@@ -43,6 +43,63 @@ struct PipelineTests {
         }
     }
 
+    /// Never flushes; sends `started` each time a run starts it, so a test knows the run is
+    /// reading.
+    struct StartGate<Element>: BatchStrategy {
+        let started: SingleValueSubject<Void>
+
+        func run(_ flusher: BatchFlusher) async throws {
+            try? started.send()
+        }
+    }
+
+    /// Hands out 1970 plus one second, plus two, and so on: a later date each call.
+    final class Ticker: Sendable {
+        let calls = Mutex(0)
+
+        func now() -> Date {
+            calls.withLock {
+                $0 += 1
+                return Date(timeIntervalSince1970: Double($0))
+            }
+        }
+    }
+
+    /// Counts its runs: the first throws, a later one sends `retried`.
+    struct FailsOnce<Element>: BatchStrategy {
+        struct Broken: Error {}
+
+        final class Runs: Sendable {
+            let count = Mutex(0)
+        }
+
+        let runs = Runs()
+        let retried: SingleValueSubject<Void>
+
+        func run(_ flusher: BatchFlusher) async throws {
+            let run = runs.count.withLock {
+                $0 += 1
+                return $0
+            }
+            guard run > 1 else { throw Broken() }
+            try? retried.send()
+        }
+    }
+
+    /// Holds its first batch until `gate` opens, after announcing it on `entered`; records every
+    /// batch it receives.
+    final class Stuck: Destination {
+        let entered = SingleValueSubject<Void>()
+        let gate = SingleValueSubject<Void>()
+        let batches = Mutex<[[Int]]>([])
+
+        func receive(_ batch: [EventRecord]) async {
+            batches.withLock { $0.append(batch.compactMap { ($0.event as? Tapped)?.number }) }
+            guard (try? entered.send()) != nil else { return }
+            try? await gate.execute()
+        }
+    }
+
     /// Fails as soon as it runs.
     struct FailingStrategy<Element>: BatchStrategy {
         struct Broken: Error, Equatable {}
@@ -74,7 +131,6 @@ struct PipelineTests {
         let recorder = Recorder()
         let sut = Pipeline(
             recorder,
-            clock: clock,
             strategy: .either(.time(interval: .seconds(5), clock: clock), PendingGate(count: 2, reached: twoPending)))
         let expectedFirst = [[1, 2]]
         let expected = [[1, 2], [3]]
@@ -83,7 +139,10 @@ struct PipelineTests {
         let work = sut.run()
         let running = Task { try await work.execute() }
         try await twoPending.execute()
-        // The interval's sleep is registered once checkSuspension throws.
+        // The interval's sleep is registered once checkSuspension throws. swift-clocks' TestClock
+        // has no way to await a sleeper, and advancing before the strategy sleeps would move the
+        // interval's start past the advance, so polling (which yields, never sleeps) is the least
+        // bad gate short of a hand-written clock.
         while (try? await clock.checkSuspension()) != nil {}
 
         await clock.advance(by: .seconds(5))
@@ -113,23 +172,46 @@ struct PipelineTests {
         #expect(recorder.numbers == expected)
     }
 
-    @Test("The default strategy is 20 records or 30 seconds on the pipeline's clock, whichever comes first")
-    func defaultStrategy() throws {
+    @Test("The default strategy delivers what is pending once 30 seconds pass on the pipeline's clock")
+    func defaultInterval() async throws {
         let clock = TestClock()
-        let expectedCount = 20
-        let expectedInterval = Duration.seconds(30)
-        let expectedStrategies = 2
+        let recorder = Recorder()
+        let sut = Pipeline(recorder, clock: clock)
+        let expected = [[1]]
+        sut.track(Tapped(number: 1))
+        let work = sut.run()
+        let running = Task { try await work.execute() }
+        // Polled for the reason timeStrategy gives.
+        while (try? await clock.checkSuspension()) != nil {}
 
-        let sut = Pipeline(clock: clock)
+        await clock.advance(by: .seconds(30))
+        var arrivals = recorder.arrivals.makeAsyncIterator()
+        _ = await arrivals.next()
+        let actual = recorder.numbers
+        sut.finish()
+        try await running.value
 
-        let either = try #require(sut.strategy as? EitherBatchStrategy<EventRecord>)
-        let count = try #require(either.strategies.first as? CountBatchStrategy<EventRecord>)
-        let time = try #require(either.strategies.last as? TimeBatchStrategy<EventRecord, TestClock<Duration>>)
-        #expect(either.strategies.count == expectedStrategies)
-        #expect(count.count == expectedCount)
-        #expect(time.interval == expectedInterval)
-        #expect(time.clock === clock)
-        #expect(time.tolerance == nil)
+        #expect(actual == expected)
+    }
+
+    @Test("The default strategy delivers 20 records as one batch without waiting for its interval")
+    func defaultTwenty() async throws {
+        let recorder = Recorder()
+        let sut = Pipeline(recorder, clock: TestClock())
+        let expected = [Array(1 ... 20)]
+        let work = sut.run()
+        let running = Task { try await work.execute() }
+
+        for number in 1 ... 20 {
+            sut.track(Tapped(number: number))
+        }
+        var arrivals = recorder.arrivals.makeAsyncIterator()
+        _ = await arrivals.next()
+        let actual = recorder.numbers
+        sut.finish()
+        try await running.value
+
+        #expect(actual == expected)
     }
 
     @Test("Every destination receives the same batches, in the same order")
@@ -213,19 +295,106 @@ struct PipelineTests {
     }
 
     @Test("Cancelling the run delivers none of the pending records")
-    func cancelDropsPending() async {
+    func cancelDropsPending() async throws {
+        let started = SingleValueSubject<Void>()
         let recorder = Recorder()
-        let sut = Pipeline(recorder, strategy: .count(2))
+        let sut = Pipeline(recorder, strategy: .either(.count(2), StartGate(started: started)))
         let expected: [[Int]] = []
         sut.track(Tapped(number: 1))
         let work = sut.run()
         let running = Task { try await work.execute() }
+        try await started.execute()
 
         running.cancel()
         _ = await running.result
         sut.finish()
 
         #expect(recorder.numbers == expected)
+    }
+
+    @Test("After a cancelled run, the next run delivers the events tracked since")
+    func runAgainAfterCancel() async throws {
+        let started = SingleValueSubject<Void>()
+        let recorder = Recorder()
+        let sut = Pipeline(recorder, strategy: .either(.count(5), StartGate(started: started)))
+        let expected = [[2, 3]]
+        let first = sut.run()
+        let running = Task { try await first.execute() }
+        try await started.execute()
+        running.cancel()
+        _ = await running.result
+
+        sut.track(Tapped(number: 2))
+        sut.track(Tapped(number: 3))
+        sut.finish()
+        try await sut.run().execute()
+
+        #expect(recorder.numbers == expected)
+    }
+
+    @Test("Retrying a run whose strategy failed runs again and delivers")
+    func retryAfterFailure() async throws {
+        let retried = SingleValueSubject<Void>()
+        let recorder = Recorder()
+        let sut = Pipeline(recorder, strategy: .either(.count(5), FailsOnce(retried: retried)))
+        let expected = [[1]]
+        let work = sut.run().retry(1)
+        let running = Task { try await work.execute() }
+        try await retried.execute()
+
+        sut.track(Tapped(number: 1))
+        sut.finish()
+        try await running.value
+
+        #expect(recorder.numbers == expected)
+    }
+
+    @Test("A destination that never returns doesn't hold up delivery to the others")
+    func stuckDestination() async throws {
+        let stuck = Stuck()
+        let recorder = Recorder()
+        let sut = Pipeline(stuck, recorder, strategy: .count(1))
+        let expected = [[1], [2]]
+        let work = sut.run()
+        let running = Task { try await work.execute() }
+
+        sut.track(Tapped(number: 1))
+        sut.track(Tapped(number: 2))
+        var arrivals = recorder.arrivals.makeAsyncIterator()
+        _ = await arrivals.next()
+        _ = await arrivals.next()
+        let actual = recorder.numbers
+        try stuck.gate.send()
+        sut.finish()
+        try await running.value
+
+        #expect(actual == expected)
+    }
+
+    @Test("A destination that falls behind keeps the newest batches up to the buffer limit, dropping the oldest")
+    func dropsOldestBatch() async throws {
+        let stuck = Stuck()
+        let recorder = Recorder()
+        let sut = Pipeline(stuck, recorder, strategy: .count(1), batchBufferLimit: 1)
+        let expected = [[1], [4]]
+        let work = sut.run()
+        let running = Task { try await work.execute() }
+        sut.track(Tapped(number: 1))
+        try await stuck.entered.execute()
+
+        sut.track(Tapped(number: 2))
+        sut.track(Tapped(number: 3))
+        sut.track(Tapped(number: 4))
+        // The other destination has a buffer of one too, so it may skip batches; once it has the
+        // last one, every batch has been handed to the stuck destination's buffer, which is
+        // handed each batch first.
+        var arrivals = recorder.arrivals.makeAsyncIterator()
+        while let batch = await arrivals.next(), (batch.last?.event as? Tapped)?.number != 4 {}
+        try stuck.gate.send()
+        sut.finish()
+        try await running.value
+
+        #expect(stuck.batches.withLock { $0 } == expected)
     }
 
     @Test("A strategy's error ends the run with that error")
@@ -237,35 +406,84 @@ struct PipelineTests {
         }
     }
 
-    @Test("A record's timestamp is the pipeline's creation time plus how far its clock has advanced")
+    @Test("Each record is stamped with the wall-clock time `now` gives when its event is tracked")
     func timestamps() async throws {
-        let clock = TestClock()
+        let ticker = Ticker()
         let recorder = Recorder()
-        let earliest = Date.now
-        let sut = Pipeline(recorder, clock: clock, strategy: .count(5))
-        let latest = Date.now
-        let expectedGaps: [TimeInterval] = [0, 2.5, 4]
+        let sut = Pipeline(recorder, strategy: .count(5), now: { ticker.now() })
+        let expected = [[Date(timeIntervalSince1970: 1), Date(timeIntervalSince1970: 2), Date(timeIntervalSince1970: 3)]]
 
         sut.track(Tapped(number: 1))
-        await clock.advance(by: .milliseconds(2500))
         sut.track(Tapped(number: 2))
-        await clock.advance(by: .milliseconds(1500))
         sut.track(Tapped(number: 3))
         sut.finish()
         try await sut.run().execute()
 
-        let actual = recorder.batches.withLock { $0.flatMap { $0.map(\.timestamp) } }
-        let origin = try #require(actual.first)
-        #expect(origin >= earliest)
-        #expect(origin <= latest)
-        #expect(actual.map { $0.timeIntervalSince(origin) } == expectedGaps)
+        let actual = recorder.batches.withLock { $0.map { $0.map(\.timestamp) } }
+        #expect(actual == expected)
     }
 
-    @Test("By default timestamps follow the continuous clock from the pipeline's creation")
-    func defaultClockTimestamp() async throws {
+    @Test("The default strategy's pipeline stamps records with `now` too")
+    func defaultStrategyTimestamps() async throws {
+        let ticker = Ticker()
         let recorder = Recorder()
+        let sut = Pipeline(recorder, clock: TestClock(), now: { ticker.now() })
+        let expected = [[Date(timeIntervalSince1970: 1)]]
+
+        sut.track(Tapped(number: 1))
+        sut.finish()
+        try await sut.run().execute()
+
+        let actual = recorder.batches.withLock { $0.map { $0.map(\.timestamp) } }
+        #expect(actual == expected)
+    }
+
+    @Test("A pipeline with the default strategy stamps records with the system's current time by default")
+    func defaultStrategyDefaultTimestamp() async throws {
+        let recorder = Recorder()
+        let sut = Pipeline(recorder, clock: TestClock())
         let earliest = Date.now
+
+        sut.track(Tapped(number: 1))
+        let latest = Date.now
+        sut.finish()
+        try await sut.run().execute()
+
+        let actual = try #require(recorder.batches.withLock { $0.first?.first?.timestamp })
+        #expect(actual >= earliest)
+        #expect(actual <= latest)
+    }
+
+    @Test("By default a destination that falls behind keeps its 100 newest waiting batches")
+    func defaultBufferLimit() async throws {
+        let stuck = Stuck()
+        let recorder = Recorder()
+        let sut = Pipeline(stuck, recorder, strategy: .count(1))
+        let expected = [[1]] + (3 ... 102).map { [$0] }
+        let work = sut.run()
+        let running = Task { try await work.execute() }
+        sut.track(Tapped(number: 1))
+        try await stuck.entered.execute()
+
+        for number in 2 ... 102 {
+            sut.track(Tapped(number: number))
+        }
+        // As in dropsOldestBatch: once the other destination has the last batch, every batch has
+        // been handed to the stuck destination's buffer.
+        var arrivals = recorder.arrivals.makeAsyncIterator()
+        while let batch = await arrivals.next(), (batch.last?.event as? Tapped)?.number != 102 {}
+        try stuck.gate.send()
+        sut.finish()
+        try await running.value
+
+        #expect(stuck.batches.withLock { $0 } == expected)
+    }
+
+    @Test("By default each record is stamped with the system's current time")
+    func defaultTimestamp() async throws {
+        let recorder = Recorder()
         let sut = Pipeline(recorder, strategy: .count(1))
+        let earliest = Date.now
 
         sut.track(Tapped(number: 1))
         let latest = Date.now

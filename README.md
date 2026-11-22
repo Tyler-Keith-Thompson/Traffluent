@@ -54,9 +54,16 @@ pipeline. `run()` is the work of delivering: it gathers records into batches and
 to every destination. Run it for as long as the app tracks events; `finish()` delivers what is
 still pending and ends it. By default a batch goes out every 20 events, or every 30 seconds while
 any are waiting; pass `strategy:` to choose another, such as `.count(100)` or
-`.either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock()))`. Timestamps and
-the default strategy's timer read the pipeline's `clock:`, a `ContinuousClock` unless you pass
-another (a test clock in tests).
+`.either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock()))`. The default
+strategy's timer runs on the pipeline's `clock:`, and timestamps come from its `now:`, the
+system's time unless you pass another (a test clock and fixed dates in tests). Each destination
+receives its batches in order from a buffer of its own, so a slow one holds up only itself; when
+its buffer is full, its oldest waiting batch is dropped. A run that ends, even by cancellation or
+an error, can be started again.
+
+Records are kept in memory only, for now. Events tracked before `run()` starts, or between runs,
+wait in memory without a bound, and records not yet delivered are lost if the process exits or
+the run is cancelled.
 
 ## Modules
 
