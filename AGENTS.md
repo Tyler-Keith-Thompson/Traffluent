@@ -9,7 +9,7 @@ gating, schema enforcement and automatic instrumentation. It is built for Swift 
 concurrency from the start, with no singletons. It optimizes for correctness that the compiler
 can check, so a malformed or unconsented event is a type error or a dropped event, never a
 silent bad row in a vendor's dashboard. It is for app teams who would otherwise build their own
-typed event layer in house and use vendor SDKs as plain sinks. Swift 6.3 (minimum).
+typed event layer in house and use vendor SDKs as plain sinks. Swift 6.4 (minimum).
 Bazel is the development build; SwiftPM is the published package. `README.md` is the user-facing
 overview.
 
@@ -43,7 +43,7 @@ the published package never depends on what the examples use (Hummingbird, ViewI
 has no rules_apple rule; `Examples/scripts/catalyst_app.py` builds the same app source for it.
 The `just example-*` recipes build each app; see `Examples/README.md`.
 `Fuzz/` is a separate SwiftPM package of libFuzzer targets that Bazel ignores, built with a
-swift.org toolchain through swiftly (`swiftly install 6.3.3`); see `Fuzz/README.md`.
+swift.org toolchain through swiftly (`swiftly install 6.4.3`); see `Fuzz/README.md`.
 
 ### Module graph
 
@@ -116,12 +116,15 @@ Every shell command gets a timeout. macOS has no `timeout`; use
 
 watchOS's arm64_32 and wasm32 have a 32-bit `Int`. `just wasi-test` (`scripts/wasi_test.py`)
 builds the SwiftPM test targets with `swift build --build-tests --swift-sdk
-swift-6.3.3-RELEASE_wasm` through swiftly into `.build/wasm`, then runs each binary with
+swift-6.4.3-RELEASE_wasm` through swiftly into `.build/wasm`, then runs each binary with
 `wasmtime run --dir . <binary> --testing-library swift-testing`, logs in `.build/wasm/logs`.
-Needs swiftly's 6.3.3 toolchain, its WebAssembly SDK (`swift sdk list`; swift.org's "Getting
+Needs swiftly's 6.4.3 toolchain, its WebAssembly SDK (`swift sdk list`; swift.org's "Getting
 Started with Swift SDKs for WebAssembly" has the install command) and `brew install wasmtime`. If
 the toolchain crashes on the manifest against a newer Xcode's SDK, pass `--xcode
 /Applications/Xcode-<older>.app`.
+
+WASI builds (`just wasi-test`, `just example-wasm`) wait on Afluent's AFLU-59: Afluent doesn't
+build for wasm32-wasi yet, so they fail until it does.
 
 - One binary of every target can pass wasmtime's limit of a million functions, so targets run in
   groups (`<PROJECT>_WASI_TESTS`, the project's name in capitals, makes `Package.swift` declare

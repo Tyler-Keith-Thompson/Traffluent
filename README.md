@@ -12,7 +12,7 @@ large apps end up writing, with vendor SDKs as plain sinks.
 
 ## Installation
 
-Traffluent requires Swift 6.3 and supports macOS 15, iOS 18, tvOS 18, watchOS 11 and visionOS 2
+Traffluent requires Swift 6.4 and supports macOS 15, iOS 18, tvOS 18, watchOS 11 and visionOS 2
 or later.
 
 ```swift

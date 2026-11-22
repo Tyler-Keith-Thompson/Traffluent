@@ -113,16 +113,16 @@ example-watchos:
     {{BAZEL}} build //Examples/Apps/ExampleApp:WatchExample
 
 # The Swift image CI's SwiftPM job runs in (.github/workflows/CI.yml).
-LINUX_SWIFT_IMAGE := "swift:6.3"
+LINUX_SWIFT_IMAGE := "swift:6.4"
 
 [doc('Build the command-line and server examples on Linux, in Docker, and run the command-line one')]
 example-linux:
     docker run --rm -v {{PROJECT_ROOT}}:/package -w /package/Examples {{LINUX_SWIFT_IMAGE}} bash -c \
         'swift build --product CommandLineExample --scratch-path .build/linux && swift build --product ServerExample --scratch-path .build/linux && .build/linux/debug/CommandLineExample'
 
-[doc('Build the command-line example for wasm32-wasi (swiftly’s 6.3.3 and its WebAssembly SDK) and run it under wasmtime')]
+[doc('Build the command-line example for wasm32-wasi (swiftly’s 6.4.3 and its WebAssembly SDK) and run it under wasmtime')]
 example-wasm:
-    cd {{EXAMPLES}} && TRAFFLUENT_EXAMPLES_WASM=1 swiftly run swift build --product CommandLineExample --swift-sdk swift-6.3.3-RELEASE_wasm --scratch-path .build/wasm +6.3.3
+    cd {{EXAMPLES}} && TRAFFLUENT_EXAMPLES_WASM=1 swiftly run swift build --product CommandLineExample --swift-sdk swift-6.4.3-RELEASE_wasm --scratch-path .build/wasm +6.4.3
     wasmtime run {{EXAMPLES}}/.build/wasm/debug/CommandLineExample.wasm
 
 [doc('Build the server example (Hummingbird); just serve-example runs it on 127.0.0.1:8080')]

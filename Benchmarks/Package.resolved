@@ -1,6 +1,15 @@
 {
-  "originHash" : "82b9d80099f03ba7137c9052b3061c25f66c1a778ec93111fa09c78e9ecabb0c",
+  "originHash" : "f00ad5041214c0f0a8e46ab9985a3a9c1aab7544141a63eb8bc203f438d79c32",
   "pins" : [
+    {
+      "identity" : "afluent",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
+      "state" : {
+        "revision" : "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
+        "version" : "1.1.39"
+      }
+    },
     {
       "identity" : "benchmark",
       "kind" : "remoteSourceControl",
