@@ -9,7 +9,9 @@ swift_library(
     srcs = glob(["**/*.swift"]),
     module_name = "Traffluent",
     deps = [
-        "//Sources/Greetings",
+        "//Sources/Events",
+        "//Sources/Destinations",
+        "//Sources/Pipelines",
     ],
     visibility = ["//visibility:public"],
 )
@@ -20,7 +22,9 @@ docc_archive(
     module = ":Traffluent",
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
-        "//Sources/Greetings:GreetingsDocumentation",
+        "//Sources/Events:EventsDocumentation",
+        "//Sources/Destinations:DestinationsDocumentation",
+        "//Sources/Pipelines:PipelinesDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

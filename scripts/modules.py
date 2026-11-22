@@ -55,8 +55,10 @@ MOCKING = "mockable/Mockable"
 
 # (name, group, description, dependencies)
 MODULES = [
-    # Example
-    ("Greetings", "Example", "Greeting: a greeting composed from a name and modifiers. Replace with the first real module.", []),
+    # Pipeline
+    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to.", []),
+    ("Destinations", "Pipeline", "Destination: where events are delivered, and ConsoleDestination, which prints them.", ["Events"]),
+    ("Pipelines", "Pipeline", "Pipeline: delivers each tracked event to every destination.", ["Events", "Destinations"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -75,7 +77,9 @@ EXECUTABLES = [
 # Test targets. SwiftPM rejects a target with no sources, so list a target only once its directory
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
-    ("GreetingsTests", ["Greetings", TEST_SUPPORT, "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling"]),
+    ("EventsTests", ["Events"]),
+    ("DestinationsTests", ["Destinations", "Events"]),
+    ("PipelinesTests", ["Pipelines", "Destinations", "Events"]),
     (f"{PROJECT}Tests", [PROJECT]),
 ]
 
@@ -118,7 +122,6 @@ SIMULATOR_TEST_TAG = "resources:simulator:1"
 # Benchmarks/Benchmarks/<name>; its Bazel target (tools/benchmarks.bzl) caches its simulated counts,
 # so `just bench-simulated` measures again only the targets whose modules or sources changed.
 BENCHMARKS = [
-    ("GreetingsBenchmarks", ["Greetings"]),
 ]
 BENCHMARK_PACKAGE = ("https://github.com/ordo-one/benchmark", "1.27.0")
 

@@ -5,9 +5,13 @@ import Testing
 
 @Suite("README examples")
 struct READMEExamplesTests {
+    struct SignedUp: Event {
+        var plan: String
+    }
+
     @Test("Usage")
-    func usage() {
-        let greeting = Greeting(name: "Ada").formal().punctuated(with: "!")
-        #expect(greeting.text == "Good day, Ada!")
+    func usage() async {
+        let pipeline = Pipeline(ConsoleDestination())
+        await pipeline.track(SignedUp(plan: "pro"))  // prints: SignedUp SignedUp(plan: "pro")
     }
 }

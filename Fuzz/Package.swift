@@ -23,6 +23,5 @@ let package = Package(
         // libFuzzer's driver, declared in a C header (it is defined by the runtime -sanitize=fuzzer links).
         .systemLibrary(name: "CLibFuzzer", path: "Sources/CLibFuzzer"),
         .target(name: "FuzzSupport", dependencies: ["CLibFuzzer"]),
-        target("FuzzGreetings", ["Greetings"]),
     ]
 )

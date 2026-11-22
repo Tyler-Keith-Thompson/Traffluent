@@ -14,14 +14,5 @@ let package = Package(
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.27.0"),
     ],
     targets: [
-        .executableTarget(
-            name: "GreetingsBenchmarks",
-            dependencies: [
-                .product(name: "Benchmark", package: "benchmark"),
-                .product(name: "Greetings", package: "Traffluent"),
-            ],
-            path: "Benchmarks/GreetingsBenchmarks",
-            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]
-        ),
     ]
 )

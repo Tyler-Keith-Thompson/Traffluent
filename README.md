@@ -27,7 +27,7 @@ Then add a product to your target, either the umbrella or individual modules:
 .target(name: "MyApp", dependencies: [
     .product(name: "Traffluent", package: "Traffluent"),
     // or, for example:
-    // .product(name: "Greetings", package: "Traffluent"),
+    // .product(name: "Pipelines", package: "Traffluent"),
 ]),
 ```
 
@@ -38,15 +38,21 @@ Every example here is a test in `Tests/TraffluentTests`, so it cannot drift from
 ```swift
 import Traffluent
 
-let greeting = Greeting(name: "Ada").formal().punctuated(with: "!")
-print(greeting.text)  // Good day, Ada!
+struct SignedUp: Event {
+    var plan: String
+}
+
+let pipeline = Pipeline(ConsoleDestination())
+await pipeline.track(SignedUp(plan: "pro"))  // prints: SignedUp SignedUp(plan: "pro")
 ```
 
 ## Modules
 
 | Module | Holds |
 |---|---|
-| `Greetings` | `Greeting`: a greeting composed from a name and modifiers |
+| `Events` | `Event`: the protocol typed analytics events conform to |
+| `Destinations` | `Destination`, where events are delivered, and `ConsoleDestination`, which prints them |
+| `Pipelines` | `Pipeline`: delivers each tracked event to every destination |
 
 ## Development
 

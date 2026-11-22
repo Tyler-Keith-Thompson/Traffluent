@@ -23,7 +23,9 @@ func testExcludes(_ excludes: [String], wasi exitTestFiles: [String]) -> [String
 // the type checker.
 let products: [Product] = [
     .library(name: "Traffluent", targets: ["Traffluent"]),
-    .library(name: "Greetings", targets: ["Greetings"]),
+    .library(name: "Events", targets: ["Events"]),
+    .library(name: "Destinations", targets: ["Destinations"]),
+    .library(name: "Pipelines", targets: ["Pipelines"]),
 ]
 
 let dependencies: [Package.Dependency] = [
@@ -32,16 +34,20 @@ let dependencies: [Package.Dependency] = [
 ]
 
 let targets: [Target] = [
-    // Example
-    .target(name: "Greetings", exclude: bazelFiles),
+    // Pipeline
+    .target(name: "Events", exclude: bazelFiles),
+    .target(name: "Destinations", dependencies: ["Events"], exclude: bazelFiles),
+    .target(name: "Pipelines", dependencies: ["Events", "Destinations"], exclude: bazelFiles),
 
     // Umbrella: `import Traffluent` imports every module.
-    .target(name: "Traffluent", dependencies: ["Greetings"], exclude: bazelFiles),
+    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "Pipelines"], exclude: bazelFiles),
 
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
 
-    .testTarget(name: "GreetingsTests", dependencies: ["Greetings", "TraffluentTestSupport", .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Generators", package: "swiftprng"), .product(name: "Sampling", package: "swiftprng")], exclude: testExcludes(bazelFiles, wasi: ["GreetingExitTests.swift"])),
+    .testTarget(name: "EventsTests", dependencies: ["Events"], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "PipelinesTests", dependencies: ["Pipelines", "Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent"], exclude: testExcludes(bazelFiles, wasi: [])),
 ]
 

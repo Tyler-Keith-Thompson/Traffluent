@@ -2,4 +2,6 @@
 //
 // Umbrella: `import Traffluent` imports every module.
 
-@_exported import Greetings
+@_exported import Events
+@_exported import Destinations
+@_exported import Pipelines
