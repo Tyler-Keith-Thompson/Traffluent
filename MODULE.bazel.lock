@@ -553,7 +553,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 72cbec12d3304a45969884114d364322ad036210f95dea01740f056b32450001"
+          "FILE:@@//swift/Package.resolved ef49427726e60f95480cb908b10c46eadc31aa78ac7e5c8009d8a1b0a7627083"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -563,6 +563,7 @@
                 "@swiftpkg_swift_property_based//:pkg_info.json": "swift-property-based",
                 "@swiftpkg_swiftprng//:pkg_info.json": "swiftprng",
                 "@swiftpkg_afluent//:pkg_info.json": "afluent",
+                "@swiftpkg_swift_distributed_tracing//:pkg_info.json": "swift-distributed-tracing",
                 "@swiftpkg_swift_log//:pkg_info.json": "swift-log",
                 "@swiftpkg_swift_clocks//:pkg_info.json": "swift-clocks"
               }
@@ -582,6 +583,7 @@
                 "swiftpkg_afluent",
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_concurrency_extras",
+                "swiftpkg_swift_distributed_tracing",
                 "swiftpkg_swift_issue_reporting",
                 "swiftpkg_swift_log",
                 "swiftpkg_swift_property_based",
@@ -634,6 +636,25 @@
               "commit": "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
               "remote": "https://github.com/Tyler-Keith-Thompson/Afluent",
               "version": "1.1.39",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
+            }
+          },
+          "swiftpkg_swift_distributed_tracing": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_distributed_tracing",
+              "commit": "9f982a7ec8dd815bf57024e39de592813ca14399",
+              "remote": "https://github.com/apple/swift-distributed-tracing",
+              "version": "1.7.4",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -728,6 +749,7 @@
             "swiftpkg_swift_property_based",
             "swiftpkg_swiftprng",
             "swiftpkg_afluent",
+            "swiftpkg_swift_distributed_tracing",
             "swiftpkg_swift_log",
             "swiftpkg_swift_clocks",
             "swift_deps_info",

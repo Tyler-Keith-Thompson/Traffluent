@@ -19,9 +19,10 @@ TESTS = ["PipelinesTests"]
 
 P = "Pipeline.swift"
 S = "Subscription.swift"
+N = "Enricher.swift"
 
 # track's one statement that sends the record.
-SEND = "subject.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)))"
+SEND = "subject.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context))"
 
 MUTANTS = [
     Mutant("defaulttimeonotherclock", P, ".time(interval: .seconds(30), clock: clock)", ".time(interval: .seconds(30), clock: ContinuousClock())"),
@@ -59,4 +60,8 @@ MUTANTS = [
         mode="stmt",
     ),
     Mutant("releasekeepsoldsubscription", S, "state.withLock { $0 = .idle(iterator) }", "", mode="stmt"),
+    Mutant("contextignored", P, "ServiceContext.current ?? .topLevel", "ServiceContext.topLevel"),
+    Mutant("enrichersskipped", P, "enricher(&context)", "", mode="stmt"),
+    Mutant("enrichersreversed", P, "self.enrichers = enrichers", "self.enrichers = enrichers.reversed()", mode="stmt"),
+    Mutant("enricherinert", N, "enrich(&context)", "", mode="stmt"),
 ]

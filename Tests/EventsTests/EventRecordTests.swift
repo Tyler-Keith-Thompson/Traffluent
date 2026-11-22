@@ -1,5 +1,6 @@
 import Events
 import Foundation
+import Instrumentation
 import Testing
 
 @Suite("EventRecord")
@@ -35,5 +36,30 @@ struct EventRecordTests {
         #expect(event.plan == expectedPlan)
         #expect(actual.timestamp == expectedTimestamp)
         #expect(actual.sourceLocation == expectedLocation)
+    }
+
+    enum SessionKey: ServiceContextKey {
+        typealias Value = String
+    }
+
+    @Test("A record keeps the context it is given")
+    func context() {
+        let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)
+        var context = ServiceContext.topLevel
+        context[SessionKey.self] = "s-1"
+        let expected = "s-1"
+
+        let actual = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location, context: context)
+
+        #expect(actual.context[SessionKey.self] == expected)
+    }
+
+    @Test("A record's context is empty unless one is given")
+    func defaultContext() {
+        let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)
+
+        let actual = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
+
+        #expect(actual.context[SessionKey.self] == nil)
     }
 }

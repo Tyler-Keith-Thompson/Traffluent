@@ -78,6 +78,25 @@ doesn't reach callbacks a framework runs on tasks of its own, such as SwiftUI bu
 those a `Tracker`. With no tracker bound, `Tracker.current` drops each event and logs it at debug
 level.
 
+Every record also carries the `ServiceContext` it was tracked in (swift-distributed-tracing's
+`Instrumentation` module), read through typed keys, so a destination can see the session, the
+screen or the active span's trace without a string-keyed bag. `Enricher`s add to it as each event
+is tracked:
+
+```swift
+import Instrumentation
+
+enum ScreenKey: ServiceContextKey {
+    typealias Value = String
+}
+
+let screen = Enricher { context in
+    context[ScreenKey.self] = "Checkout"
+}
+let pipeline = Pipeline(ConsoleDestination(), enrichers: [screen])
+pipeline.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+```
+
 Records are kept in memory only, for now. Events tracked before `run()` starts, or between runs,
 wait in memory without a bound, and records not yet delivered are lost if the process exits or
 the run is cancelled.
@@ -86,9 +105,9 @@ the run is cancelled.
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp and `SourceLocation` |
+| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation` and `ServiceContext` |
 | `Destinations` | `Destination`, where batches of records are delivered, and `ConsoleDestination`, which prints them |
-| `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination |
+| `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination, and `Enricher`, which adds to each record's context |
 | `Trackers` | `Tracker`: what app code tracks events with, bound to a task with `withTracker` and read with `Tracker.current` |
 
 ## Examples

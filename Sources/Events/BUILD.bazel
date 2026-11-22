@@ -3,11 +3,14 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp and source location.
+# Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.
 swift_library(
     name = "Events",
     srcs = glob(["**/*.swift"]),
     module_name = "Events",
+    deps = [
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+    ],
     visibility = ["//visibility:public"],
 )
 

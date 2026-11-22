@@ -1,5 +1,6 @@
 // The README's examples, verbatim, so the README cannot drift from the code.
 
+import Instrumentation
 import Traffluent
 import Testing
 
@@ -25,5 +26,20 @@ struct READMEExamplesTests {
         }
         pipeline.finish()
         try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+    }
+
+    enum ScreenKey: ServiceContextKey {
+        typealias Value = String
+    }
+
+    @Test("Context and enrichers")
+    func contextAndEnrichers() async throws {
+        let screen = Enricher { context in
+            context[ScreenKey.self] = "Checkout"
+        }
+        let pipeline = Pipeline(ConsoleDestination(), enrichers: [screen])
+        pipeline.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+        pipeline.finish()
+        try await pipeline.run().execute()
     }
 }

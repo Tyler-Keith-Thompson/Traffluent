@@ -2,6 +2,7 @@ public import Afluent
 public import Destinations
 public import Events
 public import Foundation
+import Instrumentation
 
 /// Records each tracked event, gathers the records into batches, and delivers every batch to
 /// each of its destinations.
@@ -16,7 +17,8 @@ public import Foundation
 /// try await pipeline.run().execute()
 /// ```
 ///
-/// Tracking stamps the event with the wall-clock time and the caller's source location, and sends
+/// Tracking stamps the event with the wall-clock time, the caller's source location and the task's
+/// `ServiceContext` (with what the pipeline's ``Enricher``s add), and sends
 /// the record through an Afluent `PassthroughSubject`. ``run()`` batches the records by the
 /// pipeline's strategy and delivers each batch.
 ///
@@ -32,6 +34,7 @@ public struct Pipeline: Sendable {
     let subject = PassthroughSubject<EventRecord>()
     let subscription: Subscription
     let now: @Sendable () -> Date
+    let enrichers: [Enricher]
 
     /// A pipeline delivering to `destinations`, every 20 events and every 30 seconds by `clock`
     /// while any are pending.
@@ -39,6 +42,7 @@ public struct Pipeline: Sendable {
     /// - Parameters:
     ///   - destinations: Where each batch goes.
     ///   - clock: The clock the 30 seconds are measured on.
+    ///   - enrichers: What each event's context gains as it is tracked, applied in order.
     ///   - now: The wall-clock time each event is stamped with when it is tracked.
     ///   - batchBufferLimit: How many batches each destination may have waiting while it is
     ///     still receiving an earlier one; when a new batch would pass it, the oldest waiting
@@ -46,6 +50,7 @@ public struct Pipeline: Sendable {
     /// - Precondition: `batchBufferLimit` is at least 1.
     public init(
         _ destinations: any Destination...,
+        enrichers: [Enricher] = [],
         // The core takes its dependencies as parameters rather than through a DI container's
         // registrations, so that adopters don't need the DI framework.
         clock: some Clock<Duration> = ContinuousClock(),
@@ -55,6 +60,7 @@ public struct Pipeline: Sendable {
         self.init(
             destinations,
             strategy: EitherBatchStrategy(.count(20), .time(interval: .seconds(30), clock: clock)),
+            enrichers: enrichers,
             now: now,
             batchBufferLimit: batchBufferLimit)
     }
@@ -67,6 +73,7 @@ public struct Pipeline: Sendable {
     /// - Parameters:
     ///   - destinations: Where each batch goes.
     ///   - strategy: When the pending records are delivered as a batch.
+    ///   - enrichers: What each event's context gains as it is tracked, applied in order.
     ///   - now: The wall-clock time each event is stamped with when it is tracked.
     ///   - batchBufferLimit: How many batches each destination may have waiting while it is
     ///     still receiving an earlier one; when a new batch would pass it, the oldest waiting
@@ -75,17 +82,19 @@ public struct Pipeline: Sendable {
     public init(
         _ destinations: any Destination...,
         strategy: some BatchStrategy<EventRecord>,
+        enrichers: [Enricher] = [],
         // The core takes its dependencies as parameters rather than through a DI container's
         // registrations, so that adopters don't need the DI framework.
         now: @escaping @Sendable () -> Date = { Date.now },
         batchBufferLimit: Int = 100
     ) {
-        self.init(destinations, strategy: strategy, now: now, batchBufferLimit: batchBufferLimit)
+        self.init(destinations, strategy: strategy, enrichers: enrichers, now: now, batchBufferLimit: batchBufferLimit)
     }
 
     private init(
         _ destinations: [any Destination],
         strategy: some BatchStrategy<EventRecord>,
+        enrichers: [Enricher],
         now: @escaping @Sendable () -> Date,
         batchBufferLimit: Int
     ) {
@@ -93,12 +102,13 @@ public struct Pipeline: Sendable {
         self.destinations = destinations
         self.strategy = strategy
         self.now = now
+        self.enrichers = enrichers
         self.batchBufferLimit = batchBufferLimit
         subscription = Subscription(to: subject)
     }
 
-    /// Records `event`, with the current wall-clock time and the caller's source location, for
-    /// the next batch.
+    /// Records `event`, with the current wall-clock time, the caller's source location and the
+    /// task's `ServiceContext` as the enrichers extend it, for the next batch.
     ///
     /// Returns at once; ``run()`` delivers the record. An event tracked after ``finish()`` is
     /// dropped.
@@ -119,7 +129,11 @@ public struct Pipeline: Sendable {
         column: Int = #column
     ) {
         let timestamp = now()
-        subject.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)))
+        var context = ServiceContext.current ?? .topLevel
+        for enricher in enrichers {
+            enricher(&context)
+        }
+        subject.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context))
     }
 
     /// Ends tracking: ``run()`` delivers the records still pending as a last batch, then finishes.

@@ -1,5 +1,5 @@
 {
-  "originHash" : "a61c8b0105281e0e999ee1c117babb9165231bf82e424eba0b302dfed29ff351",
+  "originHash" : "80cb2f50182054827d69fe481680830c08d6545476abf8001bc16f01f1bc05b0",
   "pins" : [
     {
       "identity" : "afluent",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "8a4260f7373493435bd21194585c95b72bfdd401",
         "version" : "1.4.3"
+      }
+    },
+    {
+      "identity" : "swift-distributed-tracing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-distributed-tracing",
+      "state" : {
+        "revision" : "9f982a7ec8dd815bf57024e39de592813ca14399",
+        "version" : "1.7.4"
       }
     },
     {

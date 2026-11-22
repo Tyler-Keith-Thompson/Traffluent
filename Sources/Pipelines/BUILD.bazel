@@ -12,6 +12,7 @@ swift_library(
         "//Sources/Events",
         "//Sources/Destinations",
         "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
     ],
     visibility = ["//visibility:public"],
 )

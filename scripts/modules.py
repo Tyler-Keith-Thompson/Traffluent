@@ -33,6 +33,9 @@ PACKAGES = [
     ("swiftprng", "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", "0.0.1"),
     # The pipeline: a PassthroughSubject events are sent through, batched by `batch(strategy:)`.
     ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.39"),
+    # ServiceContext (InstrumentationContext): the context every event record carries, read
+    # through typed keys; it holds the active span's context, which joins events to traces.
+    ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
     # Logging, per AGENTS.md: the no-op tracker logs each event it drops.
     ("swift-log", "https://github.com/apple/swift-log", "1.6.0"),
     # Tests only: TestClock, to drive a pipeline's clock.
@@ -62,9 +65,9 @@ MOCKING = "mockable/Mockable"
 # (name, group, description, dependencies)
 MODULES = [
     # Pipeline
-    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp and source location.", []),
+    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.", ["Events"]),
-    ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent"]),
+    ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation"]),
     ("Trackers", "Pipeline", "Tracker: what app code tracks events with, bound to a task with withTracker and read with Tracker.current.", ["Events", "Pipelines", "swift-log/Logging"]),
 ]
 
@@ -84,11 +87,11 @@ EXECUTABLES = [
 # Test targets. SwiftPM rejects a target with no sources, so list a target only once its directory
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
-    ("EventsTests", ["Events"]),
+    ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
     ("DestinationsTests", ["Destinations", "Events"]),
-    ("PipelinesTests", ["Pipelines", "Destinations", "Events", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("PipelinesTests", ["Pipelines", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackersTests", ["Trackers", "Pipelines", "Destinations", "Events"]),
-    (f"{PROJECT}Tests", [PROJECT]),
+    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the

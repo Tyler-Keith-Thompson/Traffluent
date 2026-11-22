@@ -23,5 +23,6 @@ MUTANTS = [
     Mutant("columnfromline", L, "self.column = column", "self.column = line", mode="stmt"),
     Mutant("recordnamefixed", R, "type(of: event).name", '"Event"'),
     Mutant("recordtimestampfixed", R, "self.timestamp = timestamp", "self.timestamp = Date(timeIntervalSince1970: 0)", mode="stmt"),
+    Mutant("recordcontextdropped", R, "self.context = context", "self.context = .topLevel", mode="stmt"),
     Mutant("defaultnamelowercased", E, "String(describing: Self.self)", "String(describing: Self.self).lowercased()"),
 ]
