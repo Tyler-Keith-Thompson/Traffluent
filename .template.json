@@ -1,0 +1,16 @@
+{
+  "commit": "9c9820a8ee2f00aacfb3e53fac02cf7c34f854f5",
+  "name": "Traffluent",
+  "type": "library",
+  "benchmarks": true,
+  "mutation": true,
+  "fuzz": true,
+  "differential": false,
+  "wasm": true,
+  "explore": false,
+  "views": false,
+  "fly": false,
+  "database": false,
+  "ci": true,
+  "trunk": false
+}

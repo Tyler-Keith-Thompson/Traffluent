@@ -1,0 +1,41 @@
+# Agent worktrees are checkouts of this same repo.
+.claude/worktrees/
+
+# Bazel
+/bazel-*
+/user.bazelrc
+# Remote cache diagnostics (user.bazelrc may write them).
+/bazel-remote-grpc.log
+/execution_log.binpb.zst
+.cache/
+
+# SwiftPM
+.build/
+.swiftpm/
+# The root package is a library, so its resolution is not committed; swift/Package.resolved
+# pins Bazel's dependencies and is.
+/Package.resolved
+
+# Xcode (generated from the Bazel graph by `just generate`)
+/xcode/
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+
+# Benchmark baselines: `main` (just bench-baseline) and `simulated` (just bench-simulated) are shared;
+# other names are local before/after comparisons.
+Benchmarks/.benchmarkBaselines/*/*
+!Benchmarks/.benchmarkBaselines/*/main/
+!Benchmarks/.benchmarkBaselines/*/simulated/
+# The harness copy, toolchain stamp and lock scripts/bench_simulated.py writes for Bazel, per machine.
+Benchmarks/.harness/
+
+# Fuzzing (see Fuzz/README.md): the corpus is a local cache; a crash becomes a test, then goes.
+/Fuzz/Corpus/
+/Fuzz/Crashes/
+
+*.swp
