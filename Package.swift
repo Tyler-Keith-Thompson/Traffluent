@@ -26,12 +26,14 @@ let products: [Product] = [
     .library(name: "Events", targets: ["Events"]),
     .library(name: "Destinations", targets: ["Destinations"]),
     .library(name: "Pipelines", targets: ["Pipelines"]),
+    .library(name: "Trackers", targets: ["Trackers"]),
 ]
 
 let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
     .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.1"),
     .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.39"),
+    .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
 ]
 
@@ -40,9 +42,10 @@ let targets: [Target] = [
     .target(name: "Events", exclude: bazelFiles),
     .target(name: "Destinations", dependencies: ["Events"], exclude: bazelFiles),
     .target(name: "Pipelines", dependencies: ["Events", "Destinations", .product(name: "Afluent", package: "afluent")], exclude: bazelFiles),
+    .target(name: "Trackers", dependencies: ["Events", "Pipelines", .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
 
     // Umbrella: `import Traffluent` imports every module.
-    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "Pipelines"], exclude: bazelFiles),
+    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "Pipelines", "Trackers"], exclude: bazelFiles),
 
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
@@ -50,6 +53,7 @@ let targets: [Target] = [
     .testTarget(name: "EventsTests", dependencies: ["Events"], exclude: testExcludes(bazelFiles, wasi: [])),
     .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
     .testTarget(name: "PipelinesTests", dependencies: ["Pipelines", "Destinations", "Events", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["PipelineExitTests.swift"])),
+    .testTarget(name: "TrackersTests", dependencies: ["Trackers", "Pipelines", "Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent"], exclude: testExcludes(bazelFiles, wasi: [])),
 ]
 

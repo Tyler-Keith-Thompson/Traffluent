@@ -8,6 +8,7 @@
     import SwiftUI
     import Synchronization
     import Testing
+    import Trackers
     import ViewInspector
 
     @MainActor
@@ -23,7 +24,7 @@
 
         @Test("The screen shows a button for each label, in order")
         func buttons() throws {
-            let sut = ExampleView(pipeline: Pipeline())
+            let sut = ExampleView(tracker: .noOp)
             let expected = ["Subscribe", "Share"]
 
             let actual = try sut.inspect().findAll(ViewType.Button.self).map { try $0.labelView().text().string() }
@@ -35,7 +36,7 @@
         func tap() async throws {
             let recorder = Recorder()
             let pipeline = Pipeline(recorder)
-            let sut = ExampleView(pipeline: pipeline)
+            let sut = ExampleView(tracker: Tracker(pipeline))
             let expected = [ButtonTapped(label: "Share")]
 
             try sut.inspect().find(button: "Share").tap()

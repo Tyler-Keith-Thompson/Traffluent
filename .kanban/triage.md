@@ -54,8 +54,10 @@ bad row in a dashboard.
 - An event that can be invalid must fail to compile where possible, and otherwise be rejected
   at the pipeline boundary with a reason a test can observe.
 - Use the owner's libraries before writing your own versions: Afluent for retry, timeout and
-  shared async work; DependencyInjection for wiring and test doubles; SwiftPRNG for seeded
-  sampling and tests; BenchmarkHarness for performance gates.
+  shared async work; DependencyInjection for wiring and test doubles outside the library;
+  SwiftPRNG for seeded sampling and tests; BenchmarkHarness for performance gates. The library's
+  own modules take no DependencyInjection dependency, so adopters never need it: they take seams
+  as parameters and share a tracker through a task-local (AGENTS.md, "Seams and composition").
 - A new external dependency in a core module needs a reason that Foundation and the owner's
   libraries don't cover. It must build on Linux and Wasm, or be Apple-only (`APPLE_ONLY_PACKAGES`).
 - Persistence and retry changes need tests of crashes, relaunches and offline periods: an event

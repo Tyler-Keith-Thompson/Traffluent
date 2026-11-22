@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
         .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.1"),
         .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.39"),
+        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
     ]
 )

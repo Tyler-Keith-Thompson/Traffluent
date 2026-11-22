@@ -61,6 +61,23 @@ receives its batches in order from a buffer of its own, so a slow one holds up o
 its buffer is full, its oldest waiting batch is dropped. A run that ends, even by cancellation or
 an error, can be started again.
 
+Code deep in an app needn't be handed the pipeline. Bind a `Tracker` to a task with `withTracker`
+and read it anywhere inside with `Tracker.current`:
+
+```swift
+let pipeline = Pipeline(ConsoleDestination())
+withTracker(Tracker(pipeline)) {
+    Tracker.current.track(SignedUp(plan: "pro"))
+}
+pipeline.finish()
+try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+```
+
+The binding reaches child tasks, and a nested `withTracker` replaces it for its own scope. It
+doesn't reach callbacks a framework runs on tasks of its own, such as SwiftUI button actions: pass
+those a `Tracker`. With no tracker bound, `Tracker.current` drops each event and logs it at debug
+level.
+
 Records are kept in memory only, for now. Events tracked before `run()` starts, or between runs,
 wait in memory without a bound, and records not yet delivered are lost if the process exits or
 the run is cancelled.
@@ -72,6 +89,7 @@ the run is cancelled.
 | `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp and `SourceLocation` |
 | `Destinations` | `Destination`, where batches of records are delivered, and `ConsoleDestination`, which prints them |
 | `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination |
+| `Trackers` | `Tracker`: what app code tracks events with, bound to a task with `withTracker` and read with `Tracker.current` |
 
 ## Examples
 

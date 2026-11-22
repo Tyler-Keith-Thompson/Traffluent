@@ -10,6 +10,6 @@ swift_library(
     visibility = ["//Examples:__subpackages__"],
     deps = [
         "//Examples/Sources/ExampleEvents",
-        "//Sources/Pipelines",
+        "//Sources/Trackers",
     ],
 )

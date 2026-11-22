@@ -278,6 +278,11 @@ library with none of that can skip this section.
   that holds state, `.shared` for one instance while anyone holds it, unique otherwise. Callers
   resolve it with `@Injected`, `@LazyInjected` or `@ConstructorInjected`, never by naming the
   conformer.
+- **Traffluent's library modules take no DependencyInjection dependency**, so adopters never need
+  the DI framework. They take their seams as parameters (a clock, a wall-clock source, a
+  destination) and share a tracker through a task-local (`withTracker`, `Tracker.current`), the
+  way swift-log and swift-distributed-tracing bind theirs. `Examples/` and tests may still use
+  DependencyInjection.
 - **The executable is the composition root.** Modules ship working defaults (an in-memory store);
   the executable registers what production swaps in (the store on disk) at startup.
 - **Async work is a pipeline of values.** With Afluent, a call returns a lazy unit of work

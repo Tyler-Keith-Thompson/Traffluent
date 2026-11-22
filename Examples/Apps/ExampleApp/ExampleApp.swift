@@ -3,10 +3,12 @@ import ExampleEvents
 import ExampleViews
 import Pipelines
 import SwiftUI
+import Trackers
 
 /// The Apple example app, one source for every Apple platform: the composition root builds the
-/// pipeline, runs it for the life of the app, tracks the launch, and hands the pipeline to the
-/// screen.
+/// pipeline, runs it for the life of the app, tracks the launch, and hands a tracker to the screen.
+/// SwiftUI runs the screen's button actions on tasks of its own, which a `withTracker` binding
+/// doesn't reach, so the app passes the tracker down instead.
 @main
 struct ExampleApp: App {
     private let pipeline = Pipeline(ConsoleDestination())
@@ -21,7 +23,7 @@ struct ExampleApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ExampleView(pipeline: pipeline)
+            ExampleView(tracker: Tracker(pipeline))
         }
     }
 }

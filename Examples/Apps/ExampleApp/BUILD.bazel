@@ -20,6 +20,7 @@ swift_library(
         "//Examples/Sources/ExampleEvents",
         "//Examples/Sources/ExampleViews",
         "//Sources/Pipelines",
+        "//Sources/Trackers",
     ],
 )
 

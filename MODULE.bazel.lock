@@ -553,7 +553,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 85845ad3cfec666ecb4f73c056b1b2f40462bd09cfff3e2cf39110cd290b9b7c"
+          "FILE:@@//swift/Package.resolved 72cbec12d3304a45969884114d364322ad036210f95dea01740f056b32450001"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -563,6 +563,7 @@
                 "@swiftpkg_swift_property_based//:pkg_info.json": "swift-property-based",
                 "@swiftpkg_swiftprng//:pkg_info.json": "swiftprng",
                 "@swiftpkg_afluent//:pkg_info.json": "afluent",
+                "@swiftpkg_swift_log//:pkg_info.json": "swift-log",
                 "@swiftpkg_swift_clocks//:pkg_info.json": "swift-clocks"
               }
             }
@@ -582,6 +583,7 @@
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_concurrency_extras",
                 "swiftpkg_swift_issue_reporting",
+                "swiftpkg_swift_log",
                 "swiftpkg_swift_property_based",
                 "swiftpkg_swiftprng"
               ]
@@ -632,6 +634,25 @@
               "commit": "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
               "remote": "https://github.com/Tyler-Keith-Thompson/Afluent",
               "version": "1.1.39",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
+            }
+          },
+          "swiftpkg_swift_log": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_log",
+              "commit": "c7413d967b97aae67c46452bf7645bdb7b200e8e",
+              "remote": "https://github.com/apple/swift-log",
+              "version": "1.17.2",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -707,6 +728,7 @@
             "swiftpkg_swift_property_based",
             "swiftpkg_swiftprng",
             "swiftpkg_afluent",
+            "swiftpkg_swift_log",
             "swiftpkg_swift_clocks",
             "swift_deps_info",
             "swift_package"

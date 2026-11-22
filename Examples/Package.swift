@@ -21,20 +21,20 @@ let hummingbird: Target.Dependency = .product(name: "Hummingbird", package: "hum
 
 let portable: [Target] = [
     .target(name: "ExampleEvents", dependencies: [library("Events")], exclude: bazelFiles),
-    .executableTarget(name: "CommandLineExample", dependencies: ["ExampleEvents", library("Destinations"), library("Pipelines")]),
+    .executableTarget(name: "CommandLineExample", dependencies: ["ExampleEvents", library("Destinations"), library("Pipelines"), library("Trackers")]),
     .testTarget(name: "ExampleEventsTests", dependencies: ["ExampleEvents", library("Destinations"), library("Events"), library("Pipelines")]),
 ]
 
 let rest: [Target] = [
-    .target(name: "ExampleViews", dependencies: ["ExampleEvents", library("Pipelines")], exclude: bazelFiles),
-    .target(name: "ExampleServer", dependencies: ["ExampleEvents", library("Pipelines"), hummingbird]),
-    .executableTarget(name: "ServerExample", dependencies: ["ExampleServer", "ExampleEvents", library("Destinations"), library("Pipelines"), hummingbird]),
+    .target(name: "ExampleViews", dependencies: ["ExampleEvents", library("Trackers")], exclude: bazelFiles),
+    .target(name: "ExampleServer", dependencies: ["ExampleEvents", library("Trackers"), hummingbird]),
+    .executableTarget(name: "ServerExample", dependencies: ["ExampleServer", "ExampleEvents", library("Destinations"), library("Pipelines"), library("Trackers"), hummingbird]),
     .testTarget(name: "ExampleViewsTests", dependencies: [
-        "ExampleViews", "ExampleEvents", library("Destinations"), library("Events"), library("Pipelines"),
+        "ExampleViews", "ExampleEvents", library("Destinations"), library("Events"), library("Pipelines"), library("Trackers"),
         .product(name: "ViewInspector", package: "viewinspector", condition: .when(platforms: [.macOS])),
     ]),
     .testTarget(name: "ExampleServerTests", dependencies: [
-        "ExampleServer", "ExampleEvents", library("Destinations"), library("Events"), library("Pipelines"),
+        "ExampleServer", "ExampleEvents", library("Destinations"), library("Events"), library("Pipelines"), library("Trackers"),
         hummingbird, .product(name: "HummingbirdTesting", package: "hummingbird"),
     ]),
 ]

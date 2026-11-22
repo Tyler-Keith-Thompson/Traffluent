@@ -16,4 +16,14 @@ struct READMEExamplesTests {
         pipeline.finish()
         try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
+
+    @Test("Tracking from anywhere")
+    func trackingFromAnywhere() async throws {
+        let pipeline = Pipeline(ConsoleDestination())
+        withTracker(Tracker(pipeline)) {
+            Tracker.current.track(SignedUp(plan: "pro"))
+        }
+        pipeline.finish()
+        try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+    }
 }

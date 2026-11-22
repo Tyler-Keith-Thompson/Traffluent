@@ -33,6 +33,8 @@ PACKAGES = [
     ("swiftprng", "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", "0.0.1"),
     # The pipeline: a PassthroughSubject events are sent through, batched by `batch(strategy:)`.
     ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.39"),
+    # Logging, per AGENTS.md: the no-op tracker logs each event it drops.
+    ("swift-log", "https://github.com/apple/swift-log", "1.6.0"),
     # Tests only: TestClock, to drive a pipeline's clock.
     ("swift-clocks", "https://github.com/pointfreeco/swift-clocks", "1.1.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
@@ -63,6 +65,7 @@ MODULES = [
     ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp and source location.", []),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.", ["Events"]),
     ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent"]),
+    ("Trackers", "Pipeline", "Tracker: what app code tracks events with, bound to a task with withTracker and read with Tracker.current.", ["Events", "Pipelines", "swift-log/Logging"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -84,6 +87,7 @@ TEST_TARGETS = [
     ("EventsTests", ["Events"]),
     ("DestinationsTests", ["Destinations", "Events"]),
     ("PipelinesTests", ["Pipelines", "Destinations", "Events", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("TrackersTests", ["Trackers", "Pipelines", "Destinations", "Events"]),
     (f"{PROJECT}Tests", [PROJECT]),
 ]
 

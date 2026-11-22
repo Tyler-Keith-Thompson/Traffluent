@@ -1,17 +1,15 @@
 public import Hummingbird
-public import Pipelines
 
 /// The server example's routes, each response tracked as ``ExampleEvents/RequestServed`` through
-/// `pipeline`.
+/// `Tracker.current`.
 ///
 /// - `GET /` answers a greeting.
 /// - `GET /items/:id` answers the item's number, or 400 Bad Request when `id` isn't one.
 ///
-/// - Parameter pipeline: The pipeline every response is tracked through.
 /// - Returns: A router for an `Application`.
-public func buildRouter(pipeline: Pipeline) -> Router<BasicRequestContext> {
+public func buildRouter() -> Router<BasicRequestContext> {
     let router = Router()
-    router.add(middleware: RequestTrackingMiddleware(pipeline: pipeline))
+    router.add(middleware: RequestTrackingMiddleware())
     router.get("/") { _, _ in
         "Hello from Traffluent"
     }

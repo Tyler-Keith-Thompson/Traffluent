@@ -29,3 +29,4 @@ try await pipeline.run().execute()
 - ``/Events``
 - ``/Destinations``
 - ``/Pipelines``
+- ``/Trackers``
