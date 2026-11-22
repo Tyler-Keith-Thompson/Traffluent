@@ -5,4 +5,5 @@
 @_exported import Events
 @_exported import Destinations
 @_exported import Pipelines
+@_exported import DestinationTesting
 @_exported import Trackers

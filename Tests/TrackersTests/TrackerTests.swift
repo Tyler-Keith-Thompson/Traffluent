@@ -1,7 +1,7 @@
+import DestinationTesting
 import Destinations
 import Events
 import Pipelines
-import Synchronization
 import Testing
 import Trackers
 
@@ -11,29 +11,11 @@ struct TrackerTests {
         var number: Int
     }
 
-    /// Records the number of every `Tapped` it receives, in order.
-    final class Recorder: Destination {
-        let numbers = Mutex<[Int]>([])
-
-        func receive(_ batch: [EventRecord]) async {
-            numbers.withLock { $0.append(contentsOf: batch.compactMap { ($0.event as? Tapped)?.number }) }
-        }
-    }
-
-    /// Records every record it receives, in order.
-    final class RecordRecorder: Destination {
-        let records = Mutex<[EventRecord]>([])
-
-        func receive(_ batch: [EventRecord]) async {
-            records.withLock { $0.append(contentsOf: batch) }
-        }
-    }
-
     struct Rejected: Error, Equatable {}
 
     @Test("A tracker hands each event to its pipeline")
     func tracks() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Tracker(pipeline)
         let expected = [1, 2]
@@ -43,13 +25,13 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 
     @Test("A tracker records its caller's source location, not its own")
     func sourceLocation() async throws {
-        let recorder = RecordRecorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Tracker(pipeline)
         let expectedFileID = #fileID
@@ -60,7 +42,7 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = try #require(recorder.records.withLock { $0.first }).sourceLocation
+        let actual = try #require(recorder.records.first).sourceLocation
         #expect(actual.fileID == expectedFileID)
         #expect(actual.function == expectedFunction)
         #expect(actual.line == expectedLine)
@@ -68,7 +50,7 @@ struct TrackerTests {
 
     @Test("Tracker.current inside withTracker is the bound tracker")
     func boundSync() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let expected = [1]
 
@@ -78,13 +60,13 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 
     @Test("Tracker.current inside the async withTracker is the bound tracker")
     func boundAsync() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let expected = [1]
 
@@ -95,13 +77,13 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 
     @Test("With no tracker bound, Tracker.current drops every event without trapping")
     func unbound() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let expected: [Int] = []
 
@@ -110,13 +92,13 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 
     @Test("A child task inherits the bound tracker")
     func childTask() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let expected = [1, 2]
 
@@ -129,14 +111,14 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 
     @Test("A nested withTracker replaces the binding inside its scope only")
     func nested() async throws {
-        let outer = Recorder()
-        let inner = Recorder()
+        let outer = InMemoryDestination()
+        let inner = InMemoryDestination()
         let outerPipeline = Pipeline(outer)
         let innerPipeline = Pipeline(inner)
         let expectedOuter = [1, 3]
@@ -154,15 +136,15 @@ struct TrackerTests {
         try await outerPipeline.run().execute()
         try await innerPipeline.run().execute()
 
-        let actualOuter = outer.numbers.withLock { $0 }
-        let actualInner = inner.numbers.withLock { $0 }
+        let actualOuter = outer.events(of: Tapped.self).map(\.number)
+        let actualInner = inner.events(of: Tapped.self).map(\.number)
         #expect(actualOuter == expectedOuter)
         #expect(actualInner == expectedInner)
     }
 
     @Test("The binding ends when withTracker returns")
     func scopeEnds() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let expected = [1]
 
@@ -173,7 +155,7 @@ struct TrackerTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.numbers.withLock { $0 }
+        let actual = recorder.events(of: Tapped.self).map(\.number)
         #expect(actual == expected)
     }
 

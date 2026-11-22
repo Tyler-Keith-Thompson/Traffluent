@@ -28,5 +28,6 @@ try await pipeline.run().execute()
 
 - ``/Events``
 - ``/Destinations``
+- ``/DestinationTesting``
 - ``/Pipelines``
 - ``/Trackers``

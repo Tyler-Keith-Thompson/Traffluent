@@ -1,20 +1,12 @@
+import DestinationTesting
 import Destinations
 import Events
 import ExampleEvents
 import Pipelines
-import Synchronization
 import Testing
 
 @Suite("Example events", .timeLimit(.minutes(1)))
 struct ExampleEventsTests {
-    final class Recorder: Destination {
-        let lines = Mutex<[String]>([])
-
-        func receive(_ batch: [EventRecord]) async {
-            lines.withLock { $0.append(contentsOf: batch.map { "\($0.name) \($0.event)" }) }
-        }
-    }
-
     @Test("Each example event is recorded under its type's name")
     func names() {
         let expected = ["AppLaunched", "ButtonTapped", "RequestServed"]
@@ -53,7 +45,7 @@ struct ExampleEventsTests {
 
     @Test("A pipeline delivers the example events to its destination in the order tracked")
     func throughPipeline() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let sut = Pipeline(recorder)
         let expected = [
             "AppLaunched AppLaunched(platform: ExampleEvents.Platform.mac)",
@@ -67,7 +59,7 @@ struct ExampleEventsTests {
         sut.finish()
         try await sut.run().execute()
 
-        let actual = recorder.lines.withLock { $0 }
+        let actual = recorder.records.map { "\($0.name) \($0.event)" }
         #expect(actual == expected)
     }
 

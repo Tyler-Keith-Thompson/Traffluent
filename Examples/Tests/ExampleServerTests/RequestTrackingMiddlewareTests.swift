@@ -1,3 +1,4 @@
+import DestinationTesting
 import Destinations
 import Events
 import ExampleEvents
@@ -5,20 +6,11 @@ import ExampleServer
 import Hummingbird
 import HummingbirdTesting
 import Pipelines
-import Synchronization
 import Testing
 import Trackers
 
 @Suite("The server example's routes and tracking", .timeLimit(.minutes(1)))
 struct RequestTrackingMiddlewareTests {
-    final class Recorder: Destination {
-        let served = Mutex<[RequestServed]>([])
-
-        func receive(_ batch: [EventRecord]) async {
-            served.withLock { $0.append(contentsOf: batch.compactMap { $0.event as? RequestServed }) }
-        }
-    }
-
     @Test("A request for / is answered with the greeting")
     func greeting() async throws {
         let sut = Application(router: buildRouter())
@@ -35,7 +27,7 @@ struct RequestTrackingMiddlewareTests {
 
     @Test("A served request is tracked through the bound tracker with its path and status")
     func tracksSuccess() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Application(router: buildRouter())
         let expected = [RequestServed(path: "/items/7", status: 200)]
@@ -48,13 +40,13 @@ struct RequestTrackingMiddlewareTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.served.withLock { $0 }
+        let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
     }
 
     @Test("A request a route rejects is tracked with the error's status")
     func tracksFailure() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Application(router: buildRouter())
         let expectedStatus = HTTPResponse.Status.badRequest
@@ -70,14 +62,14 @@ struct RequestTrackingMiddlewareTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.served.withLock { $0 }
+        let actual = recorder.events(of: RequestServed.self)
         #expect(actualStatus == expectedStatus)
         #expect(actual == expected)
     }
 
     @Test("Every request is tracked, in the order served")
     func tracksEach() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Application(router: buildRouter())
         let expected = [
@@ -94,14 +86,14 @@ struct RequestTrackingMiddlewareTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.served.withLock { $0 }
+        let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
     }
 
     @Test("A middleware error without an HTTP status is tracked as 500")
     func tracksUnknownError() async throws {
         struct Broken: Error {}
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let router = Router()
         router.add(middleware: RequestTrackingMiddleware())
@@ -117,13 +109,13 @@ struct RequestTrackingMiddlewareTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.served.withLock { $0 }
+        let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
     }
 
     @Test("A live server's request handlers see the tracker bound around the server")
     func liveServer() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let pipeline = Pipeline(recorder)
         let sut = Application(router: buildRouter())
         let expected = [RequestServed(path: "/items/3", status: 200)]
@@ -136,7 +128,7 @@ struct RequestTrackingMiddlewareTests {
         pipeline.finish()
         try await pipeline.run().execute()
 
-        let actual = recorder.served.withLock { $0 }
+        let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
     }
 }

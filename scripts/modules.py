@@ -68,6 +68,7 @@ MODULES = [
     ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.", ["Events"]),
     ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation"]),
+    ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
     ("Trackers", "Pipeline", "Tracker: what app code tracks events with, bound to a task with withTracker and read with Tracker.current.", ["Events", "Pipelines", "swift-log/Logging"]),
 ]
 
@@ -89,8 +90,9 @@ EXECUTABLES = [
 TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
     ("DestinationsTests", ["Destinations", "Events"]),
-    ("PipelinesTests", ["Pipelines", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("TrackersTests", ["Trackers", "Pipelines", "Destinations", "Events"]),
+    ("PipelinesTests", ["Pipelines", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Pipelines"]),
+    ("TrackersTests", ["Trackers", "DestinationTesting", "Pipelines", "Destinations", "Events"]),
     (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation"]),
 ]
 

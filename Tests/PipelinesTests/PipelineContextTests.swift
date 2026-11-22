@@ -1,3 +1,4 @@
+import DestinationTesting
 import Destinations
 import Events
 import InMemoryTracing
@@ -21,18 +22,9 @@ struct PipelineContextTests {
         typealias Value = String
     }
 
-    /// Records every record it receives, in order.
-    final class Recorder: Destination {
-        let records = Mutex<[EventRecord]>([])
-
-        func receive(_ batch: [EventRecord]) async {
-            records.withLock { $0.append(contentsOf: batch) }
-        }
-    }
-
     @Test("A record carries the ServiceContext the event was tracked in")
     func snapshot() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let sut = Pipeline(recorder)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = "s-1"
@@ -44,26 +36,26 @@ struct PipelineContextTests {
         sut.finish()
         try await sut.run().execute()
 
-        let actual = try #require(recorder.records.withLock { $0.first }).context[SessionKey.self]
+        let actual = try #require(recorder.records.first).context[SessionKey.self]
         #expect(actual == expected)
     }
 
     @Test("With no context bound, a record's context is empty")
     func unbound() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let sut = Pipeline(recorder)
 
         sut.track(Tapped(number: 1))
         sut.finish()
         try await sut.run().execute()
 
-        let actual = try #require(recorder.records.withLock { $0.first }).context[SessionKey.self]
+        let actual = try #require(recorder.records.first).context[SessionKey.self]
         #expect(actual == nil)
     }
 
     @Test("The context is taken when the event is tracked, not when it is delivered")
     func takenAtTrackTime() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let sut = Pipeline(recorder)
         var first = ServiceContext.topLevel
         first[SessionKey.self] = "s-1"
@@ -76,13 +68,13 @@ struct PipelineContextTests {
         sut.finish()
         try await sut.run().execute()
 
-        let actual = recorder.records.withLock { $0.map { $0.context[SessionKey.self] } }
+        let actual = recorder.records.map { $0.context[SessionKey.self] }
         #expect(actual == expected)
     }
 
     @Test("Enrichers add typed values to every record's context")
     func enriches() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let screen = Enricher { $0[ScreenKey.self] = "Home" }
         let sut = Pipeline(recorder, enrichers: [screen])
         let expected = ["Home", "Home"]
@@ -92,13 +84,13 @@ struct PipelineContextTests {
         sut.finish()
         try await sut.run().execute()
 
-        let actual = recorder.records.withLock { $0.map { $0.context[ScreenKey.self] } }
+        let actual = recorder.records.map { $0.context[ScreenKey.self] }
         #expect(actual == expected)
     }
 
     @Test("Enrichers run in order, each seeing what the caller's context and earlier enrichers set")
     func order() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let first = Enricher { $0[ScreenKey.self] = "screen of \($0[SessionKey.self] ?? "none")" }
         let second = Enricher { $0[SessionKey.self] = "s-2" }
         let sut = Pipeline(recorder, strategy: .count(1), enrichers: [first, second])
@@ -113,14 +105,14 @@ struct PipelineContextTests {
         sut.finish()
         try await sut.run().execute()
 
-        let record = try #require(recorder.records.withLock { $0.first })
+        let record = try #require(recorder.records.first)
         #expect(record.context[ScreenKey.self] == expectedScreen)
         #expect(record.context[SessionKey.self] == expectedSession)
     }
 
     @Test("An event tracked inside an active span carries that span's context")
     func span() async throws {
-        let recorder = Recorder()
+        let recorder = InMemoryDestination()
         let sut = Pipeline(recorder)
         let tracer = InMemoryTracer()
 
@@ -131,7 +123,7 @@ struct PipelineContextTests {
         sut.finish()
         try await sut.run().execute()
 
-        let actual = try #require(recorder.records.withLock { $0.first }).context.inMemorySpanContext
+        let actual = try #require(recorder.records.first).context.inMemorySpanContext
         #expect(actual != nil)
         #expect(actual == expected)
     }

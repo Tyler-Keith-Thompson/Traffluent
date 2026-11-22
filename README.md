@@ -97,6 +97,10 @@ let pipeline = Pipeline(ConsoleDestination(), enrichers: [screen])
 pipeline.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
 ```
 
+To test what your code tracks, give its pipeline an `InMemoryDestination` (module
+`DestinationTesting`; it depends on no test framework) and read it after the run: `events(of: SignedUp.self)`,
+`records` or `batches`.
+
 Records are kept in memory only, for now. Events tracked before `run()` starts, or between runs,
 wait in memory without a bound, and records not yet delivered are lost if the process exits or
 the run is cancelled.
@@ -108,6 +112,7 @@ the run is cancelled.
 | `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation` and `ServiceContext` |
 | `Destinations` | `Destination`, where batches of records are delivered, and `ConsoleDestination`, which prints them |
 | `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination, and `Enricher`, which adds to each record's context |
+| `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `Trackers` | `Tracker`: what app code tracks events with, bound to a task with `withTracker` and read with `Tracker.current` |
 
 ## Examples
