@@ -36,6 +36,12 @@ tools/                           Bazel rule wrappers (warnings as errors, Swift 
 `Benchmarks/` is a separate SwiftPM package (ordo-one/benchmark), generated from `BENCHMARKS` in
 `scripts/modules.py`. Bazel builds none of it; `Benchmarks/BUILD.bazel` only caches each target's
 simulated counts (`tools/benchmarks.bzl`). See `Benchmarks/README.md`.
+`Examples/` is a separate SwiftPM package of example apps that depends on the library by path, so
+the published package never depends on what the examples use (Hummingbird, ViewInspector). Its
+`Package.swift` and its few `BUILD.bazel` files are hand-written: Bazel builds only the Apple apps
+(`Examples/Apps/ExampleApp`, every target `manual`, so `just test` never builds them). Mac Catalyst
+has no rules_apple rule; `Examples/scripts/catalyst_app.py` builds the same app source for it.
+The `just example-*` recipes build each app; see `Examples/README.md`.
 `Fuzz/` is a separate SwiftPM package of libFuzzer targets that Bazel ignores, built with a
 swift.org toolchain through swiftly (`swiftly install 6.3.3`); see `Fuzz/README.md`.
 
@@ -199,6 +205,7 @@ Watch for these:
 | `scripts/modules.py` | `just modules`, `just test` (which runs `//:package_swift_test`), `just spm` |
 | A fuzzed module | `just fuzz-regress` |
 | Integer arithmetic that could overflow, or anything platform-conditional | `just wasi-test -c release --targets XTests` (a 32-bit `Int`) |
+| `Examples/`, or an API the examples call | `just examples-test`, then each `just example-*` the change touches (`just examples` for all) |
 | `Benchmarks/`, or an API the benchmarks call | `cd Benchmarks && env -u TOOLCHAINS xcrun --toolchain default swift build -c release` |
 | A change meant to be faster | `just bench-simulated-compare --target <Module>Benchmarks`, not `just bench-compare` |
 

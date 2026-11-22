@@ -19,3 +19,7 @@ Fuzz/.build
 
 # Overlays the bootstrap script copies over the template (server and embedded types); not built in place.
 templates
+
+# The examples package builds with SwiftPM; Bazel loads only its hand-written BUILD files.
+Examples/.build
+Examples/.swiftpm

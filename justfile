@@ -81,6 +81,58 @@ fuzz-repro target input:
 wasi-test *args="":
     python3 -u {{PROJECT_ROOT}}/scripts/wasi_test.py {{args}}
 
+# ── Examples (Examples/, a SwiftPM package of its own; README.md, "Examples") ──
+
+EXAMPLES := PROJECT_ROOT / "Examples"
+
+[doc('Build every example app')]
+examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-wasm example-server
+
+[doc('Run the examples’ tests (SwiftPM, in Examples/)')]
+examples-test *args="":
+    cd {{EXAMPLES}} && {{SWIFT}} test {{args}}
+
+[doc('Build the iPhone and iPad example, one universal app, for the simulator')]
+example-ios:
+    {{BAZEL}} build //Examples/Apps/ExampleApp:iOSExample
+
+[doc('Build the Mac example')]
+example-mac:
+    {{BAZEL}} build //Examples/Apps/ExampleApp:MacExample
+
+[doc('Build the iOS example for Mac Catalyst into Examples/.build/catalyst (rules_apple has no Catalyst rule), e.g. just example-catalyst --open')]
+example-catalyst *args="":
+    python3 {{EXAMPLES}}/scripts/catalyst_app.py {{args}}
+
+[doc('Build the visionOS example for the simulator')]
+example-visionos:
+    {{BAZEL}} build //Examples/Apps/ExampleApp:VisionExample
+
+[doc('Build the watchOS example for the simulator')]
+example-watchos:
+    {{BAZEL}} build //Examples/Apps/ExampleApp:WatchExample
+
+# The Swift image CI's SwiftPM job runs in (.github/workflows/CI.yml).
+LINUX_SWIFT_IMAGE := "swift:6.3"
+
+[doc('Build the command-line and server examples on Linux, in Docker, and run the command-line one')]
+example-linux:
+    docker run --rm -v {{PROJECT_ROOT}}:/package -w /package/Examples {{LINUX_SWIFT_IMAGE}} bash -c \
+        'swift build --product CommandLineExample --scratch-path .build/linux && swift build --product ServerExample --scratch-path .build/linux && .build/linux/debug/CommandLineExample'
+
+[doc('Build the command-line example for wasm32-wasi (swiftly’s 6.3.3 and its WebAssembly SDK) and run it under wasmtime')]
+example-wasm:
+    cd {{EXAMPLES}} && TRAFFLUENT_EXAMPLES_WASM=1 swiftly run swift build --product CommandLineExample --swift-sdk swift-6.3.3-RELEASE_wasm --scratch-path .build/wasm +6.3.3
+    wasmtime run {{EXAMPLES}}/.build/wasm/debug/CommandLineExample.wasm
+
+[doc('Build the server example (Hummingbird); just serve-example runs it on 127.0.0.1:8080')]
+example-server:
+    cd {{EXAMPLES}} && {{SWIFT}} build --product ServerExample
+
+[doc('Run the server example on 127.0.0.1:8080, printing each request it serves')]
+serve-example:
+    cd {{EXAMPLES}} && {{SWIFT}} run ServerExample
+
 # The checkout of BenchmarkHarness whose benchmark-harness tool records simulated baselines.
 BENCHMARK_HARNESS := env("BENCHMARK_HARNESS", home_directory() / "workspace" / "BenchmarkHarness")
 
@@ -153,6 +205,7 @@ clean:
     rm -rf {{PROJECT_ROOT}}/.build
     rm -rf {{PROJECT_ROOT}}/Benchmarks/.build
     rm -rf {{PROJECT_ROOT}}/Fuzz/.build
+    rm -rf {{PROJECT_ROOT}}/Examples/.build
 
 [doc('Print the dependency graph of a target')]
 deps target="//Sources/Traffluent":

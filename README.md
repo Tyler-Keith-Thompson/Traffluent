@@ -54,6 +54,28 @@ await pipeline.track(SignedUp(plan: "pro"))  // prints: SignedUp SignedUp(plan: 
 | `Destinations` | `Destination`, where events are delivered, and `ConsoleDestination`, which prints them |
 | `Pipelines` | `Pipeline`: delivers each tracked event to every destination |
 
+## Examples
+
+Small apps that send typed events through a `Pipeline` to a `ConsoleDestination`, one per
+platform. Each builds its pipeline where it starts and passes it down. They live in
+[`Examples/`](Examples), a package of their own that depends on this one.
+
+| Platform | Example | Build |
+|---|---|---|
+| iPhone and iPad | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp), one universal app | `just example-ios` |
+| Mac | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp) | `just example-mac` |
+| Mac Catalyst | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp), the iOS app built for the Mac | `just example-catalyst` |
+| visionOS | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp) | `just example-visionos` |
+| watchOS | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp) | `just example-watchos` |
+| Linux | [`Examples/Sources/CommandLineExample`](Examples/Sources/CommandLineExample) | `just example-linux` (Docker) |
+| Wasm | [`Examples/Sources/CommandLineExample`](Examples/Sources/CommandLineExample) | `just example-wasm` (wasmtime) |
+| Server | [`Examples/Sources/ServerExample`](Examples/Sources/ServerExample), on Hummingbird | `just example-server`, `just serve-example` |
+
+The events are in [`ExampleEvents`](Examples/Sources/ExampleEvents), the screen the Apple apps
+share in [`ExampleViews`](Examples/Sources/ExampleViews), and the server's routes and tracking
+middleware in [`ExampleServer`](Examples/Sources/ExampleServer). `just examples` builds them all;
+`just examples-test` runs their tests.
+
 ## Development
 
 Bazel is the development build; SwiftPM is the published package. Both are generated from

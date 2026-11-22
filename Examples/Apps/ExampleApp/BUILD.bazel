@@ -1,0 +1,69 @@
+load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_apple//apple:visionos.bzl", "visionos_application")
+load("@rules_apple//apple:watchos.bzl", "watchos_application")
+load("//tools:swift_rules.bzl", "swift_library")
+
+# The Apple example app, hand-written in the shape of the project template's Apps/<Name>: a library
+# holding the composition root, built for each platform by an application rule below. ExampleView
+# (Examples/Sources/ExampleViews) is tested on the Mac by `just examples-test`. Every target is
+# `manual`, so `bazel build //...`, `just test` and `just test-release` never build the apps; the
+# `just example-*` recipes name them. Mac Catalyst has no rules_apple rule: `just example-catalyst`
+# builds this source for it (Examples/scripts/catalyst_app.py).
+swift_library(
+    name = "ExampleAppLibrary",
+    srcs = glob(["**/*.swift"]),
+    module_name = "ExampleApp",
+    tags = ["manual"],
+    deps = [
+        "//Sources/Destinations",
+        "//Examples/Sources/ExampleEvents",
+        "//Examples/Sources/ExampleViews",
+        "//Sources/Pipelines",
+    ],
+)
+
+# iPhone and iPad: one universal app. `just example-ios` builds it for the simulator.
+ios_application(
+    name = "iOSExample",
+    bundle_id = "com.example.traffluent.ios",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info-iOS.plist"],
+    minimum_os_version = "18.0",
+    tags = ["manual"],
+    deps = [":ExampleAppLibrary"],
+)
+
+# `just example-mac`.
+macos_application(
+    name = "MacExample",
+    bundle_id = "com.example.traffluent.mac",
+    infoplists = ["Info-macOS.plist"],
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [":ExampleAppLibrary"],
+)
+
+# `just example-visionos`, for the simulator.
+visionos_application(
+    name = "VisionExample",
+    bundle_id = "com.example.traffluent.vision",
+    infoplists = ["Info-visionOS.plist"],
+    minimum_os_version = "2.0",
+    tags = ["manual"],
+    deps = [":ExampleAppLibrary"],
+)
+
+# A single-target watch app (it has `deps`, no extension). `just example-watchos`, for the
+# simulator.
+watchos_application(
+    name = "WatchExample",
+    bundle_id = "com.example.traffluent.watch",
+    infoplists = ["Info-watchOS.plist"],
+    minimum_os_version = "11.0",
+    tags = ["manual"],
+    deps = [":ExampleAppLibrary"],
+)

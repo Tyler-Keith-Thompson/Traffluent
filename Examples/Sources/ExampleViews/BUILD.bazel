@@ -1,0 +1,15 @@
+load("//tools:swift_rules.bzl", "swift_library")
+
+# Hand-written, like ../ExampleEvents/BUILD.bazel: only the Apple apps build it with Bazel, and
+# `manual` keeps it out of `bazel build //...`. Its tests run under SwiftPM (`just examples-test`).
+swift_library(
+    name = "ExampleViews",
+    srcs = glob(["**/*.swift"]),
+    module_name = "ExampleViews",
+    tags = ["manual"],
+    visibility = ["//Examples:__subpackages__"],
+    deps = [
+        "//Examples/Sources/ExampleEvents",
+        "//Sources/Pipelines",
+    ],
+)
