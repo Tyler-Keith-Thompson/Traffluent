@@ -10,8 +10,8 @@ struct ExampleEventsTests {
     final class Recorder: Destination {
         let lines = Mutex<[String]>([])
 
-        func receive<E: Event>(_ event: E) async {
-            lines.withLock { $0.append("\(E.name) \(event)") }
+        func receive(_ batch: [EventRecord]) async {
+            lines.withLock { $0.append(contentsOf: batch.map { "\($0.name) \($0.event)" }) }
         }
     }
 
@@ -52,7 +52,7 @@ struct ExampleEventsTests {
     }
 
     @Test("A pipeline delivers the example events to its destination in the order tracked")
-    func throughPipeline() async {
+    func throughPipeline() async throws {
         let recorder = Recorder()
         let sut = Pipeline(recorder)
         let expected = [
@@ -61,9 +61,11 @@ struct ExampleEventsTests {
             #"RequestServed RequestServed(path: "/", status: 404)"#,
         ]
 
-        await sut.track(AppLaunched(platform: .mac))
-        await sut.track(ButtonTapped(label: "Share"))
-        await sut.track(RequestServed(path: "/", status: 404))
+        sut.track(AppLaunched(platform: .mac))
+        sut.track(ButtonTapped(label: "Share"))
+        sut.track(RequestServed(path: "/", status: 404))
+        sut.finish()
+        try await sut.run().execute()
 
         let actual = recorder.lines.withLock { $0 }
         #expect(actual == expected)

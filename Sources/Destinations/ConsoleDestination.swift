@@ -5,13 +5,18 @@ public struct ConsoleDestination: Destination {
     /// A destination that prints to standard output.
     public init() {}
 
-    /// Prints `event`: its type's `Event.name`, a space, and the value's description.
-    public func receive(_ event: some Event) async {
-        print(line(for: event))
+    /// Prints each record in `batch`, in order: its event's `Event.name`, a space, and the event's
+    /// description.
+    ///
+    /// - Parameter batch: The records to print.
+    public func receive(_ batch: [EventRecord]) async {
+        for record in batch {
+            print(line(for: record))
+        }
     }
 
-    /// The line ``receive(_:)`` prints for `event`.
-    package func line<E: Event>(for event: E) -> String {
-        "\(E.name) \(event)"
+    /// The line ``receive(_:)`` prints for `record`.
+    package func line(for record: EventRecord) -> String {
+        "\(record.name) \(record.event)"
     }
 }

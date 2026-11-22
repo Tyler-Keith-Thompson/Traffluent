@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Pipeline: delivers each tracked event to every destination.
+# Pipeline: records each tracked event, batches the records and delivers every batch to every destination.
 swift_library(
     name = "Pipelines",
     srcs = glob(["**/*.swift"]),
@@ -11,6 +11,7 @@ swift_library(
     deps = [
         "//Sources/Events",
         "//Sources/Destinations",
+        "@swiftpkg_afluent//:Afluent",
     ],
     visibility = ["//visibility:public"],
 )

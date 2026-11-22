@@ -31,13 +31,15 @@ let products: [Product] = [
 let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
     .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.1"),
+    .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.39"),
+    .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
 ]
 
 let targets: [Target] = [
     // Pipeline
     .target(name: "Events", exclude: bazelFiles),
     .target(name: "Destinations", dependencies: ["Events"], exclude: bazelFiles),
-    .target(name: "Pipelines", dependencies: ["Events", "Destinations"], exclude: bazelFiles),
+    .target(name: "Pipelines", dependencies: ["Events", "Destinations", .product(name: "Afluent", package: "afluent")], exclude: bazelFiles),
 
     // Umbrella: `import Traffluent` imports every module.
     .target(name: "Traffluent", dependencies: ["Events", "Destinations", "Pipelines"], exclude: bazelFiles),
@@ -47,7 +49,7 @@ let targets: [Target] = [
 
     .testTarget(name: "EventsTests", dependencies: ["Events"], exclude: testExcludes(bazelFiles, wasi: [])),
     .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "PipelinesTests", dependencies: ["Pipelines", "Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "PipelinesTests", dependencies: ["Pipelines", "Destinations", "Events", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["PipelineExitTests.swift"])),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent"], exclude: testExcludes(bazelFiles, wasi: [])),
 ]
 

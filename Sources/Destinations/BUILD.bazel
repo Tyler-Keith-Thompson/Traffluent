@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Destination: where events are delivered, and ConsoleDestination, which prints them.
+# Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.
 swift_library(
     name = "Destinations",
     srcs = glob(["**/*.swift"]),

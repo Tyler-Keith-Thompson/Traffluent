@@ -37,6 +37,8 @@ use_repo(
     swift_deps,
     "swift_deps_info",
     "swift_package",
+    "swiftpkg_afluent",
+    "swiftpkg_swift_clocks",
     "swiftpkg_swift_property_based",
     "swiftpkg_swiftprng",
 )

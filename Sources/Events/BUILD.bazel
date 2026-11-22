@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Event: the protocol typed analytics events conform to.
+# Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp and source location.
 swift_library(
     name = "Events",
     srcs = glob(["**/*.swift"]),

@@ -43,16 +43,28 @@ struct SignedUp: Event {
 }
 
 let pipeline = Pipeline(ConsoleDestination())
-await pipeline.track(SignedUp(plan: "pro"))  // prints: SignedUp SignedUp(plan: "pro")
+pipeline.track(SignedUp(plan: "pro"))
+pipeline.finish()
+try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
 ```
+
+`track` returns at once. It records the event as an `EventRecord`, with the time it was tracked
+and the caller's file, module, function, line and column, and sends the record into the
+pipeline. `run()` is the work of delivering: it gathers records into batches and hands each batch
+to every destination. Run it for as long as the app tracks events; `finish()` delivers what is
+still pending and ends it. By default a batch goes out every 20 events, or every 30 seconds while
+any are waiting; pass `strategy:` to choose another, such as `.count(100)` or
+`.either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock()))`. Timestamps and
+the default strategy's timer read the pipeline's `clock:`, a `ContinuousClock` unless you pass
+another (a test clock in tests).
 
 ## Modules
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to |
-| `Destinations` | `Destination`, where events are delivered, and `ConsoleDestination`, which prints them |
-| `Pipelines` | `Pipeline`: delivers each tracked event to every destination |
+| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp and `SourceLocation` |
+| `Destinations` | `Destination`, where batches of records are delivered, and `ConsoleDestination`, which prints them |
+| `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination |
 
 ## Examples
 

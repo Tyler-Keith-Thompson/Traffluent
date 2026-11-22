@@ -6,21 +6,18 @@
     import ExampleViews
     import Pipelines
     import SwiftUI
+    import Synchronization
     import Testing
     import ViewInspector
 
     @MainActor
     @Suite("ExampleView", .serialized, .timeLimit(.minutes(1)))
     struct ExampleViewTests {
-        // Taps track from a task of their own, so the test awaits the event's arrival here rather
-        // than sleeping.
         final class Recorder: Destination {
-            let (taps, continuation) = AsyncStream.makeStream(of: ButtonTapped.self)
+            let taps = Mutex<[ButtonTapped]>([])
 
-            func receive(_ event: some Event) async {
-                if let event = event as? ButtonTapped {
-                    continuation.yield(event)
-                }
+            func receive(_ batch: [EventRecord]) async {
+                taps.withLock { $0.append(contentsOf: batch.compactMap { $0.event as? ButtonTapped }) }
             }
         }
 
@@ -37,13 +34,15 @@
         @Test("Tapping a button tracks ButtonTapped with its label")
         func tap() async throws {
             let recorder = Recorder()
-            let sut = ExampleView(pipeline: Pipeline(recorder))
-            let expected = ButtonTapped(label: "Share")
+            let pipeline = Pipeline(recorder)
+            let sut = ExampleView(pipeline: pipeline)
+            let expected = [ButtonTapped(label: "Share")]
 
             try sut.inspect().find(button: "Share").tap()
+            pipeline.finish()
+            try await pipeline.run().execute()
 
-            var taps = recorder.taps.makeAsyncIterator()
-            let actual = await taps.next()
+            let actual = recorder.taps.withLock { $0 }
             #expect(actual == expected)
         }
     }

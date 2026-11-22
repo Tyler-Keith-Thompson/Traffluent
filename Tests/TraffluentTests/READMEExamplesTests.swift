@@ -3,15 +3,17 @@
 import Traffluent
 import Testing
 
-@Suite("README examples")
+@Suite("README examples", .timeLimit(.minutes(1)))
 struct READMEExamplesTests {
     struct SignedUp: Event {
         var plan: String
     }
 
     @Test("Usage")
-    func usage() async {
+    func usage() async throws {
         let pipeline = Pipeline(ConsoleDestination())
-        await pipeline.track(SignedUp(plan: "pro"))  // prints: SignedUp SignedUp(plan: "pro")
+        pipeline.track(SignedUp(plan: "pro"))
+        pipeline.finish()
+        try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 }

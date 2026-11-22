@@ -26,7 +26,7 @@
                     .font(.headline)
                 ForEach(Self.labels, id: \.self) { label in
                     Button(label) {
-                        Task { await pipeline.track(ButtonTapped(label: label)) }
+                        pipeline.track(ButtonTapped(label: label))
                     }
                 }
             }

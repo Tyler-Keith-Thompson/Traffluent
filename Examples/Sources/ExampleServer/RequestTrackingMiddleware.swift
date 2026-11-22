@@ -23,11 +23,11 @@ public struct RequestTrackingMiddleware<Context: RequestContext>: RouterMiddlewa
     ) async throws -> Response {
         do {
             let response = try await next(request, context)
-            await pipeline.track(RequestServed(path: request.uri.path, status: response.status.code))
+            pipeline.track(RequestServed(path: request.uri.path, status: response.status.code))
             return response
         } catch {
             let status = (error as? any HTTPResponseError)?.status ?? .internalServerError
-            await pipeline.track(RequestServed(path: request.uri.path, status: status.code))
+            pipeline.track(RequestServed(path: request.uri.path, status: status.code))
             throw error
         }
     }

@@ -21,6 +21,10 @@ swift_library(
         "//Sources/Pipelines",
         "//Sources/Destinations",
         "//Sources/Events",
+        "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_clocks//:Clocks",
+        "@swiftpkg_swift_property_based//:PropertyBased",
+        "//Tests/TraffluentTestSupport",
     ],
 )
 

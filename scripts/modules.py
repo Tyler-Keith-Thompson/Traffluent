@@ -31,6 +31,10 @@ PACKAGES = [
     ("swift-property-based", "https://github.com/x-sheep/swift-property-based", "2.0.1"),
     # Tests only: seeded generators and draws that reproduce on every platform.
     ("swiftprng", "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", "0.0.1"),
+    # The pipeline: a PassthroughSubject events are sent through, batched by `batch(strategy:)`.
+    ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.39"),
+    # Tests only: TestClock, to drive a pipeline's clock.
+    ("swift-clocks", "https://github.com/pointfreeco/swift-clocks", "1.1.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -56,9 +60,9 @@ MOCKING = "mockable/Mockable"
 # (name, group, description, dependencies)
 MODULES = [
     # Pipeline
-    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to.", []),
-    ("Destinations", "Pipeline", "Destination: where events are delivered, and ConsoleDestination, which prints them.", ["Events"]),
-    ("Pipelines", "Pipeline", "Pipeline: delivers each tracked event to every destination.", ["Events", "Destinations"]),
+    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp and source location.", []),
+    ("Destinations", "Pipeline", "Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.", ["Events"]),
+    ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -79,7 +83,7 @@ EXECUTABLES = [
 TEST_TARGETS = [
     ("EventsTests", ["Events"]),
     ("DestinationsTests", ["Destinations", "Events"]),
-    ("PipelinesTests", ["Pipelines", "Destinations", "Events"]),
+    ("PipelinesTests", ["Pipelines", "Destinations", "Events", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT]),
 ]
 
