@@ -111,6 +111,11 @@ let tracker = Tracker(enrichers: [screen])
 tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
 ```
 
+To see events beside your logs or traces, deliver to `LoggerDestination(logger:)` (module
+`LoggingDestinations`) or `SpanEventDestination(tracer:)` (module `TracingDestinations`). Each is a
+module of its own, so only apps that use swift-log or swift-distributed-tracing that way link it.
+A span event joins the span active when the event was tracked, even if delivery runs later.
+
 To test what your code tracks, deliver its tracker's records to an `InMemoryDestination` (module
 `DestinationTesting`; it depends on no test framework) and read it after the delivery:
 `events(of: SignedUp.self)`, `records` or `batches`.
@@ -127,6 +132,8 @@ One task reads a tracker's records at a time: a second reading at once traps.
 | `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation` and `ServiceContext` |
 | `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; and `batch()`, the default batching |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
+| `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
+| `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
 
 ## Examples

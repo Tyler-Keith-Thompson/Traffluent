@@ -17,6 +17,8 @@ LIBRARY_DIRECTORIES = [
     "Sources/DestinationTesting",
     "Sources/Destinations",
     "Sources/Events",
+    "Sources/LoggingDestinations",
+    "Sources/TracingDestinations",
     "Sources/Trackers",
     "Sources/Traffluent",
     "Tests/TraffluentTestSupport",

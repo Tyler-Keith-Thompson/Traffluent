@@ -31,3 +31,5 @@ try await delivery.execute()
 - ``/Trackers``
 - ``/Destinations``
 - ``/DestinationTesting``
+- ``/LoggingDestinations``
+- ``/TracingDestinations``

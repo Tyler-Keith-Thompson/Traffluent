@@ -38,7 +38,7 @@ PACKAGES = [
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
     # Logging, per AGENTS.md: the no-op tracker logs each event it drops.
-    ("swift-log", "https://github.com/apple/swift-log", "1.6.0"),
+    ("swift-log", "https://github.com/apple/swift-log", "1.17.2"),
     # Tests only: TestClock, to drive a batching strategy's clock.
     ("swift-clocks", "https://github.com/pointfreeco/swift-clocks", "1.1.0"),
     # Tests only: withMainSerialExecutor, which orders tasks so a cancellation lands where a test
@@ -72,6 +72,8 @@ MODULES = [
     ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered; ConsoleDestination, which prints them; and deliver(to:), which hands each batch of a sequence to every destination.", ["Events", "afluent/Afluent"]),
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
+    ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
+    ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.", ["Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
 ]
 
@@ -94,6 +96,8 @@ TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
     ("DestinationsTests", ["Destinations", "DestinationTesting", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
+    ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
+    ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation"]),
 ]
