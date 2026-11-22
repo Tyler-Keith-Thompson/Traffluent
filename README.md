@@ -1,8 +1,8 @@
 # Traffluent
 
 Traffluent is an analytics library for Swift that isn't tied to a vendor. Events are strongly
-typed values, not stringly typed names with `[String: Any]` property bags. One pipeline fans
-each event out to as many destinations as you like. It also handles what thin wrappers skip:
+typed values, not stringly typed names with `[String: Any]` property bags. A tracker records
+them, and one delivery fans each batch of them out to as many destinations as you like. It also handles what thin wrappers skip:
 batching, on-disk persistence, retry, consent gating, schema enforcement and automatic
 instrumentation. It is built for Swift 6 strict concurrency, has no singletons, and runs on every
 platform Swift does, not only Apple's. Use it in place of the in-house typed event layer most
@@ -27,7 +27,7 @@ Then add a product to your target, either the umbrella or individual modules:
 .target(name: "MyApp", dependencies: [
     .product(name: "Traffluent", package: "Traffluent"),
     // or, for example:
-    // .product(name: "Pipelines", package: "Traffluent"),
+    // .product(name: "Trackers", package: "Traffluent"),
 ]),
 ```
 
@@ -42,35 +42,49 @@ struct SignedUp: Event {
     var plan: String
 }
 
-let pipeline = Pipeline(ConsoleDestination())
-pipeline.track(SignedUp(plan: "pro"))
-pipeline.finish()
-try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+let tracker = Tracker()
+let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
+tracker.track(SignedUp(plan: "pro"))
+tracker.finish()
+try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
 ```
 
-`track` returns at once. It records the event as an `EventRecord`, with the time it was tracked
-and the caller's file, module, function, line and column, and sends the record into the
-pipeline. `run()` is the work of delivering: it gathers records into batches and hands each batch
-to every destination. Run it for as long as the app tracks events; `finish()` delivers what is
-still pending and ends it. By default a batch goes out every 20 events, or every 30 seconds while
-any are waiting; pass `strategy:` to choose another, such as `.count(100)` or
-`.either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock()))`. The default
-strategy's timer runs on the pipeline's `clock:`, and timestamps come from its `now:`, the
-system's time unless you pass another (a test clock and fixed dates in tests). Each destination
-receives its batches in order from a buffer of its own, so a slow one holds up only itself; when
-its buffer is full, its oldest waiting batch is dropped. A run that ends, even by cancellation or
-an error, can be started again.
+`track` returns at once, from any thread. It records the event as an `EventRecord`, with the time
+it was tracked and the caller's file, module, function, line and column, and adds the record to
+the tracker's `records`, an `AsyncSequence`. Delivering is a chain of operators over it:
+`batch()` gathers the records into batches of 20, or every 30 seconds while any are waiting, and
+`deliver(to:)` hands each batch to every destination. The chain is lazy, an Afluent unit of
+work: nothing runs until `execute()`. Run it for as long as the app tracks events; `finish()`
+ends the records, so the delivery sends what is still pending and completes. Records tracked
+before the delivery starts, or between two, wait for it, so none is lost.
 
-Code deep in an app needn't be handed the pipeline. Bind a `Tracker` to a task with `withTracker`
-and read it anywhere inside with `Tracker.current`:
+Batching is Afluent's `batch(strategy:)`, so any of its strategies, or one of your own, chooses
+when a batch goes out:
 
 ```swift
-let pipeline = Pipeline(ConsoleDestination())
-withTracker(Tracker(pipeline)) {
+let delivery = tracker.records
+    .batch(strategy: .either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock())))
+    .deliver(to: ConsoleDestination(), batchBufferLimit: 10)
+```
+
+`batch(clock:)` takes the clock the default's 30 seconds run on, and `Tracker(now:)` the
+wall-clock time records are stamped with, the system's unless you pass another (a test clock and
+fixed dates in tests). Each destination receives its batches in order from a buffer of its own,
+`batchBufferLimit` batches deep (100 by default), so a slow one holds up only itself; when its
+buffer is full, its oldest waiting batch is dropped. A delivery that finished or failed can be
+executed again (a retry). Cancelling one is permanent, as for every Afluent unit of work, so after
+a cancellation build a new delivery; it delivers every record the cancelled one hadn't read.
+
+Code deep in an app needn't be handed the tracker. Bind it to a task with `withTracker` and read
+it anywhere inside with `Tracker.current`:
+
+```swift
+let tracker = Tracker()
+withTracker(tracker) {
     Tracker.current.track(SignedUp(plan: "pro"))
 }
-pipeline.finish()
-try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+tracker.finish()
+try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
 ```
 
 The binding reaches child tasks, and a nested `withTracker` replaces it for its own scope. It
@@ -93,32 +107,32 @@ enum ScreenKey: ServiceContextKey {
 let screen = Enricher { context in
     context[ScreenKey.self] = "Checkout"
 }
-let pipeline = Pipeline(ConsoleDestination(), enrichers: [screen])
-pipeline.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+let tracker = Tracker(enrichers: [screen])
+tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
 ```
 
-To test what your code tracks, give its pipeline an `InMemoryDestination` (module
-`DestinationTesting`; it depends on no test framework) and read it after the run: `events(of: SignedUp.self)`,
-`records` or `batches`.
+To test what your code tracks, deliver its tracker's records to an `InMemoryDestination` (module
+`DestinationTesting`; it depends on no test framework) and read it after the delivery:
+`events(of: SignedUp.self)`, `records` or `batches`.
 
-Records are kept in memory only, for now. Events tracked before `run()` starts, or between runs,
-wait in memory without a bound, and records not yet delivered are lost if the process exits or
-the run is cancelled.
+Records are kept in memory only, for now. Records waiting for a delivery are held without a
+bound, and records a delivery has read but not yet delivered are lost if the process exits or the
+delivery is cancelled.
+One task reads a tracker's records at a time: a second reading at once traps.
 
 ## Modules
 
 | Module | Holds |
 |---|---|
 | `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation` and `ServiceContext` |
-| `Destinations` | `Destination`, where batches of records are delivered, and `ConsoleDestination`, which prints them |
-| `Pipelines` | `Pipeline`: records each tracked event, batches the records and delivers every batch to every destination, and `Enricher`, which adds to each record's context |
+| `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; and `batch()`, the default batching |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
-| `Trackers` | `Tracker`: what app code tracks events with, bound to a task with `withTracker` and read with `Tracker.current` |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
 
 ## Examples
 
-Small apps that send typed events through a `Pipeline` to a `ConsoleDestination`, one per
-platform. Each builds its pipeline where it starts and passes it down. They live in
+Small apps that track typed events with a `Tracker` and deliver them to a `ConsoleDestination`,
+one per platform. Each builds its tracker and starts its delivery where it starts. They live in
 [`Examples/`](Examples), a package of their own that depends on this one.
 
 | Platform | Example | Build |

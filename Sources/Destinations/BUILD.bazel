@@ -3,13 +3,14 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.
+# Destination: where batches of event records are delivered; ConsoleDestination, which prints them; and deliver(to:), which hands each batch of a sequence to every destination.
 swift_library(
     name = "Destinations",
     srcs = glob(["**/*.swift"]),
     module_name = "Destinations",
     deps = [
         "//Sources/Events",
+        "@swiftpkg_afluent//:Afluent",
     ],
     visibility = ["//visibility:public"],
 )

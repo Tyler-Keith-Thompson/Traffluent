@@ -14,5 +14,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
         .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
+        .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.4.3"),
     ]
 )

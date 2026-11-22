@@ -1,20 +1,20 @@
 import Destinations
 import ExampleEvents
-import Pipelines
 import Trackers
 
-/// The Linux and Wasm example: the composition root builds the pipeline and binds a tracker to
-/// the program's task, tracks the launch through `Tracker.current`, then finishes and runs the
-/// pipeline, which delivers the launch and returns.
+/// The Linux and Wasm example: the composition root builds the tracker and its delivery, binds
+/// the tracker to the program's task, tracks the launch through `Tracker.current`, then finishes
+/// the tracker and runs the delivery, which delivers the launch and returns.
 @main
 struct CommandLineExample {
     @MainActor
     static func main() async throws {
-        let pipeline = Pipeline(ConsoleDestination())
-        withTracker(Tracker(pipeline)) {
+        let tracker = Tracker()
+        let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
+        withTracker(tracker) {
             Tracker.current.track(AppLaunched(platform: .current))
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await delivery.execute()
     }
 }

@@ -2,8 +2,8 @@ import DestinationTesting
 import Destinations
 import Events
 import ExampleEvents
-import Pipelines
 import Testing
+import Trackers
 
 @Suite("Example events", .timeLimit(.minutes(1)))
 struct ExampleEventsTests {
@@ -43,21 +43,22 @@ struct ExampleEventsTests {
         #expect(actual == expected)
     }
 
-    @Test("A pipeline delivers the example events to its destination in the order tracked")
-    func throughPipeline() async throws {
+    @Test("A delivery hands the example events to its destination in the order tracked")
+    func delivered() async throws {
         let recorder = InMemoryDestination()
-        let sut = Pipeline(recorder)
+        let tracker = Tracker()
+        let sut = tracker.records.batch().deliver(to: recorder)
         let expected = [
             "AppLaunched AppLaunched(platform: ExampleEvents.Platform.mac)",
             #"ButtonTapped ButtonTapped(label: "Share")"#,
             #"RequestServed RequestServed(path: "/", status: 404)"#,
         ]
 
-        sut.track(AppLaunched(platform: .mac))
-        sut.track(ButtonTapped(label: "Share"))
-        sut.track(RequestServed(path: "/", status: 404))
-        sut.finish()
-        try await sut.run().execute()
+        tracker.track(AppLaunched(platform: .mac))
+        tracker.track(ButtonTapped(label: "Share"))
+        tracker.track(RequestServed(path: "/", status: 404))
+        tracker.finish()
+        try await sut.execute()
 
         let actual = recorder.records.map { "\($0.name) \($0.event)" }
         #expect(actual == expected)

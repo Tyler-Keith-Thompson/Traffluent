@@ -19,7 +19,13 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/Destinations",
+        "//Sources/DestinationTesting",
         "//Sources/Events",
+        "//Sources/Trackers",
+        "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_clocks//:Clocks",
+        "@swiftpkg_swift_property_based//:PropertyBased",
+        "//Tests/TraffluentTestSupport",
     ],
 )
 

@@ -5,7 +5,6 @@
     import Events
     import ExampleEvents
     import ExampleViews
-    import Pipelines
     import SwiftUI
     import Testing
     import Trackers
@@ -27,13 +26,13 @@
         @Test("Tapping a button tracks ButtonTapped with its label")
         func tap() async throws {
             let recorder = InMemoryDestination()
-            let pipeline = Pipeline(recorder)
-            let sut = ExampleView(tracker: Tracker(pipeline))
+            let tracker = Tracker()
+            let sut = ExampleView(tracker: tracker)
             let expected = [ButtonTapped(label: "Share")]
 
             try sut.inspect().find(button: "Share").tap()
-            pipeline.finish()
-            try await pipeline.run().execute()
+            tracker.finish()
+            try await tracker.records.batch().deliver(to: recorder).execute()
 
             let actual = recorder.events(of: ButtonTapped.self)
             #expect(actual == expected)

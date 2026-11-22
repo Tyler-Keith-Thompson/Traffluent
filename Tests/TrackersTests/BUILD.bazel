@@ -20,9 +20,14 @@ swift_library(
     deps = [
         "//Sources/Trackers",
         "//Sources/DestinationTesting",
-        "//Sources/Pipelines",
         "//Sources/Destinations",
         "//Sources/Events",
+        "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_distributed_tracing//:Tracing",
+        "@swiftpkg_swift_distributed_tracing//:InMemoryTracing",
+        "@swiftpkg_swift_concurrency_extras//:ConcurrencyExtras",
+        "//Tests/TraffluentTestSupport",
     ],
 )
 

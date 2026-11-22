@@ -31,15 +31,19 @@ PACKAGES = [
     ("swift-property-based", "https://github.com/x-sheep/swift-property-based", "2.0.1"),
     # Tests only: seeded generators and draws that reproduce on every platform.
     ("swiftprng", "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", "0.0.1"),
-    # The pipeline: a PassthroughSubject events are sent through, batched by `batch(strategy:)`.
+    # A tracker's records go through a PassthroughSubject, are batched by `batch(strategy:)`, and
+    # are delivered by a DeferredTask.
     ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.39"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
     # Logging, per AGENTS.md: the no-op tracker logs each event it drops.
     ("swift-log", "https://github.com/apple/swift-log", "1.6.0"),
-    # Tests only: TestClock, to drive a pipeline's clock.
+    # Tests only: TestClock, to drive a batching strategy's clock.
     ("swift-clocks", "https://github.com/pointfreeco/swift-clocks", "1.1.0"),
+    # Tests only: withMainSerialExecutor, which orders tasks so a cancellation lands where a test
+    # puts it.
+    ("swift-concurrency-extras", "https://github.com/pointfreeco/swift-concurrency-extras", "1.4.3"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -66,10 +70,9 @@ MOCKING = "mockable/Mockable"
 MODULES = [
     # Pipeline
     ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
-    ("Destinations", "Pipeline", "Destination: where batches of event records are delivered, and ConsoleDestination, which prints them.", ["Events"]),
-    ("Pipelines", "Pipeline", "Pipeline: records each tracked event, batches the records and delivers every batch to every destination.", ["Events", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation"]),
+    ("Destinations", "Pipeline", "Destination: where batches of event records are delivered; ConsoleDestination, which prints them; and deliver(to:), which hands each batch of a sequence to every destination.", ["Events", "afluent/Afluent"]),
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
-    ("Trackers", "Pipeline", "Tracker: what app code tracks events with, bound to a task with withTracker and read with Tracker.current.", ["Events", "Pipelines", "swift-log/Logging"]),
+    ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.", ["Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -89,10 +92,9 @@ EXECUTABLES = [
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
-    ("DestinationsTests", ["Destinations", "Events"]),
-    ("PipelinesTests", ["Pipelines", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Pipelines"]),
-    ("TrackersTests", ["Trackers", "DestinationTesting", "Pipelines", "Destinations", "Events"]),
+    ("DestinationsTests", ["Destinations", "DestinationTesting", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
+    ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation"]),
 ]
 

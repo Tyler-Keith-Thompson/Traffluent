@@ -2,8 +2,8 @@ import DestinationTesting
 import Destinations
 import Events
 import Foundation
-import Pipelines
 import Testing
+import Trackers
 
 @Suite("InMemoryDestination", .timeLimit(.minutes(1)))
 struct InMemoryDestinationTests {
@@ -27,15 +27,16 @@ struct InMemoryDestinationTests {
     @Test("It keeps every batch, and every record across batches, in the order received")
     func order() async throws {
         let sut = InMemoryDestination()
-        let pipeline = Pipeline(sut, strategy: .count(2))
+        let tracker = Tracker()
+        let delivery = tracker.records.batch(strategy: .count(2)).deliver(to: sut)
         let expectedBatches = [[1, 2], [3]]
         let expectedRecords = [1, 2, 3]
 
         for number in 1...3 {
-            pipeline.track(Tapped(number: number))
+            tracker.track(Tapped(number: number))
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await delivery.execute()
 
         let actualBatches = sut.batches.map { $0.compactMap { ($0.event as? Tapped)?.number } }
         let actualRecords = sut.records.compactMap { ($0.event as? Tapped)?.number }
@@ -46,15 +47,16 @@ struct InMemoryDestinationTests {
     @Test("events(of:) reads the events of one type, as that type, and leaves out the rest")
     func typed() async throws {
         let sut = InMemoryDestination()
-        let pipeline = Pipeline(sut)
+        let tracker = Tracker()
+        let delivery = tracker.records.batch().deliver(to: sut)
         let expectedTaps = [Tapped(number: 1), Tapped(number: 2)]
         let expectedViews = [Viewed(screen: "Home")]
 
-        pipeline.track(Tapped(number: 1))
-        pipeline.track(Viewed(screen: "Home"))
-        pipeline.track(Tapped(number: 2))
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.track(Tapped(number: 1))
+        tracker.track(Viewed(screen: "Home"))
+        tracker.track(Tapped(number: 2))
+        tracker.finish()
+        try await delivery.execute()
 
         let actualTaps = sut.events(of: Tapped.self)
         let actualViews = sut.events(of: Viewed.self)
@@ -80,14 +82,15 @@ struct InMemoryDestinationTests {
     @Test("deliveries announces each batch as it is received")
     func deliveries() async throws {
         let sut = InMemoryDestination()
-        let pipeline = Pipeline(sut, strategy: .count(1))
+        let tracker = Tracker()
+        let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: sut)
         let expected = [Tapped(number: 1)]
 
-        let running = Task { try await pipeline.run().execute() }
-        pipeline.track(Tapped(number: 1))
+        let running = Task { try await delivery.execute() }
+        tracker.track(Tapped(number: 1))
         var deliveries = sut.deliveries.makeAsyncIterator()
         let batch = try #require(await deliveries.next())
-        pipeline.finish()
+        tracker.finish()
         try await running.value
 
         let actual = batch.compactMap { $0.event as? Tapped }
@@ -97,10 +100,11 @@ struct InMemoryDestinationTests {
     @Test("Events tracked from many tasks at once, read while they arrive, are each kept exactly once")
     func concurrent() async throws {
         let sut = InMemoryDestination()
-        let pipeline = Pipeline(sut, strategy: .count(7))
+        let tracker = Tracker()
+        let delivery = tracker.records.batch(strategy: .count(7)).deliver(to: sut)
         let expected = Array(1...500)
 
-        let running = Task { try await pipeline.run().execute() }
+        let running = Task { try await delivery.execute() }
         let reader = Task {
             var reads = 0
             while !Task.isCancelled {
@@ -112,10 +116,10 @@ struct InMemoryDestinationTests {
         }
         await withDiscardingTaskGroup { group in
             for number in expected {
-                group.addTask { pipeline.track(Tapped(number: number)) }
+                group.addTask { tracker.track(Tapped(number: number)) }
             }
         }
-        pipeline.finish()
+        tracker.finish()
         try await running.value
         reader.cancel()
         _ = await reader.value

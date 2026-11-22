@@ -12,20 +12,31 @@ struct READMEExamplesTests {
 
     @Test("Usage")
     func usage() async throws {
-        let pipeline = Pipeline(ConsoleDestination())
-        pipeline.track(SignedUp(plan: "pro"))
-        pipeline.finish()
-        try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+        let tracker = Tracker()
+        let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
+        tracker.track(SignedUp(plan: "pro"))
+        tracker.finish()
+        try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
+    }
+
+    @Test("Batching")
+    func batching() async throws {
+        let tracker = Tracker()
+        let delivery = tracker.records
+            .batch(strategy: .either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock())))
+            .deliver(to: ConsoleDestination(), batchBufferLimit: 10)
+        tracker.finish()
+        try await delivery.execute()
     }
 
     @Test("Tracking from anywhere")
     func trackingFromAnywhere() async throws {
-        let pipeline = Pipeline(ConsoleDestination())
-        withTracker(Tracker(pipeline)) {
+        let tracker = Tracker()
+        withTracker(tracker) {
             Tracker.current.track(SignedUp(plan: "pro"))
         }
-        pipeline.finish()
-        try await pipeline.run().execute()  // prints: SignedUp SignedUp(plan: "pro")
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
     enum ScreenKey: ServiceContextKey {
@@ -37,9 +48,9 @@ struct READMEExamplesTests {
         let screen = Enricher { context in
             context[ScreenKey.self] = "Checkout"
         }
-        let pipeline = Pipeline(ConsoleDestination(), enrichers: [screen])
-        pipeline.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
-        pipeline.finish()
-        try await pipeline.run().execute()
+        let tracker = Tracker(enrichers: [screen])
+        tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()
     }
 }

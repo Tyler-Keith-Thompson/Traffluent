@@ -28,7 +28,7 @@ TRIPLE = "arm64-apple-ios18.0-macabi"
 # The module the app imports that reaches every other it needs, and those modules, whose objects
 # the app links.
 TOP_MODULE = "ExampleViews"
-LINKED_MODULES = ["Events", "Destinations", "Pipelines", "ExampleEvents", "ExampleViews"]
+LINKED_MODULES = ["Events", "Destinations", "Trackers", "ExampleEvents", "ExampleViews"]
 SWIFT = ["env", "-u", "TOOLCHAINS", "xcrun", "--toolchain", "default"]
 
 

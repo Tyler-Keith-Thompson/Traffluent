@@ -1,8 +1,8 @@
 # Examples
 
 Example apps for every platform Traffluent supports, as a SwiftPM package that depends on the
-library by path (`..`). Each builds a `Pipeline` to a `ConsoleDestination` at its composition root
-and tracks typed events from `ExampleEvents`.
+library by path (`..`). Each builds a `Tracker` at its composition root, delivers its records to a
+`ConsoleDestination`, and tracks typed events from `ExampleEvents`.
 
 | Path | What it is |
 |---|---|

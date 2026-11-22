@@ -3,8 +3,8 @@ public import Instrumentation
 
 /// A tracked event: the event itself, when it was tracked, where, and the context it was tracked in.
 ///
-/// A pipeline makes one record per tracked event and delivers them to its destinations in
-/// batches. The event keeps its type: a destination reads its properties by casting
+/// A tracker makes one record per tracked event, and a delivery hands them to its destinations
+/// in batches. The event keeps its type: a destination reads its properties by casting
 /// ``event`` to the event types it knows, or by opening it as `some Event`.
 public struct EventRecord: Sendable {
     /// The event that was tracked.
@@ -13,7 +13,7 @@ public struct EventRecord: Sendable {
     public var timestamp: Date
     /// Where in source code the event was tracked.
     public var sourceLocation: SourceLocation
-    /// The `ServiceContext` the event was tracked in, with what the pipeline's enrichers added.
+    /// The `ServiceContext` the event was tracked in, with what the tracker's enrichers added.
     ///
     /// Its values are read through typed `ServiceContextKey`s. Inside an active span, it holds the
     /// span's context, so a destination can join the event to the trace.

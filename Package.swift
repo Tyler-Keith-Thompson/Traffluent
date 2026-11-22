@@ -25,7 +25,6 @@ let products: [Product] = [
     .library(name: "Traffluent", targets: ["Traffluent"]),
     .library(name: "Events", targets: ["Events"]),
     .library(name: "Destinations", targets: ["Destinations"]),
-    .library(name: "Pipelines", targets: ["Pipelines"]),
     .library(name: "DestinationTesting", targets: ["DestinationTesting"]),
     .library(name: "Trackers", targets: ["Trackers"]),
 ]
@@ -37,27 +36,26 @@ let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
     .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
+    .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.4.3"),
 ]
 
 let targets: [Target] = [
     // Pipeline
     .target(name: "Events", dependencies: [.product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
-    .target(name: "Destinations", dependencies: ["Events"], exclude: bazelFiles),
-    .target(name: "Pipelines", dependencies: ["Events", "Destinations", .product(name: "Afluent", package: "afluent"), .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .target(name: "Destinations", dependencies: ["Events", .product(name: "Afluent", package: "afluent")], exclude: bazelFiles),
     .target(name: "DestinationTesting", dependencies: ["Events", "Destinations"], exclude: bazelFiles),
-    .target(name: "Trackers", dependencies: ["Events", "Pipelines", .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
+    .target(name: "Trackers", dependencies: ["Events", .product(name: "Afluent", package: "afluent"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
 
     // Umbrella: `import Traffluent` imports every module.
-    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "Pipelines", "DestinationTesting", "Trackers"], exclude: bazelFiles),
+    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "Trackers"], exclude: bazelFiles),
 
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
 
     .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "PipelinesTests", dependencies: ["Pipelines", "DestinationTesting", "Destinations", "Events", .product(name: "Afluent", package: "afluent"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["PipelineExitTests.swift"])),
-    .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Pipelines"], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Pipelines", "Destinations", "Events"], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "DestinationTesting", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["DeliverExitTests.swift"])),
+    .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Trackers"], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Destinations", "Events", .product(name: "Afluent", package: "afluent"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["TrackerExitTests.swift"])),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
 ]
 

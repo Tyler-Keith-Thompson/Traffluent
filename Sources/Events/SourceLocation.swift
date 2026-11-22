@@ -1,6 +1,6 @@
 /// Where in source code an event was tracked.
 ///
-/// A pipeline captures each field from its caller's default arguments, so the location is the
+/// A tracker captures each field from its caller's default arguments, so the location is the
 /// line that called `track`, not a line inside the library.
 public struct SourceLocation: Sendable, Hashable {
     /// The file, as `#file` gives it. In the Swift 6 language mode this is the same as ``fileID``.

@@ -5,7 +5,6 @@ import ExampleEvents
 import ExampleServer
 import Hummingbird
 import HummingbirdTesting
-import Pipelines
 import Testing
 import Trackers
 
@@ -28,17 +27,17 @@ struct RequestTrackingMiddlewareTests {
     @Test("A served request is tracked through the bound tracker with its path and status")
     func tracksSuccess() async throws {
         let recorder = InMemoryDestination()
-        let pipeline = Pipeline(recorder)
+        let tracker = Tracker()
         let sut = Application(router: buildRouter())
         let expected = [RequestServed(path: "/items/7", status: 200)]
 
-        try await withTracker(Tracker(pipeline)) {
+        try await withTracker(tracker) {
             try await sut.test(.router) { client in
                 try await client.execute(uri: "/items/7?color=red", method: .get) { _ in }
             }
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
@@ -47,20 +46,20 @@ struct RequestTrackingMiddlewareTests {
     @Test("A request a route rejects is tracked with the error's status")
     func tracksFailure() async throws {
         let recorder = InMemoryDestination()
-        let pipeline = Pipeline(recorder)
+        let tracker = Tracker()
         let sut = Application(router: buildRouter())
         let expectedStatus = HTTPResponse.Status.badRequest
         let expected = [RequestServed(path: "/items/seven", status: 400)]
 
-        let actualStatus = try await withTracker(Tracker(pipeline)) {
+        let actualStatus = try await withTracker(tracker) {
             try await sut.test(.router) { client in
                 try await client.execute(uri: "/items/seven", method: .get) { response in
                     response.status
                 }
             }
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
         #expect(actualStatus == expectedStatus)
@@ -70,21 +69,21 @@ struct RequestTrackingMiddlewareTests {
     @Test("Every request is tracked, in the order served")
     func tracksEach() async throws {
         let recorder = InMemoryDestination()
-        let pipeline = Pipeline(recorder)
+        let tracker = Tracker()
         let sut = Application(router: buildRouter())
         let expected = [
             RequestServed(path: "/", status: 200),
             RequestServed(path: "/items/1", status: 200),
         ]
 
-        try await withTracker(Tracker(pipeline)) {
+        try await withTracker(tracker) {
             try await sut.test(.router) { client in
                 try await client.execute(uri: "/", method: .get) { _ in }
                 try await client.execute(uri: "/items/1", method: .get) { _ in }
             }
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
@@ -94,20 +93,20 @@ struct RequestTrackingMiddlewareTests {
     func tracksUnknownError() async throws {
         struct Broken: Error {}
         let recorder = InMemoryDestination()
-        let pipeline = Pipeline(recorder)
+        let tracker = Tracker()
         let router = Router()
         router.add(middleware: RequestTrackingMiddleware())
         router.get("/broken") { _, _ -> String in throw Broken() }
         let sut = Application(router: router)
         let expected = [RequestServed(path: "/broken", status: 500)]
 
-        try await withTracker(Tracker(pipeline)) {
+        try await withTracker(tracker) {
             try await sut.test(.router) { client in
                 try await client.execute(uri: "/broken", method: .get) { _ in }
             }
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)
@@ -116,17 +115,17 @@ struct RequestTrackingMiddlewareTests {
     @Test("A live server's request handlers see the tracker bound around the server")
     func liveServer() async throws {
         let recorder = InMemoryDestination()
-        let pipeline = Pipeline(recorder)
+        let tracker = Tracker()
         let sut = Application(router: buildRouter())
         let expected = [RequestServed(path: "/items/3", status: 200)]
 
-        try await withTracker(Tracker(pipeline)) {
+        try await withTracker(tracker) {
             try await sut.test(.live) { client in
                 try await client.execute(uri: "/items/3", method: .get) { _ in }
             }
         }
-        pipeline.finish()
-        try await pipeline.run().execute()
+        tracker.finish()
+        try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
         #expect(actual == expected)

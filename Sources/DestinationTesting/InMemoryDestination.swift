@@ -4,18 +4,18 @@ import Synchronization
 
 /// A destination that keeps every batch it receives, for tests.
 ///
-/// Give it to a pipeline, run the pipeline, then read what arrived:
+/// Deliver to it, then read what arrived:
 ///
 /// ```swift
 /// let destination = InMemoryDestination()
-/// let pipeline = Pipeline(destination)
-/// pipeline.track(SignedUp(plan: "pro"))
-/// pipeline.finish()
-/// try await pipeline.run().execute()
+/// let tracker = Tracker()
+/// tracker.track(SignedUp(plan: "pro"))
+/// tracker.finish()
+/// try await tracker.records.batch().deliver(to: destination).execute()
 /// destination.events(of: SignedUp.self)  // [SignedUp(plan: "pro")]
 /// ```
 ///
-/// Copies share what they record: the copy the pipeline holds and the one the test reads are the
+/// Copies share what they record: the copy the delivery holds and the one the test reads are the
 /// same log. Reading is safe while batches arrive.
 public struct InMemoryDestination: Destination {
     // A Mutex rather than an actor: tests read the log synchronously right after a run, and each

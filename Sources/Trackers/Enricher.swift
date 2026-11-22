@@ -1,6 +1,6 @@
 public import Instrumentation
 
-/// Adds to the context of each event a pipeline tracks, before the record is batched.
+/// Adds to the context of each event a tracker tracks, before the record is delivered.
 ///
 /// An enricher reads and sets values through typed `ServiceContextKey`s, so what it adds keeps its
 /// type all the way to the destinations:
@@ -13,10 +13,10 @@ public import Instrumentation
 /// let session = Enricher { context in
 ///     context[SessionKey.self] = "s-42"
 /// }
-/// let pipeline = Pipeline(ConsoleDestination(), enrichers: [session])
+/// let tracker = Tracker(enrichers: [session])
 /// ```
 ///
-/// A pipeline runs its enrichers in order, on the context `track` took from
+/// A tracker runs its enrichers in order, on the context `track` took from
 /// `ServiceContext.current`, as the event is tracked: an enricher sees what earlier ones set, and
 /// may override a value the caller's context already holds.
 public struct Enricher: Sendable {
