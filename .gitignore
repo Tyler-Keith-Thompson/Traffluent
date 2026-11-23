@@ -39,3 +39,4 @@ Benchmarks/.harness/
 /Fuzz/Crashes/
 
 *.swp
+/check/
