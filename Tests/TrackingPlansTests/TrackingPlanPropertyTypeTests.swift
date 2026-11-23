@@ -51,7 +51,7 @@ struct TrackingPlanPropertyTypeTests {
         let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: typeName, isOptional: false),
         ])])
-        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last).contents, as: UTF8.self))
+        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
 
         let actual = document.object?["properties"]?.object?["value"]
 
@@ -93,7 +93,7 @@ struct TrackingPlanPropertyTypeTests {
         let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: typeName, isOptional: false),
         ])])
-        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last).contents, as: UTF8.self))
+        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
 
         let actual = document.object?["properties"]?.object?["value"]
 
@@ -106,7 +106,7 @@ struct TrackingPlanPropertyTypeTests {
         let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: "[Coordinate?]", isOptional: true),
         ])])
-        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last).contents, as: UTF8.self))
+        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
 
         let actual = document.object?["properties"]?.object?["value"]
 
@@ -121,7 +121,7 @@ struct TrackingPlanPropertyTypeTests {
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
             EventSchema.Property(name: "seats", typeName: "UInt8", isOptional: true),
         ])])
-        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last).contents, as: UTF8.self))
+        let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
 
         let actualProperty = document.object?["properties"]?.object?["seats"]
         let actualRequired = document.object?["required"]

@@ -141,9 +141,10 @@ struct READMEExamplesTests {
     @Test("Exporting a tracking plan")
     func exportingATrackingPlan() {
         let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
-        let paths = plan.files.map(\.path)  // ["tracking-plan.json", "checkout_started.v2.schema.json"]
+        let paths = plan.files.map(\.path)
+        // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 
-        #expect(paths == ["tracking-plan.json", "checkout_started.v2.schema.json"])
+        #expect(paths == ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"])
     }
 }
 

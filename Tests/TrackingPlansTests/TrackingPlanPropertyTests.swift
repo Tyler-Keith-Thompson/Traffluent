@@ -22,7 +22,7 @@ struct TrackingPlanPropertyTests {
             let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: version, consentCategory: .analytics, properties: properties)])
             let expectedNames = Set(properties.map(\.name))
             let expectedRequired = properties.filter { !$0.isOptional }.map(\.name)
-            let text = String(decoding: sut.files.last?.contents ?? [], as: UTF8.self)
+            let text = String(decoding: sut.files.last { $0.path.hasSuffix(".schema.json") }?.contents ?? [], as: UTF8.self)
             let document = try? JSONValue.parse(text)
 
             let actualNames = document?.object?["properties"]?.object.map { Array($0.keys) } ?? []
@@ -48,7 +48,7 @@ struct TrackingPlanPropertyTests {
                 EventSchema.Property(name: "p\(index)", typeName: TrackingPlanPropertyTests.typeNames[type], isOptional: optionals[index])
             }
             let sut = TrackingPlan(schemas: [EventSchema(name: String(decoding: name, as: UTF8.self), version: 1, consentCategory: .analytics, properties: properties)])
-            let document = try? JSONValue.parse(String(decoding: sut.files.last?.contents ?? [], as: UTF8.self))
+            let document = try? JSONValue.parse(String(decoding: sut.files.last { $0.path.hasSuffix(".schema.json") }?.contents ?? [], as: UTF8.self))
 
             let actual = document.map { metaSchema.validate($0) }
 

@@ -26,6 +26,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/Persistence",
     "Sources/TracingDestinations",
     "Sources/Trackers",
+    "Sources/TrackingPlanTesting",
     "Sources/TrackingPlans",
     "Sources/Traffluent",
     "Tests/TraffluentTestSupport",

@@ -29,7 +29,9 @@ let products: [Product] = [
     .library(name: "GRDBPersistence", targets: ["GRDBPersistence"]),
     .library(name: "EventMacros", targets: ["EventMacros"]),
     .library(name: "TrackingPlans", targets: ["TrackingPlans"]),
+    .library(name: "TrackingPlanTesting", targets: ["TrackingPlanTesting"]),
     .plugin(name: "ExportTrackingPlan", targets: ["ExportTrackingPlan"]),
+    .plugin(name: "CheckTrackingPlan", targets: ["CheckTrackingPlan"]),
 ]
 
 let dependencies: [Package.Dependency] = [
@@ -64,11 +66,13 @@ let targets: [Target] = [
     // Schema
     .target(name: "EventMacros", dependencies: ["Events", "Persistence", "EventMacrosPlugin"], exclude: bazelFiles),
     .target(name: "TrackingPlans", dependencies: ["Events"], exclude: bazelFiles),
+    .target(name: "TrackingPlanTesting", dependencies: ["TrackingPlans"], exclude: bazelFiles),
     // Schema: compiler plugin
     .macro(name: "EventMacrosPlugin", dependencies: [.product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftCompilerPlugin", package: "swift-syntax"), .product(name: "SwiftDiagnostics", package: "swift-syntax")], exclude: bazelFiles),
 
     // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build
     .plugin(name: "ExportTrackingPlan", capability: .command(intent: .custom(verb: "export-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files."), permissions: [.writeToPackageDirectory(reason: "Writes the tracking plan's JSON Schema files into the package")])),
+    .plugin(name: "CheckTrackingPlan", capability: .command(intent: .custom(verb: "check-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan."), permissions: [])),
 
     // Umbrella: `import Traffluent` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).
     .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "Checksums", "Persistence"], exclude: bazelFiles),
@@ -79,6 +83,7 @@ let targets: [Target] = [
     .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlansTests", dependencies: ["TrackingPlans", "EventMacros", "Events", .product(name: "JSONSchema", package: "swift-json-schema"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "TrackingPlanTestingTests", dependencies: ["TrackingPlanTesting", "TrackingPlans", "Events"], exclude: bazelFiles),
     .testTarget(name: "EventMacrosPluginTests", dependencies: ["EventMacrosPlugin", .product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"), .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax")], exclude: bazelFiles),
     .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "DestinationTesting", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Trackers"], exclude: bazelFiles),

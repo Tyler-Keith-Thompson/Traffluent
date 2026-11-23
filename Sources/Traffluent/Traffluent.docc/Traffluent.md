@@ -8,8 +8,9 @@ An event is a value conforming to `Event`. A `Tracker` is a value: tracking an e
 
 `import Traffluent` imports every module but ``/GRDBPersistence``, a product of its own for apps
 that already use GRDB; ``/EventMacros``, whose `@Event` macro derives an event's conformances
-and schema from its declaration and which alone builds swift-syntax; and ``/TrackingPlans``, which
-exports those schemas as a JSON Schema tracking plan. Each module also has its own documentation and can be imported on its own.
+and schema from its declaration and which alone builds swift-syntax; ``/TrackingPlans``, which
+exports those schemas as a JSON Schema tracking plan and checks the events against a committed one;
+and ``/TrackingPlanTesting``, which runs that check from an app's tests. Each module also has its own documentation and can be imported on its own.
 
 ```swift
 import Traffluent
@@ -44,4 +45,5 @@ try await delivery.execute()
 - ``/GRDBPersistence``
 - ``/EventMacros``
 - ``/TrackingPlans``
+- ``/TrackingPlanTesting``
 - ``/Checksums``

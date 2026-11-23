@@ -105,7 +105,9 @@ MODULES = [
     ("GRDBPersistence", "Persistence", "DatabaseStore: a RecordStore that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only.", ["Events", "Persistence", "grdb.swift/GRDB", "swift-log/Logging"]),
     # Schema
     ("EventMacros", "Schema", "The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration.", ["Events", "Persistence", "EventMacrosPlugin"]),
-    ("TrackingPlans", "Schema", "TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes one.", ["Events"]),
+    ("TrackingPlans", "Schema", "TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes or checks one; TrackingPlanCheck, a comparison with the committed plan naming every TrackingPlanDifference.", ["Events"]),
+    # Imports Testing, so it is a product of its own that an app adds to its test target alone.
+    ("TrackingPlanTesting", "Schema", "expectTrackingPlan(_:matches:): records a Swift Testing issue with the check's report when an app's events no longer match its committed tracking plan.", ["TrackingPlans"]),
 ]
 
 # Compiler plugins holding macros: (name, group, description, dependencies). A module lists one
@@ -132,19 +134,29 @@ IOS_MODULES = []
 # Modules the umbrella leaves out: each is a product of its own that an adopter adds by name, as
 # it pulls in a package the rest of the library doesn't need (GRDB, swift-syntax). The umbrella's docs still
 # link to them.
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting"]
+
+# Library modules that import Swift Testing, test helpers an adopter adds to a test target. Bazel
+# finds Testing (and XCTest) only on a test target's search paths, so these get the developer
+# search paths too (rules_swift's `always_include_developer_search_paths`), rather than
+# `testonly`, which the docs targets that depend on them would then have to be as well.
+TESTING_MODULES = ["TrackingPlanTesting"]
 IOS_MINIMUM = "18.0"
 
 # SwiftPM command plugins: (name, verb, description, reason). Each is a `.plugin` target with its
 # sources in Plugins/<name>, SwiftPM's default, and a product of the same name, run with
 # `swift package <verb>`; `reason` is the one the plugin gives for writing to the package directory,
-# which the user allows with `--allow-writing-to-package-directory`. Bazel builds none of them:
+# which the user allows with `--allow-writing-to-package-directory`, or None for a plugin that only
+# reads, which asks for no permission. Bazel builds none of them:
 # PackagePlugin is SwiftPM's alone, so Plugins/ holds no BUILD.bazel, the docs leave them out and
 # //:package_swift_test doesn't compare them.
 PLUGINS = [
     ("ExportTrackingPlan", "export-tracking-plan",
      "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files.",
      "Writes the tracking plan's JSON Schema files into the package"),
+    ("CheckTrackingPlan", "check-tracking-plan",
+     "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan.",
+     None),
 ]
 
 # Executables: (name, description, dependencies). Each is an `.executableTarget` and product in
@@ -159,6 +171,7 @@ TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
     ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "DestinationTesting", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
@@ -244,6 +257,8 @@ def check():
         assert all("/" in d for d in deps), f"the plugin {name} may depend on packages only"
     for name, deps in TEST_TARGETS:
         assert not (any(is_macro(d) for d in deps) and simulator_test(name)), f"{name} tests a plugin, which the simulator can't load"
+    for name in TESTING_MODULES:
+        assert name in names, f"TESTING_MODULES names unknown module {name}"
     for name in IOS_MODULES + NON_UMBRELLA_MODULES:
         assert not is_macro(name), f"{name} is a plugin, which is never in the umbrella or IOS_MODULES"
     executables = [e[0] for e in EXECUTABLES]
@@ -461,7 +476,7 @@ def package_swift():
     for name, verb, description, reason in PLUGINS:
         lines.append(
             f'    .plugin(name: "{name}", capability: .command(intent: .custom(verb: "{verb}", description: "{description}"), '
-            f'permissions: [.writeToPackageDirectory(reason: "{reason}")])),'
+            + (f'permissions: [.writeToPackageDirectory(reason: "{reason}")])),' if reason else "permissions: [])),")
         )
     all_deps = ", ".join(f'"{n}"' for n in umbrella_modules())
     support_deps = ", ".join(spm_dep(d) for d in TEST_SUPPORT_DEPENDENCIES)
@@ -531,6 +546,10 @@ def build_bazel(name, description, deps, doc_modules=None):
         "    # Mock<Protocol> types from @Mockable, in debug builds only (MOCKING in scripts/modules.py).\n"
         '    defines = select({"//tools:debug": ["MOCKING"], "//conditions:default": []}),\n'
     ) if MOCKING in deps else ""
+    testing_attr = (
+        "    # Imports Testing, which is on the developer search paths (TESTING_MODULES in scripts/modules.py).\n"
+        "    always_include_developer_search_paths = True,\n"
+    ) if name in TESTING_MODULES else ""
     if name in IOS_MODULES:
         return (
             "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
@@ -561,6 +580,7 @@ def build_bazel(name, description, deps, doc_modules=None):
         f'    module_name = "{name}",\n'
         f"{defines_attr}"
         f"{deps_attr}"
+        f"{testing_attr}"
         '    visibility = ["//visibility:public"],\n'
         ")\n\n"
         "# The module's DocC archive, merged into //:docs. `manual` keeps it out of `bazel build //...`.\n"

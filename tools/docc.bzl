@@ -139,7 +139,9 @@ def _extract_symbol_graph(ctx, module_name):
         # Matches the swift-docc-plugin's defaults.
         emit_extension_block_symbols = "1",
         feature_configuration = feature_configuration,
-        include_dev_srch_paths = False,
+        # A module that imports Testing (TESTING_MODULES in scripts/modules.py) is found only on the
+        # developer search paths; for every other module they add nothing it imports.
+        include_dev_srch_paths = True,
         minimum_access_level = "public",
         module_name = module_name,
         output_dir = extracted,

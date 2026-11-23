@@ -28,16 +28,18 @@ struct TrackingPlanWriteTests {
         #expect(actual == expected)
     }
 
-    @Test("Writing deletes the documents the plan no longer holds and leaves other files alone")
+    @Test("Writing deletes the documents and examples the plan no longer holds and leaves other files alone")
     func removesStale() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let stale = directory.appendingPathComponent("signed_in.v1.schema.json")
+        let staleExample = directory.appendingPathComponent("signed_in.v1.example.json")
         let kept = directory.appendingPathComponent("README.md")
         #expect(FileManager.default.createFile(atPath: stale.path, contents: Data("{}".utf8)))
+        #expect(FileManager.default.createFile(atPath: staleExample.path, contents: Data("{}".utf8)))
         #expect(FileManager.default.createFile(atPath: kept.path, contents: Data("notes".utf8)))
-        let expected = ["README.md", "signed_up.v1.schema.json", "tracking-plan.json"]
+        let expected = ["README.md", "signed_up.v1.example.json", "signed_up.v1.schema.json", "tracking-plan.json"]
         let sut = ExampleCommand.trackingPlan
 
         try sut.write(to: directory)
@@ -61,7 +63,7 @@ struct TrackingPlanWriteTests {
         try sut.write(to: directory)
 
         let actual = try paths.map { try FileManager.default.attributesOfItem(atPath: $0)[.modificationDate] as? Date }
-        #expect(actual == [expected, expected])
+        #expect(actual == [expected, expected, expected])
     }
 
     @Test("Writing a plan again rewrites a file whose bytes changed")
@@ -72,7 +74,7 @@ struct TrackingPlanWriteTests {
         try sut.write(to: directory)
         let document = directory.appendingPathComponent("signed_up.v1.schema.json")
         try Data("{}".utf8).write(to: document)
-        let expected = sut.files.last.map { Data($0.contents) }
+        let expected = sut.files.first { $0.path == "signed_up.v1.schema.json" }.map { Data($0.contents) }
 
         try sut.write(to: directory)
 
@@ -106,7 +108,7 @@ struct TrackingPlanWriteTests {
 
     // Paths under /dev/null, which no file can be written to, so a command that wrongly takes the
     // first of two arguments fails rather than writing into the working directory.
-    @Test("The command exits 64 unless it is given exactly one argument", arguments: [[], ["/dev/null/a", "/dev/null/b"]])
+    @Test("The command exits 64 unless it is given exactly one argument or check and one", arguments: [[], ["/dev/null/a", "/dev/null/b"]])
     func usage(arguments: [String]) {
         let expected: Int32 = 64
 

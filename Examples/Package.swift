@@ -30,9 +30,11 @@ let targets: [Target] = [
         .product(name: "ViewInspector", package: "viewinspector", condition: .when(platforms: [.macOS])),
     ]),
     // A store's events, declared with @Event, and the executable the export-tracking-plan plugin runs to
-    // write their tracking plan into TrackingPlan/.
+    // write their tracking plan into TrackingPlan/ and check-tracking-plan runs to check it; its test
+    // checks it too.
     .target(name: "StoreEvents", dependencies: [library("EventMacros")]),
     .executableTarget(name: "StoreTrackingPlan", dependencies: ["StoreEvents", library("TrackingPlans")]),
+    .testTarget(name: "StoreTrackingPlanTests", dependencies: ["StoreTrackingPlan", library("TrackingPlanTesting")]),
     .testTarget(name: "ExampleServerTests", dependencies: [
         "ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("HTTPDestinations"), library("Trackers"),
         hummingbird, .product(name: "HummingbirdTesting", package: "hummingbird"),

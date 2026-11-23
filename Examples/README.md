@@ -14,8 +14,9 @@ library by path (`..`). Each builds a `Tracker` at its composition root, deliver
 | `Apps/ExampleApp` | The Apple app: one `@main` source; Bazel applications for iPhone and iPad, Mac, visionOS and watchOS |
 | `scripts/catalyst_app.py` | The same app built for Mac Catalyst |
 | `Sources/StoreEvents` | `CheckoutStarted`, `OrderCompleted` and `SignedUp`, a store's events declared with `@Event` |
-| `Sources/StoreTrackingPlan` | The `TrackingPlanCommand` that lists them, which `export-tracking-plan` runs |
-| `TrackingPlan` | Their tracking plan, as the plugin writes it: `just example-tracking-plan` writes it again and fails if it changed |
+| `Sources/StoreTrackingPlan` | The `TrackingPlanCommand` that lists them, which `export-tracking-plan` and `check-tracking-plan` run |
+| `Tests/StoreTrackingPlanTests` | A test that fails when the events no longer match their committed plan (`expectTrackingPlan`) |
+| `TrackingPlan` | Their tracking plan, as the plugin writes it, with each event's example: `just example-tracking-plan` checks it, writes it again and fails if it changed |
 
 SwiftPM builds and tests the package (`just examples-test`). The Apple apps need application
 bundles, which SwiftPM doesn't make, so Bazel builds them from the hand-written `BUILD.bazel` files

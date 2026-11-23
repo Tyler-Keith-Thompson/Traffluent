@@ -1,15 +1,66 @@
+import Foundation
+
 /// A JSON value, rendered the same way on every platform and release.
 ///
 /// Written here rather than with Foundation's `JSONEncoder`, whose key order and pretty-printed
 /// spacing are Foundation's to change: a plan's bytes are committed and compared, so they must not
 /// move when the toolchain does. swift-json-schema's OrderedJSON renders deterministically too, but
-/// would be a dependency of the library for a few dozen lines.
+/// would be a dependency of the library for a few dozen lines. Reading is Foundation's
+/// `JSONDecoder`'s: what it parses doesn't reach the bytes a plan writes.
+///
+/// A plan writes no fractional numbers, so there is no case for one, and a committed file holding
+/// one doesn't parse.
 indirect enum JSON: Hashable, Sendable {
+    case null
     case string(String)
     case integer(Int64)
     case boolean(Bool)
     case array([JSON])
     case object([String: JSON])
+
+    /// The JSON value `bytes` hold, or `nil` when they aren't JSON a plan could have written.
+    init?(parsing bytes: [UInt8]) {
+        guard let value = try? JSONDecoder().decode(JSON.self, from: Data(bytes)) else { return nil }
+        self = value
+    }
+
+    /// The members of an object, or `nil` for any other value.
+    var object: [String: JSON]? {
+        if case .object(let members) = self { return members }
+        return nil
+    }
+
+    /// The elements of an array, or `nil` for any other value.
+    var array: [JSON]? {
+        if case .array(let elements) = self { return elements }
+        return nil
+    }
+
+    /// The text of a string, or `nil` for any other value.
+    var string: String? {
+        if case .string(let text) = self { return text }
+        return nil
+    }
+
+    /// The value of an integer, or `nil` for any other value.
+    var integer: Int64? {
+        if case .integer(let value) = self { return value }
+        return nil
+    }
+
+    /// The value on one line, with the same spacing and key order as ``rendered``, for messages.
+    var compact: String {
+        switch self {
+        case .array(let elements):
+            "[" + elements.map(\.compact).joined(separator: ", ") + "]"
+        case .object(let members):
+            "{" + members.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }
+                .map { JSON.string($0.key).compact + ": " + $0.value.compact }
+                .joined(separator: ", ") + "}"
+        default:
+            rendered
+        }
+    }
 
     /// The value as JSON text: two-space indentation, `"key": value`, object keys in the order of
     /// their UTF-8 bytes, and an empty array or object on one line, as JavaScript's
@@ -22,6 +73,8 @@ indirect enum JSON: Hashable, Sendable {
 
     private func render(into text: inout String, indentation: String) {
         switch self {
+        case .null:
+            text += "null"
         case .string(let string):
             string.renderQuoted(into: &text)
         case .integer(let integer):
@@ -57,6 +110,27 @@ indirect enum JSON: Hashable, Sendable {
                 text += offset == sorted.count - 1 ? "\n" : ",\n"
             }
             text += indentation + "}"
+        }
+    }
+}
+
+extension JSON: Decodable {
+    // Bool is tried before Int64, which JSONDecoder doesn't read from `true` or `false`, and Int64
+    // before String, so each value takes the one case that holds it on every platform.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let boolean = try? container.decode(Bool.self) {
+            self = .boolean(boolean)
+        } else if let integer = try? container.decode(Int64.self) {
+            self = .integer(integer)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let elements = try? container.decode([JSON].self) {
+            self = .array(elements)
+        } else {
+            self = .object(try container.decode([String: JSON].self))
         }
     }
 }

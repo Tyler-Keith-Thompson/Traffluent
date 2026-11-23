@@ -5,6 +5,15 @@ extension EventSchema {
     /// than ASCII letters, digits, `_` and `-` percent-encoded, which keeps every name a valid file
     /// name and URI reference and two names' files apart.
     var fileName: String {
+        "\(fileStem).schema.json"
+    }
+
+    /// The event's example's file name: `<name>.v<version>.example.json`, encoded as ``fileName``.
+    var exampleFileName: String {
+        "\(fileStem).example.json"
+    }
+
+    private var fileStem: String {
         var encoded = ""
         for byte in name.utf8 {
             if byte.isUnreserved {
@@ -14,7 +23,7 @@ extension EventSchema {
                 encoded += "%" + (hex.count == 1 ? "0" : "") + hex
             }
         }
-        return "\(encoded).v\(version).schema.json"
+        return "\(encoded).v\(version)"
     }
 
     /// The event's JSON Schema document, as ``TrackingPlan`` describes it.
@@ -36,7 +45,7 @@ extension EventSchema {
 
 extension EventSchema.Property {
     /// The property's schema: its type's, with `null` allowed when it is optional.
-    fileprivate var schema: [String: JSON] {
+    var schema: [String: JSON] {
         guard let type = WrittenType(parsing: typeName) else { return ["x-traffluent-swift-type": .string(typeName)] }
         return type.schema(isNullable: isOptional)
     }

@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes one.
+# TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes or checks one; TrackingPlanCheck, a comparison with the committed plan naming every TrackingPlanDifference.
 swift_library(
     name = "TrackingPlans",
     srcs = glob(["**/*.swift"]),

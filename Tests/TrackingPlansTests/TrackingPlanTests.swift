@@ -30,9 +30,14 @@ struct TrackingPlanTests {
         var referrer: String?
     }
 
-    @Test("A plan's files are its index, then each event's document, ordered by name")
+    @Test("A plan's files are its index, then each event's document and example, ordered by name")
     func paths() {
-        let expected = ["tracking-plan.json", "checkout_started.v2.schema.json", "order_completed.v1.schema.json", "signed_up.v1.schema.json"]
+        let expected = [
+            "tracking-plan.json",
+            "checkout_started.v2.schema.json", "checkout_started.v2.example.json",
+            "order_completed.v1.schema.json", "order_completed.v1.example.json",
+            "signed_up.v1.schema.json", "signed_up.v1.example.json",
+        ]
         let sut = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
 
         let actual = sut.files.map(\.path)
@@ -40,25 +45,28 @@ struct TrackingPlanTests {
         #expect(actual == expected)
     }
 
-    @Test("The index lists every event's name, version, consent category and document")
+    @Test("The index lists every event's name, version, consent category, document and example")
     func index() throws {
         let expected = """
             {
               "events": [
                 {
                   "consentCategory": "analytics",
+                  "example": "checkout_started.v2.example.json",
                   "name": "checkout_started",
                   "schema": "checkout_started.v2.schema.json",
                   "version": 2
                 },
                 {
                   "consentCategory": "analytics",
+                  "example": "order_completed.v1.example.json",
                   "name": "order_completed",
                   "schema": "order_completed.v1.schema.json",
                   "version": 1
                 },
                 {
                   "consentCategory": "functional",
+                  "example": "signed_up.v1.example.json",
                   "name": "signed_up",
                   "schema": "signed_up.v1.schema.json",
                   "version": 1
@@ -247,7 +255,7 @@ struct TrackingPlanTests {
             """
         let sut = TrackingPlan(schemas: [EventSchema(name: "app_opened", version: 1, consentCategory: .analytics, properties: [])])
 
-        let actual = try #require(sut.files.last)
+        let actual = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
 
         #expect(String(decoding: actual.contents, as: UTF8.self) == expected)
     }
@@ -261,7 +269,7 @@ struct TrackingPlanTests {
             EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: []),
         ])
 
-        let actual = sut.files.map(\.path)
+        let actual = sut.files.map(\.path).filter { $0.hasSuffix(".schema.json") || $0 == "tracking-plan.json" }
 
         #expect(actual == expected)
     }
@@ -278,9 +286,16 @@ struct TrackingPlanTests {
         #expect(actual == expected)
     }
 
-    @Test("A name's bytes other than ASCII letters, digits, _ and - are percent-encoded in its file name")
+    @Test("A name's bytes other than ASCII letters, digits, _ and - are percent-encoded in its file names")
     func fileNames() {
-        let expected = ["tracking-plan.json", "Box%3CString%3E.v1.schema.json", "a%2Fb%20c.v1.schema.json", "caf%C3%A9.v1.schema.json", "ok_name-1.v1.schema.json", "tab%09.v1.schema.json"]
+        let expected = [
+            "tracking-plan.json",
+            "Box%3CString%3E.v1.schema.json", "Box%3CString%3E.v1.example.json",
+            "a%2Fb%20c.v1.schema.json", "a%2Fb%20c.v1.example.json",
+            "caf%C3%A9.v1.schema.json", "caf%C3%A9.v1.example.json",
+            "ok_name-1.v1.schema.json", "ok_name-1.v1.example.json",
+            "tab%09.v1.schema.json", "tab%09.v1.example.json",
+        ]
         let sut = TrackingPlan(schemas: ["Box<String>", "a/b c", "café", "ok_name-1", "tab\t"].map {
             EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: [])
         })
@@ -295,7 +310,7 @@ struct TrackingPlanTests {
         let expectedTitle = #"  "title": "say \"hi\" \\ to\n\r\t\b\f\u0001\u001Fé","#
         let sut = TrackingPlan(schemas: [EventSchema(name: "say \"hi\" \\ to\n\r\t\u{08}\u{0C}\u{01}\u{1F}é", version: 1, consentCategory: .analytics, properties: [])])
 
-        let actual = try #require(sut.files.last)
+        let actual = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
 
         #expect(String(decoding: actual.contents, as: UTF8.self).split(separator: "\n").contains { $0 == expectedTitle })
     }

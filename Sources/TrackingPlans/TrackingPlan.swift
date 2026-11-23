@@ -14,7 +14,8 @@ public import Events
 /// }
 ///
 /// let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
-/// plan.files.map(\.path)  // ["tracking-plan.json", "checkout_started.v2.schema.json"]
+/// plan.files.map(\.path)
+/// // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 /// ```
 ///
 /// The plan's files are values, so the same schemas give the same bytes on every run and
@@ -43,8 +44,19 @@ public import Events
 /// whose JSON shape the plan can't know, accepts any value and records the type in
 /// `x-traffluent-swift-type`.
 ///
+/// Beside each document is the event's example, `<name>.v<version>.example.json`: a conformance
+/// vector, the payload of the event with every property present and set to a fixed value its
+/// schema accepts. Another platform's code can encode the same event and compare. A `string` is
+/// `"example"`, one of `format` `date-time` is `"2001-01-01T00:00:00Z"` and one of `format`
+/// `uuid` the nil UUID; a `number` or an `integer` is 0; a `boolean` is `false`; an `array` holds
+/// one example of its `items`; and a type the plan can't map is `null`.
+///
 /// The index, `tracking-plan.json`, lists every event under `events`, by name and then version,
-/// with its `name`, `version`, `consentCategory` and `schema`, its document's file name.
+/// with its `name`, `version`, `consentCategory`, `schema`, its document's file name, and
+/// `example`, its example's.
+///
+/// ``check(againstDirectory:)`` compares a plan with the one committed in a directory, reporting
+/// each ``TrackingPlanDifference``.
 public struct TrackingPlan: Sendable, Hashable {
     /// The plan's event schemas, ordered by the UTF-8 bytes of their names and then by version.
     public let schemas: [EventSchema]
@@ -85,12 +97,14 @@ public struct TrackingPlan: Sendable, Hashable {
         self.schemas = sorted
     }
 
-    /// The plan's files: the index, `tracking-plan.json`, then each event's document in the order
-    /// of ``schemas``.
+    /// The plan's files: the index, `tracking-plan.json`, then each event's document and its
+    /// example, in the order of ``schemas``.
     ///
     /// - Complexity: O(*n* log *n*) in the plan's properties, for sorting each object's keys.
     public var files: [File] {
-        [File(path: TrackingPlan.indexFileName, json: index)] + schemas.map { File(path: $0.fileName, json: $0.document) }
+        [File(path: TrackingPlan.indexFileName, json: index)] + schemas.flatMap { schema in
+            [File(path: schema.fileName, json: schema.document), File(path: schema.exampleFileName, json: schema.example)]
+        }
     }
 
     /// The name of the plan's index file.
@@ -118,6 +132,7 @@ extension EventSchema {
             "version": .integer(Int64(version)),
             "consentCategory": .string(consentCategory.name),
             "schema": .string(fileName),
+            "example": .string(exampleFileName),
         ])
     }
 }

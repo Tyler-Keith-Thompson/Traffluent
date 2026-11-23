@@ -10,6 +10,13 @@
 #   normalized scalars, the same order as their bytes for the NFC text every test can write.
 # - The fallback CocoaError in `cocoa(_:)`: every error Foundation's file calls throw is a CocoaError
 #   already, so no test can reach it.
+# - Trying Int64 before Bool in JSON's decoding: JSONDecoder reads no integer from `true` or `false`
+#   on any platform, so the order picks the same case.
+# - Dropping `filter(TrackingPlan.isPlanFile)` in `check(againstDirectory:)`: `check(against:)`
+#   filters the files again; the first filter only saves reading files a plan doesn't write.
+# - `$0.version > event.version` as `>=` when finding a later version: an equal version is the
+#   committed event's own key, matched before the search.
+# - `.first { $0 != "null" }` as `.last` in an example's type: a plan writes `null` last.
 
 TESTS = ["TrackingPlansTests"]
 
@@ -19,6 +26,10 @@ D = "EventSchema+Document.swift"
 W = "WrittenType.swift"
 F = "TrackingPlan+Write.swift"
 C = "TrackingPlanCommand.swift"
+E = "EventSchema+Example.swift"
+K = "TrackingPlan+Check.swift"
+R = "TrackingPlanCheck.swift"
+X = "TrackingPlanDifference.swift"
 
 MUTANTS = [
     # TrackingPlan: the rules, the order and the index.
@@ -35,6 +46,8 @@ MUTANTS = [
     Mutant("indexcategoryfixed", T, '.string(consentCategory.name)', '.string("analytics")'),
     Mutant("indexschemaname", T, ".string(fileName)", ".string(name)"),
     Mutant("notrailingnewline", T, 'json.rendered + "\\n"', "json.rendered"),
+    Mutant("noexamples", T, "[File(path: schema.fileName, json: schema.document), File(path: schema.exampleFileName, json: schema.example)]", "[File(path: schema.fileName, json: schema.document)]"),
+    Mutant("indexexampleisdocument", T, '.string(exampleFileName)', '.string(fileName)'),
     # JSON: the rendering.
     Mutant("emptyarraymultiline", J, "!elements.isEmpty", "true"),
     Mutant("emptyobjectmultiline", J, "!members.isEmpty", "true"),
@@ -42,8 +55,8 @@ MUTANTS = [
     Mutant("objectindentwide", J, 'indentation + "  "', 'indentation + "    "', nth=1),
     Mutant("arraytrailingcomma", J, 'offset == elements.count - 1 ? "\\n" : ",\\n"', '",\\n"'),
     Mutant("objecttrailingcomma", J, 'offset == sorted.count - 1 ? "\\n" : ",\\n"', '",\\n"'),
-    Mutant("keysreversed", J, "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)"),
-    Mutant("colonspaced", J, '": "', '" : "'),
+    Mutant("keysreversed", J, "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=1),
+    Mutant("colonspaced", J, '": "', '" : "', nth=1),
     Mutant("booleanalwaystrue", J, 'boolean ? "true" : "false"', '"true"'),
     Mutant("quoteunescaped", J, r'"\\\""', r'"\""'),
     Mutant("backslashunescaped", J, r'"\\\\"', r'"\\"'),
@@ -54,7 +67,8 @@ MUTANTS = [
     Mutant("everybyteunreserved", D, "byte.isUnreserved", "true"),
     Mutant("hexnotpadded", D, '(hex.count == 1 ? "0" : "")', '""'),
     Mutant("hexlowercase", D, "String(byte, radix: 16, uppercase: true)", "String(byte, radix: 16, uppercase: false)"),
-    Mutant("noversioninfilename", D, '"\\(encoded).v\\(version).schema.json"', '"\\(encoded).schema.json"'),
+    Mutant("noversioninfilename", D, '"\\(encoded).v\\(version)"', '"\\(encoded)"'),
+    Mutant("examplefilename", D, '"\\(fileStem).example.json"', '"\\(fileStem).sample.json"'),
     Mutant("idisname", D, ".string(fileName)", ".string(name)"),
     Mutant("titlerenamed", D, '"title"', '"name"'),
     Mutant("requiredinverted", D, "properties.filter { !$0.isOptional }", "properties.filter { $0.isOptional }"),
@@ -101,11 +115,68 @@ MUTANTS = [
     # Writing and the command. nointermediatedirectories comes first: the file's only `true`, before
     # the mutants below write more.
     Mutant("nointermediatedirectories", F, "true", "false"),
-    Mutant("deletesall", F, '$0.hasSuffix(".schema.json") && !paths.contains($0)', '!paths.contains($0)'),
-    Mutant("deletesplanfiles", F, '$0.hasSuffix(".schema.json") && !paths.contains($0)', '$0.hasSuffix(".schema.json")'),
+    Mutant("deletesall", F, 'TrackingPlan.isPlanFile($0) && !paths.contains($0)', '!paths.contains($0)'),
+    Mutant("deletesplanfiles", F, 'TrackingPlan.isPlanFile($0) && !paths.contains($0)', 'TrackingPlan.isPlanFile($0)'),
+    Mutant("indexnotplanfile", F, 'path == indexFileName', 'false'),
+    Mutant("examplesnotplanfiles", F, 'path.hasSuffix(".example.json")', 'false'),
     Mutant("rewritesunchanged", F, "fileManager.contents(atPath: url.path) != contents", "true"),
-    Mutant("extraargumentsallowed", C, "arguments.count == 1", "arguments.count >= 1"),
+    # The check's statuses come before the ones below, whose replacements write `return 1`.
+    # checkalonewrites writes the plan into ./check of the directory the tests run in; delete it.
+    Mutant("checkalonewrites", C, 'arguments[0] != "check"', "true"),
+    Mutant("anytwochecks", C, 'arguments[0] == "check"', "true"),
+    Mutant("checkchecksfirst", C, "check(against: arguments[1])", "check(against: arguments[0])"),
+    Mutant("matchstatus", C, "            return 0", "            return 7", mode="stmt", nth=1),
+    Mutant("breakingstatus", C, "            return 1", "            return 9", mode="stmt"),
+    Mutant("outofdatestatus", C, "            return 2", "            return 8", mode="stmt"),
     Mutant("usagestatus", C, "            return 64", "            return 1", mode="stmt"),
     Mutant("writefailurestatus", C, "            return 73", "            return 1", mode="stmt"),
-    Mutant("successstatus", C, "            return 0", "            return 1", mode="stmt"),
+    Mutant("successstatus", C, "            return 0", "            return 1", mode="stmt", nth=0),
+    # Examples. stringexample comes first: the file's only "example", before the mutants below write more.
+    Mutant("stringexample", E, '.string("example")', '.string("")'),
+    Mutant("dateexample", E, '.string("2001-01-01T00:00:00Z")', '.string("example")'),
+    Mutant("uuidexample", E, '.string("00000000-0000-0000-0000-000000000000")', '.string("example")'),
+    Mutant("integerexample", E, ".integer(0)", ".integer(1)"),
+    Mutant("booleanexample", E, ".boolean(false)", ".boolean(true)"),
+    Mutant("arrayexampleempty", E, '.array([self["items"]?.object?.example ?? .null])', ".array([])"),
+    Mutant("unknownexample", E, ".null", '.string("")', nth=1),
+    Mutant("nullexampletype", E, '$0 != "null"', '$0 == "null"'),
+    Mutant("nopropertyexamples", E, "(property.name, property.schema.example)", "(property.name, JSON.null)"),
+    # JSON: reading and one-line rendering.
+    Mutant("nullunread", J, "container.decodeNil()", "false"),
+    Mutant("nullrendered", J, 'text += "null"', 'text += "nil"', mode="stmt"),
+    Mutant("compactarrayunspaced", J, '", "', '","', nth=0),
+    Mutant("compactobjectunspaced", J, '", "', '","', nth=1),
+    Mutant("compactcolon", J, 'JSON.string($0.key).compact + ": "', 'JSON.string($0.key).compact + ":"'),
+    Mutant("compactunsorted", J, "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=0),
+    # Checking: what is compared.
+    Mutant("bytesfirst", K, "differences.isEmpty", "true"),
+    Mutant("bytesignored", K, "committedFiles[$0] != currentFiles[$0]", "false"),
+    Mutant("otherfilescompared", K, "committed.filter { TrackingPlan.isPlanFile($0.path) }", "committed"),
+    Mutant("indexentryunchecked", K, "paths.count == events.count ? paths : nil", "paths"),
+    Mutant("unreadablenamedindex", K, ".unreadableFile(path: path)", ".unreadableFile(path: TrackingPlan.indexFileName)"),
+    Mutant("versionfromboolean", K, 'members["x-traffluent-version"]?.integer', 'members["x-traffluent-version"]?.integer ?? 2'),
+    Mutant("requiredunchecked", K, "required.count == requiredNames.count", "true"),
+    Mutant("propertyschemaunchecked", K, "schema.object", "schema.object ?? [:]", nth=0),
+    Mutant("nextversionlatest", K, "laterVersions.min()", "laterVersions.max()"),
+    Mutant("lowerversionraises", K, "$0.version > event.version", "$0.version < event.version"),
+    Mutant("supersededadded", K, "!superseding.contains(event.key)", "true"),
+    Mutant("committedadded", K, "!committedKeys.contains(event.key)", "true"),
+    Mutant("consentignored", K, "consentCategory != current.consentCategory", "false"),
+    Mutant("retypeignored", K, "before.type != after.type", "false"),
+    Mutant("maderequiredignored", K, "!before.isRequired && after.isRequired", "false"),
+    Mutant("madeoptionalignored", K, "before.isRequired && !after.isRequired", "false"),
+    Mutant("sensitivityignored", K, "before.isSensitive != after.isSensitive", "false"),
+    Mutant("sensitivityinverted", K, "after.isSensitive", "before.isSensitive", nth=1),
+    Mutant("removedasoptional", K, ".propertyRemoved(event: name, version: version, property: property)", ".propertyMadeOptional(event: name, version: version, property: property)"),
+    Mutant("addedalwaysrequired", K, "after.isRequired", "true", nth=2),
+    Mutant("nullkept", K, "!isRequired", "false"),
+    Mutant("nulltypelist", K, "named.count == 1 ? named[0] : .array(named)", ".array(named)"),
+    Mutant("sensitivitykept", K, 'type["x-traffluent-sensitive"] = nil', "", mode="stmt"),
+    Mutant("sensitivityunread", K, 'schema["x-traffluent-sensitive"] == .boolean(true)', "false"),
+    # The check's result and report.
+    Mutant("neverbreaking", R, "differences.contains(where: \\.isBreaking)", "false"),
+    Mutant("nevermatches", R, "differences.isEmpty", "false"),
+    Mutant("breakingunsorted", R, "differences.filter(\\.isBreaking)", "differences"),
+    Mutant("alwaysalsooutofdate", R, "!others.isEmpty", "true"),
+    Mutant("sensitivitywording", X, 'isSensitive ? "is now" : "is no longer"', 'isSensitive ? "is no longer" : "is now"'),
 ]

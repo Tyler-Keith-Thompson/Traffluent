@@ -92,8 +92,9 @@ examples: example-ios example-mac example-catalyst example-visionos example-watc
 examples-test *args="":
     cd {{EXAMPLES}} && {{SWIFT}} test {{args}}
 
-[doc('Write the store example’s tracking plan into Examples/TrackingPlan with the export-tracking-plan plugin, and fail if it differs from the committed (or staged) one')]
+[doc('Check the store example’s events against Examples/TrackingPlan with the check-tracking-plan plugin, write the plan again with export-tracking-plan, and fail if it differs from the committed (or staged) one')]
 example-tracking-plan:
+    cd {{EXAMPLES}} && {{SWIFT}} package check-tracking-plan
     cd {{EXAMPLES}} && {{SWIFT}} package --allow-writing-to-package-directory export-tracking-plan
     @git -C {{PROJECT_ROOT}} diff --exit-code -- Examples/TrackingPlan && \
         test -z "$(git -C {{PROJECT_ROOT}} ls-files --others --exclude-standard -- Examples/TrackingPlan)" || \

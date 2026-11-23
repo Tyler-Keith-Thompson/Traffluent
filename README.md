@@ -313,7 +313,8 @@ out) turns schemas into the plan's files, one document per event and an index, a
 import TrackingPlans
 
 let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
-let paths = plan.files.map(\.path)  // ["tracking-plan.json", "checkout_started.v2.schema.json"]
+let paths = plan.files.map(\.path)
+// ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 ```
 
 The bytes depend on the schemas alone: keys sorted, two-space indentation, a trailing newline and
@@ -322,6 +323,9 @@ Each document requires the properties that aren't optional, allows `null` for th
 rejects any other property, and carries the event's version and consent category
 (`x-traffluent-version`, `x-traffluent-consent-category`); a `Sensitive` property is marked
 `x-traffluent-sensitive`. `TrackingPlan`'s documentation lists how each Swift type maps.
+Beside each document is the event's example, a conformance vector: the payload with every property
+set to a fixed value its schema accepts (`"example"`, 0, `false`, one array element), which another
+platform's client can encode the same event against.
 
 A tool can only read the schemas of types it is compiled against, so the plan is written by a small
 executable in your package that lists your events:
@@ -360,6 +364,44 @@ elsewhere in the package. Writing again deletes the documents of events the plan
 [`Examples/Sources/StoreTrackingPlan`](Examples/Sources/StoreTrackingPlan) is such an executable,
 and [`Examples/TrackingPlan`](Examples/TrackingPlan) the plan it writes (`just example-tracking-plan`).
 
+### Checking the tracking plan
+
+The committed plan is the contract every platform sending the events agrees on. One command fails
+when the Swift events no longer match it, with a line naming each event and property that changed:
+
+```sh
+swift package check-tracking-plan
+```
+
+A difference is breaking when a payload the committed plan accepts may be one the events' plan
+rejects now: a removed or renamed event, a removed property, a retyped one, an optional property
+made required, or a new required property. Anything else (a new event, a new optional property, a
+changed consent category) leaves the committed plan out of date, which fails with its own message
+telling you to export it again. Raising an event's version (`@Event(version: 3)`) is how a breaking
+change is made on purpose: the new version gets a document of its own. `--plan <directory>` checks
+a plan committed elsewhere, and `--product <name>` picks the executable as export's does.
+
+The same check runs from a test, so it runs wherever the app's tests do. Add the `TrackingPlanTesting`
+product to a test target that depends on the executable:
+
+```swift
+import Foundation
+import Testing
+import TrackingPlanTesting
+@testable import AppTrackingPlan
+
+@Test func eventsMatchTheTrackingPlan() {
+    let plan = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("TrackingPlan")
+    expectTrackingPlan(AppTrackingPlan.trackingPlan, matches: plan)
+}
+```
+
+It records an issue with the report the command prints. `TrackingPlan.check(against:)` returns
+the same comparison as a value, each `TrackingPlanDifference` with whether it `isBreaking`.
+[`Examples/Tests/StoreTrackingPlanTests`](Examples/Tests/StoreTrackingPlanTests) is such a test.
+
 ## Logging, tracing, metrics and analytics
 
 Each signal has one job: logs are for the developer debugging, traces for where time went, metrics
@@ -382,7 +424,8 @@ says which facts go where, with the anti-patterns to avoid.
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
 | `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration; left out of `import Traffluent`, so only apps that use it build swift-syntax |
-| `TrackingPlans` | `TrackingPlan`: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their `EventSchema` values; `TrackingPlanCommand`, the executable that writes one, which the `export-tracking-plan` command plugin runs; left out of `import Traffluent` |
+| `TrackingPlans` | `TrackingPlan`: the JSON Schema (draft 2020-12) of every event an app tracks, one document and one example per event and an index, exported from their `EventSchema` values; `TrackingPlanCheck`, its comparison with a committed plan, naming each `TrackingPlanDifference`; `TrackingPlanCommand`, the executable that writes or checks one, which the `export-tracking-plan` and `check-tracking-plan` command plugins run; left out of `import Traffluent` |
+| `TrackingPlanTesting` | `expectTrackingPlan(_:matches:)`: records a Swift Testing issue with the check's report when the events no longer match the committed plan; for test targets, and left out of `import Traffluent` |
 
 ## Examples
 

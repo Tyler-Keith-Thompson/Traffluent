@@ -66,8 +66,11 @@ the umbrella module and `swift/Package.swift` from it. Never edit the generated 
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
 - Add a command plugin: a row in `PLUGINS` (name, verb, description, reason for writing to the
-  package) and its sources in `Plugins/<name>`. Only SwiftPM builds it (`swift package <verb>`), so
+  package, or `None` for one that only reads) and its sources in `Plugins/<name>`. Only SwiftPM builds it (`swift package <verb>`), so
   keep it thin and prove it by running it on a package, as `just example-tracking-plan` does.
+- A library module that imports Swift Testing (a test helper adopters add to their test targets,
+  like `TrackingPlanTesting`) goes in `TESTING_MODULES` too: Bazel finds Testing only on the
+  developer search paths, which the generator then gives it.
 - Add an external package: a row in `PACKAGES`, its `swiftpkg_<identity>` repository in
   `MODULE.bazel`'s `use_repo`, then `just modules` and `just resolve`.
 - Generate mocks: uncomment the Mockable row in `PACKAGES`, add `mockable/Mockable` to the

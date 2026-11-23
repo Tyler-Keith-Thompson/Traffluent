@@ -40,6 +40,7 @@ docc_archive(
         "//Sources/GRDBPersistence:GRDBPersistenceDocumentation",
         "//Sources/EventMacros:EventMacrosDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
+        "//Sources/TrackingPlanTesting:TrackingPlanTestingDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],
