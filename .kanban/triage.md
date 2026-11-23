@@ -38,7 +38,10 @@ bad row in a dashboard.
 - N4. Wrapping every vendor in this repo. Destinations beyond D1 belong in their own packages,
   built on the public destination protocol, unless the owner adds one.
 - N5. An analytics backend, dashboard, query engine or data warehouse. Traffluent is the client
-  side. Where events end up belongs to the destination's vendor.
+  side. Where events end up belongs to the destination's vendor. The one exception, by the
+  owner's decision on 2026-11-22 (TRAF-31): a self-hosted collector in a separate package, which
+  ingests Traffluent batches, validates them against the tracking plan, dedupes redelivered
+  records, stores them and can forward them. Dashboards and query engines stay out.
 - N6. Crash reporting, performance tracing (APM) and general logging. Other tools do those jobs.
   A destination may forward to OpenTelemetry, but Traffluent is not a tracing SDK.
 - N7. Apple-only features that break other platforms. A feature that can't work off Apple must
