@@ -1,6 +1,5 @@
 // The worker's work blocks a thread here on purpose (a store's append and an enricher are
-// synchronous), which needs threads: WASI builds leave these tests out.
-#if !os(WASI)
+// synchronous).
 import Dispatch
 import DestinationTesting
 import Destinations
@@ -202,4 +201,3 @@ extension InMemoryDestination {
         }
     }
 }
-#endif

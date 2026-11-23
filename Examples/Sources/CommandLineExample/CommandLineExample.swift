@@ -2,7 +2,7 @@ import Destinations
 import ExampleEvents
 import Trackers
 
-/// The Linux and Wasm example: the composition root builds the tracker and its delivery, binds
+/// The Linux example: the composition root builds the tracker and its delivery, binds
 /// the tracker to the program's task, tracks the launch through `Tracker.current`, then finishes
 /// the tracker and runs the delivery, which delivers the launch and returns.
 @main

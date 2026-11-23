@@ -216,24 +216,21 @@ struct HTTPDestinationTraceContextTests {
         #expect(tracer.performedContextInjections.isEmpty)
     }
 
-    // URLSessionTransport doesn't exist on WASI.
-    #if !os(WASI)
-        @Test("The URLSession destination injects through the instrument it is given")
-        func urlSessionInstrument() async throws {
-            // Port 1 on the loopback interface has no listener, so the send fails at once, after
-            // the context was injected.
-            let endpoint = try #require(URL(string: "http://127.0.0.1:1/batches"))
-            let tracer = InMemoryTracer()
-            let sut = HTTPDestination(endpoint: endpoint, instrument: tracer, encoder: PlansEncoder())
-            let span = tracer.startSpan("checkout")
-            let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: span.context)]
-            let expected = [span.traceID]
+    @Test("The URLSession destination injects through the instrument it is given")
+    func urlSessionInstrument() async throws {
+        // Port 1 on the loopback interface has no listener, so the send fails at once, after
+        // the context was injected.
+        let endpoint = try #require(URL(string: "http://127.0.0.1:1/batches"))
+        let tracer = InMemoryTracer()
+        let sut = HTTPDestination(endpoint: endpoint, instrument: tracer, encoder: PlansEncoder())
+        let span = tracer.startSpan("checkout")
+        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: span.context)]
+        let expected = [span.traceID]
 
-            await sut.receive(batch)
-            span.end()
+        await sut.receive(batch)
+        span.end()
 
-            let actual = tracer.performedContextInjections.compactMap { $0.values[InMemoryTracer.traceIDKey] }
-            #expect(actual == expected)
-        }
-    #endif
+        let actual = tracer.performedContextInjections.compactMap { $0.values[InMemoryTracer.traceIDKey] }
+        #expect(actual == expected)
+    }
 }

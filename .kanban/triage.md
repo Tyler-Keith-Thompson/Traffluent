@@ -2,7 +2,7 @@
 
 ## What it is
 Traffluent is a vendor-neutral analytics library for Swift. Typed events go through one pipeline
-that fans them out to many destinations, and it runs on every platform Swift does. It exists
+that fans them out to many destinations, and it runs on Apple platforms and Linux. It exists
 because vendor SDKs are singletons with stringly typed events and `[String: Any]` bags, and the
 neutral wrappers are thin and skip the hard parts. It optimizes for correctness the compiler can
 check: a malformed or unconsented event should be a type error or a dropped event, never a silent
@@ -21,7 +21,7 @@ bad row in a dashboard.
   versioning, and identity as pseudonymous session IDs only (D4).
 - Automatic instrumentation: app lifecycle, sessions, screen views and similar events that need
   no hand-written call sites. Each kind can be turned off.
-- Support on every platform: Apple platforms, Linux and Wasm. Platform-only behaviour (UIKit or
+- Support on Apple platforms and Linux (not WebAssembly: D6). Platform-only behaviour (UIKit or
   SwiftUI hooks, background tasks) goes behind `#if canImport` so the rest still builds.
 - Swift 6 strict concurrency from the start: no singletons and no global mutable state.
 - Tooling to define or generate typed events from a schema, if the owner settles that it belongs
@@ -62,7 +62,7 @@ bad row in a dashboard.
   own modules take no DependencyInjection dependency, so adopters never need it: they take seams
   as parameters and share a tracker through a task-local (AGENTS.md, "Seams and composition").
 - A new external dependency in a core module needs a reason that Foundation and the owner's
-  libraries don't cover. It must build on Linux and Wasm, or be Apple-only (`APPLE_ONLY_PACKAGES`).
+  libraries don't cover. It must build on Linux, or be Apple-only (`APPLE_ONLY_PACKAGES`).
 - Persistence and retry changes need tests of crashes, relaunches and offline periods: an event
   accepted once must be delivered or dropped on purpose, never lost silently or sent twice
   unannounced Once
@@ -70,7 +70,7 @@ bad row in a dashboard.
 
 ## Belongs elsewhere
 - Template machinery (Bazel rules, the justfile, CI, `scripts/modules.py`'s generator, the
-  benchmark, fuzz and Wasm setup) → github.com/Tyler-Keith-Thompson/ProjectTemplate.
+  benchmark and fuzz setup) → github.com/Tyler-Keith-Thompson/ProjectTemplate.
 - Retry, timeout, async sequencing or subject behaviour missing from Afluent → Afluent's board.
 - Container or test-double gaps → DependencyInjection's board. Seeded-random gaps → SwiftPRNG's
   board.
@@ -87,7 +87,7 @@ bad row in a dashboard.
 ## Decisions
 - D1. The first-party destination is PostHog, written against its HTTP capture API and not its
   SDK. It is open source and self-hostable, so even the default destination isn't a lock-in, and
-  plain HTTP runs on Linux and Wasm. Rejected: Segment (another pipeline, so it would duplicate
+  plain HTTP runs on Linux too. Rejected: Segment (another pipeline, so it would duplicate
   this one), Firebase or Amplitude (vendor SDKs, Apple- or vendor-bound), and OpenTelemetry as
   the only destination (built for traces, not product analytics). The owner said "provider of
   your choice", so this was picked at setup and the owner may change it.
@@ -119,10 +119,22 @@ bad row in a dashboard.
   enforces this: no public API runs adopter or library code on the caller. A record is durable
   once the worker has stored it; `finish()` drains first. What a crash takes before then is the
   documented loss window. Items that move work back onto the caller are turned down.
+- D6. WebAssembly is not a supported platform (the owner, 2026-11-22, TRAF-14). Swift on
+  wasm32-wasi runs on one thread, and its executor blocks that thread for every sleep, so
+  time-based batching, the default, misfires: a probe that expected batches [0, 1, 2] at about
+  1 s got [0, 1] at 8 s. The WASI test run, the WebAssembly example and every `os(WASI)` branch
+  went with it, and the template's `wasm` option is off in `.template.json`. Rejected: keeping
+  Wasm with count-only batching (the default would differ by platform, and a timer-free tracker
+  still couldn't flush on time). It comes back when the wasm32-unknown-wasip1-threads SDK ships
+  in a stable Swift release, or when an adopter asks for browser support, where JavaScriptKit's
+  `JavaScriptEventLoop` or `WebWorkerTaskExecutor`, installed by the adopter's app, makes timers
+  work. Re-adding starts with a probe of time batching under that real executor, before any
+  build or test machinery returns. Until then an item asking for Wasm is turned down, pointing
+  here.
 
 ## Open questions
-- What does "all platforms" cover: Android and Windows (Swift SDKs exist), Embedded Swift, or
-  Wasm in the browser and WASI? Each needs its own persistence and networking.
+- Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its
+  own persistence and networking.
 - Where does the event schema come from: Swift types first (macros, or protocols with derived
   encoding), or an external schema file (JSON Schema, a tracking plan) with codegen? Should
   codegen tooling live in this repo?

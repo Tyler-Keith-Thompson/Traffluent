@@ -6,7 +6,7 @@
   "mutation": true,
   "fuzz": true,
   "differential": false,
-  "wasm": true,
+  "wasm": false,
   "explore": false,
   "views": false,
   "fly": false,

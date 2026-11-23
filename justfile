@@ -48,6 +48,10 @@ spm:
 spm-test *args="":
     {{SWIFT}} test {{args}}
 
+[doc('Build the library (not its tests) for watchOS arm64_32, a 32-bit Int, into .build/watchos')]
+build-arm64_32:
+    cd {{PROJECT_ROOT}} && xcodebuild build -scheme Traffluent-Package -destination generic/platform=watchOS -derivedDataPath .build/watchos -skipPackagePluginValidation -skipMacroValidation ARCHS=arm64_32 ONLY_ACTIVE_ARCH=NO -quiet
+
 [doc('Verify both build systems agree — run before pushing')]
 verify: test spm-test
 
@@ -77,16 +81,12 @@ fuzz-regress *args="":
 fuzz-repro target input:
     python3 {{PROJECT_ROOT}}/scripts/fuzz.py repro {{target}} {{input}}
 
-[doc('SwiftPM tests on wasm32-wasi under wasmtime, a 32-bit Int, in groups of targets, e.g. just wasi-test, just wasi-test -c release, or just wasi-test --targets GreetingsTests')]
-wasi-test *args="":
-    python3 -u {{PROJECT_ROOT}}/scripts/wasi_test.py {{args}}
-
 # ── Examples (Examples/, a SwiftPM package of its own; README.md, "Examples") ──
 
 EXAMPLES := PROJECT_ROOT / "Examples"
 
 [doc('Build every example app')]
-examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-wasm example-server
+examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-server
 
 [doc('Run the examples’ tests (SwiftPM, in Examples/)')]
 examples-test *args="":
@@ -119,11 +119,6 @@ LINUX_SWIFT_IMAGE := "swift:6.4"
 example-linux:
     docker run --rm -v {{PROJECT_ROOT}}:/package -w /package/Examples {{LINUX_SWIFT_IMAGE}} bash -c \
         'swift build --product CommandLineExample --scratch-path .build/linux && swift build --product ServerExample --scratch-path .build/linux && .build/linux/debug/CommandLineExample'
-
-[doc('Build the command-line example for wasm32-wasi (swiftly’s 6.4.3 and its WebAssembly SDK) and run it under wasmtime')]
-example-wasm:
-    cd {{EXAMPLES}} && TRAFFLUENT_EXAMPLES_WASM=1 swiftly run swift build --product CommandLineExample --swift-sdk swift-6.4.3-RELEASE_wasm --scratch-path .build/wasm +6.4.3
-    wasmtime run {{EXAMPLES}}/.build/wasm/debug/CommandLineExample.wasm
 
 [doc('Build the server example (Hummingbird); just serve-example runs it on 127.0.0.1:8080')]
 example-server:

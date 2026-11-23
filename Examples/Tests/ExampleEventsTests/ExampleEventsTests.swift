@@ -71,8 +71,6 @@ struct ExampleEventsTests {
             let expected = Platform.mac
         #elseif os(Linux)
             let expected = Platform.linux
-        #elseif os(WASI)
-            let expected = Platform.wasm
         #else
             let expected = Platform.other
         #endif

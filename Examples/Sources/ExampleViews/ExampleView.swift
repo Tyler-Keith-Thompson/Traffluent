@@ -1,4 +1,4 @@
-// SwiftUI is on Apple platforms alone; on Linux and Wasm this module builds empty, so the package
+// SwiftUI is on Apple platforms alone; on Linux this module builds empty, so the package
 // still does.
 #if canImport(SwiftUI)
     public import Trackers

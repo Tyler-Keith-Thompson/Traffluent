@@ -44,18 +44,18 @@ PACKAGES = [
     # Tests only: withMainSerialExecutor, which orders tasks so a cancellation lands where a test
     # puts it.
     ("swift-concurrency-extras", "https://github.com/pointfreeco/swift-concurrency-extras", "1.4.3"),
-    # SegmentStore's file I/O: FileDescriptor and FilePath, the same code on Apple platforms, Linux
-    # and WASI. Foundation's FileHandle was rejected: it has no positioned truncate on every
+    # SegmentStore's file I/O: FileDescriptor and FilePath, the same code on Apple platforms and
+    # Linux. Foundation's FileHandle was rejected: it has no positioned truncate on every
     # platform and its errors are untyped.
     ("swift-system", "https://github.com/apple/swift-system", "1.9.0"),
     # DatabaseStore (GRDBPersistence): keeps records in a table of an app's own GRDB database, for
     # apps that already ship GRDB. Apple platforms only (APPLE_ONLY_PACKAGES): GRDB's Linux support
-    # isn't maintained and it has no Wasm support, so SegmentStore stays the default.
+    # isn't maintained, so SegmentStore stays the default.
     ("grdb.swift", "https://github.com/groue/GRDB.swift", "7.12.0"),
     # HTTPDestination's requests and responses (HTTPTypes), and the URLSession calls its default
     # transport makes (HTTPTypesFoundation). Foundation's URLRequest was rejected for the transport
-    # protocol: it lives in FoundationNetworking on Linux and doesn't exist on WASI, where HTTPTypes,
-    # pure Swift, still builds.
+    # protocol: it lives in FoundationNetworking on Linux, so the protocol's signature would
+    # change by platform, where HTTPTypes, pure Swift, is the same type everywhere.
     ("swift-http-types", "https://github.com/apple/swift-http-types", "1.8.0"),
     # Deque: the records a Consent holds while their category is undecided, which drop their oldest
     # once the hold is full. Foundation has no double-ended queue.
@@ -90,7 +90,7 @@ MODULES = [
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
-    ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport off WASI.", ["Events", "Destinations", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
+    ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport.", ["Events", "Destinations", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; and Consent, which holds, delivers or drops each event by its ConsentCategory's status.", ["Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
@@ -329,21 +329,6 @@ def exclude_arg(path):
     return ""
 
 
-def exit_test_files(directory, excludes):
-    """Swift files under `directory` (outside `excludes`) holding an exit test, as a Swift array literal."""
-    root = os.path.join(ROOT, directory)
-    found = []
-    for folder, _, files in sorted(os.walk(root)):
-        for file in sorted(files):
-            rel = os.path.relpath(os.path.join(folder, file), root)
-            if not file.endswith(".swift") or any(rel.startswith(e) for e in excludes):
-                continue
-            with open(os.path.join(folder, file), encoding="utf-8") as f:
-                if "processExitsWith" in f.read():
-                    found.append(rel)
-    return "[" + ", ".join(f'"{f}"' for f in found) + "]"
-
-
 def package_swift():
     lines = [
         "// swift-tools-version: 6.4",
@@ -356,16 +341,6 @@ def package_swift():
         "",
         "// Every target directory holds a BUILD.bazel, which SwiftPM must be told to ignore.",
         'let bazelFiles = ["BUILD.bazel"]',
-        "",
-        f"// The WebAssembly test run (scripts/wasi_test.py) sets {PROJECT.upper()}_WASI_TESTS to a comma-separated",
-        "// list of test targets: the package then declares only those, as one binary of every target",
-        "// can pass wasmtime's limit of a million functions, and leaves out each test file with an exit",
-        "// test, since WASI cannot start a child process. Unset, nothing changes.",
-        f'let wasiTests = Context.environment["{PROJECT.upper()}_WASI_TESTS"].map {{ Set($0.split(separator: ",").map(String.init)) }}',
-        "",
-        "func testExcludes(_ excludes: [String], wasi exitTestFiles: [String]) -> [String] {",
-        "    wasiTests == nil ? excludes : excludes + exitTestFiles",
-        "}",
         "",
     ]
     if APPLE_ONLY_PACKAGES:
@@ -422,7 +397,7 @@ def package_swift():
         dl = ", ".join(spm_dep(d) for d in deps)
         files = excluded(f"Tests/{name}")
         ex = "[" + ", ".join(f'"{f}"' for f in files) + "]" if files != ["BUILD.bazel"] else "bazelFiles"
-        lines.append(f'    .testTarget(name: "{name}", dependencies: [{dl}], exclude: testExcludes({ex}, wasi: {exit_test_files(f"Tests/{name}", files)})),')
+        lines.append(f'    .testTarget(name: "{name}", dependencies: [{dl}], exclude: {ex}),')
     if PERFORMANCE_TESTS:
         lines += [
             "",
@@ -431,7 +406,7 @@ def package_swift():
         for name, deps in TEST_TARGETS:
             if name in PERFORMANCE_TESTS:
                 dl = ", ".join(spm_dep(d) for d in deps)
-                lines.append(f'    .testTarget(name: "{performance_target(name)}", dependencies: [{dl}], path: "Tests/{name}/Performance", exclude: testExcludes([], wasi: {exit_test_files(f"Tests/{name}/Performance", [])})),')
+                lines.append(f'    .testTarget(name: "{performance_target(name)}", dependencies: [{dl}], path: "Tests/{name}/Performance"),')
     lines += [
         "]",
         "",
@@ -441,7 +416,7 @@ def package_swift():
         f"    platforms: {PLATFORMS},",
         "    products: products,",
         "    dependencies: dependencies,",
-        "    targets: targets.filter { $0.type != .test || wasiTests?.contains($0.name) ?? true }",
+        "    targets: targets",
         ")",
         "",
     ]

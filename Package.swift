@@ -9,16 +9,6 @@ import PackageDescription
 // Every target directory holds a BUILD.bazel, which SwiftPM must be told to ignore.
 let bazelFiles = ["BUILD.bazel"]
 
-// The WebAssembly test run (scripts/wasi_test.py) sets TRAFFLUENT_WASI_TESTS to a comma-separated
-// list of test targets: the package then declares only those, as one binary of every target
-// can pass wasmtime's limit of a million functions, and leaves out each test file with an exit
-// test, since WASI cannot start a child process. Unset, nothing changes.
-let wasiTests = Context.environment["TRAFFLUENT_WASI_TESTS"].map { Set($0.split(separator: ",").map(String.init)) }
-
-func testExcludes(_ excludes: [String], wasi exitTestFiles: [String]) -> [String] {
-    wasiTests == nil ? excludes : excludes + exitTestFiles
-}
-
 // Where the Apple-only packages' products are linked (APPLE_ONLY_PACKAGES in scripts/modules.py).
 let applePlatforms: [Platform] = [.macOS, .macCatalyst, .iOS, .tvOS, .watchOS, .visionOS]
 
@@ -72,16 +62,16 @@ let targets: [Target] = [
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
 
-    .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "DestinationTesting", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["DeliverExitTests.swift"])),
-    .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Trackers"], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "LoggingDestinationsTests", dependencies: ["LoggingDestinations", "Destinations", "Events", "Trackers", .product(name: "Logging", package: "swift-log"), .product(name: "InMemoryLogging", package: "swift-log"), .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "TracingDestinationsTests", dependencies: ["TracingDestinations", "Destinations", "Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "HTTPDestinationsTests", dependencies: ["HTTPDestinations", "DestinationTesting", "Destinations", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing")], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", .product(name: "Afluent", package: "afluent"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["ConsentExitTests.swift", "TrackerExitTests.swift"])),
-    .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: [])),
-    .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: testExcludes(bazelFiles, wasi: ["DatabaseStoreExitTests.swift", "RecordStoreCrashExitTests.swift", "RecordStoreWriteFailureExitTests.swift", "SegmentStoreExitTests.swift", "SegmentStoreWriteFailureExitTests.swift"])),
-    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: testExcludes(bazelFiles, wasi: [])),
+    .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "DestinationTesting", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Trackers"], exclude: bazelFiles),
+    .testTarget(name: "LoggingDestinationsTests", dependencies: ["LoggingDestinations", "Destinations", "Events", "Trackers", .product(name: "Logging", package: "swift-log"), .product(name: "InMemoryLogging", package: "swift-log"), .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .testTarget(name: "TracingDestinationsTests", dependencies: ["TracingDestinations", "Destinations", "Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .testTarget(name: "HTTPDestinationsTests", dependencies: ["HTTPDestinations", "DestinationTesting", "Destinations", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", .product(name: "Afluent", package: "afluent"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
 ]
 
 let package = Package(
@@ -90,5 +80,5 @@ let package = Package(
     platforms: [.macOS(.v15), .iOS(.v18), .tvOS(.v18), .watchOS(.v11), .visionOS(.v2)],
     products: products,
     dependencies: dependencies,
-    targets: targets.filter { $0.type != .test || wasiTests?.contains($0.name) ?? true }
+    targets: targets
 )

@@ -40,19 +40,12 @@ final class Intake: Sendable {
         self.entries = entries
         // Detached, so the worker never runs on the actor that made the tracker, typically the
         // main actor, nor inherits the caller's task-locals: it reads only what entries carry.
-        #if canImport(Dispatch)
-            // On a utility dispatch queue (Afluent's QueueExecutor) rather than the cooperative
-            // pool: a store's write and an enricher block their thread, and the pool has only one
-            // thread per core for every task in the process.
-            self.worker = Task.detached(executorPreference: .globalQueue(qos: .utility)) {
-                await worker.run(stream)
-            }
-        #else
-            // WASI has no Dispatch, and one thread: the cooperative pool is all there is.
-            self.worker = Task.detached {
-                await worker.run(stream)
-            }
-        #endif
+        // On a utility dispatch queue (Afluent's QueueExecutor) rather than the cooperative pool:
+        // a store's write and an enricher block their thread, and the pool has only one thread
+        // per core for every task in the process.
+        self.worker = Task.detached(executorPreference: .globalQueue(qos: .utility)) {
+            await worker.run(stream)
+        }
     }
 
     deinit {

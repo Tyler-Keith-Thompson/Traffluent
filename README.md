@@ -4,8 +4,8 @@ Traffluent is an analytics library for Swift that isn't tied to a vendor. Events
 typed values, not stringly typed names with `[String: Any]` property bags. A tracker records
 them, and one delivery fans each batch of them out to as many destinations as you like. It also handles what thin wrappers skip:
 batching, on-disk persistence, retry, consent gating, schema enforcement and automatic
-instrumentation. It is built for Swift 6 strict concurrency, has no singletons, and runs on every
-platform Swift does, not only Apple's. Use it in place of the in-house typed event layer most
+instrumentation. It is built for Swift 6 strict concurrency, has no singletons, and runs on Apple
+platforms and Linux. Use it in place of the in-house typed event layer most
 large apps end up writing, with vendor SDKs as plain sinks.
 
 [Documentation](https://tyler-keith-thompson.github.io/Traffluent/documentation/)
@@ -13,7 +13,7 @@ large apps end up writing, with vendor SDKs as plain sinks.
 ## Installation
 
 Traffluent requires Swift 6.4 and supports macOS 15, iOS 18, tvOS 18, watchOS 11 and visionOS 2
-or later.
+or later, and Linux.
 
 ```swift
 dependencies: [
@@ -285,7 +285,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
-| `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport (not on WASI) |
+| `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
@@ -305,7 +305,6 @@ one per platform. Each builds its tracker and starts its delivery where it start
 | visionOS | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp) | `just example-visionos` |
 | watchOS | [`Examples/Apps/ExampleApp`](Examples/Apps/ExampleApp) | `just example-watchos` |
 | Linux | [`Examples/Sources/CommandLineExample`](Examples/Sources/CommandLineExample) | `just example-linux` (Docker) |
-| Wasm | [`Examples/Sources/CommandLineExample`](Examples/Sources/CommandLineExample) | `just example-wasm` (wasmtime) |
 | Server | [`Examples/Sources/ServerExample`](Examples/Sources/ServerExample), on Hummingbird | `just example-server`, `just serve-example` |
 
 The events are in [`ExampleEvents`](Examples/Sources/ExampleEvents), the screen the Apple apps

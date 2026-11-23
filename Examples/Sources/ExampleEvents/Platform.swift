@@ -12,7 +12,6 @@ public enum Platform: String, Sendable, Equatable, CaseIterable {
     case watchOS
     case tvOS
     case linux
-    case wasm
     case windows
     case android
     /// A platform none of the other cases names.
@@ -38,8 +37,6 @@ public enum Platform: String, Sendable, Equatable, CaseIterable {
             .tvOS
         #elseif os(Linux)
             .linux
-        #elseif os(WASI)
-            .wasm
         #elseif os(Windows)
             .windows
         #elseif os(Android)
