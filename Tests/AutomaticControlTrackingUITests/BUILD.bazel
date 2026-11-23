@@ -31,7 +31,13 @@ ios_application(
     ],
     infoplists = ["App/Info.plist"],
     minimum_os_version = "18.0",
-    tags = ["debug-only"],
+    # Built only as the UI test's host, which only a Mac runs: `bazel test //...` on Linux would
+    # otherwise build it and find no iOS toolchain. Not `target_compatible_with`: the rule builds
+    # itself for iOS, where no constraint tells the host machine apart.
+    tags = [
+        "debug-only",
+        "manual",
+    ],
     deps = [":ControlTrackingAppLibrary"],
 )
 

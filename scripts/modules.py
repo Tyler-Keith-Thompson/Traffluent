@@ -1069,8 +1069,10 @@ def privacy_manifests_build_bazel():
         f'    bundle_id = "com.example.{PROJECT.lower()}.privacymanifests",\n'
         '    infoplists = ["Info.plist"],\n'
         f'    minimum_os_version = "{MACOS_MINIMUM}",\n'
-        f'    tags = ["{RELEASE_EXCLUDED_TAG}"],\n'
-        f"{mac_only}"
+        "    # Built only as the test's data, which only a Mac runs: `bazel test //...` on Linux would\n"
+        "    # otherwise build it and find no Apple toolchain. Not `target_compatible_with`: the rule\n"
+        "    # builds itself for macOS, where no constraint tells the host machine apart.\n"
+        f'    tags = [\n        "{RELEASE_EXCLUDED_TAG}",\n        "manual",\n    ],\n'
         f"    deps = [\n{deps}    ],\n"
         ")\n\n"
         "# Every module's manifest is in the bundle, in a bundle of the name SwiftPM gives it, the same as\n"

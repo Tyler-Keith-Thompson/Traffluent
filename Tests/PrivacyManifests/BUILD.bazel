@@ -11,11 +11,13 @@ macos_bundle(
     bundle_id = "com.example.traffluent.privacymanifests",
     infoplists = ["Info.plist"],
     minimum_os_version = "15.0",
-    tags = ["debug-only"],
-    target_compatible_with = select({
-        "@platforms//os:macos": [],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
+    # Built only as the test's data, which only a Mac runs: `bazel test //...` on Linux would
+    # otherwise build it and find no Apple toolchain. Not `target_compatible_with`: the rule
+    # builds itself for macOS, where no constraint tells the host machine apart.
+    tags = [
+        "debug-only",
+        "manual",
+    ],
     deps = [
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",
