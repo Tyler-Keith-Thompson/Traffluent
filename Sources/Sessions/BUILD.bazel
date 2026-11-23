@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a random UUID kept in memory only, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays.
+# Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a random UUID kept in memory only, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays; and Sampler.sessions(where:rate:), which keeps or drops whole sessions.
 swift_library(
     name = "Sessions",
     srcs = glob(["**/*.swift"]),

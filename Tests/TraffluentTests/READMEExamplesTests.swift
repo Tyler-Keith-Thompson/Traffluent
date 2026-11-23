@@ -169,6 +169,37 @@ struct READMEExamplesTests {
         #expect(record.context[LocaleKey.self]?.identifier == Locale.current.identifier)
     }
 
+    struct Scrolled: Event {
+        var offset: Int
+    }
+
+    @Test("Sampling")
+    func sampling() async throws {
+        let tracker = Tracker(
+            enrichers: [.sessions()],
+            samplers: [.events(of: Scrolled.self, rate: 0.1), .sessions(rate: 0.5)]
+        )
+        tracker.track(Scrolled(offset: 120))  // if kept, its record's context[SampleRateKey.self]?.value is 0.05
+        await tracker.finish()
+
+        for await record in tracker.records where record.event is Scrolled {
+            #expect(record.context[SampleRateKey.self]?.value == 0.05)
+        }
+    }
+
+    @Test("Sampling: a fixed seed and the drops")
+    func samplingSeedAndDrops() async {
+        let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.1)], samplingSeed: 42)
+        for offset in 0 ..< 100 {
+            tracker.track(Scrolled(offset: offset))
+        }
+        await tracker.finish()
+        for await report in tracker.samplingDropReports {
+            print(report)  // Scrolled: 89 sampled out
+            #expect(report.description == "Scrolled: 89 sampled out")
+        }
+    }
+
     @Test("Standard context on a server")
     func standardContextOnAServer() async throws {
         let tracker = Tracker(enrichers: [

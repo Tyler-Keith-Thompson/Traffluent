@@ -9,7 +9,7 @@ let package = Package(
     platforms: [.macOS("15.0")],
     dependencies: [
         .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
-        .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.1"),
+        .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.6"),
         .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.45"),
         .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
         .package(url: "https://github.com/apple/swift-log", from: "1.17.2"),

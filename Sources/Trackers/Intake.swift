@@ -25,6 +25,9 @@ final class Intake: Sendable {
     let subscription: Subscription
     /// The worker's reports of the events it rejected, for ``Tracker/rejectionReports``.
     let rejectionReports: AsyncStream<RejectionReport>
+    /// The worker's reports of the records its samplers dropped, for
+    /// ``Tracker/samplingDropReports``.
+    let samplingDropReports: AsyncStream<SamplingDropReport>
     /// Where the worker writes each record, if anywhere, for ``Tracker/store``.
     let store: (any RecordStore)?
     // An AsyncStream rather than a Mutex-guarded Deque and a hand-written wait: its yield is
@@ -33,20 +36,23 @@ final class Intake: Sendable {
     private let entries: AsyncStream<Entry>.Continuation
     private let worker: Task<Void, Never>
 
-    /// An intake whose worker delivers to `store`, if any, and gates by `consent`, if any.
-    init(store: (any RecordStore)?, consent: Consent?, enrichers: [Enricher]) {
+    /// An intake whose worker delivers to `store`, if any, gates by `consent`, if any, and samples
+    /// with `samplers`, drawing from `samplingSeed`.
+    init(store: (any RecordStore)?, consent: Consent?, enrichers: [Enricher], samplers: [Sampler], samplingSeed: UInt64) {
         let (stream, entries) = AsyncStream.makeStream(of: Entry.self)
         let subscription = Subscription()
         // Joined here, before `init` returns, so every decision made from now on reaches this
         // intake, in its order with the tracks.
         let membership = consent?.gate.join(entries)
         let rejections = DropReportQueue<RejectionReport>()
-        let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)
+        let samplingDrops = DropReportQueue<SamplingDropReport>()
+        let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)
         self.subscription = subscription
         self.store = store
         // Captures the queue, not the intake, so reading the reports keeps no tracker alive; the
         // worker ends them once it ends the records.
         rejectionReports = AsyncStream(unfolding: { await rejections.next() })
+        samplingDropReports = AsyncStream(unfolding: { await samplingDrops.next() })
         self.entries = entries
         // Detached, so the worker never runs on the actor that made the tracker, typically the
         // main actor, nor inherits the caller's task-locals: it reads only what entries carry.

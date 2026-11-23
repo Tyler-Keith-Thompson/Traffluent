@@ -1,5 +1,5 @@
 {
-  "originHash" : "410bacbc84b3e60f1bce089317736dc63051df37213b2dd28c6db71a7a0bd9b4",
+  "originHash" : "68147600723d9de2e2679400b63407dba278d85b48dcbefed5d2b6d4a43b79a8",
   "pins" : [
     {
       "identity" : "afluent",
@@ -125,6 +125,15 @@
       "state" : {
         "revision" : "640e5755b5826f4437eaeedd366fd776737db62c",
         "version" : "1.9.0"
+      }
+    },
+    {
+      "identity" : "swiftprng",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Tyler-Keith-Thompson/SwiftPRNG",
+      "state" : {
+        "revision" : "e4f108953819bea7454ee85cd1a37eec56d9227a",
+        "version" : "0.0.6"
       }
     },
     {

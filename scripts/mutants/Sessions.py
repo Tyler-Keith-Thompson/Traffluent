@@ -21,6 +21,7 @@ L = "SessionTimeline.swift"
 R = "SessionRotation.swift"
 S = "Session.swift"
 E = "Enricher+Sessions.swift"
+M = "Sampler+Sessions.swift"
 
 GAP = "Duration.seconds(timestamp.timeIntervalSince(session.lastActivity)) < timeout"
 
@@ -49,4 +50,6 @@ MUTANTS = [
     Mutant("nokindsnokey", R, "record.context[SessionKey.self] = session.id", "if !kinds.isEmpty { record.context[SessionKey.self] = session.id }", mode="stmt", nth=1),
     # Random, and held in memory only.
     Mutant("constantid", R, "UUID.init", "{ UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0)) }"),
+    # Sampling whole sessions: by the session's key, through the caller's predicate.
+    Mutant("sessionpredicateignored", M, ".grouped(by: SessionKey.self, where: selects, rate: rate)", ".grouped(by: SessionKey.self, rate: rate)"),
 ]

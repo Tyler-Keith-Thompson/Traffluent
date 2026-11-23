@@ -434,6 +434,59 @@ owns that decision and the user's consent to it. Traffluent never writes it to d
 up: on macOS and Linux, which have none, records carry no key. It is a `Sensitive` value, so a
 destination given `redactingSensitiveValues()` never receives it.
 
+### Sampling
+
+A tracker can keep a fraction of the events it tracks, event by event or a whole session at once
+(module `Trackers`; sessions from module `Sessions`). Nothing is sampled until the app gives the
+tracker its samplers:
+
+```swift
+import Sessions
+
+struct Scrolled: Event {
+    var offset: Int
+}
+
+let tracker = Tracker(
+    enrichers: [.sessions()],
+    samplers: [.events(of: Scrolled.self, rate: 0.1), .sessions(rate: 0.5)]
+)
+tracker.track(Scrolled(offset: 120))  // if kept, its record's context[SampleRateKey.self]?.value is 0.05
+```
+
+`.events(of:rate:)` keeps each event of a type with the probability its `SampleRate` gives, and
+`.events(where:rate:)` each record a predicate selects, deciding each event on its own.
+`.sessions(rate:)` keeps or drops every record of a session alike, its `SessionStarted` and
+`SessionEnded` with it; `.grouped(by:rate:)` does the same for the groups any context key's values
+make. A rate is in 0 ... 1: a literal outside it, or `SampleRate(_:)` given one, traps, and
+`SampleRate(checked:)` throws `InvalidSampleRate` instead. A record is kept only if every sampler
+that applies to it keeps it, and a kept record carries the product of their rates as its
+`SampleRateKey`, so a destination can count it as `1 / value` records. One no sampler applies to
+is always kept and carries no key.
+
+The tracker's worker samples each record after its enrichers, whose keys a sampler can read, and
+before its consent and its store, so a dropped event is never held, written to disk or delivered.
+Each drop is reported on `samplingDropReports`, merged one report per event type while unread, as
+rejections are. The decisions come from the tracker's `samplingSeed`, drawn from the system's
+random number generator once per tracker unless you pass one, and are the same on every platform
+and Swift release, so with a seed fixed, which events are kept is fixed too:
+
+```swift
+let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.1)], samplingSeed: 42)
+for offset in 0 ..< 100 {
+    tracker.track(Scrolled(offset: offset))
+}
+await tracker.finish()
+for await report in tracker.samplingDropReports {
+    print(report)  // Scrolled: 89 sampled out
+}
+```
+
+A session's decision is made from the seed and the session's identifier alone, so nothing records
+it: the sampler keeps only the current session's decision, in memory, and never writes the
+identifier anywhere. Records a store recovered from an earlier run were sampled in that run, and
+come back in the top-level context, without their rate.
+
 ### Consent
 
 Each event type names the purpose it is collected for, its `consentCategory`: `.analytics` unless
@@ -777,14 +830,14 @@ says which facts go where, with the anti-patterns to avoid.
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
-| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context, for every event or, through `enriched(by:)`, for those of one tracker copy; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context, for every event or, through `enriched(by:)`, for those of one tracker copy; `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport`; and `Sampler`, which keeps a seeded fraction of events, or of the groups a context key's values make, at a `SampleRate`, stamping each kept record with its `SampleRateKey` and reporting each drop as a `SamplingDropReport` |
 | `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)` and shared with UIKit's `TrackerTrait`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
 | `UIKitTracking` | `TrackerTrait`: the tracker in a UIKit trait collection, set with `traitOverrides.tracker` on a window scene, view controller or view and read as `traitCollection.tracker`; and `UIControl.track(_:for:)`, which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere |
 | `AppKitTracking` | `TrackerProviding`: a responder, window delegate or application delegate that holds a tracker; `NSView.tracker`, the tracker of the nearest one a view's actions reach; and `NSControl.track(_:)`, which tracks an event through it each time the control sends its action; macOS only, empty elsewhere |
 | `AutomaticScreenTracking` | `trackScreensAutomatically(kinds:_:)`, on a `UIWindowScene` or an `NSWindow`: opt-in screen views, which track `ScreenViewed` through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a closure given each `DiscoveredScreen`, and left to a manual `trackScreen(_:)` where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere |
 | `AutomaticControlTracking` | `trackControlsAutomatically(_:)`, on a `UIWindowScene`: opt-in control activations, which track `ControlActivated` through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a closure given each `DiscoveredControl`, with its screen as `ScreenKey`; SwiftUI's controls left to `trackOnTap(_:)`; without swizzling; `ControlActivated` on every platform, the tracking iOS, iPadOS, tvOS, visionOS and Mac Catalyst only |
 | `LifecycleTracking` | `trackLifecycle(kinds:version:versionStore:notificationCenter:)`, on a `Tracker`: opt-in lifecycle events, `ApplicationInstalled`, `ApplicationUpdated`, `ApplicationOpened`, `ApplicationBackgrounded` and `ApplicationTerminated`, from the platform's application notifications, installs and updates decided from the version a `VersionStore` keeps (`FileVersionStore`, `InMemoryVersionStore`); on backgrounding, the tracker's records made durable and `LifecycleBatchStrategy`'s batches flushed; each kind can be turned off; every platform, Linux tracking only its start and finish |
-| `Sessions` | `Enricher.sessions(timeout:kinds:)`: opt-in sessions, an enricher that stamps every record's context with its `SessionKey`, a random UUID held in memory only, and starts a new session when an event comes after the timeout's inactivity, measured between the events' timestamps, tracking `SessionEnded(duration:)` and `SessionStarted` before it; each kind can be turned off while the key stays; every platform |
+| `Sessions` | `Enricher.sessions(timeout:kinds:)`: opt-in sessions, an enricher that stamps every record's context with its `SessionKey`, a random UUID held in memory only, and starts a new session when an event comes after the timeout's inactivity, measured between the events' timestamps, tracking `SessionEnded(duration:)` and `SessionStarted` before it; each kind can be turned off while the key stays; `Sampler.sessions(where:rate:)`, which keeps or drops whole sessions; every platform |
 | `StandardContext` | Opt-in enrichers of the context most analytics want: `Enricher.application()`, `device()`, `operatingSystem()`, `locale()`, `network()` and `vendorIdentifier()`, each setting its typed key (`ApplicationKey`, `DeviceKey`, `OperatingSystemKey`, `LocaleKey`, `NetworkKey`, `VendorIdentifierKey`); static values read once, as the enricher is made; the connection from an `NWPathMonitor` the enricher owns; the platform's `identifierForVendor`, sensitive, never stored or made up; every platform, the device, network and vendor identifier on Apple platforms only |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |

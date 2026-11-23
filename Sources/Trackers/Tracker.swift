@@ -28,8 +28,8 @@ public import Persistence
 /// ``track(_:file:fileID:function:line:column:)`` does nothing but accept the event, from any
 /// thread: it reads the clock, captures the call site and the task's `ServiceContext`, and queues
 /// them. A worker the tracker owns, which never runs on the main actor, does everything else, in
-/// the order events were tracked: the constraints' check, the enrichers, the consent, a store's
-/// writes, and publishing to ``records``. No API runs that work on a caller's thread. ``flush()`` waits for the worker to
+/// the order events were tracked: the constraints' check, the enrichers, the samplers, the consent,
+/// a store's writes, and publishing to ``records``. No API runs that work on a caller's thread. ``flush()`` waits for the worker to
 /// catch up; ``finish()`` does too, then ends the records.
 ///
 /// Tracked events wait in memory, without a bound, until the worker reaches them. The queue
@@ -37,10 +37,14 @@ public import Persistence
 /// the waits of ``flush()``, and `track` can't wait for room without blocking its caller.
 ///
 /// Without a store, records live in memory only, and records not yet delivered are lost if the
-/// process exits. A tracker given a `RecordStore` (``init(store:consent:enrichers:now:)``)
+/// process exits. A tracker given a `RecordStore` (``init(store:consent:enrichers:samplers:samplingSeed:now:)``)
 /// delivers what the store kept from earlier runs first, and writes each record to it once the
 /// worker reaches it: a record is durable from then on, and one tracked moments before the
 /// process is killed, not yet reached, is lost.
+///
+/// A tracker given ``Sampler``s keeps a seeded fraction of the events they apply to, dropping the
+/// rest before they are held, written or delivered and reporting them on
+/// ``samplingDropReports``.
 ///
 /// A tracker given a ``Consent`` delivers an event only once its category is granted, holding it
 /// while undecided and dropping it when denied; one given none delivers every event.
@@ -58,22 +62,33 @@ public struct Tracker: Sendable {
     // worker to run: `track` only captures them, so no enricher runs on the caller.
     private let scopedEnrichers: [Enricher]
 
-    /// A tracker recording every event it tracks, or, given `consent`, every event it consents to.
+    /// A tracker recording every event it tracks, or, given `consent`, every event it consents to,
+    /// and, given `samplers`, the fraction of them they keep.
     ///
     /// - Parameters:
     ///   - consent: The user's consent, which each event's category must have before it is
     ///     delivered; `nil`, every event delivered, by default.
     ///   - enrichers: What each event's context gains, applied in order by the tracker's worker.
+    ///   - samplers: Which events, or groups of events, to keep a fraction of, decided by the
+    ///     tracker's worker after the enrichers; none by default, so every event is kept.
+    ///   - samplingSeed: The seed the samplers' decisions come from: fix it and which events are
+    ///     kept is fixed too. Drawn from the system's random number generator once, as the tracker
+    ///     is made, by default. Fix it only in tests and replays: every launch with the same seed
+    ///     makes the same decision for its first matching event, its second and so on, so a
+    ///     fixed seed shipped to every device keeps the same events everywhere rather than the
+    ///     sampler's rate of them.
     ///   - now: The wall-clock time each event is stamped with when it is tracked. It runs on the
     ///     tracking caller's thread, so keep it fast.
     public init(
         consent: Consent? = nil,
         enrichers: [Enricher] = [],
+        samplers: [Sampler] = [],
+        samplingSeed: UInt64 = .random(in: .min ... .max),
         // The library takes its dependencies as parameters rather than through a DI container's
         // registrations, so that adopters don't need the DI framework.
         now: @escaping @Sendable () -> Date = { Date.now }
     ) {
-        self.init(backing: .intake(Intake(store: nil, consent: consent, enrichers: enrichers)), now: now)
+        self.init(backing: .intake(Intake(store: nil, consent: consent, enrichers: enrichers, samplers: samplers, samplingSeed: samplingSeed)), now: now)
     }
 
     /// A tracker that writes every record to `store`, so records survive the app ending, and
@@ -85,20 +100,34 @@ public struct Tracker: Sendable {
     /// is granted, not while it is held, and the recovered records are gated again. The worker
     /// takes the recovered records from `store` before anything tracked.
     ///
+    /// Given `samplers`, a record they drop is never written. A record the store recovered was
+    /// sampled in the run that wrote it, so it isn't sampled again.
+    ///
     /// - Parameters:
     ///   - store: Where each record is kept until it is delivered.
     ///   - consent: The user's consent, which each event's category must have before it is
     ///     written and delivered; `nil`, every event delivered, by default.
     ///   - enrichers: What each event's context gains, applied in order by the tracker's worker.
+    ///   - samplers: Which events, or groups of events, to keep a fraction of, decided by the
+    ///     tracker's worker after the enrichers and before the store; none by default, so every
+    ///     event is kept.
+    ///   - samplingSeed: The seed the samplers' decisions come from: fix it and which events are
+    ///     kept is fixed too. Drawn from the system's random number generator once, as the tracker
+    ///     is made, by default. Fix it only in tests and replays: every launch with the same seed
+    ///     makes the same decision for its first matching event, its second and so on, so a
+    ///     fixed seed shipped to every device keeps the same events everywhere rather than the
+    ///     sampler's rate of them.
     ///   - now: The wall-clock time each event is stamped with when it is tracked. It runs on the
     ///     tracking caller's thread, so keep it fast.
     public init(
         store: some RecordStore,
         consent: Consent? = nil,
         enrichers: [Enricher] = [],
+        samplers: [Sampler] = [],
+        samplingSeed: UInt64 = .random(in: .min ... .max),
         now: @escaping @Sendable () -> Date = { Date.now }
     ) {
-        self.init(backing: .intake(Intake(store: store, consent: consent, enrichers: enrichers)), now: now)
+        self.init(backing: .intake(Intake(store: store, consent: consent, enrichers: enrichers, samplers: samplers, samplingSeed: samplingSeed)), now: now)
     }
 
     private init(backing: Backing, now: @escaping @Sendable () -> Date, scopedEnrichers: [Enricher] = []) {
@@ -191,12 +220,33 @@ public struct Tracker: Sendable {
         }
     }
 
+    /// A report of each event the tracker's ``Sampler``s dropped, in the order the drops happen.
+    ///
+    /// The tracker's worker samples each record after its enrichers and before the consent, so a
+    /// dropped record is never held, written to a store or delivered. Records a store recovered
+    /// aren't sampled again.
+    ///
+    /// Reports wait until they are read, merged: a drop joins the waiting report of the same
+    /// event, adding to its count and widening its timestamps. So the reports waiting unread are at
+    /// most one per event type, however many events are dropped. Copies of a tracker share one
+    /// sequence, which has one consumer and ends once the tracker has finished. A ``noOp``
+    /// tracker's is empty.
+    public var samplingDropReports: AsyncStream<SamplingDropReport> {
+        switch backing {
+        case .intake(let intake):
+            intake.samplingDropReports
+        case .none:
+            AsyncStream { $0.finish() }
+        }
+    }
+
     /// Records `event`, with the current wall-clock time, the caller's source location and the
     /// task's `ServiceContext` as the enrichers extend it.
     ///
     /// Returns at once, from any thread, having only queued the event: the tracker's worker
     /// checks its constraints, rejecting it on ``rejectionReports`` if it breaks one, runs the
-    /// enrichers, on the context captured here, then gates the record by its consent,
+    /// enrichers, on the context captured here, then the samplers, dropping it on
+    /// ``samplingDropReports`` if one leaves it out, then gates the record by its consent,
     /// writes it to its store and publishes it to ``records``. An event tracked after
     /// ``finish()`` is dropped and logged at debug level. A ``noOp`` tracker drops the event and
     /// logs it at debug level, so a missing `withTracker` shows up in the logs rather than passing

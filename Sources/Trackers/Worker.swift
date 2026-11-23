@@ -2,7 +2,7 @@ internal import Events
 import Logging
 internal import Persistence
 
-/// The one consumer of a tracker's ``Intake``: it validates, enriches, gates, writes and
+/// The one consumer of a tracker's ``Intake``: it validates, enriches, samples, gates, writes and
 /// publishes each record, in the order the entries came, off the threads that tracked them.
 struct Worker: Sendable {
     let sink: RecordSink
@@ -10,6 +10,9 @@ struct Worker: Sendable {
     let enrichers: [Enricher]
     let membership: ConsentGate.Membership?
     let rejections: DropReportQueue<RejectionReport>
+    let samplers: [Sampler]
+    let samplingSeed: UInt64
+    let samplingDrops: DropReportQueue<SamplingDropReport>
 
     private static let logger = Logger(label: "Trackers.Worker")
 
@@ -19,6 +22,9 @@ struct Worker: Sendable {
         // The worker's own view of the decisions, changed only as it reaches each one, so a
         // record is gated by the decisions made before it was tracked, never by a later one.
         var statuses = membership?.statuses ?? [:]
+        // The worker's alone, changed one record at a time in the order they were tracked, so
+        // the decisions follow from the seed and that order.
+        var sampling = SamplingStage(samplers: samplers, seed: samplingSeed)
         if let store {
             // Validated again: a constraint added since a record was written may reject it, and the
             // store then forgets it, as it was dropped on purpose.
@@ -41,7 +47,9 @@ struct Worker: Sendable {
                 guard !rejects(record) else { continue }
                 var enriched: [EventRecord] = []
                 enrich(record, scopedEnrichers, from: 0, into: &enriched)
-                admit(enriched, statuses: statuses)
+                // After the enrichers, whose keys (a session's) a sampler reads, and before the
+                // consent and the store, so a sampled-out record is never held or written.
+                admit(sample(enriched, with: &sampling), statuses: statuses)
             case .decide(let categories, let status):
                 for category in categories {
                     statuses[category] = status
@@ -54,6 +62,7 @@ struct Worker: Sendable {
         membership?.leave()
         sink.subscription.finish()
         rejections.finish()
+        samplingDrops.finish()
     }
 }
 
@@ -87,6 +96,26 @@ extension Worker {
         #endif
         rejections.report(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
         return true
+    }
+}
+
+extension Worker {
+    /// The records of `records` that `sampling` keeps, in order, each stamped with its rate;
+    /// each one dropped is reported.
+    fileprivate func sample(_ records: [EventRecord], with sampling: inout SamplingStage) -> [EventRecord] {
+        // A tracker without samplers, most of them, pays nothing for the stage: not even the
+        // allocation of the kept records' array.
+        guard !sampling.isEmpty else { return records }
+        var kept: [EventRecord] = []
+        kept.reserveCapacity(records.count)
+        for var record in records {
+            if sampling.keeps(&record) {
+                kept.append(record)
+            } else {
+                samplingDrops.report(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
+            }
+        }
+        return kept
     }
 }
 

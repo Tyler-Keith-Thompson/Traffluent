@@ -30,6 +30,10 @@ K = "Worker.swift"
 D = "DroppedRecords.swift"
 Q = "DropReportQueue.swift"
 J = "RejectionReport.swift"
+R = "SampleRate.swift"
+P = "Sampler.swift"
+A = "SamplingStage.swift"
+O = "SamplingDropReport.swift"
 
 # Consent mutants that only a store can catch (a recovered record's gating, a store forgetting what
 # the hold drops) are in Persistence.py, whose suites have stores.
@@ -42,12 +46,18 @@ J = "RejectionReport.swift"
 # - Dropping the log of an event tracked after finish: tests don't pin logs. Nor the worker's
 #   debug log of a rejection.
 #
+# Sampling mutants left out as equivalent:
+# - Dropping the group decision's cache of the latest group (`latest = Decided(...)`): every record
+#   then decides its group again, from the same node, to the same answer; only the time differs.
+# - `if keeps, let rate` set to `if let rate`: the rate then lands on records that are dropped, which
+#   nothing reads.
+#
 # The call site track captures. An expression rather than the statement: a mutated `let` would be
 # scoped to its branch.
 LOCATION = "SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)"
 # The enriched copy enriched(by:) returns, swapped whole as LOCATION is.
 COPY = "Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [enricher])"
-WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)"
+WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)"
 
 MUTANTS = [
     Mutant("currentignoresbinding", T, "bound ?? .noOp", ".noOp"),
@@ -93,7 +103,7 @@ MUTANTS = [
     Mutant("flushnotresumed", K, "continuation.resume(returning: true)", "continuation.resume(returning: false)", mode="stmt"),
     Mutant("nofinish", K, "sink.subscription.finish()", "", mode="stmt"),
     Mutant("finishkeepsheld", K, "membership?.leave()", "", mode="stmt"),
-    Mutant("gatebypassed", K, "admit(enriched, statuses: statuses)", "enriched.forEach(sink.send)", mode="stmt"),
+    Mutant("gatebypassed", K, "admit(sample(enriched, with: &sampling), statuses: statuses)", "sample(enriched, with: &sampling).forEach(sink.send)", mode="stmt"),
     # Records an enricher adds (Enricher(records:)).
     Mutant("addedreversed", K, "enricher(&record)", "enricher(&record).reversed()"),
     Mutant("addeddropped", K, "!rejects(added)", "false"),
@@ -178,5 +188,30 @@ MUTANTS = [
     Mutant("mergedrejectioncountlost", J, "merged.recordCount + report.recordCount", "merged.recordCount"),
     Mutant("mergedrejectionlowerlatest", J, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
     Mutant("mergedrejectionupperlatest", J, "max(merged.timestamps.upperBound, report.timestamps.upperBound)", "report.timestamps.upperBound"),
+    # Sampling: the keep or drop draw, the rate's 0 and 1 boundaries, a group's one decision, the
+    # rate stamped on kept records, the stage before the consent and the store, and the drops counted.
+    Mutant("drawinverted", A, "generator.bernoulli(samplers[index].rate.value)", "!generator.bernoulli(samplers[index].rate.value)"),
+    Mutant("sharedstream", A, "tree[index]", "tree[0]"),
+    Mutant("shortcircuit", A, "samplers[index].selects(record)", "keeps && samplers[index].selects(record)"),
+    Mutant("anydecisionkeeps", A, "keeps = keeps && decision", "keeps = keeps || decision", mode="stmt"),
+    Mutant("ratenotmultiplied", A, "(rate?.value ?? 1) * samplers[index].rate.value", "samplers[index].rate.value"),
+    Mutant("ratenotstamped", A, "record.context[SampleRateKey.self] = rate", "", mode="stmt"),
+    Mutant("ratetopbound", R, "(0 ... 1).contains(value)", "(0 ..< 1).contains(value)"),
+    Mutant("rateunbounded", R, "(0 ... 1).contains(value)", "value >= 0"),
+    Mutant("checkedrateunbounded", R, "guard (0 ... 1).contains(checked) else { throw InvalidSampleRate() }", "", mode="stmt"),
+    Mutant("checkedratetopbound", R, "(0 ... 1).contains(checked)", "(0 ..< 1).contains(checked)"),
+    Mutant("integerliteralzero", R, "self.init(Double(value))", "self.init(0)", mode="stmt"),
+    Mutant("anyeventtype", P, "$0.event is E", "true"),
+    Mutant("ungroupeddropped", P, "return nil", "return false", mode="stmt"),
+    Mutant("stalegroup", P, "latest.group == group", "true"),
+    Mutant("onegroupnode", P, "node[group.description]", 'node["group"]'),
+    Mutant("defaultseedfixed", T, ".random(in: .min ... .max)", "0", nth=0),
+    Mutant("notsampled", K, "admit(sample(enriched, with: &sampling), statuses: statuses)", "admit(enriched, statuses: statuses)", mode="stmt"),
+    Mutant("stageskipped", K, "guard !sampling.isEmpty else { return records }", "guard sampling.isEmpty else { return records }", mode="stmt"),
+    Mutant("dropnotreported", K, "samplingDrops.report(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
+    Mutant("dropsneverend", K, "samplingDrops.finish()", "", mode="stmt"),
+    Mutant("dropsmergedacrossevents", O, "waiting.firstIndex(where: { $0.eventName == report.eventName })", "waiting.indices.last"),
+    Mutant("mergeddropcountlost", O, "merged.recordCount + report.recordCount", "merged.recordCount"),
+    Mutant("mergeddroplowerlatest", O, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
     Mutant("rejectiondescribed", J, '"\\(eventName): \\(violation) (\\(recordCount) rejected)"', '"\\(eventName): \\(violation)"'),
 ]

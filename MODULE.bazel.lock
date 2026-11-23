@@ -553,7 +553,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 08f514a86cb0c0fa1c1274d0ffdb05812a68b02d6fb1a1c56766172459106b74"
+          "FILE:@@//swift/Package.resolved bb9b9ba853885f63b3d38afe8c76c2cb01435d532a5e2dbaaeec27542fc44500"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -627,9 +627,9 @@
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
               "bazel_package_name": "swiftpkg_swiftprng",
-              "commit": "964257d448bda388e30186f49363d35a22afbb69",
+              "commit": "e4f108953819bea7454ee85cd1a37eec56d9227a",
               "remote": "https://github.com/Tyler-Keith-Thompson/SwiftPRNG",
-              "version": "0.0.1",
+              "version": "0.0.6",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
