@@ -30,3 +30,7 @@ config_setting(
     values = {"compilation_mode": "dbg"},
     visibility = ["//visibility:public"],
 )
+
+# The Info.plist of a module's privacy manifest bundle (PRIVACY_MANIFEST in scripts/modules.py), the
+# keys SwiftPM writes into the bundle it builds for the same resource.
+exports_files(["ResourceBundleInfo.plist"])

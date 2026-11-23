@@ -32,6 +32,7 @@ try await delivery.execute()
 
 - <doc:WhatGoesWhere>
 - <doc:IdentifyingPeople>
+- <doc:PrivacyManifests>
 
 ### Modules
 

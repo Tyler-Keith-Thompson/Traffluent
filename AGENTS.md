@@ -23,10 +23,12 @@ Sources/<Module>/                One directory per module, each with a generated
 Sources/Traffluent/             Umbrella module (@_exported imports) and the landing DocC catalog
 Plugins/<Plugin>/                SwiftPM command plugins (PLUGINS in scripts/modules.py); Bazel builds none
 Tests/<Module>Tests/             One test target per module; Performance/ holds speed-reliant tests
-Tests/TraffluentTests/          The README examples, verbatim
+Tests/TraffluentTests/          The README examples, verbatim, and SwiftPM's privacy manifest check
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
 Tests/CompileFailures/           Sources that must not compile, each checked for its errors
                                  (tools/compile_failure_test.bzl); Bazel only
+Tests/PrivacyManifests/          A Mac bundle of the modules with privacy manifests, checked for each
+                                 (generated); Bazel only
 scripts/modules.py               The module graph
 scripts/mutants/<Module>.py      Planted bugs for `just mutate <Module>` (scripts/mutate.py)
 Fuzz/Sources/Fuzz<Module>/       A libFuzzer target per module, in the separate Fuzz/ package
@@ -117,6 +119,12 @@ in beside the project's own: keep one definition, holding the project's rows, an
   keeps the project's versions, and says when the template's have passed them.
   CI needs a `swift-bazel` image of the new version, published from the project template's
   `ci-image/build.sh`.
+- Ship a privacy manifest: put `PrivacyInfo.xcprivacy` in `Sources/<Module>/`, then `just modules`.
+  Package.swift copies it as the module's resource, and Bazel gives the module an
+  `apple_resource_bundle` as `data` (left out on Linux), both named `Traffluent_<Module>.bundle`;
+  `//Tests/PrivacyManifests` (Bazel) and `PrivacyManifestTests` in `Tests/TraffluentTests`
+  (SwiftPM) check that each is bundled unchanged. Record what it declares, and why, in the
+  umbrella catalog's PrivacyManifests article.
 - A module name takes a `Module` suffix only when it would otherwise equal its main type's name
   (`GreetingModule` would hold `Greeting`). No catch-all modules ("Core", "Utilities").
 
