@@ -120,6 +120,27 @@ struct READMEExamplesTests {
         try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
+    @Test("App lifecycle")
+    func appLifecycle() async throws {
+        // The README's store uses the default directory; this one uses a scratch directory so the
+        // test leaves nothing behind.
+        let directory = FilePath(NSTemporaryDirectory()).appending("READMEExamplesTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let store = try SegmentStore(events: [ApplicationOpened.self, ApplicationBackgrounded.self, SignedUp.self], directory: directory)
+        let tracker = Tracker(store: store)
+        // In the application delegate's application(_:didFinishLaunchingWithOptions:), kept beside the tracker:
+        let lifecycle = tracker.trackLifecycle(
+            kinds: [.installed, .updated, .opened, .backgrounded],
+            versionStore: FileVersionStore(directory: store.directory)
+        )
+        let delivery = tracker.records
+            .batch(strategy: .either(.count(20), .time(interval: .seconds(30), clock: ContinuousClock()), .lifecycle))
+            .deliver(to: ConsoleDestination())
+        await lifecycle.finish()
+        await tracker.finish()
+        try await delivery.execute()  // prints: ApplicationOpened ApplicationOpened(fromBackground: false)
+    }
+
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

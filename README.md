@@ -325,6 +325,45 @@ To test what your code tracks, deliver its tracker's records to an `InMemoryDest
 `DestinationTesting`; it depends on no test framework) and read it after the delivery:
 `events(of: SignedUp.self)`, `records` or `batches`.
 
+### App lifecycle
+
+The app's lifecycle can track itself too (module `LifecycleTracking`: every platform). Nothing is
+tracked until the app turns it on, as it launches, and keeps what it returns:
+
+```swift
+import LifecycleTracking
+
+let store = try SegmentStore(events: [ApplicationOpened.self, ApplicationBackgrounded.self, SignedUp.self])
+let tracker = Tracker(store: store)
+// In the application delegate's application(_:didFinishLaunchingWithOptions:), kept beside the tracker:
+let lifecycle = tracker.trackLifecycle(
+    kinds: [.installed, .updated, .opened, .backgrounded],
+    versionStore: FileVersionStore(directory: store.directory)
+)
+let delivery = tracker.records
+    .batch(strategy: .either(.count(20), .time(interval: .seconds(30), clock: ContinuousClock()), .lifecycle))
+    .deliver(to: ConsoleDestination())
+```
+
+As it starts, it compares the app's version (`CFBundleShortVersionString`, or `version:`) with the
+one its `VersionStore` saved at the last launch: none tracks `ApplicationInstalled`, another
+`ApplicationUpdated(previousVersion:version:)`, the same neither. The store keeps the version and
+nothing else; `FileVersionStore` keeps it in a file beside the records, `InMemoryVersionStore` in
+memory for tests, and any type of yours can conform. Then it tracks `ApplicationOpened(fromBackground:
+false)`, and after that, from `UIApplication`'s, `WKApplication`'s or `NSApplication`'s
+notifications, `ApplicationBackgrounded`, `ApplicationOpened(fromBackground: true)` and, where the
+platform reports it, `ApplicationTerminated`, each once per transition. A scene-based app gets one
+transition for the whole app, not one per scene. On macOS another app becoming active counts as the
+background. `kinds:` turns kinds off. On Linux, a server or tool calls `await lifecycle.finish()` as
+it ends, which tracks `ApplicationTerminated`.
+
+As the app leaves the foreground, it waits for the tracker's worker to write every record tracked so
+far to the store, then calls the store's `synchronize()`, so a record accepted before the app went
+to the background survives it being killed there. A delivery batched with `.lifecycle` sends what
+is pending as it reads the `ApplicationBackgrounded` record. The notification's handler only hands
+the transition on: the work runs on a task of its own, never on the main thread, and on platforms
+that suspend apps it holds background time from `ProcessInfo.performExpiringActivity` until done.
+
 ### Consent
 
 Each event type names the purpose it is collected for, its `consentCategory`: `.analytics` unless
@@ -428,7 +467,7 @@ let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
 
 A record is durable once written, not once `track` returns: one tracked moments before the process
 is killed, not yet reached by the worker, is lost. As the app moves to the background, call
-`await tracker.flush()`, then `store.synchronize()`.
+`await tracker.flush()`, then `store.synchronize()`, or let `trackLifecycle` (above) do both.
 
 The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
 binary encoding written field by field. Any other event is kept in memory only: delivered in this
@@ -674,6 +713,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `AppKitTracking` | `TrackerProviding`: a responder, window delegate or application delegate that holds a tracker; `NSView.tracker`, the tracker of the nearest one a view's actions reach; and `NSControl.track(_:)`, which tracks an event through it each time the control sends its action; macOS only, empty elsewhere |
 | `AutomaticScreenTracking` | `trackScreensAutomatically(kinds:_:)`, on a `UIWindowScene` or an `NSWindow`: opt-in screen views, which track `ScreenViewed` through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a closure given each `DiscoveredScreen`, and left to a manual `trackScreen(_:)` where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere |
 | `AutomaticControlTracking` | `trackControlsAutomatically(_:)`, on a `UIWindowScene`: opt-in control activations, which track `ControlActivated` through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a closure given each `DiscoveredControl`, with its screen as `ScreenKey`; SwiftUI's controls left to `trackOnTap(_:)`; without swizzling; `ControlActivated` on every platform, the tracking iOS, iPadOS, tvOS, visionOS and Mac Catalyst only |
+| `LifecycleTracking` | `trackLifecycle(kinds:version:versionStore:notificationCenter:)`, on a `Tracker`: opt-in lifecycle events, `ApplicationInstalled`, `ApplicationUpdated`, `ApplicationOpened`, `ApplicationBackgrounded` and `ApplicationTerminated`, from the platform's application notifications, installs and updates decided from the version a `VersionStore` keeps (`FileVersionStore`, `InMemoryVersionStore`); on backgrounding, the tracker's records made durable and `LifecycleBatchStrategy`'s batches flushed; each kind can be turned off; every platform, Linux tracking only its start and finish |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

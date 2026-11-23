@@ -25,6 +25,8 @@ final class Intake: Sendable {
     let subscription: Subscription
     /// The worker's reports of the events it rejected, for ``Tracker/rejectionReports``.
     let rejectionReports: AsyncStream<RejectionReport>
+    /// Where the worker writes each record, if anywhere, for ``Tracker/store``.
+    let store: (any RecordStore)?
     // An AsyncStream rather than a Mutex-guarded Deque and a hand-written wait: its yield is
     // the O(1) append and wake-up the intake needs, safe from any thread, and it ends with
     // `finish()` after the entries already in it.
@@ -41,6 +43,7 @@ final class Intake: Sendable {
         let rejections = DropReportQueue<RejectionReport>()
         let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)
         self.subscription = subscription
+        self.store = store
         // Captures the queue, not the intake, so reading the reports keeps no tracker alive; the
         // worker ends them once it ends the records.
         rejectionReports = AsyncStream(unfolding: { await rejections.next() })

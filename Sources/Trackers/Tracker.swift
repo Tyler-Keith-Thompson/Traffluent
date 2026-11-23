@@ -155,6 +155,20 @@ public struct Tracker: Sendable {
         }
     }
 
+    /// The store the tracker's worker writes each record to, if it was given one; `nil` for a
+    /// ``noOp`` tracker.
+    ///
+    /// Package-wide, so a module that hooks the app's lifecycle can make the records durable
+    /// (`synchronize()`) without the app passing the store a second time, and getting it wrong.
+    package var store: (any RecordStore)? {
+        switch backing {
+        case .intake(let intake):
+            intake.store
+        case .none:
+            nil
+        }
+    }
+
     /// A report of each event the tracker rejected because a property broke a constraint declared
     /// on it, in the order the rejections happen.
     ///

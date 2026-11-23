@@ -14,5 +14,6 @@
 @_exported import AppKitTracking
 @_exported import AutomaticScreenTracking
 @_exported import AutomaticControlTracking
+@_exported import LifecycleTracking
 @_exported import Checksums
 @_exported import Persistence

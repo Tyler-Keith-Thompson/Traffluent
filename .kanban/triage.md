@@ -139,7 +139,8 @@ bad row in a dashboard.
   plan is an export of those types, never the input. Rejected: an external schema file with
   codegen into Swift, which makes the Swift type a generated copy of something else; `Codable`
   (too slow, per the owner); and a runtime Mirror walk (slow, can't see optionality).
-- D8. Automatic instrumentation covers screen views (TRAF-22) and control taps (TRAF-23), and is
+- D8. Automatic instrumentation covers app lifecycle (TRAF-24), screen views (TRAF-22) and control
+  taps (TRAF-23), and is
   opt in: nothing is tracked until the app turns it on for a scene or window, and each kind can be
   turned off (owner, 2026-11-23, on TRAF-23: "In scope, opt in"). It never swizzles, never keeps
   process-wide state (N2) and uses no Apple private API, so a kind that can only be reached that way
