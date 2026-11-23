@@ -12,8 +12,9 @@ final class Intake: Sendable {
     /// What a caller hands the worker.
     enum Entry: Sendable {
         /// A record as `track` made it: its context as the caller's task held it, not yet
-        /// enriched or gated.
-        case track(EventRecord)
+        /// enriched or gated, and the enrichers of the tracker copy that tracked it, which run
+        /// before the intake's own.
+        case track(EventRecord, [Enricher])
         /// A consent decision, in the order of the tracks around it.
         case decide(Set<ConsentCategory>, ConsentStatus)
         /// A wait for every entry before it, resumed with `true` once the worker reaches it.

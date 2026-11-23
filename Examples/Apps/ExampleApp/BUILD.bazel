@@ -19,6 +19,7 @@ swift_library(
         "//Sources/Destinations",
         "//Examples/Sources/ExampleEvents",
         "//Examples/Sources/ExampleViews",
+        "//Sources/SwiftUITracking",
         "//Sources/Trackers",
     ],
 )

@@ -1,3 +1,4 @@
+import Foundation
 import Events
 import InMemoryTracing
 import Instrumentation
@@ -120,6 +121,91 @@ struct TrackerContextTests {
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).context.inMemorySpanContext
         #expect(actual != nil)
+        #expect(actual == expected)
+    }
+
+    @Test("An enriched copy's events carry what its enricher sets; the original's don't")
+    func enrichedCopy() async {
+        let tracker = Tracker()
+        let sut = tracker.enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+        let expected: [String?] = ["Checkout", nil]
+
+        sut.track(Tapped(number: 1))
+        tracker.track(Tapped(number: 2))
+        await tracker.finish()
+
+        var actual: [String?] = []
+        for await record in tracker.records {
+            actual.append(record.context[ScreenKey.self])
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("A copy's enricher runs on the caller's context, before the tracker's enrichers, which see what it set")
+    func enrichedCopyBeforeTrackerEnrichers() async throws {
+        let session = Enricher { $0[SessionKey.self] = "session on \($0[ScreenKey.self] ?? "none")" }
+        let tracker = Tracker(enrichers: [session])
+        let sut = tracker.enriched(by: Enricher { $0[ScreenKey.self] = "Checkout from \($0[SessionKey.self] ?? "none")" })
+        var context = ServiceContext.topLevel
+        context[SessionKey.self] = "s-1"
+        let expectedScreen = "Checkout from s-1"
+        let expectedSession = "session on Checkout from s-1"
+
+        ServiceContext.withValue(context) {
+            sut.track(Tapped(number: 1))
+        }
+        await tracker.finish()
+
+        var records = tracker.records.makeAsyncIterator()
+        let record = try #require(await records.next())
+        #expect(record.context[ScreenKey.self] == expectedScreen)
+        #expect(record.context[SessionKey.self] == expectedSession)
+    }
+
+    @Test("Enriching a copy again keeps its enricher and runs the new one after it")
+    func enrichedTwice() async throws {
+        let outer = Tracker().enriched(by: Enricher {
+            $0[SessionKey.self] = "s-1"
+            $0[ScreenKey.self] = "Home"
+        })
+        let sut = outer.enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+        let expectedScreen = "Checkout"
+        let expectedSession = "s-1"
+
+        sut.track(Tapped(number: 1))
+        await sut.finish()
+
+        var records = sut.records.makeAsyncIterator()
+        let record = try #require(await records.next())
+        #expect(record.context[ScreenKey.self] == expectedScreen)
+        #expect(record.context[SessionKey.self] == expectedSession)
+    }
+
+    @Test("A no-op tracker's enriched copy drops every event")
+    func enrichedNoOp() async {
+        let sut = Tracker.noOp.enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+        let expected = 0
+
+        sut.track(Tapped(number: 1))
+        await sut.finish()
+
+        var actual = 0
+        for await _ in sut.records {
+            actual += 1
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("An enriched copy stamps its events with the tracker's clock")
+    func enrichedCopyClock() async throws {
+        let expected = Date(timeIntervalSince1970: 1_000)
+        let sut = Tracker(now: { expected }).enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+
+        sut.track(Tapped(number: 1))
+        await sut.finish()
+
+        var records = sut.records.makeAsyncIterator()
+        let actual = try #require(await records.next()).timestamp
         #expect(actual == expected)
     }
 }

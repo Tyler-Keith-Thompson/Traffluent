@@ -54,6 +54,9 @@ public struct Tracker: Sendable {
 
     let backing: Backing
     private let now: @Sendable () -> Date
+    // The enrichers this copy adds (`enriched(by:)`), carried with each record it tracks for the
+    // worker to run: `track` only captures them, so no enricher runs on the caller.
+    private let scopedEnrichers: [Enricher]
 
     /// A tracker recording every event it tracks, or, given `consent`, every event it consents to.
     ///
@@ -98,9 +101,34 @@ public struct Tracker: Sendable {
         self.init(backing: .intake(Intake(store: store, consent: consent, enrichers: enrichers)), now: now)
     }
 
-    private init(backing: Backing, now: @escaping @Sendable () -> Date) {
+    private init(backing: Backing, now: @escaping @Sendable () -> Date, scopedEnrichers: [Enricher] = []) {
         self.backing = backing
         self.now = now
+        self.scopedEnrichers = scopedEnrichers
+    }
+
+    /// A copy of this tracker whose events' contexts `enricher` also changes, for the code it is
+    /// handed to.
+    ///
+    /// The copy shares this tracker's records, worker and consent; only the events tracked
+    /// through it are enriched. Use it where a task-local `ServiceContext` doesn't reach, such as
+    /// a UI framework's button actions: hand the part of the app a screen owns a tracker enriched
+    /// with that screen.
+    ///
+    /// ```swift
+    /// let checkout = tracker.enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+    /// checkout.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+    /// ```
+    ///
+    /// The tracker's worker runs `enricher`, never the tracking caller, on the context `track`
+    /// took and before the enrichers the tracker was built with, which see what it set. Enriching
+    /// a copy again runs the new enricher after the copy's, so the newest sets a key last. A
+    /// ``noOp`` tracker's copy drops every event too.
+    ///
+    /// - Parameter enricher: What each event tracked through the copy adds to its context.
+    /// - Returns: A tracker that shares this one's records and enriches its events with `enricher`.
+    public func enriched(by enricher: Enricher) -> Tracker {
+        Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [enricher])
     }
 
     /// A tracker that drops every event, logging each one at debug level. Its ``records`` are
@@ -183,7 +211,7 @@ public struct Tracker: Sendable {
                 sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column),
                 context: ServiceContext.current ?? .topLevel
             )
-            guard intake.enqueue(.track(record)) else {
+            guard intake.enqueue(.track(record, scopedEnrichers)) else {
                 // The one piece of work `track` does on its caller besides queuing: only on this
                 // drop path, never for a delivered event, and at debug level, whose message is
                 // an autoclosure built only when the level is enabled.

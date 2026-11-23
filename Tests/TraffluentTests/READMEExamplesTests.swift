@@ -43,17 +43,17 @@ struct READMEExamplesTests {
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
-    enum ScreenKey: ServiceContextKey {
+    enum SessionKey: ServiceContextKey {
         typealias Value = String
     }
 
     @Test("Context and enrichers")
     func contextAndEnrichers() async throws {
-        let screen = Enricher { context in
-            context[ScreenKey.self] = "Checkout"
+        let session = Enricher { context in
+            context[SessionKey.self] = "s-42"
         }
-        let tracker = Tracker(enrichers: [screen])
-        tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+        let tracker = Tracker(enrichers: [session])
+        tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is "s-42"
         await tracker.finish()
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()
     }

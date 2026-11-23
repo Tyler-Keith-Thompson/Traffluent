@@ -22,11 +22,12 @@ let targets: [Target] = [
     .target(name: "ExampleEvents", dependencies: [library("Events")], exclude: bazelFiles),
     .executableTarget(name: "CommandLineExample", dependencies: ["ExampleEvents", library("Destinations"), library("Trackers")]),
     .testTarget(name: "ExampleEventsTests", dependencies: ["ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("Trackers")]),
-    .target(name: "ExampleViews", dependencies: ["ExampleEvents", library("Trackers")], exclude: bazelFiles),
+    .target(name: "ExampleViews", dependencies: ["ExampleEvents", library("SwiftUITracking"), library("Trackers")], exclude: bazelFiles),
     .target(name: "ExampleServer", dependencies: ["ExampleEvents", library("Events"), library("HTTPDestinations"), library("Trackers"), hummingbird, .product(name: "HTTPTypes", package: "swift-http-types"), tracing("Instrumentation"), tracing("Tracing")]),
     .executableTarget(name: "ServerExample", dependencies: ["ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Trackers"), hummingbird, tracing("Tracing")]),
     .testTarget(name: "ExampleViewsTests", dependencies: [
-        "ExampleViews", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("Trackers"),
+        "ExampleViews", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("SwiftUITracking"), library("Trackers"),
+        tracing("Instrumentation"),
         .product(name: "ViewInspector", package: "viewinspector", condition: .when(platforms: [.macOS])),
     ]),
     // A store's events, declared with @Event, and the executable the export-tracking-plan plugin runs to

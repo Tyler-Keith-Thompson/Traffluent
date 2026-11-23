@@ -93,8 +93,8 @@ try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  /
 
 The binding reaches child tasks, and a nested `withTracker` replaces it for its own scope. It
 doesn't reach callbacks a framework runs on tasks of its own, such as SwiftUI button actions: pass
-those a `Tracker`. With no tracker bound, `Tracker.current` drops each event and logs it at debug
-level.
+those a `Tracker`, or, in SwiftUI, read it from the environment (below). With no tracker bound,
+`Tracker.current` drops each event and logs it at debug level.
 
 Every record also carries the `ServiceContext` it was tracked in (swift-distributed-tracing's
 `Instrumentation` module), read through typed keys, so a destination can see the session, the
@@ -104,16 +104,68 @@ is tracked:
 ```swift
 import Instrumentation
 
-enum ScreenKey: ServiceContextKey {
+enum SessionKey: ServiceContextKey {
     typealias Value = String
 }
 
-let screen = Enricher { context in
-    context[ScreenKey.self] = "Checkout"
+let session = Enricher { context in
+    context[SessionKey.self] = "s-42"
 }
-let tracker = Tracker(enrichers: [screen])
-tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
+let tracker = Tracker(enrichers: [session])
+tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is "s-42"
 ```
+
+`tracker.enriched(by:)` gives the part of an app a value belongs to a copy of the tracker whose
+events alone carry it, such as a screen's name, where a task-local context doesn't reach. The
+copy shares the tracker's records; the worker runs its enricher before the tracker's own.
+
+### SwiftUI
+
+On Apple platforms, views read the tracker from the environment (module `SwiftUITracking`, empty
+elsewhere). Set it at the root of the views with `tracker(_:)`, read it in any view with
+`@Environment(\.tracker)`, and let modifiers track what views do:
+
+```swift
+import SwiftUI
+
+struct PlanSelected: Event {
+    var plan: String
+}
+
+struct CheckoutView: View {
+    @Environment(\.tracker) private var tracker
+    @State private var plan = "free"
+
+    var body: some View {
+        Form {
+            Picker("Plan", selection: $plan) {
+                Text("Free").tag("free")
+                Text("Pro").tag("pro")
+            }
+            .trackChange(of: plan) { PlanSelected(plan: $0) }
+            Button("Sign up") {
+                tracker.track(SignedUp(plan: plan))  // its record's context[ScreenKey.self] is "Checkout"
+            }
+        }
+    }
+}
+
+let tracker = Tracker()
+let root = CheckoutView()
+    .trackScreen("Checkout")  // tracks ScreenViewed(screen: "Checkout") each time it appears
+    .tracker(tracker)
+```
+
+Each modifier tracks through the environment's tracker, once per trigger, and records where it is
+applied as the call site. `trackOnAppear(_:)` tracks its event each time the view appears, as
+`onAppear` runs: again when a navigation stack pops back to it, not when SwiftUI only redraws it.
+`trackOnTap(_:)` tracks each tap, beside the view's own action. `trackChange(of:_:)` tracks the
+event it makes from each new value, not from the first one or an equal one. `trackScreen(_:)`
+tracks `ScreenViewed` each time the view appears, and puts a tracker enriched with the screen's
+`ScreenKey` in the environment inside it, so the events tracked from its actions and modifiers
+carry the screen's name. Apply it where the screen's view is placed, as above: a view's own
+`@Environment` reads the environment around it, which the modifiers in its own body don't change.
+Until a tracker is set, the environment's is `Tracker.noOp`, so a preview tracks nothing.
 
 To see events beside your logs or traces, deliver to `LoggerDestination(logger:)` (module
 `LoggingDestinations`) or `SpanEventDestination(tracer:)` (module `TracingDestinations`). Each is a
@@ -478,7 +530,8 @@ says which facts go where, with the anti-patterns to avoid.
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
-| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context, for every event or, through `enriched(by:)`, for those of one tracker copy; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
+| `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

@@ -25,10 +25,9 @@ SCRATCH = os.path.join(ROOT, ".build", "catalyst")
 APP = os.path.join(SCRATCH, "ExampleApp.app")
 SOURCES = os.path.join(ROOT, "Apps", "ExampleApp")
 TRIPLE = "arm64-apple-ios18.0-macabi"
-# The module the app imports that reaches every other it needs, and those modules, whose objects
-# the app links.
-TOP_MODULE = "ExampleViews"
-LINKED_MODULES = ["Events", "Destinations", "Trackers", "ExampleEvents", "ExampleViews"]
+# The modules the app imports, which between them reach every other it needs. The app links the
+# object of every module SwiftPM builds for them, their dependencies' included.
+TOP_MODULES = ["ExampleViews", "Destinations"]
 SWIFT = ["env", "-u", "TOOLCHAINS", "xcrun", "--toolchain", "default"]
 
 
@@ -45,16 +44,21 @@ def main():
     ios_support = os.path.join(sdk, "System", "iOSSupport")
     frameworks = os.path.join(ios_support, "System", "Library", "Frameworks")
 
-    run(SWIFT + ["swift", "build", "--build-system", "swiftbuild", "--triple", TRIPLE, "--sdk", sdk,
-                 "-Xswiftc", "-Fsystem", "-Xswiftc", frameworks, "--target", TOP_MODULE, "--scratch-path", SCRATCH])
+    for module in TOP_MODULES:
+        run(SWIFT + ["swift", "build", "--build-system", "swiftbuild", "--triple", TRIPLE, "--sdk", sdk,
+                     "-Xswiftc", "-Fsystem", "-Xswiftc", frameworks, "--target", module, "--scratch-path", SCRATCH])
     products = os.path.join(SCRATCH, "out", "Products", "Debug-maccatalyst")
 
     executable = os.path.join(APP, "Contents", "MacOS", "ExampleApp")
     os.makedirs(os.path.dirname(executable), exist_ok=True)
     sources = sorted(os.path.join(SOURCES, f) for f in os.listdir(SOURCES) if f.endswith(".swift"))
-    objects = [os.path.join(products, f"{module}.o") for module in LINKED_MODULES]
+    objects = sorted(os.path.join(products, f) for f in os.listdir(products) if f.endswith(".o"))
     run(SWIFT + ["swiftc", "-target", TRIPLE, "-sdk", sdk, "-Fsystem", frameworks,
-                 "-L", os.path.join(ios_support, "usr", "lib"), "-I", products, "-module-name", "ExampleApp",
+                 "-L", os.path.join(ios_support, "usr", "lib"), "-I", products,
+                 # swift-system's C module, which SystemPackage's interface (through Persistence's)
+                 # imports; SwiftPM leaves its module map in the checkout, not among the products.
+                 "-I", os.path.join(SCRATCH, "checkouts", "swift-system", "Sources", "CSystem", "include"),
+                 "-module-name", "ExampleApp",
                  "-parse-as-library", "-swift-version", "6", *sources, *objects, "-o", executable])
 
     with open(os.path.join(SOURCES, "Info-iOS.plist"), "rb") as f:

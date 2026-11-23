@@ -2,12 +2,15 @@ import Destinations
 import ExampleEvents
 import ExampleViews
 import SwiftUI
+import SwiftUITracking
 import Trackers
 
 /// The Apple example app, one source for every Apple platform: the composition root builds the
-/// tracker, delivers its records for the life of the app, tracks the launch, and hands the tracker
-/// to the screen. SwiftUI runs the screen's button actions on tasks of its own, which a
-/// `withTracker` binding doesn't reach, so the app passes the tracker down instead.
+/// tracker, delivers its records for the life of the app, tracks the launch, and sets the tracker
+/// in the environment at the root of its views, where the screen reads it. SwiftUI runs the
+/// screen's button actions on tasks of its own, which a `withTracker` binding doesn't reach, but
+/// an action reads the environment of the view it is in. Placing the view as the screen "Home"
+/// tracks each time it appears and stamps the events tracked inside it with that name.
 @main
 struct ExampleApp: App {
     private let tracker = Tracker()
@@ -22,7 +25,9 @@ struct ExampleApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ExampleView(tracker: tracker)
+            ExampleView()
+                .trackScreen("Home")
+                .tracker(tracker)
         }
     }
 }

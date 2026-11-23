@@ -45,6 +45,8 @@ J = "RejectionReport.swift"
 # The call site track captures. An expression rather than the statement: a mutated `let` would be
 # scoped to its branch.
 LOCATION = "SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)"
+# The enriched copy enriched(by:) returns, swapped whole as LOCATION is.
+COPY = "Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [enricher])"
 WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)"
 
 MUTANTS = [
@@ -63,7 +65,7 @@ MUTANTS = [
     Mutant("ownline", T, LOCATION, LOCATION.replace("line: line,", "line: #line,")),
     Mutant("columnfromline", T, LOCATION, LOCATION.replace("column: column)", "column: line)")),
     Mutant("contextignored", T, "ServiceContext.current ?? .topLevel", "ServiceContext.topLevel"),
-    Mutant("nottracked", T, "intake.enqueue(.track(record))", "false"),
+    Mutant("nottracked", T, "intake.enqueue(.track(record, scopedEnrichers))", "false"),
     # The intake.
     Mutant("enrichersreversed", I, WORKER, WORKER.replace("enrichers: enrichers,", "enrichers: enrichers.reversed(),")),
     Mutant("consentignored", I, "consent?.gate.join(entries)", "nil"),
@@ -76,8 +78,16 @@ MUTANTS = [
     Mutant("finishdoesntwait", I, "await worker.value", "", mode="stmt", nth=1),
     # The worker.
     Mutant("nosend", K, "records.forEach(sink.send)", "", mode="stmt"),
-    Mutant("enrichersskipped", K, "enricher(&record.context)", "", mode="stmt"),
+    # The second: the first is the loop over the copy's enrichers (scopedskipped).
+    Mutant("enrichersskipped", K, "enricher(&record.context)", "", mode="stmt", nth=1),
     Mutant("enricherinert", N, "enrich(&context)", "", mode="stmt"),
+    # Tracker.enriched(by:): the copy's enrichers, carried with each record to the worker.
+    Mutant("scopedskipped", K, "for enricher in scopedEnrichers {\n                    enricher(&record.context)\n                }", "", mode="stmt"),
+    Mutant("scopednotcarried", T, "intake.enqueue(.track(record, scopedEnrichers))", "intake.enqueue(.track(record, []))"),
+    Mutant("scopedreplaced", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher]")),
+    Mutant("scopedreversed", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher] + scopedEnrichers")),
+    Mutant("scopedignored", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "scopedEnrichers")),
+    Mutant("copylosesnow", T, COPY, COPY.replace("now: now,", "now: { Date.distantPast },")),
     # The first is track's; the second, the recovered records' helper.
     Mutant("recordsredacted", K, "record.revealsSensitiveValues = true", "record.revealsSensitiveValues = false", mode="stmt", nth=0),
     Mutant("workerdecisionignored", K, "statuses[category] = status", "", mode="stmt"),

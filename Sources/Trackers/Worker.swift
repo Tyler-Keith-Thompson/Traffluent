@@ -36,9 +36,14 @@ struct Worker: Sendable {
         }
         for await entry in entries {
             switch entry {
-            case .track(var record):
+            case .track(var record, let scopedEnrichers):
                 // First, so an invalid event is never enriched, held, written or delivered.
                 guard !rejects(record) else { continue }
+                // The copy's own enrichers stand in for the caller's context, so they run first and
+                // the tracker's see what they set.
+                for enricher in scopedEnrichers {
+                    enricher(&record.context)
+                }
                 for enricher in enrichers {
                     enricher(&record.context)
                 }
