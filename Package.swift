@@ -80,8 +80,8 @@ let targets: [Target] = [
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
 
-    .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
-    .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", "DestinationTesting", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlansTests", dependencies: ["TrackingPlans", "EventMacros", "Events", .product(name: "JSONSchema", package: "swift-json-schema"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlanTestingTests", dependencies: ["TrackingPlanTesting", "TrackingPlans", "Events"], exclude: bazelFiles),
     .testTarget(name: "EventMacrosPluginTests", dependencies: ["EventMacrosPlugin", .product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"), .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax")], exclude: bazelFiles),

@@ -20,6 +20,8 @@ swift_library(
     deps = [
         "//Sources/Events",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_property_based//:PropertyBased",
+        "//Tests/TraffluentTestSupport",
     ],
 )
 

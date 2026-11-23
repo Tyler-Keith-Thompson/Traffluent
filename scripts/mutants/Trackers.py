@@ -29,6 +29,7 @@ I = "Intake.swift"
 K = "Worker.swift"
 D = "DroppedRecords.swift"
 Q = "DropReportQueue.swift"
+J = "RejectionReport.swift"
 
 # Consent mutants that only a store can catch (a recovered record's gating, a store forgetting what
 # the hold drops) are in Persistence.py, whose suites have stores.
@@ -38,12 +39,13 @@ Q = "DropReportQueue.swift"
 #   already finished, which drops it.
 # - Dropping flush's wait for the worker once the intake is finished: it matters only to a flush
 #   racing a finish on another task, which no test can order without a hook in the intake.
-# - Dropping the log of an event tracked after finish: tests don't pin logs.
+# - Dropping the log of an event tracked after finish: tests don't pin logs. Nor the worker's
+#   debug log of a rejection.
 #
 # The call site track captures. An expression rather than the statement: a mutated `let` would be
 # scoped to its branch.
 LOCATION = "SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)"
-WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership)"
+WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)"
 
 MUTANTS = [
     Mutant("currentignoresbinding", T, "bound ?? .noOp", ".noOp"),
@@ -147,4 +149,19 @@ MUTANTS = [
         "return .some(nil)",
         mode="stmt",
     ),
+    # The worker's validation, first, and its reports.
+    Mutant("rejectedadmitted", K, "guard !rejects(record) else { continue }", "", mode="stmt"),
+    Mutant("unvalidatedwithconsent", K, "record.event.constraintViolation()", "(membership == nil ? record.event.constraintViolation() : nil)"),
+    Mutant("rejectionnotreported", K, "rejections.report(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
+    Mutant("rejectionsneverend", K, "rejections.finish()", "", mode="stmt"),
+    Mutant("rejectionsunread", I, "rejectionReports = AsyncStream(unfolding: { await rejections.next() })", "rejectionReports = AsyncStream { $0.finish() }", mode="stmt"),
+    Mutant("rejectionreportsofnoop", T, "intake.rejectionReports", "AsyncStream { $0.finish() }"),
+    # Rejection reports' merging: by event, property and keyword, wherever the report waits.
+    Mutant("rejectionsnotmerged", J, "waiting.firstIndex(where: { $0.eventName == report.eventName && $0.violation == report.violation })", "nil"),
+    Mutant("mergedacrossevents", J, "$0.eventName == report.eventName && $0.violation == report.violation", "$0.violation == report.violation"),
+    Mutant("mergedacrossviolations", J, "$0.eventName == report.eventName && $0.violation == report.violation", "$0.eventName == report.eventName"),
+    Mutant("mergedrejectioncountlost", J, "merged.recordCount + report.recordCount", "merged.recordCount"),
+    Mutant("mergedrejectionlowerlatest", J, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
+    Mutant("mergedrejectionupperlatest", J, "max(merged.timestamps.upperBound, report.timestamps.upperBound)", "report.timestamps.upperBound"),
+    Mutant("rejectiondescribed", J, '"\\(eventName): \\(violation) (\\(recordCount) rejected)"', '"\\(eventName): \\(violation)"'),
 ]

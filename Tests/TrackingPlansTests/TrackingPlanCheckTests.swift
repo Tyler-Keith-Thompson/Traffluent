@@ -65,10 +65,10 @@ struct TrackingPlanCheckTests {
             EventSchema.Property(name: "itemCount", typeName: "UInt16", isOptional: false),
         ])])
         let sut = TrackingPlan(schemas: [EventSchema(name: "order_completed", version: 1, consentCategory: .analytics, properties: [
-            EventSchema.Property(name: "itemCount", typeName: "Int", isOptional: false),
+            EventSchema.Property(name: "itemCount", typeName: "[Int]", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([
-            .propertyRetyped(event: "order_completed", version: 1, property: "itemCount", committed: #"{"maximum": 65535, "minimum": 0, "type": "integer"}"#, current: #"{"type": "integer"}"#),
+            .propertyRetyped(event: "order_completed", version: 1, property: "itemCount", committed: #"{"type": "integer"}"#, current: #"{"items": {"type": "integer"}, "type": "array"}"#),
         ])
 
         let actual = sut.check(against: committed.files)

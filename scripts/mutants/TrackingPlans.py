@@ -17,6 +17,9 @@
 # - `$0.version > event.version` as `>=` when finding a later version: an equal version is the
 #   committed event's own key, matched before the search.
 # - `.first { $0 != "null" }` as `.last` in an example's type: a plan writes `null` last.
+# - Dropping the guard that skips a pattern already written: a Refinement or @Constrained that
+#   lists one pattern twice is the only way to reach it, and an allOf repeating the pattern accepts
+#   the same payloads; only the bytes would differ.
 
 TESTS = ["TrackingPlansTests"]
 
@@ -75,14 +78,18 @@ MUTANTS = [
     Mutant("additionalallowed", D, ".boolean(false)", ".boolean(true)"),
     Mutant("documentversionfixed", D, ".integer(Int64(version))", ".integer(1)"),
     Mutant("documentcategoryfixed", D, ".string(consentCategory.name)", '.string("analytics")'),
-    Mutant("optionalnotnullable", D, "type.schema(isNullable: isOptional)", "type.schema(isNullable: false)"),
-    Mutant("unparsedunnamed", D, '["x-traffluent-swift-type": .string(typeName)]', '["x-traffluent-swift-type": .string("")]'),
+    # keywordsignored first: it copies the text optionalnotnullable plants in, which then takes the
+    # copy every other mutant runs, the second.
+    Mutant("keywordsignored", D, "type.schema(isNullable: isOptional).narrowed(by: keywords)", "type.schema(isNullable: isOptional)"),
+    Mutant("optionalnotnullable", D, "type.schema(isNullable: isOptional)", "type.schema(isNullable: false)", nth=1),
+    Mutant("unknowntypekeywordsignored", D, '["x-traffluent-swift-type": .string(typeName)].narrowed(by: keywords)', '["x-traffluent-swift-type": .string(typeName)]'),
+    Mutant("unparsedunnamed", D, '["x-traffluent-swift-type": .string(typeName)]', '["x-traffluent-swift-type": .string("")]', nth=1),
     Mutant("wrappednotnullable", D, "wrapped.schema(isNullable: true)", "wrapped.schema(isNullable: false)"),
     Mutant("optionalgenericnotnullable", D, "arguments[0].schema(isNullable: true)", "arguments[0].schema(isNullable: false)"),
     Mutant("optionalunqualified", D, 'names("Optional", in: ["Swift"])', 'names("Optional", in: [])'),
     Mutant("sensitiveunmarked", D, '"x-traffluent-sensitive"', '"x-traffluent-secret"'),
-    Mutant("sensitivetraffluentmodule", D, '["Events", "Traffluent"]', '["Events"]'),
-    Mutant("sensitivedropsnull", D, "arguments[0].schema(isNullable: isNullable)", "arguments[0].schema(isNullable: false)"),
+    Mutant("sensitivetraffluentmodule", D, '["Events", "Traffluent"]', '["Events"]', nth=1),
+    Mutant("sensitivedropsnull", D, "arguments[0].schema(isNullable: isNullable)", "arguments[0].schema(isNullable: false)", nth=1),
     Mutant("arraynotnullable", D, '.type("array", isNullable: isNullable)', '.type("array", isNullable: false)'),
     Mutant("itemsnullable", D, "element.schema(isNullable: false)", "element.schema(isNullable: true)"),
     Mutant("arraygenericignored", D, 'names("Array", in: ["Swift"])', 'names("List", in: ["Swift"])'),
@@ -131,13 +138,13 @@ MUTANTS = [
     Mutant("usagestatus", C, "            return 64", "            return 1", mode="stmt"),
     Mutant("writefailurestatus", C, "            return 73", "            return 1", mode="stmt"),
     Mutant("successstatus", C, "            return 0", "            return 1", mode="stmt", nth=0),
-    # Examples. stringexample comes first: the file's only "example", before the mutants below write more.
-    Mutant("stringexample", E, '.string("example")', '.string("")'),
+    # Examples. stringexample comes first, before the mutants below write `.string(...)`.
+    Mutant("stringexample", E, '.string(textExample)', '.string("")'),
     Mutant("dateexample", E, '.string("2001-01-01T00:00:00Z")', '.string("example")'),
     Mutant("uuidexample", E, '.string("00000000-0000-0000-0000-000000000000")', '.string("example")'),
-    Mutant("integerexample", E, ".integer(0)", ".integer(1)"),
+    Mutant("integerexample", E, 'self["minimum"]?.double.map { Swift.max(0, $0.rounded(.up)) } ?? 0', "1"),
     Mutant("booleanexample", E, ".boolean(false)", ".boolean(true)"),
-    Mutant("arrayexampleempty", E, '.array([self["items"]?.object?.example ?? .null])', ".array([])"),
+    Mutant("arrayexampleempty", E, "itemCount", "0", nth=0),
     Mutant("unknownexample", E, ".null", '.string("")', nth=1),
     Mutant("nullexampletype", E, '$0 != "null"', '$0 == "null"'),
     Mutant("nopropertyexamples", E, "(property.name, property.schema.example)", "(property.name, JSON.null)"),
@@ -179,4 +186,35 @@ MUTANTS = [
     Mutant("breakingunsorted", R, "differences.filter(\\.isBreaking)", "differences"),
     Mutant("alwaysalsooutofdate", R, "!others.isEmpty", "true"),
     Mutant("sensitivitywording", X, 'isSensitive ? "is now" : "is no longer"', 'isSensitive ? "is no longer" : "is now"'),
+    # Constraint keywords in a property's schema.
+    Mutant("minlengthloosest", D, 'schema.tighten("minLength", to: Double(length), keepingLarger: true)', 'schema.tighten("minLength", to: Double(length), keepingLarger: false)'),
+    Mutant("maximumloosest", D, 'schema.tighten("maximum", to: bound, keepingLarger: false)', 'schema.tighten("maximum", to: bound, keepingLarger: true)'),
+    Mutant("tighterreplaced", D, "keepingLarger ? existing >= bound : existing <= bound", "false"),
+    Mutant("maxitemsdropped", D, 'schema.tighten("maxItems", to: Double(count), keepingLarger: false)', "", mode="stmt"),
+    Mutant("patternexamplemissing", D, 'schema["examples"] = .array([.string(example)])', "", mode="stmt"),
+    Mutant("secondpatterndropped", D, 'schema["allOf"] = .array((schema["allOf"]?.array ?? []) + [.object(["pattern": .string(pattern)])])', "", mode="stmt"),
+    Mutant("refinedunmapped", D, "arguments.count == 2", "arguments.count == 3"),
+    # JSON numbers.
+    Mutant("wholenumberfractional", J, "return .integer(Int64(value))", "return .number(value)", mode="stmt"),
+    Mutant("fractionnotdecoded", J, "self = .number(exactly: number)", "self = .null", mode="stmt"),
+    Mutant("hugenumberinteger", J, "value < 9_223_372_036_854_775_808", "true"),
+    # Examples that meet their keywords.
+    Mutant("patternexampleignored", E, 'self["examples"]?.array?.first', "nil"),
+    Mutant("minlengthignored", E, "minimum > 7", "false"),
+    Mutant("maxlengthignored", E, "maximum < Int64(text.unicodeScalars.count)", "false"),
+    Mutant("integerminimumignored", E, 'self["minimum"]?.double.map { Swift.max(0, $0.rounded(.up)) } ?? 0', "0"),
+    Mutant("integerfractionroundeddown", E, "$0.rounded(.up)", "$0.rounded(.down)"),
+    Mutant("numbermaximumignored", E, 'self["maximum"]?.double', "nil", nth=1),
+    Mutant("minitemsignored", E, "Swift.max(1, minimum)", "1"),
+    Mutant("maxitemsignored", E, "Swift.min(count, Int(maximum))", "count"),
+    # The check's constraint keywords.
+    Mutant("constraintsintype", K, "type[keyword] = nil", "", mode="stmt"),
+    Mutant("lowerboundreversed", K, "isLower ? after > before : after < before", "isLower ? after < before : after > before"),
+    Mutant("boundsswapped", K, "(before, after)", "(after, before)"),
+    Mutant("removedpatterntightens", K, "!added.isEmpty", "!removed.isEmpty", nth=1),
+    Mutant("patternsignored", K, "!added.isEmpty || !removed.isEmpty", "false"),
+    Mutant("extrapatternsunread", K, '(schema["allOf"]?.array ?? []).compactMap { $0.object?["pattern"]?.string }', "[]"),
+    Mutant("constraintsdespiteretype", K, "before.type != after.type", "before.type != after.type && false"),
+    Mutant("tightenedwording", X, r'"\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is tighter"', r'"\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is looser"'),
+    Mutant("gainedwording", X, '"gained \\(keyword) \\(current)"', '"lost \\(keyword) \\(current)"'),
 ]

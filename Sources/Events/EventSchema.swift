@@ -14,7 +14,8 @@
 /// SignedUp.schema.properties.map(\.name)  // ["plan", "referrer"]
 /// ```
 public struct EventSchema: Sendable, Hashable {
-    /// One stored property of an event: its name, its type as written and whether it is optional.
+    /// One stored property of an event: its name, its type as written, whether it is optional and
+    /// the keywords its value satisfies.
     public struct Property: Sendable, Hashable {
         /// The property's name.
         public var name: String
@@ -23,17 +24,23 @@ public struct EventSchema: Sendable, Hashable {
         public var typeName: String
         /// Whether the property is optional, written `T?`, `T!` or `Optional<T>`.
         public var isOptional: Bool
+        /// The validation keywords the property's value satisfies, when it has one: its
+        /// ``Refined`` type's rule's, then those declared beside it, in order.
+        public var keywords: [ValidationKeyword]
 
-        /// The property `name` of type `typeName`, optional when `isOptional` is set.
+        /// The property `name` of type `typeName`, optional when `isOptional` is set, whose value
+        /// satisfies `keywords`.
         ///
         /// - Parameters:
         ///   - name: The property's name.
         ///   - typeName: The property's type as written, without the optional.
         ///   - isOptional: Whether the property is optional.
-        public init(name: String, typeName: String, isOptional: Bool) {
+        ///   - keywords: The keywords the property's value satisfies; none by default.
+        public init(name: String, typeName: String, isOptional: Bool, keywords: [ValidationKeyword] = []) {
             self.name = name
             self.typeName = typeName
             self.isOptional = isOptional
+            self.keywords = keywords
         }
     }
 

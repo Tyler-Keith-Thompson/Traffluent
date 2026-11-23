@@ -8,9 +8,10 @@ import TrackingPlans
 
 @Suite("TrackingPlan: check properties")
 struct TrackingPlanCheckPropertyTests {
-    // Each schema differs from every other's, so changing a property's type to the next one is
-    // always a retyping. (Sensitive<Int> would differ from Int by sensitivity alone.)
-    static let typeNames = ["String", "Int", "UInt8", "Int32", "Double", "Bool", "Date", "UUID", "[String]", "[Int?]", "Coordinate"]
+    // Each schema's type differs from the next one's, so changing a property's type to the next one
+    // is always a retyping. (Sensitive<Int> would differ from Int by sensitivity alone, and two
+    // integer types next to each other only by their bounds.)
+    static let typeNames = ["String", "Int", "Double", "UInt8", "Bool", "Int32", "Date", "UUID", "[String]", "[Int?]", "Coordinate"]
 
     @Test("Any plan checks clean against its own files", .tags(.randomized))
     func clean() async {

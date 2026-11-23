@@ -28,8 +28,8 @@ public import Persistence
 /// ``track(_:file:fileID:function:line:column:)`` does nothing but accept the event, from any
 /// thread: it reads the clock, captures the call site and the task's `ServiceContext`, and queues
 /// them. A worker the tracker owns, which never runs on the main actor, does everything else, in
-/// the order events were tracked: the enrichers, the consent, a store's writes, and publishing to
-/// ``records``. No API runs that work on a caller's thread. ``flush()`` waits for the worker to
+/// the order events were tracked: the constraints' check, the enrichers, the consent, a store's
+/// writes, and publishing to ``records``. No API runs that work on a caller's thread. ``flush()`` waits for the worker to
 /// catch up; ``finish()`` does too, then ends the records.
 ///
 /// Tracked events wait in memory, without a bound, until the worker reaches them. The queue
@@ -127,11 +127,34 @@ public struct Tracker: Sendable {
         }
     }
 
+    /// A report of each event the tracker rejected because a property broke a constraint declared
+    /// on it, in the order the rejections happen.
+    ///
+    /// The tracker's worker checks each event's `constraintViolation()` before anything else, so a
+    /// rejected event is never enriched, held by a consent, written to a store or delivered. A
+    /// record a store recovered is checked too, and one rejected is forgotten by the store. In
+    /// debug builds each rejection is also logged at error level.
+    ///
+    /// Reports wait until they are read, merged: a rejection joins the waiting report of the same
+    /// event, property and keyword, adding to its count and widening its timestamps. So the
+    /// reports waiting unread are at most one per constraint the app declares, however many events
+    /// break them. Copies of a tracker share one sequence, which has one consumer and ends once the
+    /// tracker has finished. A ``noOp`` tracker's is empty.
+    public var rejectionReports: AsyncStream<RejectionReport> {
+        switch backing {
+        case .intake(let intake):
+            intake.rejectionReports
+        case .none:
+            AsyncStream { $0.finish() }
+        }
+    }
+
     /// Records `event`, with the current wall-clock time, the caller's source location and the
     /// task's `ServiceContext` as the enrichers extend it.
     ///
     /// Returns at once, from any thread, having only queued the event: the tracker's worker
-    /// runs the enrichers, on the context captured here, then gates the record by its consent,
+    /// checks its constraints, rejecting it on ``rejectionReports`` if it breaks one, runs the
+    /// enrichers, on the context captured here, then gates the record by its consent,
     /// writes it to its store and publishes it to ``records``. An event tracked after
     /// ``finish()`` is dropped and logged at debug level. A ``noOp`` tracker drops the event and
     /// logs it at debug level, so a missing `withTracker` shows up in the logs rather than passing

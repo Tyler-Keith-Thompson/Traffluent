@@ -21,6 +21,18 @@ extension SerializedSuites {
             var number: Int
         }
 
+        /// An event whose number must be at least 2, whose check waits at `gate` first.
+        struct Checked: Event {
+            var number: Int
+            let gate: Gate
+
+            func constraintViolation() -> ConstraintViolation? {
+                gate.wait()
+                let minimum = Constraint<Int>.minimum(2)
+                return minimum.isSatisfied(by: number) ? nil : ConstraintViolation(property: "number", keyword: minimum.keyword)
+            }
+        }
+
         /// A gate the worker waits at until the test opens it, and stays open from then on.
         final class Gate: Sendable {
             private let opened = Mutex(false)
@@ -150,6 +162,27 @@ extension SerializedSuites {
             try await sut.records.batch(strategy: .count(10)).deliver(to: recorder).execute()
 
             #expect(recorder.numbers == expected)
+        }
+
+        @Test("track returns while an event's constraint check is blocked: the worker validates, not the caller")
+        func trackDoesNotWaitForValidation() async throws {
+            let gate = Gate()
+            let sut = Tracker()
+            let recorder = InMemoryDestination()
+            let expected = [2]
+            let expectedViolation = ConstraintViolation(property: "number", keyword: .minimum(2))
+            var entered = gate.entered.makeAsyncIterator()
+            sut.track(Checked(number: 1, gate: gate))
+            _ = await entered.next()
+
+            sut.track(Checked(number: 2, gate: gate))
+            gate.open()
+            await sut.finish()
+            try await sut.records.batch(strategy: .count(10)).deliver(to: recorder).execute()
+
+            #expect(recorder.records.compactMap { ($0.event as? Checked)?.number } == expected)
+            var reports = sut.rejectionReports.makeAsyncIterator()
+            #expect(await reports.next()?.violation == expectedViolation)
         }
 
         @Test("flush waits until every event tracked before it is written")

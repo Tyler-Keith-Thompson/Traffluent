@@ -35,12 +35,12 @@ final class ConsentGate: Sendable {
     private let state: Mutex<State>
     private let heldRecordLimit: Int
     let dropReports: AsyncStream<ConsentDropReport>
-    private let reporter: DropReportQueue
+    private let reporter: DropReportQueue<ConsentDropReport>
 
     init(statuses: [ConsentCategory: ConsentStatus], heldRecordLimit: Int) {
         state = Mutex(State(statuses: statuses))
         self.heldRecordLimit = heldRecordLimit
-        let reporter = DropReportQueue()
+        let reporter = DropReportQueue<ConsentDropReport>()
         self.reporter = reporter
         // Captures the queue, not the gate, so the reports end once the consent is gone.
         dropReports = AsyncStream(unfolding: { await reporter.next() })

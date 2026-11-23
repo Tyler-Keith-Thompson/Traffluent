@@ -302,6 +302,62 @@ property whose type isn't `BinaryCodable` is a compile error that names it:
 So are `@Event` on anything but a struct and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
 
+### Constraining properties
+
+A property's type says what kind of value it holds; a constraint says which values of that kind
+are valid. A rule the type can enforce belongs in the type: a `Refined` value satisfies every
+constraint of its `Refinement` from the moment it is made. Rules a plain `String` or `Int` can't
+carry are declared beside the property with `@Constrained` (module `EventMacros`), and checked by
+the tracker:
+
+```swift
+enum CouponCode: Refinement {
+    static let constraints: [Constraint<String>] = [.pattern("^[A-Z0-9]{6}$", example: "SPRING")]
+}
+
+@Event(name: "search_performed")
+struct SearchPerformed {
+    @Constrained(.minLength(1), .maxLength(200))
+    var query: String
+    @Constrained(.minimum(0))
+    var resultCount: Int
+    var coupon: Refined<String, CouponCode>?
+}
+
+let coupon = try? Refined<String, CouponCode>(checked: "spring")  // nil: UnsatisfiedConstraint.pattern
+let tracker = Tracker()
+tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: Refined("SPRING")))
+await tracker.finish()
+for await report in tracker.rejectionReports {
+    print(report)  // search_performed: "query" breaks minLength 1 (1 rejected)
+}
+```
+
+The keywords are JSON Schema's: `minLength` and `maxLength` (in Unicode scalars) and `pattern`
+for a string, `minimum` and `maximum` for a number, `minItems` and `maxItems` for an array. Each is
+offered only for the types it applies to, with its bound in the property's own type, so
+`.minLength` on an `Int` or `.minimum(0.5)` on an `Int` is a compile error. In `@Constrained`, so
+is a lower bound above its upper bound, a pattern that doesn't compile, and a pattern whose
+`example` it, or another keyword of the property, rejects; in a `Refinement`, those trap when its
+constraints are built. `Refined`'s plain initializer traps on a value that breaks its rule, as an
+`Array` subscript does out of range; `init(checked:)` throws the `UnsatisfiedConstraint` instead.
+
+The tracker's worker checks each event's declared constraints before anything else, never on the
+caller. An event that breaks one is rejected: never enriched, held by a consent, written to a
+store or delivered. Each rejection is reported on `tracker.rejectionReports`, as a
+`RejectionReport` naming the event, the property and the keyword, and in debug builds logged at
+error level too. Unread reports merge, one per event, property and keyword, counting the rejections
+and the range of times they were tracked, so a broken call site in a loop can't fill memory. A
+record a store recovered from an earlier run is checked again, and the store forgets one that a
+constraint added since rejects; a stored `Refined` value its rule no longer accepts doesn't decode,
+and the store reports it. A `Sensitive` property takes no `@Constrained` keywords, as checking one
+would reveal it; a `Sensitive<Refined<…>>` enforces its rule as it is made.
+
+Both kinds of constraint are part of the event's schema, so the exported tracking plan lists them
+beside each property's type, and each example payload satisfies them (a pattern's `example` is
+the one used). An array's `Refined` elements are checked as they are made, but their rules aren't
+exported.
+
 ### Exporting a tracking plan
 
 The events' Swift types are their schema's source; a tracking plan, the JSON Schema (draft
@@ -377,7 +433,10 @@ A difference is breaking when a payload the committed plan accepts may be one th
 rejects now: a removed or renamed event, a removed property, a retyped one, an optional property
 made required, or a new required property. Anything else (a new event, a new optional property, a
 changed consent category) leaves the committed plan out of date, which fails with its own message
-telling you to export it again. Raising an event's version (`@Event(version: 3)`) is how a breaking
+telling you to export it again. A constraint is compared keyword by keyword: tightening one (a
+higher `minLength` or `minimum`, a lower `maxLength` or `maximum`, a new bound, a new or changed
+`pattern`) is breaking, and loosening one only leaves the plan out of date. An integer type
+narrowed to one of fewer bits tightens its bounds the same way. Raising an event's version (`@Event(version: 3)`) is how a breaking
 change is made on purpose: the new version gets a document of its own. `--plan <directory>` checks
 a plan committed elsewhere, and `--product <name>` picks the executable as export's does.
 
@@ -413,17 +472,17 @@ says which facts go where, with the anti-patterns to avoid.
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `EventSchema`, an event type's name, version, consent category and stored properties as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
+| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `Refined`, a value that satisfies its `Refinement`'s `Constraint`s from the moment it is made; `EventSchema`, an event type's name, version, consent category and stored properties, with each one's `ValidationKeyword`s, as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
 | `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
-| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
-| `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration; left out of `import Traffluent`, so only apps that use it build swift-syntax |
+| `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration, checking the constraints `@Constrained` declares beside its properties; left out of `import Traffluent`, so only apps that use it build swift-syntax |
 | `TrackingPlans` | `TrackingPlan`: the JSON Schema (draft 2020-12) of every event an app tracks, one document and one example per event and an index, exported from their `EventSchema` values; `TrackingPlanCheck`, its comparison with a committed plan, naming each `TrackingPlanDifference`; `TrackingPlanCommand`, the executable that writes or checks one, which the `export-tracking-plan` and `check-tracking-plan` command plugins run; left out of `import Traffluent` |
 | `TrackingPlanTesting` | `expectTrackingPlan(_:matches:)`: records a Swift Testing issue with the check's report when the events no longer match the committed plan; for test targets, and left out of `import Traffluent` |
 

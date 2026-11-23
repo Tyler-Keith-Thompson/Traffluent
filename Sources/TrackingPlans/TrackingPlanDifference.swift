@@ -14,6 +14,7 @@
 /// | ``propertyRetyped(event:version:property:committed:current:)`` | yes |
 /// | ``propertyMadeRequired(event:version:property:)`` | yes |
 /// | ``requiredPropertyAdded(event:version:property:)`` | yes |
+/// | ``constraintTightened(event:version:property:keyword:committed:current:)`` | yes |
 /// | ``unreadableFile(path:)`` | yes |
 /// | ``eventAdded(event:version:)`` | no |
 /// | ``versionRaised(event:committed:current:)`` | no |
@@ -21,6 +22,7 @@
 /// | ``propertyMadeOptional(event:version:property:)`` | no |
 /// | ``consentCategoryChanged(event:version:committed:current:)`` | no |
 /// | ``sensitivityChanged(event:version:property:isSensitive:)`` | no |
+/// | ``constraintLoosened(event:version:property:keyword:committed:current:)`` | no |
 /// | ``fileOutOfDate(path:)`` | no |
 ///
 /// Raising an event's version is how its author marks a breaking change: the plan then holds a
@@ -39,6 +41,11 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// The event has a required property the committed plan doesn't, which every committed
     /// payload lacks.
     case requiredPropertyAdded(event: String, version: Int, property: String)
+    /// A property's constraint keyword is tighter: a lower bound (`minLength`, `minimum`,
+    /// `minItems`) rose, an upper one (`maxLength`, `maximum`, `maxItems`) fell, or one was added,
+    /// or a `pattern` was added or changed. `committed` and `current` are its values as JSON, `nil`
+    /// where there is none; a property's patterns are one string, or an array of several.
+    case constraintTightened(event: String, version: Int, property: String, keyword: String, committed: String?, current: String?)
     /// A file of the committed plan is missing, or isn't JSON of the shape a plan writes, so the
     /// events can't be compared with it: the index, `tracking-plan.json`, when there is no
     /// committed plan at all.
@@ -55,6 +62,10 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     case consentCategoryChanged(event: String, version: Int, committed: String, current: String)
     /// A property became `Sensitive`, or stopped being, as `isSensitive` says.
     case sensitivityChanged(event: String, version: Int, property: String, isSensitive: Bool)
+    /// A property's constraint keyword is looser: a lower bound fell, an upper one rose, or one
+    /// was removed, or a `pattern` was only removed. The values are as for
+    /// ``constraintTightened(event:version:property:keyword:committed:current:)``.
+    case constraintLoosened(event: String, version: Int, property: String, keyword: String, committed: String?, current: String?)
     /// A file of the committed plan isn't the bytes exporting the plan writes now, though its
     /// events are the same: written by hand or by another release, or missing, or no longer part
     /// of the plan.
@@ -64,9 +75,10 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// table in ``TrackingPlanDifference`` lists which differences are.
     public var isBreaking: Bool {
         switch self {
-        case .eventRemoved, .propertyRemoved, .propertyRetyped, .propertyMadeRequired, .requiredPropertyAdded, .unreadableFile:
+        case .eventRemoved, .propertyRemoved, .propertyRetyped, .propertyMadeRequired, .requiredPropertyAdded, .constraintTightened, .unreadableFile:
             true
-        case .eventAdded, .versionRaised, .optionalPropertyAdded, .propertyMadeOptional, .consentCategoryChanged, .sensitivityChanged, .fileOutOfDate:
+        case .eventAdded, .versionRaised, .optionalPropertyAdded, .propertyMadeOptional, .consentCategoryChanged, .sensitivityChanged,
+            .constraintLoosened, .fileOutOfDate:
             false
         }
     }
@@ -98,8 +110,21 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
             "\(event) v\(version): consent category changed from \(committed) to \(current)"
         case .sensitivityChanged(let event, let version, let property, let isSensitive):
             "\(event) v\(version): property \"\(property)\" \(isSensitive ? "is now" : "is no longer") sensitive"
+        case .constraintTightened(let event, let version, let property, let keyword, let committed, let current):
+            "\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is tighter"
+        case .constraintLoosened(let event, let version, let property, let keyword, let committed, let current):
+            "\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is looser"
         case .fileOutOfDate(let path):
             "\(path) isn't what exporting the plan writes now"
+        }
+    }
+
+    /// How a keyword changed, in words: gained, lost or changed from one value to another.
+    private static func change(_ keyword: String, _ committed: String?, _ current: String?) -> String {
+        switch (committed, current) {
+        case (nil, let current?): "gained \(keyword) \(current)"
+        case (let committed?, nil): "lost \(keyword) \(committed)"
+        default: "changed \(keyword) from \(committed ?? "") to \(current ?? "")"
         }
     }
 }

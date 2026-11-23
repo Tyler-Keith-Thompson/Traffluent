@@ -29,3 +29,29 @@ swift_compile_failure_test(
     tags = ["debug-only"],
     deps = ["//Sources/EventMacros"],
 )
+
+# @Constrained with a keyword that doesn't apply to the property's type: the error names the
+# keyword, the property's type and the type it applies to.
+swift_compile_failure_test(
+    name = "EventConstraintWrongType",
+    size = "small",
+    src = "EventConstraintWrongType.swift",
+    expected_errors = [
+        "error: referencing static method 'minLength' on 'Constraint' requires the types 'Int' and 'String' be equivalent",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same event with keywords that apply to each property's type compiles.
+swift_compile_failure_test(
+    name = "EventConstraintControl",
+    size = "small",
+    src = "EventConstraintControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)

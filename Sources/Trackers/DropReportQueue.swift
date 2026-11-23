@@ -2,19 +2,25 @@ internal import DequeModule
 internal import Foundation
 internal import Synchronization
 
-/// The drop reports a ``Consent`` has made and no one has read yet, behind
-/// ``Consent/dropReports``.
+/// A report a ``DropReportQueue`` keeps until it is read, which decides how it joins the reports
+/// already waiting.
+protocol QueuedReport: Sendable {
+    /// Adds `report` to `waiting`, the reports not yet read, oldest first: appended, or merged into
+    /// one of them.
+    static func add(_ report: Self, to waiting: inout Deque<Self>)
+}
+
+/// The reports a ``Consent`` or a tracker has made and no one has read yet, behind
+/// ``Consent/dropReports`` and ``Tracker/rejectionReports``.
 ///
-/// A held-record-limit report merges into one still waiting right before it, so a full hold
-/// adds no report per event while nothing reads them: the reports waiting hold at most one
-/// overflow report between any two others, however many events overflow in between. An
-/// `AsyncStream`'s continuation would buffer every report, and a dropping buffer policy would
-/// lose counts.
-final class DropReportQueue: Sendable {
+/// Each kind of report merges into the reports waiting as its ``QueuedReport/add(_:to:)`` says,
+/// so a burst of drops adds no report per event while nothing reads them. An `AsyncStream`'s
+/// continuation would buffer every report, and a dropping buffer policy would lose counts.
+final class DropReportQueue<Report: QueuedReport>: Sendable {
     fileprivate struct State: Sendable {
-        var waiting: Deque<ConsentDropReport> = []
+        var waiting: Deque<Report> = []
         /// The reader waiting for the next report, if one is.
-        var reader: CheckedContinuation<ConsentDropReport?, Never>?
+        var reader: CheckedContinuation<Report?, Never>?
         var isFinished = false
     }
 
@@ -22,19 +28,15 @@ final class DropReportQueue: Sendable {
     // handler, which can't await, takes it too.
     private let state = Mutex(State())
 
-    /// Hands `report` to the waiting reader, or keeps it, merged into a waiting overflow report.
-    func report(_ report: ConsentDropReport) {
-        let reader: CheckedContinuation<ConsentDropReport?, Never>? = state.withLock { state in
+    /// Hands `report` to the waiting reader, or keeps it, merged as its kind merges.
+    func report(_ report: Report) {
+        let reader: CheckedContinuation<Report?, Never>? = state.withLock { state in
             guard !state.isFinished else { return nil }
             if let reader = state.reader {
                 state.reader = nil
                 return reader
             }
-            if let last = state.waiting.last, let merged = last.merging(report) {
-                state.waiting[state.waiting.count - 1] = merged
-            } else {
-                state.waiting.append(report)
-            }
+            Report.add(report, to: &state.waiting)
             return nil
         }
         reader?.resume(returning: report)
@@ -52,10 +54,10 @@ final class DropReportQueue: Sendable {
 
     /// The next report, waiting for one; `nil` once finished and read, or when the reading task
     /// is cancelled.
-    func next() async -> ConsentDropReport? {
+    func next() async -> Report? {
         await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<ConsentDropReport?, Never>) in
-                let ready: ConsentDropReport?? = state.withLock { state in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Report?, Never>) in
+                let ready: Report?? = state.withLock { state in
                     // Checked under the lock the cancellation handler takes too: a cancellation
                     // either came first, or finds this reader waiting.
                     guard !Task.isCancelled else { return .some(nil) }
@@ -80,7 +82,18 @@ final class DropReportQueue: Sendable {
     }
 }
 
-extension ConsentDropReport {
+extension ConsentDropReport: QueuedReport {
+    /// Merges a held-record-limit report into one still waiting right before it, so a full hold
+    /// adds no report per event while nothing reads them: the reports waiting hold at most one
+    /// overflow report between any two others, however many events overflow in between.
+    static func add(_ report: ConsentDropReport, to waiting: inout Deque<ConsentDropReport>) {
+        if let last = waiting.last, let merged = last.merging(report) {
+            waiting[waiting.count - 1] = merged
+        } else {
+            waiting.append(report)
+        }
+    }
+
     /// This report and `next` as one, when both are held-record-limit drops; otherwise `nil`.
     fileprivate func merging(_ next: ConsentDropReport) -> ConsentDropReport? {
         guard case .heldRecordLimit(let count, let timestamps) = self,

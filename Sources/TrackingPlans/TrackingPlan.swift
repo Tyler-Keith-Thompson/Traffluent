@@ -39,17 +39,26 @@ public import Events
 /// for the types of 32 bits or fewer and a `minimum` of 0 for the unsigned ones; `Date` a `string`
 /// of `format` `date-time` and `UUID` one of `format` `uuid`; an array (`[T]`, `Array<T>`) an
 /// `array` whose `items` are `T`'s schema. An optional type (`T?`, `T!`, `Optional<T>`) adds `null`
-/// to `T`'s `type`. `Sensitive<T>` is `T`'s schema with `x-traffluent-sensitive: true`. Each may be
-/// qualified by its module (`Swift.Int`, `Foundation.Date`, `Events.Sensitive`). Any other type,
-/// whose JSON shape the plan can't know, accepts any value and records the type in
-/// `x-traffluent-swift-type`.
+/// to `T`'s `type`. `Sensitive<T>` is `T`'s schema with `x-traffluent-sensitive: true`, and
+/// `Refined<T, Rule>` is `T`'s schema. Each may be qualified by its module (`Swift.Int`,
+/// `Foundation.Date`, `Events.Sensitive`). Any other type, whose JSON shape the plan can't know,
+/// accepts any value and records the type in `x-traffluent-swift-type`.
+///
+/// A property's ``/Events/ValidationKeyword``s (its `Refined` type's rule's and those declared
+/// with `@Constrained`) are added to its schema as the JSON Schema keywords they are: `minLength`,
+/// `maxLength`, `minimum`, `maximum`, `minItems` and `maxItems`, each merged with a bound the type
+/// has already by keeping the tighter. The first `pattern` is `pattern`, with its example in
+/// `examples`; any other is a `pattern` of its own under `allOf`. A bound with a fraction is
+/// written as a JSON number with one.
 ///
 /// Beside each document is the event's example, `<name>.v<version>.example.json`: a conformance
 /// vector, the payload of the event with every property present and set to a fixed value its
 /// schema accepts. Another platform's code can encode the same event and compare. A `string` is
-/// `"example"`, one of `format` `date-time` is `"2001-01-01T00:00:00Z"` and one of `format`
-/// `uuid` the nil UUID; a `number` or an `integer` is 0; a `boolean` is `false`; an `array` holds
-/// one example of its `items`; and a type the plan can't map is `null`.
+/// `"example"` (cut to its `maxLength`, or `x` repeated to a `minLength` above 7, or its pattern's
+/// example), one of `format` `date-time` is `"2001-01-01T00:00:00Z"` and one of `format` `uuid`
+/// the nil UUID; a `number` or an `integer` is 0, or the nearest value its bounds allow; a
+/// `boolean` is `false`; an `array` holds one example of its `items`, or as many as its
+/// `minItems` and `maxItems` allow; and a type the plan can't map is `null`.
 ///
 /// The index, `tracking-plan.json`, lists every event under `events`, by name and then version,
 /// with its `name`, `version`, `consentCategory`, `schema`, its document's file name, and

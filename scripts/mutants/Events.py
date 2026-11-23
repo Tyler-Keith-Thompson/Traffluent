@@ -5,7 +5,13 @@
 # Every mutant must be caught; one that survives needs a test, or a note here saying why it is
 # equivalent to the original.
 #
-# Known equivalent mutants (they survive by design): none.
+# Known equivalent mutants (they survive by design):
+# - Dropping `hasher.combine(keyword)` from Constraint's hash: equal constraints still hash
+#   alike, which is all Hashable asks; only a hash-quality measurement could tell.
+# - Event's default `constraintViolation()` returning a violation: its text, `{ nil }`, isn't
+#   unique in the file to plant; EventConstraintTests pins the default.
+# - A pattern check's fallback when the pattern doesn't compile: the factory compiled it already,
+#   so the fallback can't run.
 
 TESTS = ["EventsTests"]
 
@@ -15,6 +21,11 @@ E = "Event.swift"
 K = "ConsentCategory.swift"
 V = "Sensitive.swift"
 S = "EventSchema.swift"
+
+C = "Constraint.swift"
+RF = "Refined.swift"
+VK = "ValidationKeyword.swift"
+CV = "ConstraintViolation.swift"
 
 MUTANTS = [
     Mutant("modulewholefileid", L, 'String(fileID.prefix { $0 != "/" })', "fileID"),
@@ -51,4 +62,47 @@ MUTANTS = [
     Mutant("schemaversionzero", S, "        self.version = version", "        self.version = 0", mode="stmt"),
     Mutant("schemaconsentfixed", S, "        self.consentCategory = consentCategory", "        self.consentCategory = .analytics", mode="stmt"),
     Mutant("schemanoproperties", S, "        self.properties = properties", "        self.properties = []", mode="stmt"),
+    # Constraint: each keyword's check, its bound included, and its traps.
+    Mutant("minlengthexclusive", C, "$0.unicodeScalars.count >= length", "$0.unicodeScalars.count > length"),
+    Mutant("minlengthcharacters", C, "$0.unicodeScalars.count >= length", "$0.count >= length"),
+    Mutant("maxlengthexclusive", C, "$0.unicodeScalars.count <= length", "$0.unicodeScalars.count < length"),
+    Mutant("maxlengthcharacters", C, "$0.unicodeScalars.count <= length", "$0.count <= length"),
+    Mutant("negativeminlength", C, "length >= 0", "length >= -1", nth=0),
+    Mutant("negativemaxlength", C, "length >= 0", "length >= -1", nth=1),
+    Mutant("patternalwaysmatches", C, "return value.contains(regex)", "return true", mode="stmt"),
+    Mutant("exampleunchecked", C, 'precondition(example.contains(regex), "The pattern \\(pattern) doesn\'t match its example \\(example)")', "", mode="stmt"),
+    Mutant("invalidpatternaccepted", C, 'preconditionFailure("The pattern \\(pattern) isn\'t a valid regular expression")', "return Constraint(.pattern(pattern, example: example)) { _ in true }", mode="stmt"),
+    # The integer bounds come first in the file, then the floating-point ones.
+    Mutant("integerminimumexclusive", C, "$0 >= bound", "$0 > bound", nth=0),
+    Mutant("floatminimumexclusive", C, "$0 >= bound", "$0 > bound", nth=1),
+    Mutant("integermaximumexclusive", C, "$0 <= bound", "$0 < bound", nth=0),
+    Mutant("floatmaximumexclusive", C, "$0 <= bound", "$0 < bound", nth=1),
+    Mutant("integerminimumkeyword", C, ".minimum(Double(bound))", ".maximum(Double(bound))", nth=0),
+    Mutant("infiniteminimum", C, "bound.isFinite", "true", nth=0),
+    Mutant("infinitemaximum", C, "bound.isFinite", "true", nth=1),
+    Mutant("minitemsexclusive", C, "$0.count >= count", "$0.count > count"),
+    Mutant("maxitemsexclusive", C, "$0.count <= count", "$0.count < count"),
+    Mutant("negativeminitems", C, "count >= 0", "count >= -1", nth=0),
+    Mutant("negativemaxitems", C, "count >= 0", "count >= -1", nth=1),
+    Mutant("constraintsallequal", C, "lhs.keyword == rhs.keyword", "true"),
+    # Refined: the plain spelling's trap, the checked spelling's error, and the conformances.
+    Mutant("plainnottrapped", RF, 'preconditionFailure("Refined<\\(Value.self), \\(Rule.self)>: the value breaks \\(broken.keyword)")', "", mode="stmt"),
+    Mutant("checkednotthrown", RF, "throw broken.keyword.unsatisfied", "", mode="stmt"),
+    Mutant("lastbroken", RF, "Rule.constraints.first(where: { !$0.isSatisfied(by: value) })", "Rule.constraints.last(where: { !$0.isSatisfied(by: value) })", nth=1),
+    Mutant("comparereversed", RF, "lhs.value < rhs.value", "lhs.value > rhs.value"),
+    Mutant("refineddescriptionempty", RF, "String(describing: value)", '""'),
+    Mutant("refinedkeywordsnone", RF, "Rule.constraints.map(\\.keyword)", "[]"),
+    # ValidationKeyword: the keywords of a type, forwarded through Optional and Sensitive.
+    Mutant("keywordsofnone", VK, "(type as? any RefinedKeywords.Type)?.keywords ?? []", "[]"),
+    Mutant("keypathkeywordsnone", VK, "keywords(of: Value.self)", "[]"),
+    Mutant("optionalnotforwarded", VK, "Wrapped.keywords", "[]"),
+    Mutant("sensitivenotforwarded", VK, "Value.keywords", "[]"),
+    Mutant("minlengthdescribed", VK, '"minLength \\(length)"', '"maxLength \\(length)"'),
+    Mutant("patterndescribed", VK, '"pattern \\(pattern)"', '"pattern \\(pattern)$"'),
+    Mutant("wholeboundfraction", VK, "return String(Int64(self))", "return description", mode="stmt"),
+    Mutant("hugeboundinteger", VK, "abs(self) <= 9_007_199_254_740_992", "true"),
+    Mutant("violationunnamed", CV, "self.property = property", 'self.property = ""', mode="stmt"),
+    Mutant("violationkeywordfixed", CV, "self.keyword = keyword", "self.keyword = .minLength(0)", mode="stmt"),
+    Mutant("violationdescribed", CV, '"\\"\\(property)\\" breaks \\(keyword)"', '"\\(property) breaks \\(keyword)"'),
+    Mutant("schemakeywordsdropped", S, "            self.keywords = keywords", "            self.keywords = []", mode="stmt"),
 ]

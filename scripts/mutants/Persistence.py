@@ -136,11 +136,10 @@ MUTANTS = [
     Mutant("nodestinationswait", "Deliver.swift", "destinationCount == 0", "destinationCount == -1", module="Destinations"),
     # Write-through, in Trackers.
     Mutant("storeignored", "RecordSink.swift", "subscription.send(store.append(record))", "subscription.send(record)", mode="stmt", module="Trackers"),
-    # The worker's recovered records: the statement mutants first, as the expression mutant
-    # rewrites the text they look for; recoverednotgated leaves a copy of that text before it.
-    Mutant("recoverednotsent", "Worker.swift", "admit(store.takeRecoveredRecords().map(\\.revealingSensitiveValues), statuses: statuses)", "", mode="stmt", module="Trackers"),
-    Mutant("recoverednotgated", "Worker.swift", "admit(store.takeRecoveredRecords().map(\\.revealingSensitiveValues), statuses: statuses)", "store.takeRecoveredRecords().map(\\.revealingSensitiveValues).forEach(sink.send)", mode="stmt", module="Trackers"),
-    Mutant("recoveredredacted", "Worker.swift", "store.takeRecoveredRecords().map(\\.revealingSensitiveValues)", "store.takeRecoveredRecords()", nth=1, module="Trackers"),
+    # The worker's recovered records.
+    Mutant("recoverednotsent", "Worker.swift", "admit(admitted, statuses: statuses)", "", mode="stmt", module="Trackers"),
+    Mutant("recoverednotgated", "Worker.swift", "admit(admitted, statuses: statuses)", "admitted.forEach(sink.send)", mode="stmt", module="Trackers"),
+    Mutant("recoveredredacted", "Worker.swift", "store.takeRecoveredRecords().map(\\.revealingSensitiveValues)", "store.takeRecoveredRecords()", module="Trackers"),
     Mutant("recoveredwrittenagain", "RecordSink.swift", "record.deliveryTag == nil", "true", module="Trackers"),
     # Consent's gating of a store's records, in Trackers.
     Mutant("droppednotforgotten", "Worker.swift", "store.acknowledger.acknowledge(store.positions)", "", mode="stmt", module="Trackers"),
@@ -166,4 +165,10 @@ MUTANTS = [
     Mutant("nocallsitewrittenline1", N, 'SourceLocation(file: "", fileID: "", function: "", line: 0, column: 0)', 'SourceLocation(file: "", fileID: "", function: "", line: 1, column: 0)'),
     # Sensitive's encoding; the first copy is Optional's.
     Mutant("sensitivenotwritten", C, "encoder.encode(value)", "", mode="stmt", nth=1),
+    # Refined's encoding: its value as it is, checked again as it is read.
+    Mutant("refinednotwritten", C, "encoder.encode(value)", "", mode="stmt", nth=2),
+    Mutant("refinedwrongerror", C, ".invalidValue", "BinaryDecodingError.endOfData", nth=6),
+    # A recovered record a constraint added since rejects: dropped and forgotten by the store.
+    Mutant("recoveredrejectedadmitted", "Worker.swift", "rejected.append(record)", "admitted.append(record)", mode="stmt", module="Trackers"),
+    Mutant("recoveredrejectedkept", "Worker.swift", "forget(rejected)", "", mode="stmt", module="Trackers"),
 ]

@@ -1,13 +1,17 @@
 internal import Events
+import Logging
 internal import Persistence
 
-/// The one consumer of a tracker's ``Intake``: it enriches, gates, writes and publishes each
-/// record, in the order the entries came, off the threads that tracked them.
+/// The one consumer of a tracker's ``Intake``: it validates, enriches, gates, writes and
+/// publishes each record, in the order the entries came, off the threads that tracked them.
 struct Worker: Sendable {
     let sink: RecordSink
     let store: (any RecordStore)?
     let enrichers: [Enricher]
     let membership: ConsentGate.Membership?
+    let rejections: DropReportQueue<RejectionReport>
+
+    private static let logger = Logger(label: "Trackers.Worker")
 
     /// Delivers what `store` kept from earlier runs, then handles each entry until the intake
     /// ends, then lets go of what the consent holds for this tracker and ends the records.
@@ -16,11 +20,25 @@ struct Worker: Sendable {
         // record is gated by the decisions made before it was tracked, never by a later one.
         var statuses = membership?.statuses ?? [:]
         if let store {
-            admit(store.takeRecoveredRecords().map(\.revealingSensitiveValues), statuses: statuses)
+            // Validated again: a constraint added since a record was written may reject it, and the
+            // store then forgets it, as it was dropped on purpose.
+            var admitted: [EventRecord] = []
+            var rejected: [EventRecord] = []
+            for record in store.takeRecoveredRecords().map(\.revealingSensitiveValues) {
+                if rejects(record) {
+                    rejected.append(record)
+                } else {
+                    admitted.append(record)
+                }
+            }
+            forget(rejected)
+            admit(admitted, statuses: statuses)
         }
         for await entry in entries {
             switch entry {
             case .track(var record):
+                // First, so an invalid event is never enriched, held, written or delivered.
+                guard !rejects(record) else { continue }
                 for enricher in enrichers {
                     enricher(&record.context)
                 }
@@ -37,6 +55,22 @@ struct Worker: Sendable {
         }
         membership?.leave()
         sink.subscription.finish()
+        rejections.finish()
+    }
+}
+
+extension Worker {
+    /// Whether `record`'s event breaks a constraint, reporting it if so.
+    fileprivate func rejects(_ record: EventRecord) -> Bool {
+        guard let violation = record.event.constraintViolation() else { return false }
+        let name = type(of: record.event).name
+        #if DEBUG
+        // At error in debug builds only: a release build reports it on rejectionReports alone,
+        // and the property's value is never logged.
+        Self.logger.error("Rejected \(name) tracked at \(record.sourceLocation.map { "\($0.fileID):\($0.line)" } ?? "an unknown call site"): \(violation)")
+        #endif
+        rejections.report(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
+        return true
     }
 }
 

@@ -44,10 +44,51 @@ extension EventSchema {
 }
 
 extension EventSchema.Property {
-    /// The property's schema: its type's, with `null` allowed when it is optional.
+    /// The property's schema: its type's, with `null` allowed when it is optional, narrowed by its
+    /// keywords.
     var schema: [String: JSON] {
-        guard let type = WrittenType(parsing: typeName) else { return ["x-traffluent-swift-type": .string(typeName)] }
-        return type.schema(isNullable: isOptional)
+        guard let type = WrittenType(parsing: typeName) else {
+            return ["x-traffluent-swift-type": .string(typeName)].narrowed(by: keywords)
+        }
+        return type.schema(isNullable: isOptional).narrowed(by: keywords)
+    }
+}
+
+extension Dictionary where Key == String, Value == JSON {
+    /// The schema with `keywords` added, each bound merged with one the schema has already (an
+    /// `Int8`'s, say) by keeping the tighter. The first pattern is `pattern`, with its example in
+    /// `examples`; any other is a `pattern` of its own under `allOf`, as an object holds one
+    /// `pattern`.
+    fileprivate func narrowed(by keywords: [ValidationKeyword]) -> [String: JSON] {
+        var schema = self
+        var patterns: [String] = []
+        for keyword in keywords {
+            switch keyword {
+            case .minLength(let length): schema.tighten("minLength", to: Double(length), keepingLarger: true)
+            case .maxLength(let length): schema.tighten("maxLength", to: Double(length), keepingLarger: false)
+            case .minimum(let bound): schema.tighten("minimum", to: bound, keepingLarger: true)
+            case .maximum(let bound): schema.tighten("maximum", to: bound, keepingLarger: false)
+            case .minItems(let count): schema.tighten("minItems", to: Double(count), keepingLarger: true)
+            case .maxItems(let count): schema.tighten("maxItems", to: Double(count), keepingLarger: false)
+            case .pattern(let pattern, let example):
+                guard !patterns.contains(pattern) else { continue }
+                if patterns.isEmpty {
+                    schema["pattern"] = .string(pattern)
+                    schema["examples"] = .array([.string(example)])
+                } else {
+                    schema["allOf"] = .array((schema["allOf"]?.array ?? []) + [.object(["pattern": .string(pattern)])])
+                }
+                patterns.append(pattern)
+            }
+        }
+        return schema
+    }
+
+    /// Sets the bound `keyword` to `bound`, unless the schema has a tighter one: larger when
+    /// `keepingLarger` is set (a lower bound), smaller otherwise.
+    private mutating func tighten(_ keyword: String, to bound: Double, keepingLarger: Bool) {
+        if let existing = self[keyword]?.double, keepingLarger ? existing >= bound : existing <= bound { return }
+        self[keyword] = .number(exactly: bound)
     }
 }
 
@@ -59,6 +100,10 @@ extension WrittenType {
         }
         if let arguments = names("Optional", in: ["Swift"]), arguments.count == 1 {
             return arguments[0].schema(isNullable: true)
+        }
+        // A refined value's JSON is its value's; its rule's keywords come from the property's.
+        if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 {
+            return arguments[0].schema(isNullable: isNullable)
         }
         if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 {
             return arguments[0].schema(isNullable: isNullable).merging(["x-traffluent-sensitive": .boolean(true)]) { $1 }

@@ -4,8 +4,9 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 /// `@Event`: an extension of the struct it is attached to that conforms it to `Event` and
-/// `BinaryCodable`, with its `name`, `consentCategory` and `schema`, and its encoding field by
-/// field in declaration order.
+/// `BinaryCodable`, with its `name`, `consentCategory`, `schema` and, when a property declares
+/// constraints with `@Constrained`, its `constraintViolation()`, and its encoding field by field
+/// in declaration order.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
@@ -40,6 +41,7 @@ public struct EventMacro: ExtensionMacro {
             arguments.name.map { "\(access)static var name: String {\n    \($0)\n}" },
             arguments.consent.map { "\(access)static var consentCategory: Events.ConsentCategory {\n    \($0)\n}" },
             schema(of: properties, version: arguments.version, access: access),
+            constraintViolation(of: properties, access: access),
         ] + requirements(of: properties) + [
             encode(properties, access: access),
             decode(properties, access: access),
@@ -52,7 +54,7 @@ public struct EventMacro: ExtensionMacro {
 
     private static func schema(of properties: [StoredProperty], version: Int, access: String) -> String {
         let entries = properties.map {
-            "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional)),"
+            "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), keywords: \($0.keywords)),"
         }
         let list = entries.isEmpty ? "[]" : "[\n" + entries.joined(separator: "\n") + "\n    ]"
         return """
@@ -60,6 +62,24 @@ public struct EventMacro: ExtensionMacro {
                 Events.EventSchema(name: Self.name, version: \(version), consentCategory: Self.consentCategory, properties: \(list))
             }
             """
+    }
+
+    /// `constraintViolation()`, checking each property's declared constraints in declaration order,
+    /// or `nil` when no property declares one, which leaves `Event`'s default.
+    ///
+    /// The constraints are copied into a typed context, `[Events.Constraint<T>]` for a property of
+    /// type `T`, so one that doesn't apply to the type is a compile error. An optional property is
+    /// checked only when it holds a value.
+    private static func constraintViolation(of properties: [StoredProperty], access: String) -> String? {
+        let checks = properties.filter { !$0.constraints.isEmpty }.map { property in
+            let value = property.isOptional ? "value" : "self.\(property.identifier)"
+            let loop = "for constraint: Events.Constraint<\(property.typeName)> in \(property.constraintList) where !constraint.isSatisfied(by: \(value)) {\n"
+                + "    return Events.ConstraintViolation(property: \"\(property.name)\", keyword: constraint.keyword)\n}"
+            guard property.isOptional else { return loop }
+            return "if let value = self.\(property.identifier) {\n\(loop)\n}"
+        }
+        guard !checks.isEmpty else { return nil }
+        return "\(access)func constraintViolation() -> Events.ConstraintViolation? {\n" + checks.map { $0 + "\n" }.joined() + "return nil\n}"
     }
 
     private static func encode(_ properties: [StoredProperty], access: String) -> String {

@@ -97,7 +97,7 @@ MOCKING = "mockable/Mockable"
 # (name, group, description, dependencies)
 MODULES = [
     # Pipeline
-    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to, and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
+    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to; Refined, a value its type keeps within a Refinement's Constraints; and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered; ConsoleDestination, which prints them; and deliver(to:), which hands each batch of a sequence to every destination.", ["Events", "afluent/Afluent"]),
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
@@ -109,7 +109,7 @@ MODULES = [
     ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
     ("GRDBPersistence", "Persistence", "DatabaseStore: a RecordStore that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only.", ["Events", "Persistence", "grdb.swift/GRDB", "swift-log/Logging"]),
     # Schema
-    ("EventMacros", "Schema", "The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration.", ["Events", "Persistence", "EventMacrosPlugin"]),
+    ("EventMacros", "Schema", "The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration; and @Constrained, the constraints a property declares, which @Event checks.", ["Events", "Persistence", "EventMacrosPlugin"]),
     ("TrackingPlans", "Schema", "TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes or checks one; TrackingPlanCheck, a comparison with the committed plan naming every TrackingPlanDifference.", ["Events"]),
     # Imports Testing, so it is a product of its own that an app adds to its test target alone.
     ("TrackingPlanTesting", "Schema", "expectTrackingPlan(_:matches:): records a Swift Testing issue with the check's report when an app's events no longer match its committed tracking plan.", ["TrackingPlans"]),
@@ -185,8 +185,8 @@ EXECUTABLES = [
 # Test targets. SwiftPM rejects a target with no sources, so list a target only once its directory
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
-    ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
-    ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", "DestinationTesting", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),

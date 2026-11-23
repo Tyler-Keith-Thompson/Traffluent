@@ -11,6 +11,21 @@ struct StoredProperty {
     let typeName: String
     /// Whether the type is optional.
     let isOptional: Bool
+    /// The keywords `@Constrained` declares on it, in order.
+    let constraints: [DeclaredConstraint]
+
+    /// The schema's keywords for it: its type's, which a `Refined` type's rule gives, then the
+    /// declared ones, typed by the property's type.
+    var keywords: String {
+        let typed = "Events.ValidationKeyword.keywords(of: \\Self.\(identifier))"
+        guard !constraints.isEmpty else { return typed }
+        return "\(typed) + (\(constraintList) as [Events.Constraint<\(typeName)>]).map(\\.keyword)"
+    }
+
+    /// The declared constraints as an array literal, as written.
+    var constraintList: String {
+        "[" + constraints.map(\.source).joined(separator: ", ") + "]"
+    }
 
     /// The name as an argument label: without backticks, which a label needs only for `inout`,
     /// `var` and `let`.
@@ -33,6 +48,8 @@ struct StoredProperty {
                 continue
             }
             let isLet = variable.bindingSpecifier.tokenKind == .keyword(.let)
+            let (constraints, constraintDiagnostics) = DeclaredConstraint.constraints(of: variable)
+            diagnostics += constraintDiagnostics
             let bindings = Array(variable.bindings)
             for (index, binding) in bindings.enumerated() where !binding.isComputed {
                 if isLet && binding.initializer != nil { continue }
@@ -50,7 +67,9 @@ struct StoredProperty {
                     identifier: identifier,
                     name: pattern.identifier.identifier?.name ?? identifier,
                     typeName: (wrapped ?? type).trimmedDescription,
-                    isOptional: wrapped != nil
+                    isOptional: wrapped != nil,
+                    // An attribute applies to every binding of its declaration: `var a, b: String`.
+                    constraints: constraints
                 ))
             }
         }
@@ -61,7 +80,7 @@ struct StoredProperty {
 extension VariableDeclSyntax {
     /// Whether the declaration is `static`: a property of the type, not of each value. (A struct
     /// can't declare `class` properties.)
-    fileprivate var isStatic: Bool {
+    var isStatic: Bool {
         modifiers.contains { $0.name.tokenKind == .keyword(.static) }
     }
 
@@ -73,7 +92,7 @@ extension VariableDeclSyntax {
 extension PatternBindingSyntax {
     /// Whether the binding has a getter: accessors other than `willSet` and `didSet` observers,
     /// which a stored property may have.
-    fileprivate var isComputed: Bool {
+    var isComputed: Bool {
         switch accessorBlock?.accessors {
         case nil:
             false

@@ -22,6 +22,8 @@ final class Intake: Sendable {
 
     /// What the worker sends the records to, for ``Tracker/records`` to read.
     let subscription: Subscription
+    /// The worker's reports of the events it rejected, for ``Tracker/rejectionReports``.
+    let rejectionReports: AsyncStream<RejectionReport>
     // An AsyncStream rather than a Mutex-guarded Deque and a hand-written wait: its yield is
     // the O(1) append and wake-up the intake needs, safe from any thread, and it ends with
     // `finish()` after the entries already in it.
@@ -35,8 +37,12 @@ final class Intake: Sendable {
         // Joined here, before `init` returns, so every decision made from now on reaches this
         // intake, in its order with the tracks.
         let membership = consent?.gate.join(entries)
-        let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership)
+        let rejections = DropReportQueue<RejectionReport>()
+        let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections)
         self.subscription = subscription
+        // Captures the queue, not the intake, so reading the reports keeps no tracker alive; the
+        // worker ends them once it ends the records.
+        rejectionReports = AsyncStream(unfolding: { await rejections.next() })
         self.entries = entries
         // Detached, so the worker never runs on the actor that made the tracker, typically the
         // main actor, nor inherits the caller's task-locals: it reads only what entries carry.

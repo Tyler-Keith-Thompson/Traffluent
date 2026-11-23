@@ -152,6 +152,14 @@ private struct EventContract {
             case (let before?, let after?):
                 if before.type != after.type {
                     differences.append(.propertyRetyped(event: name, version: version, property: property, committed: before.type.compact, current: after.type.compact))
+                } else {
+                    // Only for the same type: a retyping says it all, and another type's bounds
+                    // mean something else.
+                    differences += before.constraints.differences(to: after.constraints).map { change in
+                        change.isTightened
+                            ? .constraintTightened(event: name, version: version, property: property, keyword: change.keyword, committed: change.committed, current: change.current)
+                            : .constraintLoosened(event: name, version: version, property: property, keyword: change.keyword, committed: change.committed, current: change.current)
+                    }
                 }
                 if !before.isRequired && after.isRequired {
                     differences.append(.propertyMadeRequired(event: name, version: version, property: property))
@@ -182,20 +190,102 @@ private struct PropertyContract {
     let isRequired: Bool
     /// Whether it is marked `x-traffluent-sensitive`.
     let isSensitive: Bool
-    /// Its schema, without the sensitivity marker, and without the `null` its `type` allows when it
-    /// is optional, which is how optionality reads in a document: so a change to optionality alone
-    /// is one difference, not a retyping too.
+    /// Its schema, without the sensitivity marker, its constraint keywords and the `null` its
+    /// `type` allows when it is optional, which is how optionality reads in a document: so a change
+    /// to optionality or to a bound alone is one difference, not a retyping too.
     let type: JSON
+    /// Its constraint keywords.
+    let constraints: ConstraintContract
 
     init(schema: [String: JSON], isRequired: Bool) {
         self.isRequired = isRequired
         isSensitive = schema["x-traffluent-sensitive"] == .boolean(true)
+        constraints = ConstraintContract(schema: schema)
         var type = schema
         type["x-traffluent-sensitive"] = nil
+        for keyword in ConstraintContract.keywords {
+            type[keyword] = nil
+        }
         if !isRequired, case .array(let names) = type["type"] {
             let named = names.filter { $0 != .string("null") }
             type["type"] = named.count == 1 ? named[0] : .array(named)
         }
         self.type = .object(type)
+    }
+}
+
+/// What a committed plan promises about one property's constraint keywords: its bounds and its
+/// patterns.
+private struct ConstraintContract {
+    /// The keywords a constraint writes, which ``PropertyContract/type`` leaves out: the bounds,
+    /// the patterns (the first as `pattern`, any other under `allOf`) and the first pattern's
+    /// `examples`, an annotation that constrains nothing.
+    static let keywords = ["minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", "allOf", "examples"]
+
+    /// A bound, by its keyword's name, and whether it is a lower one.
+    private static let bounds: [(keyword: String, isLower: Bool)] = [
+        ("minLength", true), ("maxLength", false), ("minimum", true), ("maximum", false), ("minItems", true), ("maxItems", false),
+    ]
+
+    let values: [String: Double]
+    let patterns: [String]
+
+    init(schema: [String: JSON]) {
+        var values: [String: Double] = [:]
+        for (keyword, _) in Self.bounds {
+            values[keyword] = schema[keyword]?.double
+        }
+        self.values = values
+        let extra = (schema["allOf"]?.array ?? []).compactMap { $0.object?["pattern"]?.string }
+        patterns = (schema["pattern"]?.string.map { [$0] } ?? []) + extra
+    }
+
+    /// One keyword's change: tightened when a payload the committed bound accepts may be one the
+    /// current rejects.
+    struct Change {
+        let keyword: String
+        let committed: String?
+        let current: String?
+        let isTightened: Bool
+    }
+
+    /// Each bound that moved, in the order of ``bounds``, then the patterns, when any was added or
+    /// removed.
+    ///
+    /// A lower bound that rose, an upper one that fell, or one added is tightened; the reverse is
+    /// loosened. A pattern added is tightened, as one regular expression can't be shown to accept
+    /// all another does; a pattern only removed is loosened.
+    func differences(to current: ConstraintContract) -> [Change] {
+        var changes: [Change] = []
+        for (keyword, isLower) in Self.bounds {
+            let before = values[keyword]
+            let after = current.values[keyword]
+            guard before != after else { continue }
+            let isTightened = switch (before, after) {
+            case (nil, _): true
+            case (_, nil): false
+            case (let before?, let after?): isLower ? after > before : after < before
+            }
+            changes.append(Change(keyword: keyword, committed: before.map(Self.text), current: after.map(Self.text), isTightened: isTightened))
+        }
+        let added = current.patterns.filter { !patterns.contains($0) }
+        let removed = patterns.filter { !current.patterns.contains($0) }
+        if !added.isEmpty || !removed.isEmpty {
+            changes.append(Change(keyword: "pattern", committed: Self.text(patterns), current: Self.text(current.patterns), isTightened: !added.isEmpty))
+        }
+        return changes
+    }
+
+    private static func text(_ bound: Double) -> String {
+        JSON.number(exactly: bound).compact
+    }
+
+    /// The patterns as JSON, one string, or an array of several; `nil` for none.
+    private static func text(_ patterns: [String]) -> String? {
+        switch patterns.count {
+        case 0: nil
+        case 1: JSON.string(patterns[0]).compact
+        default: JSON.array(patterns.map(JSON.string)).compact
+        }
     }
 }

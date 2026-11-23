@@ -22,8 +22,10 @@ M = "EventMacro.swift"
 A = "EventArguments.swift"
 P = "StoredProperty.swift"
 D = "EventMacroDiagnostic.swift"
+C = "DeclaredConstraint.swift"
+X = "ConstrainedMacro.swift"
 # A schema property's entry, as EventMacro.swift writes it.
-PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional)),"'
+PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), keywords: \($0.keywords)),"'
 
 MUTANTS = [
     # EventMacro: the extension.
@@ -81,4 +83,23 @@ MUTANTS = [
     Mutant("qualifiedoptionalmissed", P, 'member.name.text == "Optional"', "false"),
     # EventMacroDiagnostic: errors, not warnings.
     Mutant("warningsonly", D, "        .error", "        .warning", mode="stmt"),
+    # @Constrained: what @Event generates from it.
+    Mutant("noconstraintviolation", M, "constraintViolation(of: properties, access: access),", "nil,"),
+    Mutant("optionalunwrapped", M, "guard property.isOptional else { return loop }", "return loop", mode="stmt"),
+    Mutant("schemadeclaredkeywordsdropped", P, "guard !constraints.isEmpty else { return typed }", "return typed", mode="stmt"),
+    Mutant("constraintsunread", P, "DeclaredConstraint.constraints(of: variable)", "([DeclaredConstraint](), [Diagnostic]())"),
+    # @Constrained: what @Event reads, and the errors it reports.
+    Mutant("qualifiednotread", C, 'name == "Constrained" || name == "EventMacros.Constrained"', 'name == "Constrained"'),
+    Mutant("invalidpatternaccepted", C, "(try? Regex(pattern)) != nil", "true"),
+    Mutant("conflictsunchecked", C, "diagnostics = conflicts(among: constraints)", "", mode="stmt"),
+    Mutant("equalboundsconflict", C, "lower > upper", "lower >= upper"),
+    Mutant("exampleunchecked", C, "!$0.keyword.accepts(example)", "false"),
+    Mutant("examplelengthunchecked", C, "string.unicodeScalars.count <= length", "true"),
+    Mutant("negativeboundpositive", C, "prefix.expression.numberLiteralValue.map { -$0 }", "prefix.expression.numberLiteralValue"),
+    Mutant("labelledcountaccepted", C, "arguments[0].label == nil", "true", nth=0),
+    Mutant("examplelabelunchecked", C, 'arguments[1].label?.text == "example"', "true"),
+    # @Constrained's own check of where it is.
+    Mutant("staticconstrained", X, "!variable.isStatic && !variable.bindings.contains { $0.isComputed }", "!variable.bindings.contains { $0.isComputed }"),
+    Mutant("computedconstrained", X, "!variable.isStatic && !variable.bindings.contains { $0.isComputed }", "!variable.isStatic"),
+    Mutant("anystructconstrained", X, "!isStored || !inEvent", "!isStored"),
 ]

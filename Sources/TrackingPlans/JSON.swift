@@ -8,12 +8,15 @@ import Foundation
 /// would be a dependency of the library for a few dozen lines. Reading is Foundation's
 /// `JSONDecoder`'s: what it parses doesn't reach the bytes a plan writes.
 ///
-/// A plan writes no fractional numbers, so there is no case for one, and a committed file holding
-/// one doesn't parse.
+/// A number is ``integer(_:)`` when it is a whole number that fits an `Int64`, and
+/// ``number(_:)`` otherwise, both when a plan writes it (``number(exactly:)``) and when it reads one,
+/// so a value reads back as the case it was written as.
 indirect enum JSON: Hashable, Sendable {
     case null
     case string(String)
     case integer(Int64)
+    /// A number with a fraction, or a whole one beyond `Int64`'s range: a bound on a `Double`.
+    case number(Double)
     case boolean(Bool)
     case array([JSON])
     case object([String: JSON])
@@ -40,6 +43,28 @@ indirect enum JSON: Hashable, Sendable {
     var string: String? {
         if case .string(let text) = self { return text }
         return nil
+    }
+
+    /// `value` as JSON: an ``integer(_:)`` when it is a whole number in `Int64`'s range, a
+    /// ``number(_:)`` otherwise.
+    ///
+    /// - Precondition: `value` is finite, as every JSON number is.
+    static func number(exactly value: Double) -> JSON {
+        precondition(value.isFinite, "A JSON number is finite, not \(value)")
+        // -2^63 ..< 2^63: every whole Double in it converts to Int64 exactly.
+        if value.rounded() == value, value >= -9_223_372_036_854_775_808, value < 9_223_372_036_854_775_808 {
+            return .integer(Int64(value))
+        }
+        return .number(value)
+    }
+
+    /// The value of a number, an integer included, or `nil` for any other value.
+    var double: Double? {
+        switch self {
+        case .integer(let value): Double(value)
+        case .number(let value): value
+        default: nil
+        }
     }
 
     /// The value of an integer, or `nil` for any other value.
@@ -79,6 +104,10 @@ indirect enum JSON: Hashable, Sendable {
             string.renderQuoted(into: &text)
         case .integer(let integer):
             text += String(integer)
+        case .number(let number):
+            // Swift's shortest representation that reads back as the same Double, the same on
+            // every platform: `0.5`, `1e-05`, `1e+20`, each valid JSON.
+            text += number.description
         case .boolean(let boolean):
             text += boolean ? "true" : "false"
         case .array(let elements):
@@ -115,8 +144,9 @@ indirect enum JSON: Hashable, Sendable {
 }
 
 extension JSON: Decodable {
-    // Bool is tried before Int64, which JSONDecoder doesn't read from `true` or `false`, and Int64
-    // before String, so each value takes the one case that holds it on every platform.
+    // Bool is tried before Int64, which JSONDecoder doesn't read from `true` or `false`, Int64
+    // before Double, and both before String, so each value takes the one case that holds it on
+    // every platform.
     init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
@@ -125,6 +155,8 @@ extension JSON: Decodable {
             self = .boolean(boolean)
         } else if let integer = try? container.decode(Int64.self) {
             self = .integer(integer)
+        } else if let number = try? container.decode(Double.self) {
+            self = .number(exactly: number)
         } else if let string = try? container.decode(String.self) {
             self = .string(string)
         } else if let elements = try? container.decode([JSON].self) {
