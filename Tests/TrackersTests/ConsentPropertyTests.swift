@@ -2,7 +2,6 @@
 // events, and reports the drops, as a model built from plain arrays does, for any sequence of
 // tracks and decisions and any hold bound.
 
-import DestinationTesting
 import Destinations
 import Events
 import Foundation

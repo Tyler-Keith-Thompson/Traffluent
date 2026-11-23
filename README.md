@@ -321,9 +321,12 @@ app's trace; the encoder's `Content-Type` always wins, and with no instrument bo
 header is added. Only the first record's context travels in the header fields; write each
 record's into the body if the server needs it.
 
-To test what your code tracks, deliver its tracker's records to an `InMemoryDestination` (module
-`DestinationTesting`; it depends on no test framework) and read it after the delivery:
-`events(of: SignedUp.self)`, `records` or `batches`.
+To read what was tracked inside the app, deliver to an `InMemoryDestination` too (module
+`Destinations`): an event inspector in a debug build, a recent-activity view, a SwiftUI preview,
+or a test of what your code tracks. It keeps the newest 1,000 records, or as many as you pass as
+`capacity:`, dropping the oldest across batches; `InMemoryDestination.unbounded()` keeps every one.
+Read it with `events(of: SignedUp.self)`, `records` or `batches`, or wait on `deliveries`, which
+announces each batch to one reader.
 
 ### App lifecycle
 
@@ -825,8 +828,7 @@ says which facts go where, with the anti-patterns to avoid.
 | Module | Holds |
 |---|---|
 | `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `Refined`, a value that satisfies its `Refinement`'s `Constraint`s from the moment it is made; `EventSchema`, an event type's name, version, consent category and stored properties, with each one's `ValidationKeyword`s, as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
-| `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
-| `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
+| `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `InMemoryDestination`, which keeps the newest records it receives for the app or a test to read; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |

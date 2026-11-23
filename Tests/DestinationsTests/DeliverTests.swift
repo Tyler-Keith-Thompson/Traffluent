@@ -1,6 +1,5 @@
 import Afluent
 import Clocks
-import DestinationTesting
 import Destinations
 import Events
 import Foundation

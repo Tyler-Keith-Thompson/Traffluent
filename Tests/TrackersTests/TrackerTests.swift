@@ -1,5 +1,4 @@
 import Afluent
-import DestinationTesting
 import Destinations
 import Events
 import Foundation

@@ -1,5 +1,4 @@
 #if canImport(GRDB)
-import DestinationTesting
 import Destinations
 import Events
 import Foundation

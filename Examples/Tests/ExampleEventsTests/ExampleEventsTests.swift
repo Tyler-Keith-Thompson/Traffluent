@@ -1,4 +1,3 @@
-import DestinationTesting
 import Destinations
 import Events
 import ExampleEvents

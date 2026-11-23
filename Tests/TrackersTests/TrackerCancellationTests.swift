@@ -3,7 +3,6 @@
 // enqueued. It changes a global hook, so the suite runs its tests one at a time.
 import Afluent
 import ConcurrencyExtras
-import DestinationTesting
 import Destinations
 import Events
 import Synchronization

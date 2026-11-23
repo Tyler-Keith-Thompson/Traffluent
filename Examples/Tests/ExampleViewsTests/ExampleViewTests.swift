@@ -1,7 +1,6 @@
 // The tests run on the Mac; elsewhere this target builds empty, without ViewInspector.
 #if os(macOS)
     import AppKit
-    import DestinationTesting
     import Destinations
     import Events
     import ExampleEvents

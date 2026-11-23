@@ -2,7 +2,6 @@
 import AppKit
 #endif
 import Destinations
-import DestinationTesting
 import Events
 import Foundation
 import LifecycleTracking

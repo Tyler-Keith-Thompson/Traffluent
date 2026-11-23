@@ -1,7 +1,6 @@
 // What @Constrained declares, compiled by the real compiler and run: the schema's keywords, the
 // generated constraintViolation(), and a tracker rejecting each kind of violation on its worker.
 
-import DestinationTesting
 import Destinations
 import EventMacros
 import Foundation

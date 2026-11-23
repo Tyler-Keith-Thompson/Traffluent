@@ -11,7 +11,6 @@ swift_library(
     deps = [
         "//Sources/Events",
         "//Sources/Destinations",
-        "//Sources/DestinationTesting",
         "//Sources/LoggingDestinations",
         "//Sources/TracingDestinations",
         "//Sources/HTTPDestinations",
@@ -38,7 +37,6 @@ docc_archive(
     deps = [
         "//Sources/Events:EventsDocumentation",
         "//Sources/Destinations:DestinationsDocumentation",
-        "//Sources/DestinationTesting:DestinationTestingDocumentation",
         "//Sources/LoggingDestinations:LoggingDestinationsDocumentation",
         "//Sources/TracingDestinations:TracingDestinationsDocumentation",
         "//Sources/HTTPDestinations:HTTPDestinationsDocumentation",

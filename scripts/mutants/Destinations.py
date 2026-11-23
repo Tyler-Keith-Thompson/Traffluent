@@ -18,6 +18,7 @@ TESTS = ["DestinationsTests"]
 C = "ConsoleDestination.swift"
 D = "Deliver.swift"
 B = "Batch.swift"
+M = "InMemoryDestination.swift"
 
 MUTANTS = [
     Mutant("linewithoutname", C, '"\\(record.name) \\(record.event)"', '"\\(record.event)"'),
@@ -41,4 +42,21 @@ MUTANTS = [
     Mutant("untransformedsent", "TransformingDestination.swift", "await base.receive(transformed)", "await base.receive(batch)", mode="stmt"),
     Mutant("callsitekept", "DroppingCallSite.swift", "record.sourceLocation = nil", "", mode="stmt"),
     Mutant("notredacted", "RedactingSensitiveValues.swift", "record.revealsSensitiveValues = false", "", mode="stmt"),
+    # InMemoryDestination: what it keeps and announces.
+    Mutant("notkept", M, "log.kept.withLock { $0.append(batch) }", "", mode="stmt"),
+    Mutant("notannounced", M, "log.continuation.yield(batch)", "", mode="stmt"),
+    Mutant("recordsfirstbatch", M, "log.kept.withLock { Array($0.records) }", "log.kept.withLock { $0.batches.first ?? [] }"),
+    Mutant("eventsfirstbatch", M, "log.kept.withLock { $0.records.compactMap { $0.event as? E } }", "log.kept.withLock { ($0.batches.first ?? []).compactMap { $0.event as? E } }"),
+    # InMemoryDestination's capacity.
+    Mutant("capacityzeroallowed", M, "capacity >= 1", "capacity >= 0"),
+    Mutant("checkedcapacityzeroallowed", M, "checkedCapacity >= 1", "checkedCapacity >= 0"),
+    Mutant("defaultcapacity", M, "1_000", "999"),
+    Mutant("evictsonelate", M, "records.count > capacity", "records.count > capacity + 1"),
+    Mutant("evictsonetoomany", M, "records.count - capacity", "records.count - capacity + 1"),
+    Mutant("recordsnotevicted", M, "records.removeFirst(excess)", "", mode="stmt"),
+    Mutant("partialbatchdroppedwhole", M, "batchSizes[0] -= excess", "_ = batchSizes.removeFirst()", mode="stmt"),
+    Mutant("emptybatchkept", M, "guard !batch.isEmpty else { return }", "", mode="stmt"),
+    Mutant("deliveriesbufferonemore", M, ".bufferingNewest(capacity)", ".bufferingNewest(capacity + 1)"),
+    Mutant("unboundedbounded", M, "Log(capacity: nil)", "Log(capacity: InMemoryDestination.defaultCapacity)"),
+    Mutant("unboundeddeliveriesbounded", M, ".unbounded", ".bufferingNewest(InMemoryDestination.defaultCapacity)"),
 ]

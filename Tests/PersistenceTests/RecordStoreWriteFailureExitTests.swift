@@ -8,7 +8,6 @@
 // if the store did what the test names; the parent then opens the store as the next launch would.
 // Each test runs against every kind of store (StoreKind).
 
-import DestinationTesting
 import Destinations
 import Events
 import Foundation

@@ -4,7 +4,6 @@
 
 @_exported import Events
 @_exported import Destinations
-@_exported import DestinationTesting
 @_exported import LoggingDestinations
 @_exported import TracingDestinations
 @_exported import HTTPDestinations

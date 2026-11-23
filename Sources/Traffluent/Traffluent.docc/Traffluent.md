@@ -46,7 +46,6 @@ try await delivery.execute()
 - ``/Sessions``
 - ``/StandardContext``
 - ``/Destinations``
-- ``/DestinationTesting``
 - ``/LoggingDestinations``
 - ``/TracingDestinations``
 - ``/HTTPDestinations``

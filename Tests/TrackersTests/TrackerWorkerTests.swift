@@ -1,7 +1,6 @@
 // The worker's work blocks a thread here on purpose (a store's append and an enricher are
 // synchronous).
 import Dispatch
-import DestinationTesting
 import Destinations
 import Events
 import Persistence

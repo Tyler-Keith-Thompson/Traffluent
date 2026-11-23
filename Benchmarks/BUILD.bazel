@@ -20,7 +20,6 @@ LIBRARY_DIRECTORIES = [
     "Sources/AutomaticControlTracking",
     "Sources/AutomaticScreenTracking",
     "Sources/Checksums",
-    "Sources/DestinationTesting",
     "Sources/Destinations",
     "Sources/EventMacros",
     "Sources/EventMacrosPlugin",

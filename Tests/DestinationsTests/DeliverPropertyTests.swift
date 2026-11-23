@@ -1,7 +1,6 @@
 // Property tests against a naive reference: a count strategy's batches are the tracked events
 // split into chunks of the count.
 
-import DestinationTesting
 import Destinations
 import Events
 import PropertyBased

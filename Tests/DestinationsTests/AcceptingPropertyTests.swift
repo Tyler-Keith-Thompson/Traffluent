@@ -1,7 +1,6 @@
 // Property tests against a naive reference: a destination accepting some categories receives the
 // tracked events filtered to those categories, batch by batch, with empty batches left out.
 
-import DestinationTesting
 import Destinations
 import Events
 import PropertyBased

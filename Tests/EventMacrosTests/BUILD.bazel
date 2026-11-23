@@ -23,7 +23,6 @@ swift_library(
         "//Sources/Persistence",
         "//Sources/Trackers",
         "//Sources/Destinations",
-        "//Sources/DestinationTesting",
         "@swiftpkg_swift_property_based//:PropertyBased",
         "//Tests/TraffluentTestSupport",
     ],

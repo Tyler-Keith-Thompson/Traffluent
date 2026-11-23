@@ -5,7 +5,6 @@
 // parent then opens the same store, as the app's next launch would. Each test runs against every
 // kind of store (StoreKind).
 
-import DestinationTesting
 import Destinations
 import Events
 import Dispatch
