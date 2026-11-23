@@ -105,7 +105,7 @@ MOCKING = "mockable/Mockable"
 # (name, group, description, dependencies)
 MODULES = [
     # Pipeline
-    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to; Refined, a value its type keeps within a Refinement's Constraints; and EventRecord: a tracked event with its timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
+    ("Events", "Pipeline", "Event: the protocol typed analytics events conform to; Refined, a value its type keeps within a Refinement's Constraints; and EventRecord: a tracked event with its random identifier, timestamp, source location and context.", ["swift-distributed-tracing/Instrumentation"]),
     ("Destinations", "Pipeline", "Destination: where batches of event records are delivered; ConsoleDestination, which prints them; InMemoryDestination, which keeps the newest records it receives; and deliver(to:), which hands each batch of a sequence to every destination.", ["Events", "afluent/Afluent", "swift-collections/DequeModule"]),
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),

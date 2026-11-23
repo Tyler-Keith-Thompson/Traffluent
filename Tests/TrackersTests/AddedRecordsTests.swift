@@ -125,4 +125,25 @@ struct AddedRecordsTests {
         let actual = try #require(await records.next())
         #expect(actual.revealsSensitiveValues)
     }
+
+    @Test("A record an enricher adds has an identifier of its own, not the tracked record's")
+    func addedIdentifier() async {
+        let adding = Enricher(records: { record in
+            guard record.event is Tapped else { return [] }
+            return [EventRecord(event: Marker(label: "added"), timestamp: record.timestamp, sourceLocation: nil, context: record.context)]
+        })
+        let sut = Tracker(enrichers: [adding])
+        let expectedCount = 4
+
+        sut.track(Tapped(number: 1))
+        sut.track(Tapped(number: 2))
+        await sut.finish()
+
+        var actual: [UUID] = []
+        for await record in sut.records {
+            actual.append(record.id)
+        }
+        #expect(actual.count == expectedCount)
+        #expect(Set(actual).count == expectedCount)
+    }
 }

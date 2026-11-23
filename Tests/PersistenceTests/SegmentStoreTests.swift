@@ -92,7 +92,25 @@ struct SegmentStoreTests {
         #expect(next.takeRecoveredRecords().map(\.isRedelivered) == [false, true, true, false])
     }
 
-    @Test("A segment is the TRFL header, version 1, then frames of length, CRC-32 and payload")
+    @Test("A recovered record keeps the identifier it was stored with, redelivered or not")
+    func recoveredIdentifiers() throws {
+        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let sut = try SegmentStore(events: [Tapped.self], directory: directory)
+        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
+        let records = (0..<2).map { EventRecord(event: Tapped(number: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location) }
+        let expected = records.map(\.id)
+        let expectedRedelivered = [true, false]
+        let tags = try records.map { try #require(sut.append($0).deliveryTag) }
+        _ = tags[0].acknowledger.willDeliver([tags[0].position])
+
+        let actual = try SegmentStore(events: [Tapped.self], directory: directory).takeRecoveredRecords()
+
+        #expect(actual.map(\.id) == expected)
+        #expect(actual.map(\.isRedelivered) == expectedRedelivered)
+    }
+
+    @Test("A segment is the TRFL header, version 1, then frames of length, CRC-32 and payload, a record's payload starting with its identifier")
     func format() throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -100,7 +118,10 @@ struct SegmentStoreTests {
         let expectedHeader: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
 
-        _ = sut.append(EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        let record = EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
+        let expectedIdentifier = withUnsafeBytes(of: record.id.uuid) { Array($0) }
+
+        _ = sut.append(record)
 
         let name = try #require(try FileManager.default.contentsOfDirectory(atPath: directory.string).first)
         let bytes = try #require(FileManager.default.contents(atPath: directory.appending(name).string)).map { $0 }
@@ -112,6 +133,7 @@ struct SegmentStoreTests {
         #expect(length == payload.count)
         #expect(checksum == payload.withUnsafeBytes { CRC32.checksum(of: $0) })
         #expect(payload.first == 0)
+        #expect(Array(payload[1..<17]) == expectedIdentifier)
         #expect(sut.byteCount == bytes.count)
     }
 

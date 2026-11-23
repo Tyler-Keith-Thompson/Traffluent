@@ -7,7 +7,20 @@ public import Instrumentation
 /// in batches. The event keeps its type: a destination reads its properties by casting
 /// ``event`` to the event types it knows, or by opening it as `some Event`, and reads its
 /// ``Sensitive`` properties through ``reveal(_:)``.
-public struct EventRecord: Sendable {
+///
+/// Each record has an ``id`` of its own, which a collector receiving it more than once uses to
+/// keep one copy.
+public struct EventRecord: Sendable, Identifiable {
+    /// The record's identifier: a random (version 4) UUID drawn when the record is made. A tracker
+    /// draws it when its worker accepts the tracked event, before the record is enriched, stored
+    /// or delivered; a store keeps it with the record, so a redelivered record has the identifier
+    /// it had when first delivered.
+    ///
+    /// It identifies the record, not a person: it is drawn for this record alone, never derived
+    /// from the device, the user, the session or another record, and two records never share one.
+    /// A collector that receives a record twice, as a redelivered record can be, keeps one copy by
+    /// it.
+    public let id: UUID
     /// The event that was tracked.
     public var event: any Event
     /// When the event was tracked.
@@ -34,7 +47,7 @@ public struct EventRecord: Sendable {
     public var deliveryTag: DeliveryTag?
     /// Whether ``reveal(_:)`` gives the event's ``Sensitive`` values: `true` for the records a
     /// tracker makes, `false` once a delivery redacts them (`redactingSensitiveValues()`) and for
-    /// records made with ``init(event:timestamp:sourceLocation:context:isRedelivered:deliveryTag:)``.
+    /// records made with ``init(id:event:timestamp:sourceLocation:context:isRedelivered:deliveryTag:)``.
     ///
     /// Only the library sets it, so a destination given redacted records can't make them reveal.
     public package(set) var revealsSensitiveValues: Bool
@@ -43,6 +56,8 @@ public struct EventRecord: Sendable {
     /// ``Sensitive`` values stay redacted.
     ///
     /// - Parameters:
+    ///   - id: The record's identifier; a new random UUID by default. Pass one only to remake a
+    ///     record read back from where it was kept.
     ///   - event: The event that was tracked.
     ///   - timestamp: When the event was tracked.
     ///   - sourceLocation: Where in source code the event was tracked, or `nil` when unknown.
@@ -51,6 +66,7 @@ public struct EventRecord: Sendable {
     ///     default.
     ///   - deliveryTag: Where a store keeps the record; `nil`, memory only, by default.
     public init(
+        id: UUID = UUID(),
         event: any Event,
         timestamp: Date,
         sourceLocation: SourceLocation?,
@@ -58,6 +74,7 @@ public struct EventRecord: Sendable {
         isRedelivered: Bool = false,
         deliveryTag: DeliveryTag? = nil
     ) {
+        self.id = id
         self.event = event
         self.timestamp = timestamp
         self.sourceLocation = sourceLocation

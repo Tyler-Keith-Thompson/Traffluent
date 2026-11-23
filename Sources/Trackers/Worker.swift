@@ -1,4 +1,6 @@
 internal import Events
+internal import Foundation
+internal import Instrumentation
 import Logging
 internal import Persistence
 
@@ -42,7 +44,11 @@ struct Worker: Sendable {
         }
         for await entry in entries {
             switch entry {
-            case .track(let record, let scopedEnrichers):
+            case .track(let event, let timestamp, let sourceLocation, let context, let scopedEnrichers):
+                // The identifier is drawn here rather than in `track`, which only accepts (D5):
+                // nothing reads a record before the worker reaches it, so it is the same
+                // identifier from the store to every destination and redelivery.
+                let record = EventRecord(id: UUID(), event: event, timestamp: timestamp, sourceLocation: sourceLocation, context: context)
                 // First, so an invalid event is never enriched, held, written or delivered.
                 guard !rejects(record) else { continue }
                 var enriched: [EventRecord] = []

@@ -69,6 +69,28 @@ struct RecordStoreTests {
         #expect(actual.deliveryTag != nil)
     }
 
+    @Test("A tracked record is recovered on the next launch with the identifier the tracker gave it", arguments: StoreKind.all)
+    func recoveredIdentifier(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let tracker = Tracker(store: try kind.open(at: path, events: [Tapped.self]).store)
+        tracker.track(Tapped(number: 1))
+        tracker.track(Tapped(number: 2))
+        await tracker.flush()
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let destination = InMemoryDestination()
+        await tracker.finish()
+        try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
+        let expected = destination.records.map(\.id)
+
+        let actual = try kind.open(at: copy, events: [Tapped.self]).store.takeRecoveredRecords().map(\.id)
+
+        #expect(actual == expected)
+        #expect(Set(actual).count == 2)
+    }
+
     @Test("A recovered record whose file equals its fileID keeps both", arguments: StoreKind.all)
     func recoveredFileEqualToFileID(kind: StoreKind) throws {
         let path = StoreKind.temporaryPath()

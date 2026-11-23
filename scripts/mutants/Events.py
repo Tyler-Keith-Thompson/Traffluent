@@ -41,6 +41,9 @@ MUTANTS = [
     Mutant("redeliveredforced", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = true", mode="stmt"),
     Mutant("redeliveredignored", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = false", mode="stmt"),
     Mutant("tagdropped", R, "self.deliveryTag = deliveryTag", "self.deliveryTag = nil", mode="stmt"),
+    # The record's identifier: kept as given, and random by default.
+    Mutant("idignored", R, "self.id = id", "self.id = UUID(uuid: (1, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))", mode="stmt"),
+    Mutant("constantdefaultid", R, "UUID()", "UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))"),
     # The default, after the `false`s of the doc comments before it.
     Mutant("defaultredelivered", R, "false", "true", nth=2),
     Mutant("tagpositionzero", "DeliveryTag.swift", "self.position = position", "self.position = 0", mode="stmt"),

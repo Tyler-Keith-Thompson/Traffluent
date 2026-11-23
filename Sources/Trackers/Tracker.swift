@@ -244,7 +244,7 @@ public struct Tracker: Sendable {
     /// task's `ServiceContext` as the enrichers extend it.
     ///
     /// Returns at once, from any thread, having only queued the event: the tracker's worker
-    /// checks its constraints, rejecting it on ``rejectionReports`` if it breaks one, runs the
+    /// makes its record, with a new identifier (`EventRecord.id`), checks its constraints, rejecting it on ``rejectionReports`` if it breaks one, runs the
     /// enrichers, on the context captured here, then the samplers, dropping it on
     /// ``samplingDropReports`` if one leaves it out, then gates the record by its consent,
     /// writes it to its store and publishes it to ``records``. An event tracked after
@@ -269,13 +269,14 @@ public struct Tracker: Sendable {
     ) {
         switch backing {
         case .intake(let intake):
-            let record = EventRecord(
+            let entry = Intake.Entry.track(
                 event: event,
                 timestamp: now(),
                 sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column),
-                context: ServiceContext.current ?? .topLevel
+                context: ServiceContext.current ?? .topLevel,
+                enrichers: scopedEnrichers
             )
-            guard intake.enqueue(.track(record, scopedEnrichers)) else {
+            guard intake.enqueue(entry) else {
                 // The one piece of work `track` does on its caller besides queuing: only on this
                 // drop path, never for a delivered event, and at debug level, whose message is
                 // an autoclosure built only when the level is enabled.

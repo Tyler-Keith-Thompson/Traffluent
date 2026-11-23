@@ -18,6 +18,12 @@ to every app of one vendor on the device and resets it once they are all removed
 it, never stores it and never makes one up where the system has none, as on macOS and Linux. Like
 your own identifier below, adding it is the app's decision, its consent included.
 
+Every record also has an `EventRecord.id`, a random UUID drawn when its event is tracked. It
+identifies the record, not the person: each record draws its own, so no two records share one and
+it links nothing together, and a store keeps it only with its record until that record is
+delivered. It is there so a collector that receives a record twice, after a redelivery, keeps one
+copy.
+
 An app that wants another link, such as its own account identifier, adds it with an enricher of
 its own, and owns what that takes: where the identifier is stored, when it is cleared, and the
 user's consent to it.

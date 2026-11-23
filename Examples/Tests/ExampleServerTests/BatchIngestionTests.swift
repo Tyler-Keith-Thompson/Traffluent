@@ -1,3 +1,4 @@
+import Destinations
 import Events
 import ExampleEvents
 import ExampleServer
@@ -33,7 +34,7 @@ struct BatchIngestionTests {
         try await sut.test(.live) { client in
             let port = try #require(client.port)
             let endpoint = try #require(URL(string: "http://localhost:\(port)/batches"))
-            let app = HTTPDestination(endpoint: endpoint, instrument: appTracer, encoder: EventNamesEncoder())
+            let app = HTTPDestination(endpoint: endpoint, instrument: appTracer, encoder: RecordLinesEncoder())
             try await tracker.records.batch().deliver(to: app).execute()
         }
 
@@ -42,6 +43,30 @@ struct BatchIngestionTests {
         #expect(actual.spanContext.parentSpanID == expectedParentSpanID)
         #expect(actual.kind == .server)
         #expect(actual.events.map(\.name) == expectedEvents)
+    }
+
+    @Test("Each record's span event carries the record's identifier, as the app's tracker gave it")
+    func recordIdentifiers() async throws {
+        let serverTracer = InMemoryTracer()
+        let sut = Application(router: buildRouter(tracer: serverTracer))
+        let tracker = Tracker()
+        let memory = InMemoryDestination()
+
+        tracker.track(ButtonTapped(label: "Buy"))
+        tracker.track(ButtonTapped(label: "Buy"))
+        await tracker.finish()
+        try await sut.test(.live) { client in
+            let port = try #require(client.port)
+            let endpoint = try #require(URL(string: "http://localhost:\(port)/batches"))
+            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: RecordLinesEncoder())
+            try await tracker.records.batch().deliver(to: app, memory).execute()
+        }
+
+        let expected: [SpanAttribute?] = memory.records.map { .string($0.id.uuidString) }
+        let span = try #require(serverTracer.finishedSpans.first { $0.operationName == "POST /batches" })
+        let actual = span.events.map { $0.attributes.get("record.id") }
+        #expect(actual == expected)
+        #expect(Set(memory.records.map(\.id)).count == 2)
     }
 
     @Test("A batch sent without trace context is handled in a server span of a trace of the server's own")
@@ -61,7 +86,7 @@ struct BatchIngestionTests {
         try await sut.test(.live) { client in
             let port = try #require(client.port)
             let endpoint = try #require(URL(string: "http://localhost:\(port)/batches"))
-            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: EventNamesEncoder())
+            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: RecordLinesEncoder())
             try await tracker.records.batch().deliver(to: app).execute()
         }
 
@@ -76,7 +101,21 @@ struct BatchIngestionTests {
         let expected = HTTPResponse.Status.noContent
 
         let actual = try await sut.test(.router) { client in
-            try await client.execute(uri: "/batches", method: .post, body: ByteBuffer(string: "ButtonTapped")) { response in
+            try await client.execute(uri: "/batches", method: .post, body: ByteBuffer(string: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F ButtonTapped")) { response in
+                response.status
+            }
+        }
+
+        #expect(actual == expected)
+    }
+
+    @Test("A batch with a line that isn't a record identifier and an event name answers 400 Bad Request", arguments: ["ButtonTapped", "not-a-uuid ButtonTapped", "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"])
+    func malformedLine(line: String) async throws {
+        let sut = Application(router: buildRouter())
+        let expected = HTTPResponse.Status.badRequest
+
+        let actual = try await sut.test(.router) { client in
+            try await client.execute(uri: "/batches", method: .post, body: ByteBuffer(string: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F ButtonTapped\n" + line)) { response in
                 response.status
             }
         }

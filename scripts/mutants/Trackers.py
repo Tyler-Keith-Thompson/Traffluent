@@ -65,6 +65,7 @@ MUTANTS = [
     Mutant("asyncunbound", W, "return try await Tracker.$bound.withValue(tracker, operation: operation)", "return try await operation()", mode="stmt"),
     Mutant("defaultnow", T, "Date.now", "Date.distantPast", nth=0),
     Mutant("fixedtimestamp", T, "now()", "Date(timeIntervalSince1970: 0)"),
+    Mutant("constanttrackid", K, "UUID()", "UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))"),
     # Each swaps one field of the source location; the original expression stays in the innermost
     # else branch, so every one finds it.
     Mutant("filefromfileid", T, LOCATION, LOCATION.replace("file: file,", "file: fileID,")),
@@ -75,7 +76,7 @@ MUTANTS = [
     Mutant("ownline", T, LOCATION, LOCATION.replace("line: line,", "line: #line,")),
     Mutant("columnfromline", T, LOCATION, LOCATION.replace("column: column)", "column: line)")),
     Mutant("contextignored", T, "ServiceContext.current ?? .topLevel", "ServiceContext.topLevel"),
-    Mutant("nottracked", T, "intake.enqueue(.track(record, scopedEnrichers))", "false"),
+    Mutant("nottracked", T, "intake.enqueue(entry)", "false"),
     # The intake.
     Mutant("enrichersreversed", I, WORKER, WORKER.replace("enrichers: enrichers,", "enrichers: enrichers.reversed(),")),
     Mutant("consentignored", I, "consent?.gate.join(entries)", "nil"),
@@ -92,7 +93,8 @@ MUTANTS = [
     Mutant("enricherinert", N, "enrich(&record.context)", "", mode="stmt"),
     # Tracker.enriched(by:): the copy's enrichers, carried with each record to the worker.
     Mutant("scopedskipped", K, "enrich(record, scopedEnrichers, from: 0, into: &enriched)", "enrich(record, scopedEnrichers, from: scopedEnrichers.count, into: &enriched)", mode="stmt"),
-    Mutant("scopednotcarried", T, "intake.enqueue(.track(record, scopedEnrichers))", "intake.enqueue(.track(record, []))"),
+    # The last `scopedEnrichers`: the one track's entry carries.
+    Mutant("scopednotcarried", T, "scopedEnrichers", "[]", nth=6),
     Mutant("scopedreplaced", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher]")),
     Mutant("scopedreversed", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher] + scopedEnrichers")),
     Mutant("scopedignored", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "scopedEnrichers")),

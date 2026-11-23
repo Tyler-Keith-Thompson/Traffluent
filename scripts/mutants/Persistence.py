@@ -48,6 +48,9 @@ MUTANTS = [
     Mutant("filealwaysnil", N, "encoder.encode(location.file == location.fileID ? nil : location.file)", "encoder.encode(String?.none)", mode="stmt"),
     Mutant("filefromfileid", N, "file ?? fileID", "fileID"),
     Mutant("trailingbytesaccepted", N, "guard decoder.isAtEnd else { throw .invalidValue }", "", mode="stmt"),
+    # The record's identifier, written first and given back on recovery.
+    Mutant("idnotwritten", N, "encoder.encode(record.id)", "", mode="stmt"),
+    Mutant("idnotrestored", N, "return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location)", "return EventRecord(event: event, timestamp: timestamp, sourceLocation: location)", mode="stmt"),
     Mutant("lengthnotwritten", F, "encoder.overwriteLittleEndian(length, at: 0)", "", mode="stmt"),
     Mutant("checksumnotwritten", F, "encoder.overwriteLittleEndian(checksum, at: 4)", "", mode="stmt"),
     Mutant("markoffbyone", F, "encoder.encode(index)", "encoder.encode(index + 1)", mode="stmt"),

@@ -1,7 +1,7 @@
 import Events
 import Foundation
 
-/// A record's bytes on disk, the same for every store: its timestamp, `fileID`, `file` (`nil` when
+/// A record's bytes on disk, the same for every store: its identifier's 16 bytes, its timestamp, `fileID`, `file` (`nil` when
 /// it equals `fileID`), function, line, column and event name, then the event's own
 /// ``BinaryCodable`` bytes, all in the binary encoding. A record with no call site is written with
 /// empty names and line 0, which no call site has, as lines count from 1.
@@ -19,6 +19,7 @@ package enum RecordEncoding {
         // Line 0 marks a missing call site rather than a flag of its own, so records written
         // before call sites could be missing read the same.
         let location = record.sourceLocation ?? SourceLocation(file: "", fileID: "", function: "", line: 0, column: 0)
+        encoder.encode(record.id)
         encoder.encode(record.timestamp)
         encoder.encode(location.fileID)
         encoder.encode(location.file == location.fileID ? nil : location.file)
@@ -41,8 +42,8 @@ package enum RecordEncoding {
         return encoder.bytes
     }
 
-    /// The record `bytes` hold, decoded through `registry`: a record with no tag, tracked in the
-    /// top-level context.
+    /// The record `bytes` hold, decoded through `registry`: a record with its identifier, no tag,
+    /// tracked in the top-level context.
     ///
     /// - Parameters:
     ///   - bytes: A record's bytes, as ``encode(_:registration:to:)`` wrote them.
@@ -52,6 +53,7 @@ package enum RecordEncoding {
     ///   or hold bytes past the event's.
     package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> EventRecord {
         var decoder = BinaryDecoder(bytes, readingSensitiveValues: true)
+        let id: UUID = try decoder.decode()
         let timestamp: Date = try decoder.decode()
         let fileID: String = try decoder.decode()
         let file: String? = try decoder.decode()
@@ -63,6 +65,6 @@ package enum RecordEncoding {
         let event = try registration.decode(&decoder)
         guard decoder.isAtEnd else { throw .invalidValue }
         let location = line == 0 ? nil : SourceLocation(file: file ?? fileID, fileID: fileID, function: function, line: line, column: column)
-        return EventRecord(event: event, timestamp: timestamp, sourceLocation: location)
+        return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location)
     }
 }

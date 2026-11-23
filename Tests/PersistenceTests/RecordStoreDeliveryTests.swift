@@ -19,8 +19,10 @@ struct RecordStoreDeliveryTests {
         let entered = SingleValueSubject<Void>()
         let gate = SingleValueSubject<Void>()
         let received = Mutex<[[Int]]>([])
+        let entering = Mutex<[[UUID]]>([])
 
         func receive(_ batch: [EventRecord]) async {
+            entering.withLock { $0.append(batch.map(\.id)) }
             try? entered.send()
             try? await gate.execute()
             received.withLock { $0.append(batch.compactMap { ($0.event as? Tapped)?.number }) }
@@ -121,6 +123,34 @@ struct RecordStoreDeliveryTests {
         let recovered = next.takeRecoveredRecords()
         #expect(recovered.compactMap { ($0.event as? Tapped)?.number } == [1, 2, 3])
         #expect(recovered.map(\.isRedelivered) == [true, true, false])
+    }
+
+    @Test("A record whose delivery didn't finish reaches the next run's destinations redelivered, with the identifier it was first delivered with", arguments: StoreKind.all)
+    func redeliveredIdentifiers(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let tracker = Tracker(store: try kind.open(at: path, events: [Tapped.self]).store)
+        let stuck = Stuck()
+        let delivery = Task { try await tracker.records.batch(strategy: .count(2)).deliver(to: stuck).execute() }
+        tracker.track(Tapped(number: 1))
+        tracker.track(Tapped(number: 2))
+        try await stuck.entered.execute()
+        delivery.cancel()
+        _ = try? await delivery.value
+        await tracker.finish()
+        let expected = try #require(stuck.entering.withLock { $0.first })
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let next = Tracker(store: try kind.open(at: copy, events: [Tapped.self]).store)
+        let destination = InMemoryDestination()
+
+        await next.finish()
+        try await next.records.batch(strategy: .count(10)).deliver(to: destination).execute()
+
+        let actual = destination.records
+        #expect(actual.map(\.id) == expected)
+        #expect(actual.map(\.isRedelivered) == [true, true])
     }
 
     @Test("A record is marked as being delivered before any destination receives it", arguments: StoreKind.all)

@@ -1,5 +1,7 @@
 internal import Afluent
 internal import Events
+internal import Foundation
+internal import Instrumentation
 internal import Persistence
 
 /// A tracker's intake and its worker: `track`, `grant` and `deny` only enqueue an entry; the
@@ -11,10 +13,11 @@ internal import Persistence
 final class Intake: Sendable {
     /// What a caller hands the worker.
     enum Entry: Sendable {
-        /// A record as `track` made it: its context as the caller's task held it, not yet
-        /// enriched or gated, and the enrichers of the tracker copy that tracked it, which run
-        /// before the intake's own.
-        case track(EventRecord, [Enricher])
+        /// What `track` captured for a record: the event, its time and call site, the context as
+        /// the caller's task held it, and the enrichers of the tracker copy that tracked it, which
+        /// run before the intake's own. The worker makes the record, giving it its identifier, so
+        /// the caller draws no random bytes.
+        case track(event: any Event, timestamp: Date, sourceLocation: SourceLocation, context: ServiceContext, enrichers: [Enricher])
         /// A consent decision, in the order of the tracks around it.
         case decide(Set<ConsentCategory>, ConsentStatus)
         /// A wait for every entry before it, resumed with `true` once the worker reaches it.

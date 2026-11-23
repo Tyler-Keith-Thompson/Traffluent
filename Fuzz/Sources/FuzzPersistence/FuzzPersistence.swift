@@ -3,8 +3,9 @@
 // flipped, the tail cut, raw bytes appended) or replaced by raw bytes outright, and a store is
 // opened on it. The model reads the bytes as the format says (a header, then frames of length,
 // CRC-32 and payload, up to the first that isn't intact) and must agree with recovery: the same
-// records, in order, each from a frame whose checksum holds, with the redelivery marks the intact
-// frames give, and the file cut to the intact prefix, or deleted when nothing is left to deliver.
+// records, in order, each from a frame whose checksum holds, with the identifier its frame holds
+// and the redelivery marks the intact frames give, and the file cut to the intact prefix, or
+// deleted when nothing is left to deliver.
 // A segment whose header names a later version is left as it is, and nothing is read from it.
 
 import Checksums
@@ -13,7 +14,7 @@ import Foundation
 import FuzzSupport
 import Persistence
 
-struct Tapped: Event, Equatable {
+struct Tapped: Event, Hashable {
     var number: Int
     var label: String
 }
@@ -46,11 +47,12 @@ enum FuzzPersistence {
         (0 ..< 4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
     }
 
-    /// A record's payload as the format lays it out, for an event named `name` whose fields are
-    /// `fields`.
-    static func recordPayload(name: String, fields: (inout BinaryEncoder) -> Void) -> [UInt8] {
+    /// A record's payload as the format lays it out, for a record identified by `id` of an event
+    /// named `name` whose fields are `fields`.
+    static func recordPayload(id: UUID, name: String, fields: (inout BinaryEncoder) -> Void) -> [UInt8] {
         var encoder = BinaryEncoder()
         encoder.encode(UInt8(0))
+        encoder.encode(id)
         encoder.encode(Date(timeIntervalSinceReferenceDate: 0))
         encoder.encode("App/File.swift")
         encoder.encode(String?.none)
@@ -60,6 +62,12 @@ enum FuzzPersistence {
         encoder.encode(name)
         fields(&encoder)
         return encoder.bytes
+    }
+
+    /// A record frame the fuzzer built: the record's identifier and event.
+    struct Built: Hashable {
+        var id: UUID
+        var event: Tapped
     }
 
     /// What the model reads from a segment's bytes.
@@ -108,8 +116,8 @@ enum FuzzPersistence {
     }
 
     static func fuzz(_ input: inout FuzzInput) {
-        // Each built payload (without its kind byte) and the event it decodes to, if any.
-        var built: [[UInt8]: Tapped?] = [:]
+        // Each built payload (without its kind byte) and the record it decodes to, if any.
+        var built: [[UInt8]: Built?] = [:]
         var bytes: [UInt8]
         if input.int(below: 8) == 0 {
             bytes = []
@@ -121,15 +129,18 @@ enum FuzzPersistence {
                 switch input.int(below: 8) {
                 case 0, 1, 2:
                     let event = Tapped(number: input.int(in: -2 ... 2), label: String(repeating: "é", count: input.int(below: 4)))
-                    let payload = recordPayload(name: "Tapped") { event.encode(to: &$0) }
-                    built[Array(payload.dropFirst())] = event
+                    // Identifiers from a few values, so two frames can share one and recovery
+                    // must still give each record its own frame's.
+                    let id = UUID(uuid: (UInt8(input.int(below: 4)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                    let payload = recordPayload(id: id, name: "Tapped") { event.encode(to: &$0) }
+                    built[Array(payload.dropFirst())] = Built(id: id, event: event)
                     bytes += frame(payload)
                     records += 1
                 case 3:
                     // A record the store can't decode: an unlisted type, or bytes past the event's.
                     let payload = input.int(below: 2) == 0
-                        ? recordPayload(name: "Other") { _ in }
-                        : recordPayload(name: "Tapped") { Tapped(number: 0, label: "").encode(to: &$0); $0.encode(UInt8(9)) }
+                        ? recordPayload(id: UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), name: "Other") { _ in }
+                        : recordPayload(id: UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), name: "Tapped") { Tapped(number: 0, label: "").encode(to: &$0); $0.encode(UInt8(9)) }
                     built[Array(payload.dropFirst())] = .some(nil)
                     bytes += frame(payload)
                     records += 1
@@ -153,16 +164,16 @@ enum FuzzPersistence {
         try! Data(bytes).write(to: URL(fileURLWithPath: path))
 
         let model = read(bytes)
-        var expected: [(event: Tapped, isRedelivered: Bool, frame: Int)] = []
+        var expected: [(record: Built, isRedelivered: Bool, frame: Int)] = []
         var collision = false
         for (position, record) in model.records.enumerated() {
-            guard let event = built[record.payload] else {
+            guard let decoded = built[record.payload] else {
                 // An intact frame the fuzzer didn't build means a CRC-32 collision; nothing to compare.
                 collision = true
                 break
             }
-            if let event {
-                expected.append((event, model.marked.contains(record.index), position))
+            if let decoded {
+                expected.append((decoded, model.marked.contains(record.index), position))
             }
         }
 
@@ -179,7 +190,8 @@ enum FuzzPersistence {
         guard !collision else { return }
         check(recovered.count == expected.count, "recovered \(recovered.count) records, model \(expected.count)")
         for (record, expectation) in zip(recovered, expected) {
-            check(record.event as? Tapped == expectation.event, "recovered \(record.event), model \(expectation.event)")
+            check(record.event as? Tapped == expectation.record.event, "recovered \(record.event), model \(expectation.record.event)")
+            check(record.id == expectation.record.id, "recovered identifier \(record.id), model \(expectation.record.id)")
             check(record.isRedelivered == expectation.isRedelivered, "redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
             let index = UInt32(truncatingIfNeeded: record.deliveryTag?.position ?? .max)
             check(index == model.records[expectation.frame].index, "position \(index) for frame \(expectation.frame)")

@@ -116,6 +116,33 @@ struct SessionTimeoutTests {
         #expect(actualKeys == [first, first, first, first, second, second])
     }
 
+    @Test("SessionEnded and SessionStarted records have identifiers of their own, distinct from every record's and from the session's key")
+    func sessionRecordIdentifiers() async {
+        let clock = TestClock()
+        let origin = Date(timeIntervalSinceReferenceDate: 1_000)
+        let timeout = Duration.seconds(60)
+        let sut = Tracker(enrichers: [.sessions(timeout: timeout)], now: {
+            let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
+            return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
+        })
+        let expectedCount = 5
+
+        sut.track(Tapped(number: 1))
+        await clock.advance(by: timeout)
+        sut.track(Tapped(number: 2))
+        await sut.finish()
+
+        var records: [EventRecord] = []
+        for await record in sut.records {
+            records.append(record)
+        }
+        let actual = Set(records.map(\.id))
+        let keys = Set(records.compactMap { $0.context[SessionKey.self] })
+        #expect(records.count == expectedCount)
+        #expect(actual.count == expectedCount)
+        #expect(actual.isDisjoint(with: keys))
+    }
+
     @Test("The default timeout is 30 minutes: an event 30 minutes less a second after the last stays, one 30 minutes after starts anew")
     func defaultTimeout() async {
         let clock = TestClock()

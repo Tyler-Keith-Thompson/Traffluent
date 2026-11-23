@@ -28,6 +28,10 @@ import Logging
 ///   first. The format is the encoder's; events need no `Codable` conformance.
 /// - A response with a 2xx status means the batch arrived. Any other status, or no response,
 ///   means it didn't; either way the batch is not sent again.
+/// - A record can still arrive twice: one a store redelivers after the app was stopped mid-send
+///   (`EventRecord/isRedelivered`) may have arrived before. Its `EventRecord/id` is the one it was
+///   first sent with, so an encoder that writes each record's identifier lets the server keep one
+///   copy.
 ///
 /// ``receive(_:)`` handles its own failures: a batch the encoder can't encode, a send that gets
 /// no response and a response that isn't 2xx are each logged at error level and dropped, so

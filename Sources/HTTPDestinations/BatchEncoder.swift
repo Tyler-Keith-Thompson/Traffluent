@@ -4,6 +4,8 @@ public import Events
 ///
 /// Events need no `Codable` conformance: an encoder reads the events it knows by casting each
 /// record's `EventRecord.event` to their types, and chooses the wire format and its content type.
+/// An encoder for a server that deduplicates writes each record's `EventRecord.id`, which a
+/// redelivered record keeps.
 ///
 /// ```swift
 /// struct PlansEncoder: BatchEncoder {

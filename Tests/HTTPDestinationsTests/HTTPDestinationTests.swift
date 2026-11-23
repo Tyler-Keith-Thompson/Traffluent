@@ -22,6 +22,13 @@ struct HTTPDestinationTests {
         }
     }
 
+    /// Encodes a batch as its records' identifiers, one per line, as plain text.
+    struct IdentifiersEncoder: BatchEncoder {
+        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+            EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
+        }
+    }
+
     struct Unencodable: Error, Equatable {}
 
     struct FailingEncoder: BatchEncoder {
@@ -87,6 +94,25 @@ struct HTTPDestinationTests {
         #expect(actual.map(\.request.method) == expectedMethods)
         #expect(actual.map(\.request.url) == expectedURLs)
         #expect(actual.map(\.body) == expectedBodies)
+    }
+
+    @Test("A batch's body carries each record's identifier, as the tracker gave it, for a server to deduplicate by")
+    func identifiersInBody() async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let transport = TransportDouble(.success(HTTPResponse(status: .ok)))
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder())
+        let memory = InMemoryDestination()
+        let tracker = Tracker()
+
+        tracker.track(SignedUp(plan: "a"))
+        tracker.track(SignedUp(plan: "a"))
+        await tracker.finish()
+        try await tracker.records.batch(strategy: .count(10)).deliver(to: sut, memory).execute()
+
+        let expected = [Data(memory.records.map(\.id.uuidString).joined(separator: "\n").utf8)]
+        let actual = transport.sent.withLock { $0.map(\.body) }
+        #expect(actual == expected)
+        #expect(Set(memory.records.map(\.id)).count == 2)
     }
 
     @Test("A batch of several records is one request, its records encoded oldest first")

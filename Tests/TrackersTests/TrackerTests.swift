@@ -196,6 +196,30 @@ struct TrackerTests {
         #expect(actual == expected)
     }
 
+    @Test("Each tracked event's record has an identifier of its own, given when tracked, which the enrichers see and the worker keeps")
+    func identifiers() async {
+        let seen = Mutex<[UUID]>([])
+        let watching = Enricher(records: { record in
+            seen.withLock { $0.append(record.id) }
+            return []
+        })
+        let sut = Tracker(enrichers: [watching])
+        let expectedCount = 3
+
+        sut.track(Tapped(number: 1))
+        sut.track(Tapped(number: 1))
+        sut.track(Tapped(number: 1))
+        await sut.finish()
+
+        var actual: [UUID] = []
+        for await record in sut.records {
+            actual.append(record.id)
+        }
+        let expected = seen.withLock { $0 }
+        #expect(actual == expected)
+        #expect(Set(actual).count == expectedCount)
+    }
+
     @Test("By default each record is stamped with the system's current time")
     func defaultTimestamp() async throws {
         let sut = Tracker()

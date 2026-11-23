@@ -98,4 +98,26 @@ struct EventRecordTests {
         #expect(tag.position == expectedPosition)
         #expect(tag.acknowledger === store)
     }
+
+    @Test("A record keeps the identifier it is given")
+    func identifier() throws {
+        let expected = try #require(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
+
+        let actual = EventRecord(id: expected, event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+
+        #expect(actual.id == expected)
+    }
+
+    @Test("Two records made without an identifier get different random (version 4) ones, even of the same event")
+    func distinctIdentifiers() {
+        let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)
+        let expectedVersion: UInt8 = 4
+
+        let first = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
+        let second = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
+
+        #expect(first.id != second.id)
+        #expect(first.id.uuid.6 >> 4 == expectedVersion)
+        #expect(second.id.uuid.6 >> 4 == expectedVersion)
+    }
 }
