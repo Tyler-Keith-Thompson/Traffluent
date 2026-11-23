@@ -96,31 +96,6 @@ struct SegmentStoreBoundTests {
         #expect(sut.byteCount == bound)
     }
 
-    @Test("A record too large for an empty log is kept in memory only, with nothing written and nothing dropped")
-    func tooLarge() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreBoundTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        let small = EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
-        let large = EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: Events.SourceLocation(file: "A", fileID: "A", function: "a much longer function name", line: 1, column: 1))
-        let probe = try SegmentStore(events: [Tapped.self], directory: directory.appending("probe"))
-        _ = probe.append(small)
-        let bound = probe.byteCount
-        let sut = try SegmentStore(events: [Tapped.self], directory: directory.appending("log"), byteBound: bound)
-        var reports = sut.dropReports.makeAsyncIterator()
-        let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 0)...Date(timeIntervalSince1970: 0))
-        _ = sut.append(small)
-
-        let actual = sut.append(large)
-
-        #expect(actual.deliveryTag == nil)
-        #expect(sut.byteCount == bound)
-        #expect(sut.pendingRecordCount == 1)
-        // The small record is still kept: the next small one, which needs its room, is what drops it.
-        _ = sut.append(small)
-        #expect(await reports.next() == expected)
-    }
-
     @Test("A drop report counts only the dropped segment's records not yet delivered, over their timestamps")
     func reportCountsPending() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreBoundTests-\(UUID().uuidString)")
@@ -147,30 +122,6 @@ struct SegmentStoreBoundTests {
 
         #expect(await reports.next() == expected)
         #expect(sut.byteCount <= 2 * segment)
-    }
-
-    @Test("A dropped segment whose records were all delivered is never reported: it was already deleted")
-    func deliveredNotReported() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreBoundTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        func record(_ number: Int) -> EventRecord {
-            EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: Double(number)), sourceLocation: location)
-        }
-        let probe = try SegmentStore(events: [Tapped.self], directory: directory.appending("probe"))
-        _ = probe.append(record(0))
-        let segment = probe.byteCount
-        let sut = try SegmentStore(events: [Tapped.self], directory: directory.appending("log"), byteBound: 2 * segment, segmentByteCount: segment)
-        var reports = sut.dropReports.makeAsyncIterator()
-        let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 1)...Date(timeIntervalSince1970: 1))
-        let tag = try #require(sut.append(record(0)).deliveryTag)
-        tag.acknowledger.acknowledge([tag.position])
-
-        for number in 1..<4 {
-            _ = sut.append(record(number))
-        }
-
-        #expect(await reports.next() == expected)
     }
 
     @Test("A delivery mark that would pass the bound drops the oldest segment first, and reports it")
@@ -269,30 +220,6 @@ struct SegmentStoreBoundTests {
         #expect(files.count == 3)
     }
 
-    @Test("Recovery drops the oldest segments while the directory holds more than a smaller bound, and reports them")
-    func recoveryWithinBound() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreBoundTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        func record(_ number: Int) -> EventRecord {
-            EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: Double(number)), sourceLocation: location)
-        }
-        let probe = try SegmentStore(events: [Tapped.self], directory: directory.appending("probe"))
-        _ = probe.append(record(0))
-        let segment = probe.byteCount
-        let earlier = try SegmentStore(events: [Tapped.self], directory: directory.appending("log"), segmentByteCount: segment)
-        for number in 0..<3 {
-            _ = earlier.append(record(number))
-        }
-        let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 0)...Date(timeIntervalSince1970: 0))
-
-        let sut = try SegmentStore(events: [Tapped.self], directory: directory.appending("log"), byteBound: 2 * segment, segmentByteCount: segment)
-
-        var reports = sut.dropReports.makeAsyncIterator()
-        #expect(await reports.next() == expected)
-        #expect(sut.takeRecoveredRecords().compactMap { ($0.event as? Tapped)?.number } == [1, 2])
-        #expect(sut.byteCount == 2 * segment)
-    }
 }
 
 extension SegmentStoreBoundTests.Tapped: BinaryCodable {

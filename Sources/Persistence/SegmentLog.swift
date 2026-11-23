@@ -457,7 +457,7 @@ final class SegmentLog: Acknowledger {
             var undecodable = 0
             for frame in contents.records {
                 do throws(BinaryDecodingError) {
-                    var record = try SegmentFormat.record(from: bytes[frame.payload], registry: registry)
+                    var record = try RecordEncoding.record(from: bytes[frame.payload], registry: registry)
                     record.isRedelivered = contents.marked.contains(frame.index)
                     segment.timestamps.append(record.timestamp)
                     segment.acknowledged.append(false)

@@ -2,19 +2,19 @@
 // (WASI) cannot start, and those builds leave out every file holding one.
 //
 // A child process opens a store, tracks and crashes (abort, so nothing gets to clean up); the
-// parent then opens the same directory, as the app's next launch would.
+// parent then opens the same store, as the app's next launch would. Each test runs against every
+// kind of store (StoreKind).
 
 import DestinationTesting
 import Destinations
 import Events
 import Foundation
 import Persistence
-import SystemPackage
 import Testing
 import Trackers
 
-@Suite("SegmentStore: crashes", .timeLimit(.minutes(1)))
-struct SegmentStoreCrashExitTests {
+@Suite("RecordStore: crashes", .timeLimit(.minutes(1)))
+struct RecordStoreCrashExitTests {
     struct Tapped: Event, Equatable {
         var number: Int
     }
@@ -27,20 +27,20 @@ struct SegmentStoreCrashExitTests {
         }
     }
 
-    @Test("A record tracked right before the process crashes is delivered on the next launch, not marked redelivered")
-    func crashAfterTrack() async throws {
-        let path: String = FilePath(NSTemporaryDirectory()).appending("SegmentStoreCrashExitTests-\(UUID().uuidString)").string
+    @Test("A record tracked right before the process crashes is delivered on the next launch, not marked redelivered", arguments: StoreKind.all)
+    func crashAfterTrack(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let destination = InMemoryDestination()
         let expected = [Tapped(number: 1), Tapped(number: 2)]
 
-        await #expect(processExitsWith: .failure) { [path = path as String] in
-            let tracker = Tracker(store: try! SegmentStore(events: [Tapped.self], directory: FilePath(path)))
+        await #expect(processExitsWith: .failure) { [kind = kind as StoreKind, path = path as String] in
+            let tracker = Tracker(store: try! kind.open(at: path, events: [Tapped.self]).store)
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
             abort()
         }
-        let store = try SegmentStore(events: [Tapped.self], directory: FilePath(path))
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
@@ -50,21 +50,21 @@ struct SegmentStoreCrashExitTests {
         #expect(store.byteCount == 0)
     }
 
-    @Test("A batch delivered right before the process crashes, and so never deleted, is resent on the next launch marked redelivered")
-    func crashAfterDelivery() async throws {
-        let path: String = FilePath(NSTemporaryDirectory()).appending("SegmentStoreCrashExitTests-\(UUID().uuidString)").string
+    @Test("A batch delivered right before the process crashes, and so never deleted, is resent on the next launch marked redelivered", arguments: StoreKind.all)
+    func crashAfterDelivery(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let destination = InMemoryDestination()
         let expected = [Tapped(number: 1), Tapped(number: 2), Tapped(number: 3)]
 
-        await #expect(processExitsWith: .failure) { [path = path as String] in
-            let tracker = Tracker(store: try! SegmentStore(events: [Tapped.self], directory: FilePath(path)))
+        await #expect(processExitsWith: .failure) { [kind = kind as StoreKind, path = path as String] in
+            let tracker = Tracker(store: try! kind.open(at: path, events: [Tapped.self]).store)
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
             tracker.track(Tapped(number: 3))
             try? await tracker.records.batch(strategy: .count(2)).deliver(to: CrashingDestination()).execute()
         }
-        let store = try SegmentStore(events: [Tapped.self], directory: FilePath(path))
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
@@ -75,7 +75,7 @@ struct SegmentStoreCrashExitTests {
     }
 }
 
-extension SegmentStoreCrashExitTests.Tapped: BinaryCodable {
+extension RecordStoreCrashExitTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
         encoder.encode(number)
     }

@@ -16,5 +16,6 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
         .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.4.3"),
         .package(url: "https://github.com/apple/swift-system", from: "1.9.0"),
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.12.0"),
     ]
 )

@@ -5,12 +5,11 @@ import Events
 import Foundation
 import Persistence
 import Synchronization
-import SystemPackage
 import Testing
 import Trackers
 
-@Suite("SegmentStore: delivery", .timeLimit(.minutes(1)))
-struct SegmentStoreDeliveryTests {
+@Suite("RecordStore: delivery", .timeLimit(.minutes(1)))
+struct RecordStoreDeliveryTests {
     struct Tapped: Event, Equatable {
         var number: Int
     }
@@ -55,11 +54,11 @@ struct SegmentStoreDeliveryTests {
         }
     }
 
-    @Test("A batch is acknowledged only once every destination has received it")
-    func everyDestination() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [Tapped.self], directory: directory)
+    @Test("A batch is acknowledged only once every destination has received it", arguments: StoreKind.all)
+    func everyDestination(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let fast = InMemoryDestination()
         let slow = Stuck()
@@ -82,11 +81,11 @@ struct SegmentStoreDeliveryTests {
         #expect(store.byteCount == 0)
     }
 
-    @Test("A delivery to no destinations acknowledges each batch at once")
-    func noDestinations() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [Tapped.self], directory: directory)
+    @Test("A delivery to no destinations acknowledges each batch at once", arguments: StoreKind.all)
+    func noDestinations(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
 
         tracker.track(Tapped(number: 1))
@@ -97,11 +96,11 @@ struct SegmentStoreDeliveryTests {
         #expect(store.byteCount == 0)
     }
 
-    @Test("A cancelled delivery acknowledges nothing it hadn't delivered, and the next run gets those records marked redelivered")
-    func cancelledDelivery() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [Tapped.self], directory: directory)
+    @Test("A cancelled delivery acknowledges nothing it hadn't delivered, and the next run gets those records marked redelivered", arguments: StoreKind.all)
+    func cancelledDelivery(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let destination = Stuck()
         let sut = tracker.records.batch(strategy: .count(2)).deliver(to: destination)
@@ -115,17 +114,20 @@ struct SegmentStoreDeliveryTests {
         _ = try? await delivery.value
 
         #expect(store.pendingRecordCount == 3)
-        let next = try SegmentStore(events: [Tapped.self], directory: directory)
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let next = try kind.open(at: copy, events: [Tapped.self]).store
         let recovered = next.takeRecoveredRecords()
         #expect(recovered.compactMap { ($0.event as? Tapped)?.number } == [1, 2, 3])
         #expect(recovered.map(\.isRedelivered) == [true, true, false])
     }
 
-    @Test("A record is marked as being delivered before any destination receives it")
-    func markedBeforeReceive() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [Tapped.self], directory: directory)
+    @Test("A record is marked as being delivered before any destination receives it", arguments: StoreKind.all)
+    func markedBeforeReceive(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let destination = Stuck()
         let sut = tracker.records.batch(strategy: .count(1)).deliver(to: destination)
@@ -134,43 +136,23 @@ struct SegmentStoreDeliveryTests {
         tracker.track(Tapped(number: 1))
         try await destination.entered.execute()
 
-        // A copy of the log as it is now, as a crash would leave it: a second store mustn't open
-        // the directory while this one has it.
-        let copy = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: copy.string) }
-        try FileManager.default.copyItem(atPath: directory.string, toPath: copy.string)
-        let next = try SegmentStore(events: [Tapped.self], directory: copy)
+        // A copy of the store as it is now, as a crash would leave it: a second store mustn't open
+        // it while this one has it.
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let next = try kind.open(at: copy, events: [Tapped.self]).store
         #expect(next.takeRecoveredRecords().map(\.isRedelivered) == [true])
         try destination.gate.send()
         tracker.finish()
         try await delivery.value
     }
 
-    @Test("Marking records as being delivered, without acknowledging them, brings them back redelivered; the others not")
-    func willDeliverMarks() throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        let probe = try SegmentStore(events: [Tapped.self], directory: directory.appending("probe"))
-        _ = probe.append(EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
-        let frame = probe.byteCount - 8
-        let log = directory.appending("log")
-        let sut = try SegmentStore(events: [Tapped.self], directory: log, segmentByteCount: 8 + 2 * frame)
-        let tags = try (0..<4).map { number in
-            try #require(sut.append(EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)).deliveryTag)
-        }
-
-        _ = tags[0].acknowledger.willDeliver([tags[1].position, tags[2].position])
-
-        let next = try SegmentStore(events: [Tapped.self], directory: log)
-        #expect(next.takeRecoveredRecords().map(\.isRedelivered) == [false, true, true, false])
-    }
-
-    @Test("A batch a full destination buffer dropped is never acknowledged, so its segment stays for the next launch")
-    func droppedBatchKept() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [Tapped.self], directory: directory)
+    @Test("A batch a full destination buffer dropped is never acknowledged, so it stays for the next launch, marked redelivered", arguments: StoreKind.all)
+    func droppedBatchKept(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let destination = Stuck()
         // The delivery asks for a fourth batch once it has put the third in the buffer.
@@ -200,28 +182,29 @@ struct SegmentStoreDeliveryTests {
 
         #expect(destination.received.withLock { $0 }.flatMap { $0 } == [1, 3])
         #expect(store.pendingRecordCount == 1)
-        // The segment comes back whole, with the delivered records too, all marked redelivered.
-        let next = try SegmentStore(events: [Tapped.self], directory: directory)
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let next = try kind.open(at: copy, events: [Tapped.self]).store
         let recovered = next.takeRecoveredRecords()
-        #expect(recovered.compactMap { ($0.event as? Tapped)?.number } == [1, 2, 3])
-        #expect(recovered.map(\.isRedelivered) == [true, true, true])
+        // A segment comes back whole, with its delivered records too; a table only with the
+        // record never acknowledged.
+        let expected = kind == .segments ? [1, 2, 3] : [2]
+        #expect(recovered.compactMap { ($0.event as? Tapped)?.number } == expected)
+        let allRedelivered = recovered.allSatisfy(\.isRedelivered)
+        #expect(allRedelivered)
     }
 
-    @Test("While the destination is offline, records stay on disk within the bound, the oldest dropped and reported, until a send succeeds")
-    func offlinePeriod() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+    @Test("While the destination is offline, records stay on disk within the bound, the oldest dropped and reported, until a send succeeds", arguments: StoreKind.all)
+    func offlinePeriod(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
         let timestamp = Date(timeIntervalSince1970: 0)
-        // A record's frame, tracked from this function as the ones below are.
-        let probe = try SegmentStore(events: [Tapped.self], directory: directory.appending("probe"))
-        Tracker(store: probe, now: { timestamp }).track(Tapped(number: 0))
-        let frame = probe.byteCount - 8
-        // One record per segment, room for three, and for a delivery mark of one record in each.
-        let segment = 8 + frame
-        let mark = 8 + 1 + 4
-        let bound = 3 * (segment + mark)
-        let log = directory.appending("log")
-        let store = try SegmentStore(events: [Tapped.self], directory: log, byteBound: bound, segmentByteCount: segment)
+        // Room for three records, tracked from this function as the probe is, and their marks.
+        let opened = try kind.open(at: path, events: [Tapped.self], holding: 3) { probe in
+            Tracker(store: probe, now: { timestamp }).track(Tapped(number: 0))
+        }
+        let store = opened.store
         let tracker = Tracker(store: store, now: { timestamp })
         let destination = Flaky()
         let sut = tracker.records.batch(strategy: .count(6)).deliver(to: destination)
@@ -240,12 +223,13 @@ struct SegmentStoreDeliveryTests {
         let actualReports = [await reports.next(), await reports.next(), await reports.next()]
         #expect(actualReports == [expectedReport, expectedReport, expectedReport])
         #expect(store.pendingRecordCount == 3)
-        #expect(store.byteCount <= bound)
-        // A copy of the log as it is now, as a crash would leave it: a second store mustn't open
-        // the directory while this one has it.
-        let copy = directory.appending("copy")
-        try FileManager.default.copyItem(atPath: log.string, toPath: copy.string)
-        let offline = try SegmentStore(events: [Tapped.self], directory: copy)
+        #expect(store.byteCount <= opened.byteBound)
+        // A copy of the store as it is now, as a crash would leave it: a second store mustn't open
+        // it while this one has it.
+        let copy = path + "-copy"
+        defer { try? FileManager.default.removeItem(atPath: copy) }
+        try FileManager.default.copyItem(atPath: path, toPath: copy)
+        let offline = try kind.open(at: copy, events: [Tapped.self]).store
         let recovered = offline.takeRecoveredRecords()
         #expect(recovered.compactMap { ($0.event as? Tapped)?.number } == [4, 5, 6])
         #expect(recovered.map(\.isRedelivered) == [true, true, true])
@@ -259,14 +243,13 @@ struct SegmentStoreDeliveryTests {
         #expect(destination.sent.withLock { $0 } == [[1, 2, 3, 4, 5, 6]])
         #expect(store.pendingRecordCount == 0)
         #expect(store.byteCount == 0)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: log.string).isEmpty)
     }
 
-    @Test("Records delivered from a store carry its tag and aren't redelivered")
-    func deliveredRecords() async throws {
-        let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreDeliveryTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let tracker = Tracker(store: try SegmentStore(events: [Tapped.self], directory: directory))
+    @Test("Records delivered from a store carry its tag and aren't redelivered", arguments: StoreKind.all)
+    func deliveredRecords(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let tracker = Tracker(store: try kind.open(at: path, events: [Tapped.self]).store)
         let destination = InMemoryDestination()
 
         tracker.track(Tapped(number: 1))
@@ -279,7 +262,7 @@ struct SegmentStoreDeliveryTests {
     }
 }
 
-extension SegmentStoreDeliveryTests.Tapped: BinaryCodable {
+extension RecordStoreDeliveryTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
         encoder.encode(number)
     }

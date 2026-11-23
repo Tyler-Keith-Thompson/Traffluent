@@ -1,6 +1,5 @@
 internal import Checksums
 import Events
-import Foundation
 
 /// The bytes of a segment file.
 ///
@@ -9,9 +8,8 @@ import Foundation
 /// little-endian `UInt32` payload length, the payload's CRC-32 as a little-endian `UInt32`, and the
 /// payload. A payload's first byte is its kind:
 ///
-/// - 0, a record: its timestamp, `fileID`, `file` (`nil` when it equals `fileID`), function, line,
-///   column and event name, then the event's own ``BinaryCodable`` bytes, all in the binary
-///   encoding. Records are numbered from 0 in the order they appear.
+/// - 0, a record: its bytes in ``RecordEncoding``. Records are numbered from 0 in the order they
+///   appear.
 /// - 1, a delivery mark: the numbers, as little-endian `UInt32`s, of records in this segment a
 ///   delivery was about to hand to destinations.
 ///
@@ -100,15 +98,7 @@ enum SegmentFormat {
     /// The frame of `record`, whose event `registration` encodes.
     static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration) -> [UInt8] {
         var encoder = frameEncoder(of: .record)
-        let location = record.sourceLocation
-        encoder.encode(record.timestamp)
-        encoder.encode(location.fileID)
-        encoder.encode(location.file == location.fileID ? nil : location.file)
-        encoder.encode(location.function)
-        encoder.encode(location.line)
-        encoder.encode(location.column)
-        encoder.encode(registration.name)
-        registration.encode(record.event, &encoder)
+        RecordEncoding.encode(record, registration: registration, to: &encoder)
         return sealed(encoder)
     }
 
@@ -119,27 +109,6 @@ enum SegmentFormat {
             encoder.encode(index)
         }
         return sealed(encoder)
-    }
-
-    /// The record whose payload (after the kind byte) is `payload`, decoded through `registry`:
-    /// a record with no tag, tracked in the top-level context.
-    ///
-    /// - Throws: ``BinaryDecodingError`` when the payload isn't a record of a registered event
-    ///   type, or holds bytes past the event's.
-    static func record(from payload: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> EventRecord {
-        var decoder = BinaryDecoder(payload)
-        let timestamp: Date = try decoder.decode()
-        let fileID: String = try decoder.decode()
-        let file: String? = try decoder.decode()
-        let function: String = try decoder.decode()
-        let line: Int = try decoder.decode()
-        let column: Int = try decoder.decode()
-        let name: String = try decoder.decode()
-        guard let registration = registry.registration(named: name) else { throw .invalidValue }
-        let event = try registration.decode(&decoder)
-        guard decoder.isAtEnd else { throw .invalidValue }
-        let location = SourceLocation(file: file ?? fileID, fileID: fileID, function: function, line: line, column: column)
-        return EventRecord(event: event, timestamp: timestamp, sourceLocation: location)
     }
 
     /// An encoder holding room for a frame's length and checksum, then `kind`'s byte.

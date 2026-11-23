@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Umbrella: `import Traffluent` imports every module.
+# Umbrella: `import Traffluent` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).
 swift_library(
     name = "Traffluent",
     srcs = glob(["**/*.swift"]),
@@ -35,6 +35,7 @@ docc_archive(
         "//Sources/Trackers:TrackersDocumentation",
         "//Sources/Checksums:ChecksumsDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
+        "//Sources/GRDBPersistence:GRDBPersistenceDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

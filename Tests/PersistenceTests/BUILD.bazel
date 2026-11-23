@@ -19,6 +19,7 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/Persistence",
+        "//Sources/GRDBPersistence",
         "//Sources/Checksums",
         "//Sources/Events",
         "//Sources/Trackers",
@@ -28,7 +29,13 @@ swift_library(
         "@swiftpkg_swift_system//:SystemPackage",
         "@swiftpkg_swift_property_based//:PropertyBased",
         "//Tests/TraffluentTestSupport",
-    ],
+    ] + select({
+        # Apple-only packages (APPLE_ONLY_PACKAGES in scripts/modules.py).
+        "@platforms//os:macos": [
+            "@swiftpkg_grdb.swift//:GRDB",
+        ],
+        "//conditions:default": [],
+    }),
 )
 
 # `bazel test` / `just test`: a standalone executable, fast to start and run in Bazel's sandbox.

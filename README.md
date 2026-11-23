@@ -171,6 +171,14 @@ version, is left untouched after a rollback. The store makes the log durable aga
 terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
 context.
 
+An app on Apple platforms that already keeps a GRDB database can keep its records there instead:
+`DatabaseStore(events:database:table:byteBound:)` (module `GRDBPersistence`, a product of its own
+that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a table
+name, creates the table with a migration of its own, and opens no second SQLite database. It makes
+the same promises as `SegmentStore`: each record is committed before `track` returns, a batch is
+marked before it goes out and its rows deleted once delivered, the table is bounded by its records'
+encoded bytes with the oldest dropped and reported, and records are encoded the same way.
+
 ## Modules
 
 | Module | Holds |
@@ -183,6 +191,7 @@ context.
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
+| `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
 
 ## Examples
 

@@ -1,15 +1,15 @@
 import Events
 
 /// The event types a store persists, found by type when appending and by name when recovering.
-struct EventRegistry: Sendable {
+package struct EventRegistry: Sendable {
     /// How one event type is written and read back.
-    struct Registration: Sendable {
+    package struct Registration: Sendable {
         /// The type's `Event.name`, which each of its records on disk carries.
-        let name: String
+        package let name: String
         /// Writes an event of this type.
-        let encode: @Sendable (any Event, inout BinaryEncoder) -> Void
+        package let encode: @Sendable (any Event, inout BinaryEncoder) -> Void
         /// Reads an event of this type.
-        let decode: @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
+        package let decode: @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
     }
 
     private let byType: [ObjectIdentifier: Registration]
@@ -18,7 +18,7 @@ struct EventRegistry: Sendable {
     /// The registry of `types`.
     ///
     /// - Precondition: No two of `types` share an `Event.name`.
-    init(_ types: [any (Event & BinaryCodable).Type]) {
+    package init(_ types: [any (Event & BinaryCodable).Type]) {
         var byType: [ObjectIdentifier: Registration] = [:]
         var byName: [String: Registration] = [:]
         for type in types {
@@ -34,12 +34,12 @@ struct EventRegistry: Sendable {
     }
 
     /// The registration of `type`, or `nil` when it isn't persisted.
-    func registration(of type: any Event.Type) -> Registration? {
+    package func registration(of type: any Event.Type) -> Registration? {
         byType[ObjectIdentifier(type)]
     }
 
     /// The registration of the type named `name`, or `nil` when none is.
-    func registration(named name: String) -> Registration? {
+    package func registration(named name: String) -> Registration? {
         byName[name]
     }
 

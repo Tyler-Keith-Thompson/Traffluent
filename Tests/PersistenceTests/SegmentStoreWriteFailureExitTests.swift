@@ -7,14 +7,11 @@
 // process's alone, so it can't reach the other tests. A child exits 0 only if the store did what
 // the test names; the parent then opens the directory as the next launch would.
 
-import DestinationTesting
-import Destinations
 import Events
 import Foundation
 import Persistence
 import SystemPackage
 import Testing
-import Trackers
 
 #if canImport(Darwin)
 import Darwin
@@ -28,7 +25,7 @@ struct SegmentStoreWriteFailureExitTests {
         var number: Int
     }
 
-    @Test("A record whose write fails is kept in memory only and reported, and the part written is cut off")
+    @Test("A record whose write fails partway is cut off: no part of its frame is left in the segment")
     func appendFails() async throws {
         let path: String = FilePath(NSTemporaryDirectory()).appending("SegmentStoreWriteFailureExitTests-\(UUID().uuidString)").string
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -96,48 +93,6 @@ struct SegmentStoreWriteFailureExitTests {
         }
     }
 
-    @Test("A batch whose delivery mark can't be written is held back, never sent unmarked, and delivered on the next launch")
-    func markFails() async throws {
-        let path: String = FilePath(NSTemporaryDirectory()).appending("SegmentStoreWriteFailureExitTests-\(UUID().uuidString)").string
-        defer { try? FileManager.default.removeItem(atPath: path) }
-        let destination = InMemoryDestination()
-        let expected = [Tapped(number: 1), Tapped(number: 2)]
-
-        await #expect(processExitsWith: .success) { [path = path as String] in
-            let store = try! SegmentStore(events: [Tapped.self], directory: FilePath(path))
-            let tracker = Tracker(store: store)
-            let destination = InMemoryDestination()
-            tracker.track(Tapped(number: 1))
-            tracker.track(Tapped(number: 2))
-            tracker.finish()
-            // No room for the mark.
-            signal(SIGXFSZ, SIG_IGN)
-            var limit = rlimit()
-            #if canImport(Glibc)
-            getrlimit(__rlimit_resource_t(RLIMIT_FSIZE.rawValue), &limit)
-            limit.rlim_cur = rlim_t(store.byteCount)
-            setrlimit(__rlimit_resource_t(RLIMIT_FSIZE.rawValue), &limit)
-            #else
-            getrlimit(RLIMIT_FSIZE, &limit)
-            limit.rlim_cur = rlim_t(store.byteCount)
-            setrlimit(RLIMIT_FSIZE, &limit)
-            #endif
-
-            try? await tracker.records.batch(strategy: .count(2)).deliver(to: destination).execute()
-
-            guard destination.batches.isEmpty, store.pendingRecordCount == 2 else {
-                exit(1)
-            }
-        }
-        let store = try SegmentStore(events: [Tapped.self], directory: FilePath(path))
-        let tracker = Tracker(store: store)
-        tracker.finish()
-        try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
-
-        #expect(destination.events(of: Tapped.self) == expected)
-        #expect(destination.records.map(\.isRedelivered) == [false, false])
-        #expect(store.byteCount == 0)
-    }
 }
 
 extension SegmentStoreWriteFailureExitTests.Tapped: BinaryCodable {

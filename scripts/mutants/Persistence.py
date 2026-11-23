@@ -29,6 +29,7 @@ R = "EventRegistry.swift"
 C = "StandardConformances.swift"
 D = "BinaryDecoder.swift"
 E = "BinaryEncoder.swift"
+N = "RecordEncoding.swift"
 
 MUTANTS = [
     # The format.
@@ -44,9 +45,9 @@ MUTANTS = [
     Mutant("validcountnotadvanced", F, "contents.validByteCount = offset", "", mode="stmt"),
     Mutant("marknotread", F, "contents.marked.insert(bytes.littleEndianUInt32(at: numberOffset))", "", mode="stmt"),
     Mutant("payloadwithkind", F, "start + 1..<payload.upperBound", "start..<payload.upperBound"),
-    Mutant("filealwaysnil", F, "encoder.encode(location.file == location.fileID ? nil : location.file)", "encoder.encode(String?.none)", mode="stmt"),
-    Mutant("filefromfileid", F, "file ?? fileID", "fileID"),
-    Mutant("trailingbytesaccepted", F, "guard decoder.isAtEnd else { throw .invalidValue }", "", mode="stmt"),
+    Mutant("filealwaysnil", N, "encoder.encode(location.file == location.fileID ? nil : location.file)", "encoder.encode(String?.none)", mode="stmt"),
+    Mutant("filefromfileid", N, "file ?? fileID", "fileID"),
+    Mutant("trailingbytesaccepted", N, "guard decoder.isAtEnd else { throw .invalidValue }", "", mode="stmt"),
     Mutant("lengthnotwritten", F, "encoder.overwriteLittleEndian(length, at: 0)", "", mode="stmt"),
     Mutant("checksumnotwritten", F, "encoder.overwriteLittleEndian(checksum, at: 4)", "", mode="stmt"),
     Mutant("markoffbyone", F, "encoder.encode(index)", "encoder.encode(index + 1)", mode="stmt"),

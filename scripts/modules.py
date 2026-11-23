@@ -48,6 +48,10 @@ PACKAGES = [
     # and WASI. Foundation's FileHandle was rejected: it has no positioned truncate on every
     # platform and its errors are untyped.
     ("swift-system", "https://github.com/apple/swift-system", "1.9.0"),
+    # DatabaseStore (GRDBPersistence): keeps records in a table of an app's own GRDB database, for
+    # apps that already ship GRDB. Apple platforms only (APPLE_ONLY_PACKAGES): GRDB's Linux support
+    # isn't maintained and it has no Wasm support, so SegmentStore stays the default.
+    ("grdb.swift", "https://github.com/groue/GRDB.swift", "7.12.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -57,7 +61,7 @@ PACKAGES = [
 # identity. SwiftPM links their products on Apple platforms only and Bazel on macOS only (a
 # `select`), so the same targets still build on Linux, where the code using them is left out by
 # `#if canImport`. //:package_swift_test leaves their products out of its comparison.
-APPLE_ONLY_PACKAGES = []
+APPLE_ONLY_PACKAGES = ["grdb.swift"]
 
 # Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`), by
 # name. Bazel runs them on macOS alone: elsewhere they are incompatible, so `bazel test //...` skips
@@ -82,6 +86,7 @@ MODULES = [
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
     ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
+    ("GRDBPersistence", "Persistence", "DatabaseStore: a RecordStore that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only.", ["Events", "Persistence", "grdb.swift/GRDB", "swift-log/Logging"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -89,6 +94,11 @@ MODULES = [
 # one must be one too. A test target that depends on one, or on a Bazel label (`//tools/...`), runs
 # in the simulator as an ios_unit_test, and Package.swift leaves it out as well.
 IOS_MODULES = []
+
+# Modules the umbrella leaves out: each is a product of its own that an adopter adds by name, as
+# it pulls in a package the rest of the library doesn't need (GRDB). The umbrella's docs still
+# link to them.
+NON_UMBRELLA_MODULES = ["GRDBPersistence"]
 IOS_MINIMUM = "18.0"
 
 # Executables: (name, description, dependencies). Each is an `.executableTarget` and product in
@@ -107,7 +117,7 @@ TEST_TARGETS = [
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("PersistenceTests", ["Persistence", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation", "swift-system/SystemPackage"]),
 ]
 
@@ -196,6 +206,8 @@ def check():
         assert not simulator_test(name), f"{name} runs in the simulator, which PERFORMANCE_TESTS doesn't support"
     for name in IOS_MODULES:
         assert name in names, f"IOS_MODULES names unknown module {name}"
+    for name in NON_UMBRELLA_MODULES:
+        assert name in names, f"NON_UMBRELLA_MODULES names unknown module {name}"
     for name, _, _, deps in MODULES:
         if name not in IOS_MODULES:
             for d in deps:
@@ -237,6 +249,11 @@ def umbrella():
 def package_modules():
     """MODULES that Package.swift declares: every one but the iOS modules."""
     return [m for m in MODULES if m[0] not in IOS_MODULES]
+
+
+def umbrella_modules():
+    """The modules `import <PROJECT>` imports: every one Package.swift declares but the opt-in ones."""
+    return [m[0] for m in package_modules() if m[0] not in NON_UMBRELLA_MODULES]
 
 
 def package_tests():
@@ -376,13 +393,13 @@ def package_swift():
     for name, _, deps in EXECUTABLES:
         dl = ", ".join(spm_dep(d) for d in deps)
         lines.append(f'    .executableTarget(name: "{name}", dependencies: [{dl}]{exclude_arg(f"Sources/{name}")}),')
-    all_deps = ", ".join(f'"{m[0]}"' for m in package_modules())
+    all_deps = ", ".join(f'"{n}"' for n in umbrella_modules())
     support_deps = ", ".join(spm_dep(d) for d in TEST_SUPPORT_DEPENDENCIES)
     support_deps_arg = f"dependencies: [{support_deps}], " if TEST_SUPPORT_DEPENDENCIES else ""
     if umbrella():
         lines += [
             "",
-            f"    // Umbrella: `import {PROJECT}` imports every module.",
+            f"    // Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).",
             f'    .target(name: "{PROJECT}", dependencies: [{all_deps}], exclude: bazelFiles),',
         ]
     lines += [
@@ -437,7 +454,8 @@ def dependency_manifest():
     )
 
 
-def build_bazel(name, description, deps):
+def build_bazel(name, description, deps, doc_modules=None):
+    """A module's BUILD.bazel; its docs link to `doc_modules`' archives, its first-party `deps` unless given."""
     deps_attr = bazel_deps(deps)
     defines_attr = (
         "    # Mock<Protocol> types from @Mockable, in debug builds only (MOCKING in scripts/modules.py).\n"
@@ -460,7 +478,7 @@ def build_bazel(name, description, deps):
             '    visibility = ["//visibility:public"],\n'
             ")\n"
         )
-    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in deps if "/" not in d)
+    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in (deps if doc_modules is None else doc_modules) if "/" not in d)
     doc_deps_attr = f"    deps = [\n{doc_deps}    ],\n" if doc_deps else ""
     return (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
@@ -774,12 +792,12 @@ def main():
     write(os.path.join(ROOT, "Tests", TEST_SUPPORT, "BUILD.bazel"), test_support_build_bazel())
     write(os.path.join(ROOT, "tools", "executables.bzl"), executables_bzl())
     write(os.path.join(ROOT, "tools", "performance_tests.bzl"), performance_tests_bzl())
-    names = [m[0] for m in package_modules()]
+    names = umbrella_modules()
     if umbrella():
         directory = os.path.join(ROOT, "Sources", PROJECT)
-        write(os.path.join(directory, "BUILD.bazel"), build_bazel(PROJECT, f"Umbrella: `import {PROJECT}` imports every module.", names))
+        write(os.path.join(directory, "BUILD.bazel"), build_bazel(PROJECT, f"Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).", names, [m[0] for m in package_modules()]))
         write(os.path.join(directory, f"{PROJECT}.swift"),
-              f"// GENERATED by scripts/modules.py.\n//\n// Umbrella: `import {PROJECT}` imports every module.\n\n"
+              f"// GENERATED by scripts/modules.py.\n//\n// Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES in\n// scripts/modules.py), which are products of their own.\n\n"
               + "".join(f"@_exported import {n}\n" for n in names))
     write(os.path.join(ROOT, "swift", "Package.swift"), dependency_manifest())
     write(os.path.join(ROOT, "Benchmarks", "Package.swift"), benchmarks_package_swift())
