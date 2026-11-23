@@ -116,6 +116,12 @@ To see events beside your logs or traces, deliver to `LoggerDestination(logger:)
 module of its own, so only apps that use swift-log or swift-distributed-tracing that way link it.
 A span event joins the span active when the event was tracked, even if delivery runs later.
 
+To send batches to a server, deliver to `HTTPDestination(endpoint:headerFields:encoder:)` (module
+`HTTPDestinations`). It posts each batch as one request whose body is what your `BatchEncoder`
+writes for it, so events need no `Codable` conformance and the wire format is yours. A failed send
+is logged and dropped, without holding up the other destinations. It sends with `URLSession` by
+default, or through any `HTTPTransport` you pass as `transport:`.
+
 To test what your code tracks, deliver its tracker's records to an `InMemoryDestination` (module
 `DestinationTesting`; it depends on no test framework) and read it after the delivery:
 `events(of: SignedUp.self)`, `records` or `batches`.
@@ -195,6 +201,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
+| `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder`, through an `HTTPTransport`; `URLSessionTransport`, the default transport (not on WASI) |
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |

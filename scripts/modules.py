@@ -52,6 +52,11 @@ PACKAGES = [
     # apps that already ship GRDB. Apple platforms only (APPLE_ONLY_PACKAGES): GRDB's Linux support
     # isn't maintained and it has no Wasm support, so SegmentStore stays the default.
     ("grdb.swift", "https://github.com/groue/GRDB.swift", "7.12.0"),
+    # HTTPDestination's requests and responses (HTTPTypes), and the URLSession calls its default
+    # transport makes (HTTPTypesFoundation). Foundation's URLRequest was rejected for the transport
+    # protocol: it lives in FoundationNetworking on Linux and doesn't exist on WASI, where HTTPTypes,
+    # pure Swift, still builds.
+    ("swift-http-types", "https://github.com/apple/swift-http-types", "1.8.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -82,6 +87,7 @@ MODULES = [
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
+    ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport; URLSessionTransport, the default transport off WASI.", ["Events", "Destinations", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.", ["Events", "Persistence", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
@@ -115,6 +121,7 @@ TEST_TARGETS = [
     ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
+    ("HTTPDestinationsTests", ["HTTPDestinations", "DestinationTesting", "Destinations", "Events", "Trackers", "afluent/Afluent", "swift-http-types/HTTPTypes"]),
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),

@@ -37,6 +37,7 @@ try await delivery.execute()
 - ``/DestinationTesting``
 - ``/LoggingDestinations``
 - ``/TracingDestinations``
+- ``/HTTPDestinations``
 - ``/Persistence``
 - ``/GRDBPersistence``
 - ``/Checksums``

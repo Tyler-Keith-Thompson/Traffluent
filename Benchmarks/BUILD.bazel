@@ -19,6 +19,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/Destinations",
     "Sources/Events",
     "Sources/GRDBPersistence",
+    "Sources/HTTPDestinations",
     "Sources/LoggingDestinations",
     "Sources/Persistence",
     "Sources/TracingDestinations",

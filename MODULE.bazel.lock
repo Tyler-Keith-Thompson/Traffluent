@@ -553,7 +553,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 54a7dc1cfe561495cfa0b7a5c1380a635cf3ca06c0734bdec01b8fcc0a3c1489"
+          "FILE:@@//swift/Package.resolved 75e83aa25d38617481592e21fb1e908c0cf31e69144e9606cedc1ad9f35b03e4"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -568,7 +568,8 @@
                 "@swiftpkg_swift_clocks//:pkg_info.json": "swift-clocks",
                 "@swiftpkg_swift_concurrency_extras//:pkg_info.json": "swift-concurrency-extras",
                 "@swiftpkg_swift_system//:pkg_info.json": "swift-system",
-                "@swiftpkg_grdb.swift//:pkg_info.json": "grdb.swift"
+                "@swiftpkg_grdb.swift//:pkg_info.json": "grdb.swift",
+                "@swiftpkg_swift_http_types//:pkg_info.json": "swift-http-types"
               }
             }
           },
@@ -588,6 +589,7 @@
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_concurrency_extras",
                 "swiftpkg_swift_distributed_tracing",
+                "swiftpkg_swift_http_types",
                 "swiftpkg_swift_issue_reporting",
                 "swiftpkg_swift_log",
                 "swiftpkg_swift_property_based",
@@ -767,6 +769,25 @@
               "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
             }
           },
+          "swiftpkg_swift_http_types": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_http_types",
+              "commit": "bff4b6903cdc99dda49649dd52f46c11cfd3ed50",
+              "remote": "https://github.com/apple/swift-http-types",
+              "version": "1.8.0",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
+            }
+          },
           "swiftpkg_swift_issue_reporting": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -798,6 +819,7 @@
             "swiftpkg_swift_concurrency_extras",
             "swiftpkg_swift_system",
             "swiftpkg_grdb.swift",
+            "swiftpkg_swift_http_types",
             "swift_deps_info",
             "swift_package"
           ],
