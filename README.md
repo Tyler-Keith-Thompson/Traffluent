@@ -395,6 +395,45 @@ neither the tracker nor its store writes it to disk (a store keeps no record's c
 next launch's tracker starts a new session with a new identifier. Traffluent keeps no identifier
 that links one session to another.
 
+### Standard context
+
+Every event can carry what most analytics want beside it: the app, the device, the operating
+system, the locale and the network connection (module `StandardContext`: every platform). Each is an
+enricher of its own, so nothing is added until the app adds it:
+
+```swift
+import StandardContext
+
+let tracker = Tracker(enrichers: [.application(), .device(), .operatingSystem(), .locale(), .network()])
+tracker.track(SignedUp(plan: "pro"))  // its record's context[OperatingSystemKey.self]?.name is "iOS" on an iPhone
+```
+
+Each sets a typed key whose value is a small struct a destination reads from each record's context:
+`ApplicationKey` (bundle identifier, version and build), `DeviceKey` (model identifier and form
+factor), `OperatingSystemKey` (name and version), `LocaleKey` (a `Locale`, with its identifier,
+language and region) and `NetworkKey` (Wi-Fi, cellular, wired Ethernet, another kind, or offline).
+The app, device, system and locale are read once, as the enricher is made, never per event. The
+network connection changes, so its enricher starts an `NWPathMonitor` of its own, which stops when
+the last tracker holding the enricher goes, and sets the latest connection on each event.
+
+Off Apple platforms there is no device and no path monitor, so those enrichers set nothing, and a
+process there usually has no Info.plist: a server or tool passes its own app.
+
+```swift
+let tracker = Tracker(enrichers: [
+    .application(ApplicationKey.Value(bundleIdentifier: "com.example.server", version: "1.2.0", build: "42")),
+    .operatingSystem(),
+])
+```
+
+`.vendorIdentifier()`, made on the main actor, adds the platform's `identifierForVendor` as
+`VendorIdentifierKey`: the operating system owns it, gives it to every app of one vendor on the
+device, and resets it once they are all removed. Of the identifiers Traffluent offers, it is the
+only one that outlives a session. Nothing carries it unless the app adds the enricher, and the app
+owns that decision and the user's consent to it. Traffluent never writes it to disk nor makes one
+up: on macOS and Linux, which have none, records carry no key. It is a `Sensitive` value, so a
+destination given `redactingSensitiveValues()` never receives it.
+
 ### Consent
 
 Each event type names the purpose it is collected for, its `consentCategory`: `.analytics` unless
@@ -746,6 +785,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `AutomaticControlTracking` | `trackControlsAutomatically(_:)`, on a `UIWindowScene`: opt-in control activations, which track `ControlActivated` through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a closure given each `DiscoveredControl`, with its screen as `ScreenKey`; SwiftUI's controls left to `trackOnTap(_:)`; without swizzling; `ControlActivated` on every platform, the tracking iOS, iPadOS, tvOS, visionOS and Mac Catalyst only |
 | `LifecycleTracking` | `trackLifecycle(kinds:version:versionStore:notificationCenter:)`, on a `Tracker`: opt-in lifecycle events, `ApplicationInstalled`, `ApplicationUpdated`, `ApplicationOpened`, `ApplicationBackgrounded` and `ApplicationTerminated`, from the platform's application notifications, installs and updates decided from the version a `VersionStore` keeps (`FileVersionStore`, `InMemoryVersionStore`); on backgrounding, the tracker's records made durable and `LifecycleBatchStrategy`'s batches flushed; each kind can be turned off; every platform, Linux tracking only its start and finish |
 | `Sessions` | `Enricher.sessions(timeout:kinds:)`: opt-in sessions, an enricher that stamps every record's context with its `SessionKey`, a random UUID held in memory only, and starts a new session when an event comes after the timeout's inactivity, measured between the events' timestamps, tracking `SessionEnded(duration:)` and `SessionStarted` before it; each kind can be turned off while the key stays; every platform |
+| `StandardContext` | Opt-in enrichers of the context most analytics want: `Enricher.application()`, `device()`, `operatingSystem()`, `locale()`, `network()` and `vendorIdentifier()`, each setting its typed key (`ApplicationKey`, `DeviceKey`, `OperatingSystemKey`, `LocaleKey`, `NetworkKey`, `VendorIdentifierKey`); static values read once, as the enricher is made; the connection from an `NWPathMonitor` the enricher owns; the platform's `identifierForVendor`, sensitive, never stored or made up; every platform, the device, network and vendor identifier on Apple platforms only |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

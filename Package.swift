@@ -31,6 +31,7 @@ let products: [Product] = [
     .library(name: "AutomaticControlTracking", targets: ["AutomaticControlTracking"]),
     .library(name: "LifecycleTracking", targets: ["LifecycleTracking"]),
     .library(name: "Sessions", targets: ["Sessions"]),
+    .library(name: "StandardContext", targets: ["StandardContext"]),
     .library(name: "Checksums", targets: ["Checksums"]),
     .library(name: "Persistence", targets: ["Persistence"]),
     .library(name: "GRDBPersistence", targets: ["GRDBPersistence"]),
@@ -74,6 +75,7 @@ let targets: [Target] = [
     .target(name: "AutomaticControlTracking", dependencies: ["Events", "Persistence", "Trackers", "SwiftUITracking", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .target(name: "LifecycleTracking", dependencies: ["Events", "Persistence", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "Sessions", dependencies: ["Events", "Persistence", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .target(name: "StandardContext", dependencies: ["Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     // Persistence
     .target(name: "Checksums", exclude: bazelFiles),
     .target(name: "Persistence", dependencies: ["Events", "Checksums", .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
@@ -90,7 +92,7 @@ let targets: [Target] = [
     .plugin(name: "CheckTrackingPlan", capability: .command(intent: .custom(verb: "check-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan."))),
 
     // Umbrella: `import Traffluent` imports every module.
-    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "AutomaticScreenTracking", "AutomaticControlTracking", "LifecycleTracking", "Sessions", "Checksums", "Persistence"], exclude: bazelFiles),
+    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "AutomaticScreenTracking", "AutomaticControlTracking", "LifecycleTracking", "Sessions", "StandardContext", "Checksums", "Persistence"], exclude: bazelFiles),
 
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
@@ -112,6 +114,7 @@ let targets: [Target] = [
     .testTarget(name: "AutomaticControlTrackingTests", dependencies: ["AutomaticControlTracking", "Events", "Persistence", .product(name: "PropertyBased", package: "swift-property-based")], exclude: bazelFiles),
     .testTarget(name: "LifecycleTrackingTests", dependencies: ["LifecycleTracking", "Events", "Persistence", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based")], exclude: bazelFiles),
     .testTarget(name: "SessionsTests", dependencies: ["Sessions", "Events", "Persistence", "Trackers", "LifecycleTracking", .product(name: "Clocks", package: "swift-clocks"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SystemPackage", package: "swift-system"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "StandardContextTests", dependencies: ["StandardContext", "Events", "Persistence", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SystemPackage", package: "swift-system"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),

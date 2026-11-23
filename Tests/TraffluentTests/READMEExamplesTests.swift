@@ -155,6 +155,35 @@ struct READMEExamplesTests {
         #expect(signedUp.context[SessionKey.self] == started.context[SessionKey.self])
     }
 
+    @Test("Standard context")
+    func standardContext() async throws {
+        let tracker = Tracker(enrichers: [.application(), .device(), .operatingSystem(), .locale(), .network()])
+        tracker.track(SignedUp(plan: "pro"))  // its record's context[OperatingSystemKey.self]?.name is "iOS" on an iPhone
+        await tracker.finish()
+
+        var records = tracker.records.makeAsyncIterator()
+        let record = try #require(await records.next())
+        #expect(record.context[ApplicationKey.self] == ApplicationKey.Value.current)
+        #expect(record.context[OperatingSystemKey.self] == OperatingSystemKey.Value.current)
+        #expect(record.context[DeviceKey.self] == DeviceKey.Value.current)
+        #expect(record.context[LocaleKey.self]?.identifier == Locale.current.identifier)
+    }
+
+    @Test("Standard context on a server")
+    func standardContextOnAServer() async throws {
+        let tracker = Tracker(enrichers: [
+            .application(ApplicationKey.Value(bundleIdentifier: "com.example.server", version: "1.2.0", build: "42")),
+            .operatingSystem(),
+        ])
+        tracker.track(SignedUp(plan: "pro"))
+        await tracker.finish()
+
+        var records = tracker.records.makeAsyncIterator()
+        let record = try #require(await records.next())
+        #expect(record.context[ApplicationKey.self]?.version == "1.2.0")
+        #expect(record.context[DeviceKey.self] == nil)
+    }
+
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

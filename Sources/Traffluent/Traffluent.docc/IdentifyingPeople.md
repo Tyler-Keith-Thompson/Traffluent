@@ -4,16 +4,23 @@ Traffluent knows people only by a pseudonymous session. An identifier that outli
 
 ## Overview
 
-The one identifier Traffluent ships is the session's: `Enricher.sessions(timeout:kinds:)` (module
+The identifier Traffluent makes is the session's: `Enricher.sessions(timeout:kinds:)` (module
 ``/Sessions``) stamps every record's context with its `SessionKey`, a random UUID derived from
 nothing and held in the enricher's memory only. It is never written to disk, and the next launch
 starts a new session with a new identifier.
 
-Nothing else identifies the person. Traffluent keeps no persisted anonymous or device identifier,
-and has no call that identifies a user or aliases one identifier to another, so nothing it adds
-links one session to the next. An app that wants such a link, such as its own account identifier,
-adds it with an enricher of its own, and owns what that takes: where the identifier is stored,
-when it is cleared, and the user's consent to it.
+Nothing else identifies the person unless the app asks. Traffluent keeps no persisted anonymous or
+device identifier, and has no call that identifies a user or aliases one identifier to another.
+The one identifier it offers that outlives a session is the operating system's own:
+`Enricher.vendorIdentifier()` (module ``/StandardContext``) adds the platform's
+`identifierForVendor` as `VendorIdentifierKey`, a `Sensitive` value. The system owns it, gives it
+to every app of one vendor on the device and resets it once they are all removed; Traffluent reads
+it, never stores it and never makes one up where the system has none, as on macOS and Linux. Like
+your own identifier below, adding it is the app's decision, its consent included.
+
+An app that wants another link, such as its own account identifier, adds it with an enricher of
+its own, and owns what that takes: where the identifier is stored, when it is cleared, and the
+user's consent to it.
 
 ### Add your identifier
 
