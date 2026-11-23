@@ -6,9 +6,11 @@ CI builds, so a stale manifest would pass unnoticed and only SwiftPM users would
 
 `swiftpm_manifest_test` reads each first-party Swift module and its direct dependencies off the
 analyzed graph (through an aspect, so nothing is compiled), writes them as one line per module,
-and compares that with the same lines pulled out of Package.swift's `.target`, `.executableTarget`
-and `.testTarget` entries. A missing target, an extra one or a different dependency list fails the
-test.
+and compares that with the same lines pulled out of Package.swift's `.target`, `.executableTarget`,
+`.macro` and `.testTarget` entries. A missing target, an extra one or a different dependency list
+fails the test. It also compares the manifest's `.library` products with the modules Bazel says the package
+offers, so a product dropped from or added to the list fails it too. Command plugins (`.plugin`
+targets and products, PLUGINS in scripts/modules.py) are SwiftPM's alone, so neither side has them.
 """
 
 _ModuleDependencies = provider(
@@ -45,7 +47,8 @@ _module_dependencies_aspect = aspect(
 )
 
 # Pulls one `Module: Dependency ...` line out of every `.target(name:`, `.executableTarget(name:`,
-# `.testTarget(name:` and `.macro(name:` entry, writing a product dependency as `identity/Product`, as the aspect does.
+# `.macro(name:` and `.testTarget(name:` entry, writing a product dependency as `identity/Product`,
+# as the aspect does.
 # A product linked on Apple platforms only (`condition: .when(platforms: applePlatforms)`,
 # APPLE_ONLY_PACKAGES in scripts/modules.py) is in Bazel's graph on macOS alone, so it is left out
 # of both sides.
@@ -78,37 +81,56 @@ grep -E '^ *\\.(target|executableTarget|testTarget|macro)\\(name: "' "$manifest"
         | awk '{ printf " %s", $0 }')
     printf '%s:%s\\n' "$name" "$deps"
 done | LC_ALL=C sort > "$actual"
+products="$3"
+offered="${TEST_TMPDIR:-/tmp}/offered.txt"
+grep -oE '^ *\\.library\\(name: "[^"]*"' "$manifest" | sed -E 's/.*name: "([^"]*)"/\\1/' | LC_ALL=C sort > "$offered"
+status=0
 if ! diff -u "$bazel" "$actual"; then
     echo
     echo "Package.swift disagrees with the Bazel graph (- Bazel, + Package.swift)."
-    echo "Run \\`just modules\\` and commit Package.swift together with the BUILD.bazel files."
-    exit 1
+    status=1
 fi
+if ! diff -u "$products" "$offered"; then
+    echo
+    echo "Package.swift's library products differ from the modules the package offers (- Bazel, + Package.swift)."
+    status=1
+fi
+if [ "$status" -ne 0 ]; then
+    echo "Run \\`just modules\\` and commit Package.swift together with the BUILD.bazel files."
+fi
+exit "$status"
 """
 
 def _swiftpm_manifest_test_impl(ctx):
     lines = depset(transitive = [module[_ModuleDependencies].lines for module in ctx.attr.modules])
     expected = ctx.actions.declare_file(ctx.label.name + ".expected.txt")
     ctx.actions.write(expected, "\n".join(sorted(lines.to_list())) + "\n")
+    products = ctx.actions.declare_file(ctx.label.name + ".products.txt")
+    names = sorted([product[_ModuleDependencies].name for product in ctx.attr.products])
+    ctx.actions.write(products, "".join([name + "\n" for name in names]))
     checker = ctx.actions.declare_file(ctx.label.name + ".check.sh")
     ctx.actions.write(checker, _SCRIPT, is_executable = True)
     runner = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(
         runner,
-        '#!/bin/sh\nexec "{}" "{}" "{}"\n'.format(checker.short_path, ctx.file.manifest.short_path, expected.short_path),
+        '#!/bin/sh\nexec "{}" "{}" "{}" "{}"\n'.format(checker.short_path, ctx.file.manifest.short_path, expected.short_path, products.short_path),
         is_executable = True,
     )
     return [DefaultInfo(
         executable = runner,
-        runfiles = ctx.runfiles(files = [checker, expected, ctx.file.manifest]),
+        runfiles = ctx.runfiles(files = [checker, expected, products, ctx.file.manifest]),
     )]
 
 swiftpm_manifest_test = rule(
     implementation = _swiftpm_manifest_test_impl,
-    doc = "Fails when Package.swift's targets and dependencies differ from the Bazel graph's.",
+    doc = "Fails when Package.swift's targets, dependencies or library products differ from the Bazel graph's.",
     attrs = {
         "manifest": attr.label(allow_single_file = True, mandatory = True),
         "modules": attr.label_list(aspects = [_module_dependencies_aspect], mandatory = True),
+        "products": attr.label_list(
+            aspects = [_module_dependencies_aspect],
+            doc = "The modules Package.swift offers as `.library` products.",
+        ),
     },
     test = True,
 )

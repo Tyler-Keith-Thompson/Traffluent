@@ -54,20 +54,45 @@ swift.org toolchain through swiftly (`swiftly install 6.4.3`); see `Fuzz/README.
 external packages and platforms. `just modules` regenerates `Package.swift`, every `BUILD.bazel`,
 the umbrella module and `swift/Package.swift` from it. Never edit the generated files by hand;
 `//:package_swift_test` fails when `Package.swift` disagrees with the Bazel graph.
+`just modules` refuses a table or function defined twice in it, which a template update can merge
+in beside the project's own: keep one definition, holding the project's rows, and delete the other.
 
 - Add a module: a row in `MODULES` (name, group, description, dependencies), then `just modules`.
 - Add a test target: a row in `TEST_TARGETS`. A target with a `Performance/` directory of Swift
   sources must be listed in `PERFORMANCE_TESTS`, and the reverse.
-- Add a compiler plugin (macros): a row in `MACROS`, listed among the dependencies of the module
-  that declares its macros (`EventMacros` for `EventMacrosPlugin`), which keeps swift-syntax out of
-  every other module. A test target that lists the plugin tests its expansions with
-  `SwiftSyntaxMacrosGenericTestSupport` (Swift Testing, through `failureHandler:`); under Bazel it
-  links the plugin's sources compiled as a library in the test's package (see `MACROS`).
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
-- Add a command plugin: a row in `PLUGINS` (name, verb, description, reason for writing to the
-  package, or `None` for one that only reads) and its sources in `Plugins/<name>`. Only SwiftPM builds it (`swift package <verb>`), so
-  keep it thin and prove it by running it on a package, as `just example-tracking-plan` does.
+- Add an example module (a demo app's views, a sample server's routes): a row in `MODULES` and its
+  name in `EXAMPLE_MODULES`, then `just modules`. It builds and tests like any module, but has no
+  library product, umbrella import or DocC archive, so neither it nor its dependencies ship. Only
+  executables, test targets and other example modules may depend on it (`check()` enforces it).
+- Offer a module on its own but not through `import Traffluent` (a test-support back end, such as
+  an in-memory store adopters use in their tests): its name in `NON_UMBRELLA_MODULES` too, then
+  `just modules`. It keeps its library product and DocC archive; only the umbrella leaves it out.
+  The umbrella catalog's topic list is hand-written: list it there under a heading of its own, not
+  among the production modules.
+- Add a macro: its compiler plugin is a row in `MACROS` (name, group, description, and only
+  package products as dependencies: swift-syntax's, with `swift-syntax` in `PACKAGES`), its sources
+  in `Sources/<Plugin>/` (an `@main` `CompilerPlugin` listing the macro types), then `just modules`
+  and `just resolve`. The module that declares the macros (`#externalMacro(module: "<Plugin>",
+  type: ...)`) lists the plugin among its dependencies: Package.swift gets a `.macro` target, Bazel
+  a `swift_compiler_plugin` in that module's `plugins`. The plugin has no product, docs or umbrella
+  import; adopters import the declaring module, and build swift-syntax with it, so when the package
+  has an umbrella, consider `NON_UMBRELLA_MODULES` for it. A test target that lists the plugin tests
+  its expansions (`assertMacroExpansion` from `SwiftSyntaxMacrosGenericTestSupport`, with
+  `Issue.record` as its failure handler); one that lists the declaring module tests the expanded
+  code. A source that must not compile (a macro's diagnostic as the compiler reports it) is a
+  `swift_compile_failure_test` (`tools/compile_failure_test.bzl`) in `Tests/CompileFailures`, a
+  hand-written BUILD.bazel no Package.swift target holds, with a control that compiles.
+  A plugin takes planted bugs like a module (`scripts/mutants/<Plugin>.py`), with its expansion
+  tests as the spec's `TESTS`.
+- Add a command plugin (`swift package <verb>`): a row in `PLUGINS` (name, verb, description, and
+  the reason it writes to the package directory, or `None` when it writes nothing there), its
+  sources in `Plugins/<name>/` (an `@main` `CommandPlugin`), then `just modules`. Package.swift gets
+  a `.plugin` target and product; Bazel builds none of it, so no test reaches the plugin. Keep it
+  thin, its logic in a module or an executable it builds and runs, and run it on the package
+  (`swift package --allow-writing-to-package-directory <verb>`) after a change to it, as
+  `just example-tracking-plan` does.
 - A library module that imports Swift Testing (a test helper adopters add to their test targets,
   like `TrackingPlanTesting`) goes in `TESTING_MODULES` too: Bazel finds Testing only on the
   developer search paths, which the generator then gives it.
@@ -82,6 +107,15 @@ the umbrella module and `swift/Package.swift` from it. Never edit the generated 
 - A package only Apple platforms build (Objective-C, a wrapper of an Apple framework) goes in
   `APPLE_ONLY_PACKAGES` too: its products are linked on Apple platforms only, so the targets still
   build on Linux, and the code that uses them sits under `#if canImport(...)`.
+- Raise the Swift floor (a dependency's manifest needs a newer Swift): set `SWIFT` (every
+  manifest's tools version, CI's and the Docker image's Swift, the minimum the docs state) and
+  `SWIFT_TOOLCHAIN` (the swiftly release for fuzzing, WebAssembly and Embedded Swift) in
+  `scripts/modules.py`, then `just modules`. It writes them into the generated manifests and
+  replaces the previous ones in every other file that names them (`SWIFT_SITES`), from the record
+  in `tools/swift_version.bzl`. Never edit a version in those files by hand. `just template-update`
+  keeps the project's versions, and says when the template's have passed them.
+  CI needs a `swift-bazel` image of the new version, published from the project template's
+  `ci-image/build.sh`.
 - A module name takes a `Module` suffix only when it would otherwise equal its main type's name
   (`GreetingModule` would hold `Greeting`). No catch-all modules ("Core", "Utilities").
 

@@ -14,6 +14,8 @@ MANIFESTS = [
 
 # Every target directory SwiftPM needs to load the root manifest.
 LIBRARY_DIRECTORIES = [
+    "Plugins/CheckTrackingPlan",
+    "Plugins/ExportTrackingPlan",
     "Sources/Checksums",
     "Sources/DestinationTesting",
     "Sources/Destinations",

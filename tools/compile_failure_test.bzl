@@ -8,6 +8,20 @@ failure, keeps a fixture that fails for another reason (a missing module, a typo
 With no `expected_errors` it passes only when the source compiles: a control, which shows that
 the search paths and the plugin work.
 
+Fixtures and their tests live in `Tests/CompileFailures` (hand-written BUILD.bazel), which the root
+BUILD.bazel leaves out of the test bundles by name and no Package.swift target holds:
+
+    swift_compile_failure_test(
+        name = "NonCodableProperty",
+        size = "small",
+        src = "NonCodableProperty.swift",
+        expected_errors = ["error: ..."],
+        plugin = "//Sources/<Plugin>",
+        plugin_module_name = "<Plugin>",
+        tags = ["debug-only"],
+        deps = ["//Sources/<Module>"],
+    )
+
 The compiler is the host's: `xcrun swiftc` on macOS (the Xcode that xcode-select names, which builds
 the deps too), `swiftc` on the PATH elsewhere, as in CI's image. It is a test rather than a build
 action because a build action that must fail can't be cached as an output.

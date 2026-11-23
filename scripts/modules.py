@@ -2,7 +2,7 @@
 """The module graph, written once.
 
 Package.swift, swift/Package.swift, every Sources/*/BUILD.bazel and Tests/*/BUILD.bazel, the
-umbrella module, tools/performance_tests.bzl, tools/executables.bzl and tools/macros.bzl are generated from the tables below, so SwiftPM
+umbrella module, tools/performance_tests.bzl, tools/executables.bzl, tools/examples.bzl, tools/macros.bzl and tools/swift_version.bzl are generated from the tables below, so SwiftPM
 and Bazel cannot drift. Run `just modules` after editing them. `//:package_swift_test` fails when
 Package.swift disagrees with the Bazel graph.
 
@@ -11,7 +11,12 @@ would otherwise share a name with its main type (`GreetingModule` would hold `Gr
 catch-all modules ("Core", "Utilities").
 """
 
+import ast
+import collections
+import glob
 import os
+import re
+import sys
 
 # The package, umbrella module and test-support module take the project's name. A package whose
 # main module takes the project's name (`import Traffluent` is that module, not an umbrella) lists
@@ -110,30 +115,26 @@ MODULES = [
     ("TrackingPlanTesting", "Schema", "expectTrackingPlan(_:matches:): records a Swift Testing issue with the check's report when an app's events no longer match its committed tracking plan.", ["TrackingPlans"]),
 ]
 
-# Compiler plugins holding macros: (name, group, description, dependencies). A module lists one
-# among its dependencies to declare its macros: SwiftPM takes it as a dependency, Bazel as a
-# plugin, which rules_swift loads for that module and the modules that depend on it directly. A
-# plugin is no library: it has no product, no docs and no place in the umbrella. A test target
-# lists one to test its expansions: SwiftPM links the plugin's module into the tests, and Bazel
-# links `<name>Library`, the same sources compiled as a library in the test's package, since
-# rules_swift builds a swift_test's plugin dependency for the host and loads it as a plugin, not as
-# a module. (In the plugin's own package the library's swiftmodule would collide with the plugin's.)
-MACROS = [
-    ("EventMacrosPlugin", "Schema", "The @Event macro's implementation: the extension it adds to an event's struct.", [
-        "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros",
-        "swift-syntax/SwiftCompilerPlugin", "swift-syntax/SwiftDiagnostics",
-    ]),
-]
-
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
 # simulator; Package.swift, the umbrella and the docs leave them out, and a module that depends on
 # one must be one too. A test target that depends on one, or on a Bazel label (`//tools/...`), runs
 # in the simulator as an ios_unit_test, and Package.swift leaves it out as well.
 IOS_MODULES = []
+IOS_MINIMUM = "18.0"
 
-# Modules the umbrella leaves out: each is a product of its own that an adopter adds by name, as
-# it pulls in a package the rest of the library doesn't need (GRDB, swift-syntax). The umbrella's docs still
-# link to them.
+# Example modules, by name from MODULES: code that shows the library in use (a demo app's views, a
+# sample server's routes) rather than part of it. They build and test like any module, but
+# Package.swift offers no library product for them, and the umbrella and the docs leave them out,
+# so neither they nor their dependencies ship in `import Traffluent`. Only executables, test
+# targets and other example modules may depend on one.
+EXAMPLE_MODULES = []
+
+# Modules offered as products of their own but left out of the umbrella, by name from MODULES:
+# ones an adopter imports on purpose rather than with `import Traffluent`, such as a test-support
+# back end (an in-memory store for their tests). Each keeps its library product, its DocC archive
+# and its place in the docs; only the generated umbrella doesn't import it.
+# Traffluent's pull in a package the rest of the library doesn't need (GRDB, swift-syntax) or
+# import Swift Testing.
 NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting"]
 
 # Library modules that import Swift Testing, test helpers an adopter adds to a test target. Bazel
@@ -141,15 +142,31 @@ NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "Trac
 # search paths too (rules_swift's `always_include_developer_search_paths`), rather than
 # `testonly`, which the docs targets that depend on them would then have to be as well.
 TESTING_MODULES = ["TrackingPlanTesting"]
-IOS_MINIMUM = "18.0"
 
-# SwiftPM command plugins: (name, verb, description, reason). Each is a `.plugin` target with its
-# sources in Plugins/<name>, SwiftPM's default, and a product of the same name, run with
-# `swift package <verb>`; `reason` is the one the plugin gives for writing to the package directory,
-# which the user allows with `--allow-writing-to-package-directory`, or None for a plugin that only
-# reads, which asks for no permission. Bazel builds none of them:
-# PackagePlugin is SwiftPM's alone, so Plugins/ holds no BUILD.bazel, the docs leave them out and
-# //:package_swift_test doesn't compare them.
+# Compiler plugins holding macros: (name, group, description, dependencies), whose dependencies
+# are packages' products only (swift-syntax's). A module lists one among its dependencies to offer its
+# macros: SwiftPM takes it as a dependency of a `.macro` target, Bazel as a `plugins` entry of a
+# swift_compiler_plugin, which rules_swift loads for that module and the modules that depend on it
+# directly. A plugin is no library: it has no product, no docs and no place in the umbrella, so the
+# module that declares the macros is what adopters import. A test target lists one to test its
+# expansions: SwiftPM links the plugin's module into the tests, and Bazel links `<name>Library`,
+# the same sources compiled as a library in the test's package, since rules_swift builds a
+# test's plugin dependency for the host and loads it as a plugin, not as a module. (In the
+# plugin's own package that library's swiftmodule would collide with the plugin's.)
+MACROS = [
+    ("EventMacrosPlugin", "Schema", "The @Event macro's implementation: the extension it adds to an event's struct.", [
+        "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros",
+        "swift-syntax/SwiftCompilerPlugin", "swift-syntax/SwiftDiagnostics",
+    ]),
+]
+
+# SwiftPM command plugins: (name, verb, description, reason), run with `swift package <verb>`.
+# Each is a `.plugin` target with a product of the same name, its sources in Plugins/<name>
+# (SwiftPM's default). `reason` is why the plugin writes to the package directory, which SwiftPM
+# shows when asking for it (`--allow-writing-to-package-directory` grants it up front); None asks
+# for no permissions. Bazel builds none of them: PackagePlugin is SwiftPM's alone, so Plugins/ holds
+# no BUILD.bazel, and the docs and //:package_swift_test leave them out. Keep a plugin thin, and
+# prove it by running it.
 PLUGINS = [
     ("ExportTrackingPlan", "export-tracking-plan",
      "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files.",
@@ -233,7 +250,78 @@ BENCHMARK_PACKAGE = ("https://github.com/ordo-one/benchmark", "1.27.0")
 PLATFORMS = '[.macOS(.v15), .iOS(.v18), .tvOS(.v18), .watchOS(.v11), .visionOS(.v2)]'
 MACOS_MINIMUM = "15.0"
 
+# The Swift the project builds with. SWIFT is the floor: every manifest's swift-tools-version, CI's
+# swift:<SWIFT> and swift-bazel:<SWIFT>-<bazel> images, the Docker image's base and the minimum the
+# docs state. SWIFT_TOOLCHAIN is the swift.org release swiftly installs where Xcode's toolchain falls
+# short (fuzzing, WebAssembly, Embedded Swift), which the embedded type's images pin too. To raise
+# the floor, change both and run `just modules`: it writes them into the generated manifests and
+# replaces the previous ones in SWIFT_SITES. CI needs a swift-bazel image of the new version (the
+# project template's ci-image/build.sh publishes them).
+SWIFT = "6.4"
+SWIFT_TOOLCHAIN = "6.4.3"
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The files that name SWIFT or SWIFT_TOOLCHAIN besides the ones generated here, as globs from the
+# root; each is also looked for under templates/<piece>/, where the project template keeps the
+# optional pieces' files. A missing one is skipped.
+SWIFT_SITES = [
+    "Fuzz/Package.swift", "Explore/Package.swift", "Examples/Package.swift",
+    ".github/workflows/*.yml", "Dockerfile", "justfile",
+    "scripts/fuzz.py", "Explore/build.sh", "tools/embedded-swift", "tools/swift_rules.bzl",
+    "README.md", "AGENTS.md", ".github/README.md", "Fuzz/README.md", "Explore/README.md", "Examples/README.md",
+]
+
+
+def swift_version_bzl():
+    return (
+        '"""GENERATED by scripts/modules.py (SWIFT, SWIFT_TOOLCHAIN) — edit them there, then run `just modules`."""\n\n'
+        "# The Swift versions the files in SWIFT_SITES name: the next `just modules` replaces these there\n"
+        "# when scripts/modules.py declares others.\n"
+        f'SWIFT = "{SWIFT}"\n'
+        f'SWIFT_TOOLCHAIN = "{SWIFT_TOOLCHAIN}"\n'
+    )
+
+
+def recorded_swift(root):
+    """The (SWIFT, SWIFT_TOOLCHAIN) that tools/swift_version.bzl under `root` records, or None."""
+    path = os.path.join(root, "tools", "swift_version.bzl")
+    if not os.path.isfile(path):
+        return None
+    with open(path) as file:
+        values = dict(re.findall(r'^(SWIFT|SWIFT_TOOLCHAIN) = "([^"]*)"$', file.read(), re.MULTILINE))
+    return values.get("SWIFT"), values.get("SWIFT_TOOLCHAIN")
+
+
+def swift_sites(root):
+    paths = set()
+    for site in SWIFT_SITES:
+        paths.update(glob.glob(os.path.join(root, site)))
+        paths.update(glob.glob(os.path.join(root, "templates", "*", site)))
+    return sorted(paths)
+
+
+def replace_swift(root, old, new):
+    """Replaces the versions `old` with `new`, both (SWIFT, SWIFT_TOOLCHAIN), in every file of
+    SWIFT_SITES under `root`, in one pass, so a replacement is never matched again. A version matches
+    only whole, never inside a longer one (1.2 isn't replaced in 1.2.3 or 11.2).
+
+    Returns the paths it changed."""
+    replacements = {o: n for o, n in zip(old, new) if o and n and o != n}
+    if not replacements:
+        return []
+    versions = "|".join(re.escape(o) for o in sorted(replacements, key=len, reverse=True))
+    pattern = re.compile(rf"(?<![\w.])(?:{versions})(?!\w|\.\d)")
+    changed = []
+    for path in swift_sites(root):
+        with open(path) as file:
+            text = file.read()
+        replaced = pattern.sub(lambda match: replacements[match.group(0)], text)
+        if replaced != text:
+            with open(path, "w") as file:
+                file.write(replaced)
+            changed.append(path)
+    return changed
 
 
 def performance_target(name):
@@ -241,9 +329,31 @@ def performance_target(name):
     return name.removesuffix("Tests") + "PerformanceTests"
 
 
+def duplicate_definitions():
+    """The top-level names this file assigns or defines more than once, sorted.
+
+    A template update merges a table the template adds (`MACROS = []`) as a clean insertion even
+    when the project already defines it elsewhere in the file, and the later assignment wins, so
+    the check reads the source rather than the values.
+    """
+    with open(__file__) as file:
+        tree = ast.parse(file.read())
+    counts = collections.Counter()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            counts[node.name] += 1
+        elif isinstance(node, ast.Assign):
+            counts.update(target.id for target in node.targets if isinstance(target, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            counts[node.target.id] += 1
+    return sorted(name for name, count in counts.items() if count > 1)
+
+
 def check():
-    names = [m[0] for m in MODULES] + macro_names()
-    assert len(names) == len(set(names)), "duplicate module"
+    names = [m[0] for m in MODULES]
+    # A plugin is a dependency like a module, but no list of modules below may name one.
+    plugins = macro_names()
+    assert len(names + plugins) == len(set(names + plugins)), "duplicate module"
     for name in APPLE_ONLY_TESTS:
         assert name in dict(TEST_TARGETS), f"APPLE_ONLY_TESTS names unknown test target {name}"
     packages = [p[0] for p in PACKAGES]
@@ -252,22 +362,11 @@ def check():
             if "/" in d:
                 assert d.split("/")[0] in packages, f"{name} depends on unknown package {d}"
             else:
-                assert d in names, f"{name} depends on unknown {d}"
+                assert d in names + plugins, f"{name} depends on unknown {d}"
     for name, _, _, deps in MACROS:
         assert all("/" in d for d in deps), f"the plugin {name} may depend on packages only"
-    for name, deps in TEST_TARGETS:
-        assert not (any(is_macro(d) for d in deps) and simulator_test(name)), f"{name} tests a plugin, which the simulator can't load"
-    for name in TESTING_MODULES:
-        assert name in names, f"TESTING_MODULES names unknown module {name}"
-    for name in IOS_MODULES + NON_UMBRELLA_MODULES:
-        assert not is_macro(name), f"{name} is a plugin, which is never in the umbrella or IOS_MODULES"
     executables = [e[0] for e in EXECUTABLES]
-    assert not set(executables) & set(names + [PROJECT]), "an executable shares a module's name"
-    plugins = [p[0] for p in PLUGINS]
-    assert len(plugins) == len(set(plugins)), "duplicate plugin"
-    assert not set(plugins) & set(names + executables + [PROJECT]), "a plugin shares a module's or an executable's name"
-    for name, _, _, _ in PLUGINS:
-        assert os.path.isdir(os.path.join(ROOT, "Plugins", name)), f"the plugin {name} has no Plugins/{name}"
+    assert not set(executables) & set(names + plugins + [PROJECT]), "an executable shares a module's name"
     tests = [t[0] for t in TEST_TARGETS]
     assert len(tests) == len(set(tests)), "duplicate test target"
     for name, deps in TEST_TARGETS:
@@ -277,14 +376,38 @@ def check():
             if "/" in d:
                 assert d.split("/")[0] in packages, f"{name} depends on unknown package {d}"
             else:
-                assert d in names + [PROJECT, TEST_SUPPORT], f"{name} depends on unknown {d}"
+                assert d in names + plugins + [PROJECT, TEST_SUPPORT], f"{name} depends on unknown {d}"
+        assert not (simulator_test(name) and any(is_macro(d) for d in deps)), \
+            f"{name} tests a compiler plugin, which only tests on the Mac can link"
+    # A command plugin shares SwiftPM's namespace of targets and products.
+    taken = {**{t: "a test target" for t in tests + [TEST_SUPPORT]}, **{e: "an executable" for e in executables},
+             **{m: "a macro" for m in plugins}, **{m: "a module" for m in names + [PROJECT]}}
+    commands = [p[0] for p in PLUGINS]
+    assert len(commands) == len(set(commands)), "duplicate command plugin"
+    verbs = [p[1] for p in PLUGINS]
+    assert len(verbs) == len(set(verbs)), "two command plugins share a verb"
+    for name, _, _, _ in PLUGINS:
+        assert name not in taken, f"the command plugin {name} has the name of {taken.get(name)}"
+        assert glob.glob(os.path.join(ROOT, "Plugins", name, "**", "*.swift"), recursive=True), \
+            f"the command plugin {name} has no Swift sources in Plugins/{name}"
     for name in PERFORMANCE_TESTS:
         assert name in tests, f"PERFORMANCE_TESTS names unknown test target {name}"
         assert not simulator_test(name), f"{name} runs in the simulator, which PERFORMANCE_TESTS doesn't support"
     for name in IOS_MODULES:
         assert name in names, f"IOS_MODULES names unknown module {name}"
+    for name in EXAMPLE_MODULES:
+        assert name in names, f"EXAMPLE_MODULES names unknown module {name}"
+    for name in TESTING_MODULES:
+        assert name in names, f"TESTING_MODULES names unknown module {name}"
     for name in NON_UMBRELLA_MODULES:
         assert name in names, f"NON_UMBRELLA_MODULES names unknown module {name}"
+        assert name != PROJECT and umbrella(), f"NON_UMBRELLA_MODULES lists {name}, but the package has no umbrella to leave it out of"
+        assert name not in EXAMPLE_MODULES, f"{name} is an example module, which the umbrella already leaves out"
+        assert name not in IOS_MODULES, f"{name} is an iOS module, which the umbrella already leaves out"
+    for name, _, _, deps in MODULES:
+        if name not in EXAMPLE_MODULES:
+            for d in deps:
+                assert d not in EXAMPLE_MODULES, f"{name} depends on the example module {d}, so it must be in EXAMPLE_MODULES"
     for name, _, _, deps in MODULES:
         if name not in IOS_MODULES:
             for d in deps:
@@ -292,21 +415,23 @@ def check():
     for name, deps in BENCHMARKS:
         for d in deps:
             assert d in names or (d == PROJECT and umbrella()), f"benchmark {name} imports unknown module {d}"
+            assert d not in EXAMPLE_MODULES, f"benchmark {name} imports the example module {d}, which has no product"
+
+
+def macro_names():
+    """The compiler plugins' names (MACROS)."""
+    return [m[0] for m in MACROS]
+
+
+def is_macro(d):
+    """Whether dependency `d` names a compiler plugin (MACROS)."""
+    return d in macro_names()
 
 
 def simulator_test(name):
     """Whether test target `name` runs in the iOS simulator: it depends on an iOS module or a Bazel label."""
     deps = dict(TEST_TARGETS)[name]
     return any(d in IOS_MODULES or d.startswith("//") for d in deps)
-
-
-def macro_names():
-    return [m[0] for m in MACROS]
-
-
-def is_macro(d):
-    """Whether `d` names a compiler plugin (MACROS)."""
-    return d in macro_names()
 
 
 def spm_dep(d):
@@ -337,9 +462,15 @@ def package_modules():
     return [m for m in MODULES if m[0] not in IOS_MODULES]
 
 
+def library_modules():
+    """MODULES that the package offers as products and the umbrella imports: every one Package.swift
+    declares but the example modules."""
+    return [m for m in package_modules() if m[0] not in EXAMPLE_MODULES]
+
+
 def umbrella_modules():
-    """The modules `import <PROJECT>` imports: every one Package.swift declares but the opt-in ones."""
-    return [m[0] for m in package_modules() if m[0] not in NON_UMBRELLA_MODULES]
+    """MODULES the generated umbrella imports: every library product but NON_UMBRELLA_MODULES."""
+    return [m for m in library_modules() if m[0] not in NON_UMBRELLA_MODULES]
 
 
 def package_tests():
@@ -353,7 +484,7 @@ def package_dependencies():
     (swift/Package.swift), as SwiftPM warns about a dependency no target uses."""
     if not IOS_MODULES:
         return PACKAGES
-    used = {d.split("/")[0] for _, deps in [(m[0], m[3]) for m in package_modules()] + [(e[0], e[2]) for e in EXECUTABLES] + package_tests()
+    used = {d.split("/")[0] for _, deps in [(m[0], m[3]) for m in package_modules() + MACROS] + [(e[0], e[2]) for e in EXECUTABLES] + package_tests()
             for d in deps if "/" in d and not d.startswith("//")}
     return [p for p in PACKAGES if p[0] in used]
 
@@ -364,14 +495,12 @@ def apple_only(d):
 
 def bazel_deps(deps, testing=False):
     """A `deps` attribute, or nothing when there are none; Apple-only products sit in a macOS `select`.
-    A module's compiler plugins (MACROS) go in a `plugins` attribute instead; a test target's
-    are the plugins' `Library` targets (see MACROS)."""
+    A compiler plugin (MACROS) goes in a `plugins` attribute instead, but for a test library
+    (`testing`), which links the plugin's `<name>Library` in its own package (see MACROS)."""
     if testing:
         return _bazel_deps([f":{d}Library" if is_macro(d) else d for d in deps])
-    plugins = [d for d in deps if is_macro(d)]
-    deps = [d for d in deps if not is_macro(d)]
-    plugins_attr = "    plugins = [\n" + "".join(f'        "{bazel_label(d)}",\n' for d in plugins) + "    ],\n" if plugins else ""
-    return _bazel_deps(deps) + plugins_attr
+    plugins = "".join(f'        "{bazel_label(d)}",\n' for d in deps if is_macro(d))
+    return _bazel_deps([d for d in deps if not is_macro(d)]) + (f"    plugins = [\n{plugins}    ],\n" if plugins else "")
 
 
 def _bazel_deps(deps):
@@ -407,6 +536,11 @@ def excluded(path):
     return [f for f in ("BUILD.bazel", "README.md", "Performance", "__Snapshots__") if os.path.exists(os.path.join(ROOT, path, f))]
 
 
+def swift_string(text):
+    """`text` as a Swift string literal."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+
 def exclude_arg(path):
     files = excluded(path)
     if files == ["BUILD.bazel"]:
@@ -418,7 +552,7 @@ def exclude_arg(path):
 
 def package_swift():
     lines = [
-        "// swift-tools-version: 6.4",
+        f"// swift-tools-version: {SWIFT}",
     ] + (["import CompilerPluginSupport"] if MACROS else []) + [
         "import PackageDescription",
         "",
@@ -444,7 +578,7 @@ def package_swift():
     ]
     if umbrella():
         lines.append(f'    .library(name: "{PROJECT}", targets: ["{PROJECT}"]),')
-    lines += [f'    .library(name: "{m[0]}", targets: ["{m[0]}"]),' for m in package_modules()]
+    lines += [f'    .library(name: "{m[0]}", targets: ["{m[0]}"]),' for m in library_modules()]
     lines += [f'    .executable(name: "{e[0]}", targets: ["{e[0]}"]),' for e in EXECUTABLES]
     lines += [f'    .plugin(name: "{p[0]}", targets: ["{p[0]}"]),' for p in PLUGINS]
     lines += ["]", "", "let dependencies: [Package.Dependency] = ["]
@@ -474,17 +608,16 @@ def package_swift():
     if PLUGINS:
         lines += ["", "    // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build"]
     for name, verb, description, reason in PLUGINS:
-        lines.append(
-            f'    .plugin(name: "{name}", capability: .command(intent: .custom(verb: "{verb}", description: "{description}"), '
-            + (f'permissions: [.writeToPackageDirectory(reason: "{reason}")])),' if reason else "permissions: [])),")
-        )
-    all_deps = ", ".join(f'"{n}"' for n in umbrella_modules())
+        intent = f".custom(verb: {swift_string(verb)}, description: {swift_string(description)})"
+        permissions = "" if reason is None else f", permissions: [.writeToPackageDirectory(reason: {swift_string(reason)})]"
+        lines.append(f'    .plugin(name: "{name}", capability: .command(intent: {intent}{permissions}){exclude_arg(f"Plugins/{name}")}),')
+    all_deps = ", ".join(f'"{m[0]}"' for m in umbrella_modules())
     support_deps = ", ".join(spm_dep(d) for d in TEST_SUPPORT_DEPENDENCIES)
     support_deps_arg = f"dependencies: [{support_deps}], " if TEST_SUPPORT_DEPENDENCIES else ""
     if umbrella():
         lines += [
             "",
-            f"    // Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).",
+            f"    // Umbrella: `import {PROJECT}` imports every module.",
             f'    .target(name: "{PROJECT}", dependencies: [{all_deps}], exclude: bazelFiles),',
         ]
     lines += [
@@ -539,8 +672,9 @@ def dependency_manifest():
     )
 
 
-def build_bazel(name, description, deps, doc_modules=None):
-    """A module's BUILD.bazel; its docs link to `doc_modules`' archives, its first-party `deps` unless given."""
+def build_bazel(name, description, deps, linked=()):
+    """A module's BUILD.bazel. `linked` names modules its catalog links to without importing them:
+    their archives join its docs' dependencies alone."""
     deps_attr = bazel_deps(deps)
     defines_attr = (
         "    # Mock<Protocol> types from @Mockable, in debug builds only (MOCKING in scripts/modules.py).\n"
@@ -567,7 +701,22 @@ def build_bazel(name, description, deps, doc_modules=None):
             '    visibility = ["//visibility:public"],\n'
             ")\n"
         )
-    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in (deps if doc_modules is None else doc_modules) if "/" not in d and not is_macro(d))
+    if name in EXAMPLE_MODULES:
+        return (
+            "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
+            'load("//tools:swift_rules.bzl", "swift_library")\n\n'
+            f"# {description}\n"
+            "# An example (EXAMPLE_MODULES in scripts/modules.py): no product, umbrella import or docs.\n"
+            "swift_library(\n"
+            f'    name = "{name}",\n'
+            '    srcs = glob(["**/*.swift"]),\n'
+            f'    module_name = "{name}",\n'
+            f"{defines_attr}"
+            f"{deps_attr}"
+            '    visibility = ["//visibility:public"],\n'
+            ")\n"
+        )
+    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in [*deps, *linked] if "/" not in d and not is_macro(d))
     doc_deps_attr = f"    deps = [\n{doc_deps}    ],\n" if doc_deps else ""
     return (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
@@ -595,6 +744,22 @@ def build_bazel(name, description, deps, doc_modules=None):
     )
 
 
+def executable_build_bazel(name, description, deps):
+    deps_attr = bazel_deps(deps)
+    return (
+        "# GENERATED by scripts/modules.py — edit EXECUTABLES there, then run `just modules`.\n\n"
+        'load("//tools:swift_rules.bzl", "swift_binary")\n\n'
+        f"# {description}\n"
+        "swift_binary(\n"
+        f'    name = "{name}",\n'
+        '    srcs = glob(["**/*.swift"]),\n'
+        f'    module_name = "{name}",\n'
+        f"{deps_attr}"
+        '    visibility = ["//visibility:public"],\n'
+        ")\n"
+    )
+
+
 def macro_build_bazel(name, description, deps):
     return (
         "# GENERATED by scripts/modules.py — edit MACROS there, then run `just modules`.\n\n"
@@ -607,8 +772,7 @@ def macro_build_bazel(name, description, deps):
         f"{bazel_deps(deps)}"
         '    visibility = ["//visibility:public"],\n'
         ")\n\n"
-        "# The sources, which the tests of the plugin also compile as a library (MACROS in\n"
-        "# scripts/modules.py).\n"
+        "# The sources, which the plugin's tests also compile as a library (MACROS in scripts/modules.py).\n"
         "filegroup(\n"
         '    name = "srcs",\n'
         '    srcs = glob(["**/*.swift"]),\n'
@@ -623,7 +787,7 @@ def macro_library_bazel(name):
     return (
         f"# {name}'s sources as a library of the same module, for these tests to link (MACROS in\n"
         "# scripts/modules.py). Its `@main` entry point is renamed, as swift_compiler_plugin renames\n"
-        "# it, so it doesn't clash with the test runner's.\n"
+        "# the plugin's, so it doesn't clash with the test runner's.\n"
         "swift_library(\n"
         f'    name = "{name}Library",\n'
         "    testonly = True,\n"
@@ -645,24 +809,9 @@ def macros_bzl():
     packages = "".join(f'    "Sources/{name}",\n' for name in macro_names())
     return (
         '"""GENERATED by scripts/modules.py (MACROS) — edit the table there, then run `just modules`."""\n\n'
-        "# The source packages that hold compiler plugins, which have no documentation of their own.\n"
+        "# The source packages that hold a compiler plugin rather than a library: the root BUILD.bazel\n"
+        "# leaves them out of the docs and the products.\n"
         f"MACRO_PACKAGES = [\n{packages}]\n"
-    )
-
-
-def executable_build_bazel(name, description, deps):
-    deps_attr = bazel_deps(deps)
-    return (
-        "# GENERATED by scripts/modules.py — edit EXECUTABLES there, then run `just modules`.\n\n"
-        'load("//tools:swift_rules.bzl", "swift_binary")\n\n'
-        f"# {description}\n"
-        "swift_binary(\n"
-        f'    name = "{name}",\n'
-        '    srcs = glob(["**/*.swift"]),\n'
-        f'    module_name = "{name}",\n'
-        f"{deps_attr}"
-        '    visibility = ["//visibility:public"],\n'
-        ")\n"
     )
 
 
@@ -828,9 +977,20 @@ def executables_bzl():
     )
 
 
+def examples_bzl():
+    packages = "".join(f'    "Sources/{name}",\n' for name in EXAMPLE_MODULES)
+    return (
+        '"""GENERATED by scripts/modules.py (EXAMPLE_MODULES) — edit the table there, then run `just modules`."""\n\n'
+        "# The source packages of example modules, which have no DocC archive: the root BUILD.bazel\n"
+        "# leaves them out of the docs.\n"
+        f"EXAMPLE_PACKAGES = [\n{packages}]\n"
+    )
+
+
 def library_directories():
     """Every non-test target directory the root Package.swift declares."""
     directories = [f"Sources/{m[0]}" for m in package_modules()] + [f"Sources/{e[0]}" for e in EXECUTABLES] + [f"Sources/{name}" for name in macro_names()]
+    directories += [f"Plugins/{p[0]}" for p in PLUGINS]
     if umbrella():
         directories.append(f"Sources/{PROJECT}")
     return sorted(directories + [f"Tests/{TEST_SUPPORT}"])
@@ -851,7 +1011,7 @@ def benchmarks_package_swift():
         for name, deps in BENCHMARKS
     )
     return (
-        "// swift-tools-version: 6.4\n"
+        f"// swift-tools-version: {SWIFT}\n"
         "import PackageDescription\n\n"
         "// GENERATED by scripts/modules.py from BENCHMARKS: edit the table there, then run `just modules`.\n"
         "// Benchmarks live in their own package so the library and its tests never depend on the\n"
@@ -915,7 +1075,14 @@ def write(path, text):
 
 
 def main():
+    duplicates = duplicate_definitions()
+    if duplicates:
+        sys.exit(f"scripts/modules.py defines {', '.join(duplicates)} more than once (a template update "
+                 "can merge a second copy in); keep one, holding this project's rows, and delete the other")
     check()
+    # Before the record is rewritten: it names the versions the sites hold now.
+    replace_swift(ROOT, recorded_swift(ROOT) or (SWIFT, SWIFT_TOOLCHAIN), (SWIFT, SWIFT_TOOLCHAIN))
+    write(os.path.join(ROOT, "tools", "swift_version.bzl"), swift_version_bzl())
     for name, _, description, deps in MODULES:
         d = os.path.join(ROOT, "Sources", name)
         write(os.path.join(d, "BUILD.bazel"), build_bazel(name, description, deps))
@@ -937,16 +1104,19 @@ def main():
         write(os.path.join(d, "BUILD.bazel"), executable_build_bazel(name, description, deps))
     for name, _, description, deps in MACROS:
         write(os.path.join(ROOT, "Sources", name, "BUILD.bazel"), macro_build_bazel(name, description, deps))
-    write(os.path.join(ROOT, "tools", "macros.bzl"), macros_bzl())
     write(os.path.join(ROOT, "Tests", TEST_SUPPORT, "BUILD.bazel"), test_support_build_bazel())
     write(os.path.join(ROOT, "tools", "executables.bzl"), executables_bzl())
+    write(os.path.join(ROOT, "tools", "examples.bzl"), examples_bzl())
+    write(os.path.join(ROOT, "tools", "macros.bzl"), macros_bzl())
     write(os.path.join(ROOT, "tools", "performance_tests.bzl"), performance_tests_bzl())
-    names = umbrella_modules()
+    names = [m[0] for m in umbrella_modules()]
     if umbrella():
         directory = os.path.join(ROOT, "Sources", PROJECT)
-        write(os.path.join(directory, "BUILD.bazel"), build_bazel(PROJECT, f"Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).", names, [m[0] for m in package_modules()]))
+        write(os.path.join(directory, "BUILD.bazel"), build_bazel(PROJECT, f"Umbrella: `import {PROJECT}` imports every module.", names,
+                                                             # The landing catalog may link a module left out of the umbrella.
+                                                             linked=NON_UMBRELLA_MODULES))
         write(os.path.join(directory, f"{PROJECT}.swift"),
-              f"// GENERATED by scripts/modules.py.\n//\n// Umbrella: `import {PROJECT}` imports every module but the opt-in ones (NON_UMBRELLA_MODULES in\n// scripts/modules.py), which are products of their own.\n\n"
+              f"// GENERATED by scripts/modules.py.\n//\n// Umbrella: `import {PROJECT}` imports every module.\n\n"
               + "".join(f"@_exported import {n}\n" for n in names))
     write(os.path.join(ROOT, "swift", "Package.swift"), dependency_manifest())
     write(os.path.join(ROOT, "Benchmarks", "Package.swift"), benchmarks_package_swift())

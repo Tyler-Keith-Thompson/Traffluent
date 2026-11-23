@@ -5,7 +5,7 @@ load("//tools:swift_rules.bzl", "swift_library", "swift_test")
 
 # EventMacrosPlugin's sources as a library of the same module, for these tests to link (MACROS in
 # scripts/modules.py). Its `@main` entry point is renamed, as swift_compiler_plugin renames
-# it, so it doesn't clash with the test runner's.
+# the plugin's, so it doesn't clash with the test runner's.
 swift_library(
     name = "EventMacrosPluginLibrary",
     testonly = True,

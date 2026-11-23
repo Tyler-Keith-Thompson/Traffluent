@@ -17,8 +17,7 @@ swift_compiler_plugin(
     visibility = ["//visibility:public"],
 )
 
-# The sources, which the tests of the plugin also compile as a library (MACROS in
-# scripts/modules.py).
+# The sources, which the plugin's tests also compile as a library (MACROS in scripts/modules.py).
 filegroup(
     name = "srcs",
     srcs = glob(["**/*.swift"]),
