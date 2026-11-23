@@ -3,11 +3,14 @@ import ExampleEvents
 import ExampleServer
 import Hummingbird
 import Trackers
+import Tracing
 
 /// The server example: the composition root builds the tracker, binds it to the server's task so
 /// every request handler reads it as `Tracker.current`, and serves the example routes on
-/// 127.0.0.1:8080 until interrupted. The delivery runs beside the server; once the server stops,
-/// the tracker is finished, so the delivery sends what is pending and completes.
+/// 127.0.0.1:8080 until interrupted. The batches route records its spans with the bootstrapped
+/// `InstrumentationSystem.tracer`; bootstrap a tracer here to export them. The delivery runs
+/// beside the server; once the server stops, the tracker is finished, so the delivery sends what
+/// is pending and completes.
 @main
 struct ServerExample {
     @MainActor
@@ -15,7 +18,7 @@ struct ServerExample {
         let tracker = Tracker()
         let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
         let application = Application(
-            router: buildRouter(),
+            router: buildRouter(tracer: InstrumentationSystem.tracer),
             configuration: .init(address: .hostname("127.0.0.1", port: 8080))
         )
         try await withTracker(tracker) {

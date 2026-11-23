@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport; URLSessionTransport, the default transport off WASI.
+# HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport off WASI.
 swift_library(
     name = "HTTPDestinations",
     srcs = glob(["**/*.swift"]),
@@ -11,6 +11,7 @@ swift_library(
     deps = [
         "//Sources/Events",
         "//Sources/Destinations",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_http_types//:HTTPTypes",
         "@swiftpkg_swift_http_types//:HTTPTypesFoundation",
         "@swiftpkg_swift_log//:Logging",

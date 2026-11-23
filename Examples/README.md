@@ -8,7 +8,7 @@ library by path (`..`). Each builds a `Tracker` at its composition root, deliver
 |---|---|
 | `Sources/ExampleEvents` | `AppLaunched(platform:)`, `ButtonTapped(label:)`, `RequestServed(path:status:)`, `Platform` |
 | `Sources/ExampleViews` | `ExampleView`, the SwiftUI screen the Apple apps share |
-| `Sources/ExampleServer` | The Hummingbird routes and `RequestTrackingMiddleware` |
+| `Sources/ExampleServer` | The Hummingbird routes, `RequestTrackingMiddleware`, and `POST /batches`, which accepts `HTTPDestination` batches (`EventNamesEncoder`) in a server span joined to the app's trace |
 | `Sources/CommandLineExample` | The Linux and Wasm program |
 | `Sources/ServerExample` | The server, on 127.0.0.1:8080 |
 | `Apps/ExampleApp` | The Apple app: one `@main` source; Bazel applications for iPhone and iPad, Mac, visionOS and watchOS |

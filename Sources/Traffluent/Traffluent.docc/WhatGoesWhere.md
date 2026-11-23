@@ -60,6 +60,9 @@ The signals stay separate, but they can point at each other:
   active when it was tracked. An engineer reading a slow trace sees which user action started it.
 - Every `EventRecord` carries the `ServiceContext` it was tracked in, so an analytics event and
   the trace around it share a trace ID without either system storing the other's data.
+- `HTTPDestination` (module `HTTPDestinations`) injects the trace context of each batch's first
+  record into its request's header fields, so a collector that extracts it records the request
+  in the trace the app was in.
 
 ## Anti-patterns
 

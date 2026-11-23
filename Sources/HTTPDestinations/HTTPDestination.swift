@@ -2,6 +2,7 @@ public import Destinations
 public import Events
 public import Foundation
 public import HTTPTypes
+public import Instrumentation
 import Logging
 
 /// A destination that sends each batch it receives to an HTTP endpoint, as one request.
@@ -11,8 +12,18 @@ import Logging
 /// - One request per batch, in the order the delivery hands them over, the next sent only once
 ///   the previous one has a response or has failed.
 /// - The method is `POST` and the URL is the configured endpoint.
-/// - The header fields are the configured ones, with `Content-Type` set to the encoder's
-///   ``EncodedBatch/contentType`` (it replaces a configured `Content-Type`).
+/// - The header fields are the configured ones, then the trace context of the batch's first
+///   record, then `Content-Type`, each replacing fields of the same name before it:
+///   - The instrument injects the first (oldest) record's `EventRecord/context`, so a server
+///     extracting it joins the request, and the events, to the trace the app was in. Its field
+///     names are the instrument's: `traceparent` and `tracestate` for a W3C Trace Context tracer.
+///     A record tracked outside any span, or an instrument that injects nothing (the default
+///     `NoOpInstrument` when none is bootstrapped), adds no fields.
+///   - Only the first record's context travels in the header fields, though a batch may hold
+///     records tracked in other traces. A server that needs each record's context reads it from
+///     the body, where a ``BatchEncoder`` writes it.
+///   - `Content-Type` is always the encoder's ``EncodedBatch/contentType``, whatever a configured
+///     field or the instrument wrote.
 /// - The body is exactly the encoder's ``EncodedBatch/body`` for the batch's records, oldest
 ///   first. The format is the encoder's; events need no `Codable` conformance.
 /// - A response with a 2xx status means the batch arrived. Any other status, or no response,
@@ -32,6 +43,10 @@ import Logging
 /// ```
 public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>: Destination {
     private let request: HTTPRequest
+    // An existential, not a generic parameter: the default is the bootstrapped
+    // `InstrumentationSystem.instrument`, itself `any Instrument`, and a third generic argument
+    // would lengthen every spelling of the type for one call per batch beside a network request.
+    private let instrument: any Instrument
     private let transport: Transport
     private let encoder: Encoding
 
@@ -40,11 +55,21 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     /// - Parameters:
     ///   - endpoint: The URL each batch is posted to.
     ///   - headerFields: The header fields every request carries (an `Authorization`, say); none
-    ///     by default. The encoder's content type replaces a `Content-Type` among them.
+    ///     by default. The injected trace context replaces fields of its names, and the encoder's
+    ///     content type replaces a `Content-Type`.
+    ///   - instrument: What injects each batch's first record's trace context into the header
+    ///     fields; the bootstrapped `InstrumentationSystem.instrument`, read once here, by default.
     ///   - transport: What sends each request.
     ///   - encoder: What turns each batch into a request body.
-    public init(endpoint: URL, headerFields: HTTPFields = [:], transport: Transport, encoder: Encoding) {
+    public init(
+        endpoint: URL,
+        headerFields: HTTPFields = [:],
+        instrument: any Instrument = InstrumentationSystem.instrument,
+        transport: Transport,
+        encoder: Encoding
+    ) {
         request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)
+        self.instrument = instrument
         self.transport = transport
         self.encoder = encoder
     }
@@ -65,6 +90,9 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             return .notEncoded(error)
         }
         var request = request
+        if let first = batch.first {
+            instrument.inject(first.context, into: &request.headerFields, using: HTTPFieldsInjector())
+        }
         request.headerFields[.contentType] = encoded.contentType
         do {
             let response = try await transport.send(request, body: encoded.body)

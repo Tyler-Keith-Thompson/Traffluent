@@ -19,6 +19,10 @@ func library(_ name: String) -> Target.Dependency {
 
 let hummingbird: Target.Dependency = .product(name: "Hummingbird", package: "hummingbird")
 
+func tracing(_ name: String) -> Target.Dependency {
+    .product(name: name, package: "swift-distributed-tracing")
+}
+
 let portable: [Target] = [
     .target(name: "ExampleEvents", dependencies: [library("Events")], exclude: bazelFiles),
     .executableTarget(name: "CommandLineExample", dependencies: ["ExampleEvents", library("Destinations"), library("Trackers")]),
@@ -27,15 +31,16 @@ let portable: [Target] = [
 
 let rest: [Target] = [
     .target(name: "ExampleViews", dependencies: ["ExampleEvents", library("Trackers")], exclude: bazelFiles),
-    .target(name: "ExampleServer", dependencies: ["ExampleEvents", library("Trackers"), hummingbird]),
-    .executableTarget(name: "ServerExample", dependencies: ["ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Trackers"), hummingbird]),
+    .target(name: "ExampleServer", dependencies: ["ExampleEvents", library("Events"), library("HTTPDestinations"), library("Trackers"), hummingbird, .product(name: "HTTPTypes", package: "swift-http-types"), tracing("Instrumentation"), tracing("Tracing")]),
+    .executableTarget(name: "ServerExample", dependencies: ["ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Trackers"), hummingbird, tracing("Tracing")]),
     .testTarget(name: "ExampleViewsTests", dependencies: [
         "ExampleViews", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("Trackers"),
         .product(name: "ViewInspector", package: "viewinspector", condition: .when(platforms: [.macOS])),
     ]),
     .testTarget(name: "ExampleServerTests", dependencies: [
-        "ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("Trackers"),
+        "ExampleServer", "ExampleEvents", library("DestinationTesting"), library("Destinations"), library("Events"), library("HTTPDestinations"), library("Trackers"),
         hummingbird, .product(name: "HummingbirdTesting", package: "hummingbird"),
+        tracing("Instrumentation"), tracing("Tracing"), tracing("InMemoryTracing"),
     ]),
 ]
 
@@ -47,6 +52,9 @@ let package = Package(
         .package(name: "Traffluent", path: ".."),
     ] + (wasm ? [] : [
         .package(url: "https://github.com/hummingbird-project/hummingbird", from: "2.29.0"),
+        // The server example's tracer, which joins each batch's request to the app's trace.
+        .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
+        .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         // 0.x: its minor releases may break its API.
         .package(url: "https://github.com/nalexn/ViewInspector", .upToNextMinor(from: "0.10.5")),
     ]),
