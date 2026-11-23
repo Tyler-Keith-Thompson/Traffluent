@@ -21,6 +21,7 @@ swift_library(
         "//Sources/Traffluent",
         "//Sources/EventMacros",
         "//Sources/TrackingPlans",
+        "//Sources/TrackerTesting",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_distributed_tracing//:Tracing",
         "@swiftpkg_swift_system//:SystemPackage",

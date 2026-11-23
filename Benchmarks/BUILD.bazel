@@ -33,6 +33,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/StandardContext",
     "Sources/SwiftUITracking",
     "Sources/TracingDestinations",
+    "Sources/TrackerTesting",
     "Sources/Trackers",
     "Sources/TrackingPlanTesting",
     "Sources/TrackingPlans",

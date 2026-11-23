@@ -328,6 +328,30 @@ or a test of what your code tracks. It keeps the newest 1,000 records, or as man
 Read it with `events(of: SignedUp.self)`, `records` or `batches`, or wait on `deliveries`, which
 announces each batch to one reader.
 
+### Testing what your code tracks
+
+To check what your code tracks from a test, add the `TrackerTesting` product to the test target.
+`withRecordingTracker` binds a fresh tracker to the test's task for its body, then returns every
+event tracked in it, in order, with `SignedUp` `Equatable`:
+
+```swift
+import Testing
+import TrackerTesting
+
+@Test func signingUpTracksThePlan() async {
+    let tracked = await withRecordingTracker {
+        Tracker.current.track(SignedUp(plan: "pro"))
+    }
+    #expect(tracked.events(of: SignedUp.self) == [SignedUp(plan: "pro")])
+}
+```
+
+Each call has a tracker of its own, so tests running at once never see each other's events. The
+body may be sync or async, and may return a value, read as `tracked.value`. `tracked.names` lists
+every event's name and `tracked.records` every record. Code handed its tracker rather than reading
+`Tracker.current`, such as a SwiftUI view given it with `tracker(_:)`, takes the one the body is
+given: `withRecordingTracker { tracker in … }`.
+
 ### App lifecycle
 
 The app's lifecycle can track itself too (module `LifecycleTracking`: every platform). Nothing is
@@ -847,6 +871,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration, checking the constraints `@Constrained` declares beside its properties; left out of `import Traffluent`, so only apps that use it build swift-syntax |
 | `TrackingPlans` | `TrackingPlan`: the JSON Schema (draft 2020-12) of every event an app tracks, one document and one example per event and an index, exported from their `EventSchema` values; `TrackingPlanCheck`, its comparison with a committed plan, naming each `TrackingPlanDifference`; `TrackingPlanCommand`, the executable that writes or checks one, which the `export-tracking-plan` and `check-tracking-plan` command plugins run; left out of `import Traffluent` |
 | `TrackingPlanTesting` | `expectTrackingPlan(_:matches:)`: records a Swift Testing issue with the check's report when the events no longer match the committed plan; for test targets, and left out of `import Traffluent` |
+| `TrackerTesting` | `withRecordingTracker`: runs a test's body with a fresh tracker bound to its task, given to the body too, and returns a `TrackerRecording` of every event tracked in it, in order, typed with `events(of:)`; for test targets, and left out of `import Traffluent` |
 
 ## Examples
 

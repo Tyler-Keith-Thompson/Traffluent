@@ -55,6 +55,7 @@ docc_archive(
         "//Sources/EventMacros:EventMacrosDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
         "//Sources/TrackingPlanTesting:TrackingPlanTestingDocumentation",
+        "//Sources/TrackerTesting:TrackerTestingDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

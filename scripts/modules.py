@@ -111,6 +111,8 @@ MODULES = [
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
     ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport.", ["Events", "Destinations", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; Consent, which holds, delivers or drops each event by its ConsentCategory's status; and Samplers, which keep a seeded fraction of events, or of the groups a context key makes, stamping each kept record with its SampleRateKey.", ["Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees"]),
+    # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
+    ("TrackerTesting", "Pipeline", "withRecordingTracker(_:): runs a test's body with a fresh tracker bound to its task, then returns a TrackerRecording of every event tracked in it, in order, typed with events(of:).", ["Events", "Trackers"]),
     # Instrumentation
     ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.", ["Events", "Persistence", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
     ("UIKitTracking", "Instrumentation", "TrackerTrait: the tracker in a UIKit trait collection, set with traitOverrides.tracker on a window scene, view controller or view and read as traitCollection.tracker; and UIControl.track(_:for:), which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere.", ["Events", "Trackers"]),
@@ -151,7 +153,7 @@ EXAMPLE_MODULES = []
 # and its place in the docs; only the generated umbrella doesn't import it.
 # Traffluent's pull in a package the rest of the library doesn't need (GRDB, swift-syntax) or
 # import Swift Testing.
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting"]
 
 # Library modules that import Swift Testing, test helpers an adopter adds to a test target. Bazel
 # finds Testing (and XCTest) only on a test target's search paths, so these get the developer
@@ -205,6 +207,7 @@ TEST_TARGETS = [
     ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
+    ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
@@ -222,7 +225,7 @@ TEST_TARGETS = [
     ("StandardContextTests", ["StandardContext", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
+    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "TrackerTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the

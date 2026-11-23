@@ -6,6 +6,7 @@ import Instrumentation
 import SystemPackage
 import Traffluent
 import Testing
+import TrackerTesting
 import TrackingPlans
 
 @Suite("README examples", .timeLimit(.minutes(1)))
@@ -31,6 +32,14 @@ struct READMEExamplesTests {
             .deliver(to: ConsoleDestination(), batchBufferLimit: 10)
         await tracker.finish()
         try await delivery.execute()
+    }
+
+    @Test("Testing what your code tracks")
+    func signingUpTracksThePlan() async {
+        let tracked = await withRecordingTracker {
+            Tracker.current.track(SignedUp(plan: "pro"))
+        }
+        #expect(tracked.events(of: SignedUp.self) == [SignedUp(plan: "pro")])
     }
 
     @Test("Tracking from anywhere")
@@ -293,3 +302,6 @@ extension READMEExamplesTests.SignedUp: BinaryCodable {
         plan = try decoder.decode()
     }
 }
+
+// The README states that `SignedUp` is `Equatable` for its testing example.
+extension READMEExamplesTests.SignedUp: Equatable {}
