@@ -18,7 +18,7 @@ bad row in a dashboard.
 - One first-party destination (D1), plus test, console or logging destinations.
 - The hard parts: batching, on-disk persistence across launches, retry with backoff, flushing on
   lifecycle events, consent gating (per destination and per purpose), schema enforcement and
-  versioning, and identity (anonymous ids, identify, alias, reset).
+  versioning, and identity as pseudonymous session IDs only (D4).
 - Automatic instrumentation: app lifecycle, sessions, screen views and similar events that need
   no hand-written call sites. Each kind can be turned off.
 - Support on every platform: Apple platforms, Linux and Wasm. Platform-only behaviour (UIKit or
@@ -65,7 +65,8 @@ bad row in a dashboard.
   libraries don't cover. It must build on Linux and Wasm, or be Apple-only (`APPLE_ONLY_PACKAGES`).
 - Persistence and retry changes need tests of crashes, relaunches and offline periods: an event
   accepted once must be delivered or dropped on purpose, never lost silently or sent twice
-  unannounced.
+  unannounced Once
+  stored, that is; before the worker stores it, a crash may lose it (D5).
 
 ## Belongs elsewhere
 - Template machinery (Bazel rules, the justfile, CI, `scripts/modules.py`'s generator, the
@@ -93,6 +94,31 @@ bad row in a dashboard.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage.
+- D3. Consent is both per purpose and per destination (TRAF-7, the owner's answer of
+  2026-11-22). Each event type has a consent category (a purpose); each destination accepts a set
+  of categories. Per category, consent is undecided, granted or denied. While it is undecided,
+  events are held in memory, bounded, dropping the oldest with a drop report, and never written
+  to disk. On grant, held events are delivered in order. On deny, they are dropped and reported.
+  Rejected: dropping until granted, which loses first-launch events, and deciding per category.
+- D4. Traffluent identifies people only by pseudonymous session IDs (the owner, 2026-11-23).
+  A session ID is random, never derived from the device, the user or another ID, never persisted
+  past its session, and replaced when a new session starts. Traffluent ships no "sticky"
+  identifier of its own: no persisted anonymous or device ID and no alias that links sessions
+  together. The one exception the owner allowed (2026-11-23): the platform's
+  `identifierForVendor`, which the OS owns, scopes to the vendor's apps and resets when they are
+  all removed. Traffluent may offer it as an opt-in enricher where the platform has it, never
+  stored by Traffluent and never a fallback to a generated ID.
+  Adopters who want one write their own Enricher and own that decision, including its consent.
+  An item asking Traffluent to persist or link identifiers across sessions is turned down,
+  pointing at the Enricher route.
+- D5. Tracking accepts and nothing more (the owner, 2026-11-23): "collection can happen on any
+  thread but all our work is off the main thread. Nothing expensive, no serialization, nothing
+  but accepting events." `track`, `grant` and `deny` take the time, the call site and the current
+  context, enqueue them and return. Enrichment, consent, encoding, persistence and delivery run
+  on a worker the tracker owns, never on the caller's thread or the main actor. The structure
+  enforces this: no public API runs adopter or library code on the caller. A record is durable
+  once the worker has stored it; `finish()` drains first. What a crash takes before then is the
+  documented loss window. Items that move work back onto the caller are turned down.
 
 ## Open questions
 - What does "all platforms" cover: Android and Windows (Swift SDKs exist), Embedded Swift, or
@@ -102,8 +128,6 @@ bad row in a dashboard.
   codegen tooling live in this repo?
 - How much automatic instrumentation: lifecycle and sessions only, or also screen views
   (UIKit or SwiftUI), taps, deep links and network requests? Opt in or opt out?
-- What is the consent model: per destination, per purpose (GDPR-style categories), or both? What
-  happens to events queued before consent is given: hold them, drop them, or decide per purpose?
 - Should there be adapters or a migration path from Segment's analytics-swift or vendor SDKs?
 - Is server-side Swift (Vapor services sending analytics) a target user, or only apps?
 - Are the template's minimum OS versions (macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2)
