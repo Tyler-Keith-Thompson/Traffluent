@@ -16,6 +16,7 @@ MANIFESTS = [
 LIBRARY_DIRECTORIES = [
     "Plugins/CheckTrackingPlan",
     "Plugins/ExportTrackingPlan",
+    "Sources/AppKitTracking",
     "Sources/Checksums",
     "Sources/DestinationTesting",
     "Sources/Destinations",
@@ -32,6 +33,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/TrackingPlanTesting",
     "Sources/TrackingPlans",
     "Sources/Traffluent",
+    "Sources/UIKitTracking",
     "Tests/TraffluentTestSupport",
 ]
 

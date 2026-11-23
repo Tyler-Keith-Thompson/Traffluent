@@ -86,7 +86,13 @@ APPLE_ONLY_PACKAGES = ["grdb.swift"]
 # Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`), by
 # name. Bazel runs them on macOS alone: elsewhere they are incompatible, so `bazel test //...` skips
 # them, where a test binary that ran no tests would fail. SwiftPM still builds them, empty, on Linux.
-APPLE_ONLY_TESTS = ["SwiftUITrackingTests"]
+APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests"]
+
+# Test targets that run in the iOS simulator (an ios_unit_test in the test host, tools/test_host)
+# though they depend on no iOS module: tests of a module every platform builds but whose code is
+# UIKit's alone, so the Mac has nothing to run. Like the other simulator tests, Package.swift
+# leaves them out; Bazel runs them on macOS alone.
+SIMULATOR_TESTS = ["UIKitTrackingTests"]
 
 # The product whose macro generates mocks. A module that depends on it is compiled with the
 # MOCKING condition in debug builds only (SwiftPM's debug configuration, Bazel's
@@ -105,7 +111,9 @@ MODULES = [
     ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport.", ["Events", "Destinations", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; and Consent, which holds, delivers or drops each event by its ConsentCategory's status.", ["Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     # Instrumentation
-    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:), and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.", ["Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
+    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.", ["Events", "Persistence", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
+    ("UIKitTracking", "Instrumentation", "TrackerTrait: the tracker in a UIKit trait collection, set with traitOverrides.tracker on a window scene, view controller or view and read as traitCollection.tracker; and UIControl.track(_:for:), which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere.", ["Events", "Trackers"]),
+    ("AppKitTracking", "Instrumentation", "TrackerProviding: a responder, window delegate or application delegate that holds a tracker; NSView.tracker, the tracker of the nearest one a view's actions reach; and NSControl.track(_:), which tracks an event through it each time the control sends its action, beside the action; macOS only, empty elsewhere.", ["Events", "Trackers"]),
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
     ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
@@ -199,6 +207,8 @@ TEST_TARGETS = [
     ("HTTPDestinationsTests", ["HTTPDestinations", "DestinationTesting", "Destinations", "Events", "Trackers", "afluent/Afluent", "swift-http-types/HTTPTypes", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("SwiftUITrackingTests", ["SwiftUITracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
+    ("UIKitTrackingTests", ["UIKitTracking", "SwiftUITracking", "Events", "Trackers"]),
+    ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
@@ -359,6 +369,9 @@ def check():
     assert len(names + plugins) == len(set(names + plugins)), "duplicate module"
     for name in APPLE_ONLY_TESTS:
         assert name in dict(TEST_TARGETS), f"APPLE_ONLY_TESTS names unknown test target {name}"
+    for name in SIMULATOR_TESTS:
+        assert name in dict(TEST_TARGETS), f"SIMULATOR_TESTS names unknown test target {name}"
+        assert name not in APPLE_ONLY_TESTS, f"{name} is a simulator test, which runs on macOS alone already"
     packages = [p[0] for p in PACKAGES]
     for name, deps in [(m[0], m[3]) for m in MODULES + MACROS] + [(e[0], e[2]) for e in EXECUTABLES]:
         for d in deps:
@@ -432,9 +445,10 @@ def is_macro(d):
 
 
 def simulator_test(name):
-    """Whether test target `name` runs in the iOS simulator: it depends on an iOS module or a Bazel label."""
+    """Whether test target `name` runs in the iOS simulator: it is in SIMULATOR_TESTS, or depends on an
+    iOS module or a Bazel label."""
     deps = dict(TEST_TARGETS)[name]
-    return any(d in IOS_MODULES or d.startswith("//") for d in deps)
+    return name in SIMULATOR_TESTS or any(d in IOS_MODULES or d.startswith("//") for d in deps)
 
 
 def spm_dep(d):
@@ -895,7 +909,7 @@ def simulator_test_build_bazel(name, deps, size):
         'load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")\n'
         'load("//tools:swift_rules.bzl", "swift_library")\n\n'
         "# The tests, run in the iOS simulator: the target depends on an iOS module (IOS_MODULES in\n"
-        f"# scripts/modules.py). Tagged `{RELEASE_EXCLUDED_TAG}`, like every target but the speed-reliant ones.\n"
+        f"# scripts/modules.py) or is in SIMULATOR_TESTS. Tagged `{RELEASE_EXCLUDED_TAG}`, like every target but the speed-reliant ones.\n"
         "swift_library(\n"
         f'    name = "{name}Library",\n'
         "    testonly = True,\n"
@@ -924,6 +938,11 @@ def simulator_test_build_bazel(name, deps, size):
         f'    minimum_os_version = "{IOS_MINIMUM}",\n'
         f'    tags = [\n        "{RELEASE_EXCLUDED_TAG}",\n        "{SIMULATOR_TEST_TAG}",\n    ],\n'
         '    runner = "@rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",\n'
+        '    # The simulator is the Mac\'s alone, so elsewhere `bazel test //...` skips the bundle.\n'
+        '    target_compatible_with = select({\n'
+        '        "@platforms//os:macos": [],\n'
+        '        "//conditions:default": ["@platforms//:incompatible"],\n'
+        '    }),\n'
         '    test_host = "//tools/test_host",\n'
         '    visibility = ["//visibility:public"],\n'
         f'    deps = [":{name}Library"],\n'

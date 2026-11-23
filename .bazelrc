@@ -2,6 +2,14 @@
 # keep the two in step.
 build --macos_minimum_os=15.0
 build --host_macos_minimum_os=15.0
+build --ios_minimum_os=18.0
+
+# The simulator UIKitTrackingTests runs in (SIMULATOR_TESTS in scripts/modules.py), one simulator
+# test at a time: each carries SIMULATOR_TEST_TAG and boots a simulator of its own. An execution
+# option, so it keeps the analysis cache.
+build --ios_simulator_device="iPhone 16 Pro"
+build --ios_simulator_version=26.2
+build --local_resources=simulator=1
 
 # Debug is the default, so a bare `bazel build` and `just build` resolve to the same
 # configuration. Keeping them in step matters because of the analysis-cache guardrail below:

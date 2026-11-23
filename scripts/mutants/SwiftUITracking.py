@@ -32,8 +32,8 @@ SITE = "CallSite(file: file, fileID: fileID, function: function, line: line, col
 
 MUTANTS = [
     # The environment.
-    # The first `.noOp` is the doc comment's.
-    Mutant("defaulttracks", E, ".noOp", "Tracker()", nth=1),
+    # The first two `.noOp`s are the doc comments'.
+    Mutant("defaulttracks", E, ".noOp", "Tracker()", nth=2),
     Mutant("trackernotset", E, "environment(\\.tracker, tracker)", "environment(\\.tracker, .noOp)"),
     # The call site.
     Mutant("forwardline", C, FORWARD, FORWARD.replace("line: callSite.line", "line: callSite.column")),

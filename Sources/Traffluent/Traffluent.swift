@@ -10,5 +10,7 @@
 @_exported import HTTPDestinations
 @_exported import Trackers
 @_exported import SwiftUITracking
+@_exported import UIKitTracking
+@_exported import AppKitTracking
 @_exported import Checksums
 @_exported import Persistence

@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# EnvironmentValues.tracker, set with tracker(_:), and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.
+# EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.
 swift_library(
     name = "SwiftUITracking",
     srcs = glob(["**/*.swift"]),
@@ -12,6 +12,7 @@ swift_library(
         "//Sources/Events",
         "//Sources/Persistence",
         "//Sources/Trackers",
+        "//Sources/UIKitTracking",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
     ],
     visibility = ["//visibility:public"],
@@ -26,6 +27,7 @@ docc_archive(
         "//Sources/Events:EventsDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
         "//Sources/Trackers:TrackersDocumentation",
+        "//Sources/UIKitTracking:UIKitTrackingDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

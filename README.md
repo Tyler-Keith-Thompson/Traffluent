@@ -167,6 +167,75 @@ carry the screen's name. Apply it where the screen's view is placed, as above: a
 `@Environment` reads the environment around it, which the modifiers in its own body don't change.
 Until a tracker is set, the environment's is `Tracker.noOp`, so a preview tracks nothing.
 
+### UIKit and AppKit
+
+In UIKit (module `UIKitTracking`: iOS, iPadOS, tvOS, visionOS and Mac Catalyst), the tracker is a
+trait. Set it on the window scene as it connects, and every view controller and view in the scene
+inherits it, as SwiftUI views inherit their environment. Read it in an action with
+`traitCollection.tracker`, or let `track(_:for:)` track a control's events:
+
+```swift
+import UIKit
+
+struct ShareTapped: Event {}
+
+final class CheckoutViewController: UIViewController {
+    let share = UIButton(configuration: .filled())
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        share.track(ShareTapped())  // through the tracker the button's traits hold when it is tapped
+        share.addTarget(self, action: #selector(signUp(_:)), for: .primaryActionTriggered)
+        view.addSubview(share)
+    }
+
+    @objc func signUp(_ sender: UIButton) {
+        sender.traitCollection.tracker.track(SignedUp(plan: "pro"))
+    }
+}
+
+// In the scene delegate's scene(_:willConnectTo:options:):
+windowScene.traitOverrides.tracker = tracker
+```
+
+In AppKit (module `AppKitTracking`, macOS), a view finds its tracker the way an action finds its
+target: `NSView.tracker` asks the view's responder chain (its superviews and view controllers, its
+window and window controller), then the window's delegate and the application's delegate, for the
+first that conforms to `TrackerProviding`. `track(_:)` tracks an event each time a control sends
+its action, just before the action:
+
+```swift
+import AppKit
+
+final class CheckoutWindowController: NSWindowController, TrackerProviding {
+    let tracker: Tracker
+
+    init(window: NSWindow, tracker: Tracker) {
+        self.tracker = tracker
+        super.init(window: window)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    @objc func signUp(_ sender: NSButton) {
+        sender.tracker.track(SignedUp(plan: "pro"))
+    }
+}
+
+let share = NSButton(title: "Share", target: nil, action: nil)
+share.track(ShareTapped())  // through the tracker of the window it is in when it is clicked
+```
+
+Neither needs a global or swizzling. The tracker is found when the action fires, so each scene or
+window can have a tracker of its own, a view controller can override it for the views below it
+(with a tracker `enriched(by:)` a screen's name, say), and a control moved to another window tracks
+through that window's. `track(_:for:)` adds a `UIAction` beside the control's other actions and
+returns it, for `removeAction(_:for:)`. An `NSControl` has one target and action, so `track(_:)`
+puts its own in their place and sends the control's action on to its target, or up the responder
+chain when it had none; call it after setting them. SwiftUI's `\.tracker` and UIKit's trait are one
+value: SwiftUI views hosted in UIKit read the scene's tracker, and UIKit views hosted in SwiftUI read
+the environment's.
+
 To see events beside your logs or traces, deliver to `LoggerDestination(logger:)` (module
 `LoggingDestinations`) or `SpanEventDestination(tracer:)` (module `TracingDestinations`). Each is a
 module of its own, so only apps that use swift-log or swift-distributed-tracing that way link it.
@@ -531,7 +600,9 @@ says which facts go where, with the anti-patterns to avoid.
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context, for every event or, through `enriched(by:)`, for those of one tracker copy; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
-| `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
+| `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)` and shared with UIKit's `TrackerTrait`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
+| `UIKitTracking` | `TrackerTrait`: the tracker in a UIKit trait collection, set with `traitOverrides.tracker` on a window scene, view controller or view and read as `traitCollection.tracker`; and `UIControl.track(_:for:)`, which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere |
+| `AppKitTracking` | `TrackerProviding`: a responder, window delegate or application delegate that holds a tracker; `NSView.tracker`, the tracker of the nearest one a view's actions reach; and `NSControl.track(_:)`, which tracks an event through it each time the control sends its action; macOS only, empty elsewhere |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

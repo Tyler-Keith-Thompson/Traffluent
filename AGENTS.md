@@ -34,6 +34,7 @@ tools/                           Bazel rule wrappers (warnings as errors, Swift 
                                  tools/bazel turns BuildBuddy on when the Keychain holds its key, and
                                  on macOS sweeps stale output bases once a day (tools/sweep-output-bases):
                                  a deleted workspace's, or one idle 7 days
+tools/test_host/                 The iOS app UIKitTrackingTests runs inside, in the simulator
 ```
 
 `Benchmarks/` is a separate SwiftPM package (ordo-one/benchmark), generated from `BENCHMARKS` in
@@ -148,6 +149,10 @@ Every shell command gets a timeout. macOS has no `timeout`; use
   tagged `debug-only`, which `--config=release` filters out.
 - A test that bounds wall-clock time, or runs a large input under `.timeLimit`, belongs in
   `Tests/X/Performance/`.
+- `UIKitTrackingTests` runs in the iOS simulator (`SIMULATOR_TESTS` in `scripts/modules.py`; the
+  device and runtime are in `.bazelrc`), so `just test` boots one on the Mac; SwiftPM and Linux
+  leave it out. `just mutate` runs SwiftPM bundles only, so `scripts/mutants/UIKitTracking.py`'s
+  mutants are run one at a time against `bazel test //Tests/UIKitTrackingTests`.
 - Release builds use their own output base (see the justfile). Don't create other output bases
   or copies of the repo, and shut down any extra Bazel server you start.
 - Run suites through Bazel, not `swift test --filter`.
