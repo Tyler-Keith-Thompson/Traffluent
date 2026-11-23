@@ -86,13 +86,13 @@ APPLE_ONLY_PACKAGES = ["grdb.swift"]
 # Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`), by
 # name. Bazel runs them on macOS alone: elsewhere they are incompatible, so `bazel test //...` skips
 # them, where a test binary that ran no tests would fail. SwiftPM still builds them, empty, on Linux.
-APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests"]
+APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests", "AutomaticScreenTrackingTests"]
 
 # Test targets that run in the iOS simulator (an ios_unit_test in the test host, tools/test_host)
 # though they depend on no iOS module: tests of a module every platform builds but whose code is
 # UIKit's alone, so the Mac has nothing to run. Like the other simulator tests, Package.swift
 # leaves them out; Bazel runs them on macOS alone.
-SIMULATOR_TESTS = ["UIKitTrackingTests"]
+SIMULATOR_TESTS = ["UIKitTrackingTests", "AutomaticScreenTrackingUIKitTests"]
 
 # The product whose macro generates mocks. A module that depends on it is compiled with the
 # MOCKING condition in debug builds only (SwiftPM's debug configuration, Bazel's
@@ -114,6 +114,7 @@ MODULES = [
     ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.", ["Events", "Persistence", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
     ("UIKitTracking", "Instrumentation", "TrackerTrait: the tracker in a UIKit trait collection, set with traitOverrides.tracker on a window scene, view controller or view and read as traitCollection.tracker; and UIControl.track(_:for:), which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere.", ["Events", "Trackers"]),
     ("AppKitTracking", "Instrumentation", "TrackerProviding: a responder, window delegate or application delegate that holds a tracker; NSView.tracker, the tracker of the nearest one a view's actions reach; and NSControl.track(_:), which tracks an event through it each time the control sends its action, beside the action; macOS only, empty elsewhere.", ["Events", "Trackers"]),
+    ("AutomaticScreenTracking", "Instrumentation", "trackScreensAutomatically(kinds:_:), on a UIWindowScene or an NSWindow: opt-in screen views, which track ScreenViewed through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a predicate given the DiscoveredScreen, and left to a manual trackScreen(_:) where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere.", ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking"]),
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
     ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
@@ -209,6 +210,8 @@ TEST_TARGETS = [
     ("SwiftUITrackingTests", ["SwiftUITracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("UIKitTrackingTests", ["UIKitTracking", "SwiftUITracking", "Events", "Trackers"]),
     ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
+    ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "SwiftUITracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("AutomaticScreenTrackingUIKitTests", ["AutomaticScreenTracking", "SwiftUITracking", "UIKitTracking", "Events", "Trackers"]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),

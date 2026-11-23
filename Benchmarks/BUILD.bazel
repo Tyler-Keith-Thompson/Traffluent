@@ -17,6 +17,7 @@ LIBRARY_DIRECTORIES = [
     "Plugins/CheckTrackingPlan",
     "Plugins/ExportTrackingPlan",
     "Sources/AppKitTracking",
+    "Sources/AutomaticScreenTracking",
     "Sources/Checksums",
     "Sources/DestinationTesting",
     "Sources/Destinations",

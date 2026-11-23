@@ -27,6 +27,7 @@ let products: [Product] = [
     .library(name: "SwiftUITracking", targets: ["SwiftUITracking"]),
     .library(name: "UIKitTracking", targets: ["UIKitTracking"]),
     .library(name: "AppKitTracking", targets: ["AppKitTracking"]),
+    .library(name: "AutomaticScreenTracking", targets: ["AutomaticScreenTracking"]),
     .library(name: "Checksums", targets: ["Checksums"]),
     .library(name: "Persistence", targets: ["Persistence"]),
     .library(name: "GRDBPersistence", targets: ["GRDBPersistence"]),
@@ -66,6 +67,7 @@ let targets: [Target] = [
     .target(name: "SwiftUITracking", dependencies: ["Events", "Persistence", "Trackers", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .target(name: "UIKitTracking", dependencies: ["Events", "Trackers"], exclude: bazelFiles),
     .target(name: "AppKitTracking", dependencies: ["Events", "Trackers"], exclude: bazelFiles),
+    .target(name: "AutomaticScreenTracking", dependencies: ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking"], exclude: bazelFiles),
     // Persistence
     .target(name: "Checksums", exclude: bazelFiles),
     .target(name: "Persistence", dependencies: ["Events", "Checksums", .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
@@ -82,7 +84,7 @@ let targets: [Target] = [
     .plugin(name: "CheckTrackingPlan", capability: .command(intent: .custom(verb: "check-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan."))),
 
     // Umbrella: `import Traffluent` imports every module.
-    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "Checksums", "Persistence"], exclude: bazelFiles),
+    .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "AutomaticScreenTracking", "Checksums", "Persistence"], exclude: bazelFiles),
 
     // Shared fixtures (data only) for every test target.
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
@@ -100,6 +102,7 @@ let targets: [Target] = [
     .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", .product(name: "Afluent", package: "afluent"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "SwiftUITrackingTests", dependencies: ["SwiftUITracking", "Events", "Persistence", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .testTarget(name: "AppKitTrackingTests", dependencies: ["AppKitTracking", "Events", "Trackers"], exclude: bazelFiles),
+    .testTarget(name: "AutomaticScreenTrackingTests", dependencies: ["AutomaticScreenTracking", "SwiftUITracking", "AppKitTracking", "Events", "Trackers", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),

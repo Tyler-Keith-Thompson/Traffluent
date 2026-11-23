@@ -66,6 +66,20 @@ struct TrackScreen: ViewModifier {
             .onAppear { [screen, callSite] in
                 screenTracker.track(ScreenViewed(screen: screen), from: callSite)
             }
+            .markedAsTrackedScreen()
+    }
+}
+
+extension View {
+    /// The view, holding a `TrackedScreenMarker` behind it where UIKit or AppKit hosts it, so
+    /// automatic screen tracking leaves its screen to `trackScreen(_:)`.
+    @ViewBuilder
+    fileprivate func markedAsTrackedScreen() -> some View {
+        #if (canImport(UIKit) && !os(watchOS)) || canImport(AppKit)
+        background(TrackedScreenMarker())
+        #else
+        self
+        #endif
     }
 }
 #endif

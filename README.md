@@ -236,6 +236,39 @@ chain when it had none; call it after setting them. SwiftUI's `\.tracker` and UI
 value: SwiftUI views hosted in UIKit read the scene's tracker, and UIKit views hosted in SwiftUI read
 the environment's.
 
+### Automatic screen views
+
+Screens can track their own views (module `AutomaticScreenTracking`: iOS, iPadOS, tvOS, visionOS,
+Mac Catalyst and macOS). Nothing is tracked until a window scene, or on macOS a window, turns it
+on:
+
+```swift
+import AutomaticScreenTracking
+
+// In the scene delegate's scene(_:willConnectTo:options:), beside the scene's tracker:
+windowScene.traitOverrides.tracker = tracker
+windowScene.trackScreensAutomatically { screen in
+    switch screen.name {
+    case "DebugMenuViewController": nil  // not tracked
+    case "CheckoutView": ScreenViewed(screen: "Checkout")
+    default: ScreenViewed(screen: screen.name)
+    }
+}
+```
+
+A screen is a view controller on screen none of whose children is: the one a navigation controller
+shows, a tab's, one presented. It tracks `ScreenViewed` as it appears, and again when a pop or a
+dismissal reveals it, named after its controller's type, or for a hosting controller after the
+SwiftUI view it shows, such as each view a `NavigationStack` pushes on iOS. The closure gets each
+`DiscoveredScreen`, its name and kind, and returns the event to track, renamed, or `nil` to skip it;
+leave it out to track every screen under its own name. `kinds:` turns off UIKit's (or AppKit's)
+view controllers or SwiftUI's views. A SwiftUI screen given `trackScreen(_:)` is left to it, so it
+isn't tracked twice. Each screen view goes through the tracker the screen's traits hold, so each
+scene keeps its own; on macOS, `window.trackScreensAutomatically()` tracks through the tracker the
+screen's view finds up its responder chain. There, a `NavigationStack` draws what it pushes without
+a view controller, so give those views `trackScreen(_:)`. It swizzles nothing: the scene owns it,
+and it looks at the scene's view controllers after each turn of the main run loop.
+
 To see events beside your logs or traces, deliver to `LoggerDestination(logger:)` (module
 `LoggingDestinations`) or `SpanEventDestination(tracer:)` (module `TracingDestinations`). Each is a
 module of its own, so only apps that use swift-log or swift-distributed-tracing that way link it.
@@ -603,6 +636,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)` and shared with UIKit's `TrackerTrait`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
 | `UIKitTracking` | `TrackerTrait`: the tracker in a UIKit trait collection, set with `traitOverrides.tracker` on a window scene, view controller or view and read as `traitCollection.tracker`; and `UIControl.track(_:for:)`, which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere |
 | `AppKitTracking` | `TrackerProviding`: a responder, window delegate or application delegate that holds a tracker; `NSView.tracker`, the tracker of the nearest one a view's actions reach; and `NSControl.track(_:)`, which tracks an event through it each time the control sends its action; macOS only, empty elsewhere |
+| `AutomaticScreenTracking` | `trackScreensAutomatically(kinds:_:)`, on a `UIWindowScene` or an `NSWindow`: opt-in screen views, which track `ScreenViewed` through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a closure given each `DiscoveredScreen`, and left to a manual `trackScreen(_:)` where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
