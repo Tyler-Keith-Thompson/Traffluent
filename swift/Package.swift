@@ -19,5 +19,6 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.12.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", from: "604.0.0"),
     ]
 )

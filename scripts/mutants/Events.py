@@ -14,6 +14,7 @@ R = "EventRecord.swift"
 E = "Event.swift"
 K = "ConsentCategory.swift"
 V = "Sensitive.swift"
+S = "EventSchema.swift"
 
 MUTANTS = [
     Mutant("modulewholefileid", L, 'String(fileID.prefix { $0 != "/" })', "fileID"),
@@ -42,4 +43,11 @@ MUTANTS = [
     Mutant("descriptionreveals", V, '"<redacted>"', '"\\(value)"', nth=0),
     Mutant("debugdescriptionreveals", V, '"Sensitive(<redacted>)"', '"Sensitive(\\(value))"'),
     Mutant("mirrorreveals", V, "Mirror(self, children: [], displayStyle: .struct)", 'Mirror(self, children: ["value": value], displayStyle: .struct)'),
+    Mutant("propertyunnamed", S, "            self.name = name", '            self.name = ""', mode="stmt"),
+    Mutant("propertytypeunnamed", S, "            self.typeName = typeName", '            self.typeName = ""', mode="stmt"),
+    Mutant("propertyneveroptional", S, "            self.isOptional = isOptional", "            self.isOptional = false", mode="stmt"),
+    # The schema's own `self.name = name`, after the property's, which holds the text too.
+    Mutant("schemaunnamed", S, "        self.name = name", '        self.name = ""', mode="stmt", nth=1),
+    Mutant("schemaversionzero", S, "        self.version = version", "        self.version = 0", mode="stmt"),
+    Mutant("schemanoproperties", S, "        self.properties = properties", "        self.properties = []", mode="stmt"),
 ]

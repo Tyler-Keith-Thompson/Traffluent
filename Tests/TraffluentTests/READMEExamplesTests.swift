@@ -1,5 +1,6 @@
 // The README's examples, verbatim, so the README cannot drift from the code.
 
+import EventMacros
 import Foundation
 import Instrumentation
 import SystemPackage
@@ -116,6 +117,24 @@ struct READMEExamplesTests {
         tracker.track(SignedUp(plan: "pro"))
         await tracker.finish()
         try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
+    }
+
+    @Event(name: "checkout_started", version: 2)
+    struct CheckoutStarted {
+        var cartSize: Int
+        var coupon: String?
+    }
+
+    @Test("Deriving events with @Event")
+    func derivingEvents() async throws {
+        let tracker = Tracker()
+        tracker.track(CheckoutStarted(cartSize: 3, coupon: nil))
+        let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", "coupon"]
+        await tracker.finish()
+
+        #expect(properties == ["cartSize", "coupon"])
+        #expect(CheckoutStarted.name == "checkout_started")
+        #expect(CheckoutStarted.schema.version == 2)
     }
 }
 

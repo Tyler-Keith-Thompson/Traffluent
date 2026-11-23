@@ -34,5 +34,16 @@ let package = Package(
             path: "Benchmarks/PersistenceBenchmarks",
             plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]
         ),
+        .executableTarget(
+            name: "EventMacrosBenchmarks",
+            dependencies: [
+                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "EventMacros", package: "Traffluent"),
+                .product(name: "Events", package: "Traffluent"),
+                .product(name: "Persistence", package: "Traffluent"),
+            ],
+            path: "Benchmarks/EventMacrosBenchmarks",
+            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]
+        ),
     ]
 )

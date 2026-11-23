@@ -2,7 +2,7 @@
 """The module graph, written once.
 
 Package.swift, swift/Package.swift, every Sources/*/BUILD.bazel and Tests/*/BUILD.bazel, the
-umbrella module, tools/performance_tests.bzl and tools/executables.bzl are generated from the tables below, so SwiftPM
+umbrella module, tools/performance_tests.bzl, tools/executables.bzl and tools/macros.bzl are generated from the tables below, so SwiftPM
 and Bazel cannot drift. Run `just modules` after editing them. `//:package_swift_test` fails when
 Package.swift disagrees with the Bazel graph.
 
@@ -60,6 +60,9 @@ PACKAGES = [
     # Deque: the records a Consent holds while their category is undecided, which drop their oldest
     # once the hold is full. Foundation has no double-ended queue.
     ("swift-collections", "https://github.com/apple/swift-collections", "1.7.6"),
+    # The @Event macro's compiler plugin (MACROS) and its expansion tests. Only the plugin and its
+    # tests depend on it, so an app that doesn't use the macro never builds it.
+    ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "604.0.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -96,6 +99,23 @@ MODULES = [
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
     ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
     ("GRDBPersistence", "Persistence", "DatabaseStore: a RecordStore that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only.", ["Events", "Persistence", "grdb.swift/GRDB", "swift-log/Logging"]),
+    # Schema
+    ("EventMacros", "Schema", "The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration.", ["Events", "Persistence", "EventMacrosPlugin"]),
+]
+
+# Compiler plugins holding macros: (name, group, description, dependencies). A module lists one
+# among its dependencies to declare its macros: SwiftPM takes it as a dependency, Bazel as a
+# plugin, which rules_swift loads for that module and the modules that depend on it directly. A
+# plugin is no library: it has no product, no docs and no place in the umbrella. A test target
+# lists one to test its expansions: SwiftPM links the plugin's module into the tests, and Bazel
+# links `<name>Library`, the same sources compiled as a library in the test's package, since
+# rules_swift builds a swift_test's plugin dependency for the host and loads it as a plugin, not as
+# a module. (In the plugin's own package the library's swiftmodule would collide with the plugin's.)
+MACROS = [
+    ("EventMacrosPlugin", "Schema", "The @Event macro's implementation: the extension it adds to an event's struct.", [
+        "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros",
+        "swift-syntax/SwiftCompilerPlugin", "swift-syntax/SwiftDiagnostics",
+    ]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -105,9 +125,9 @@ MODULES = [
 IOS_MODULES = []
 
 # Modules the umbrella leaves out: each is a product of its own that an adopter adds by name, as
-# it pulls in a package the rest of the library doesn't need (GRDB). The umbrella's docs still
+# it pulls in a package the rest of the library doesn't need (GRDB, swift-syntax). The umbrella's docs still
 # link to them.
-NON_UMBRELLA_MODULES = ["GRDBPersistence"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros"]
 IOS_MINIMUM = "18.0"
 
 # Executables: (name, description, dependencies). Each is an `.executableTarget` and product in
@@ -120,6 +140,8 @@ EXECUTABLES = [
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
+    ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "DestinationTesting", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
@@ -128,7 +150,7 @@ TEST_TARGETS = [
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
+    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the
@@ -172,6 +194,7 @@ SIMULATOR_TEST_TAG = "resources:simulator:1"
 BENCHMARKS = [
     ("ChecksumsBenchmarks", ["Checksums"]),
     ("PersistenceBenchmarks", ["Persistence", "Events", "Trackers"]),
+    ("EventMacrosBenchmarks", ["EventMacros", "Events", "Persistence"]),
 ]
 BENCHMARK_PACKAGE = ("https://github.com/ordo-one/benchmark", "1.27.0")
 
@@ -188,17 +211,23 @@ def performance_target(name):
 
 
 def check():
-    names = [m[0] for m in MODULES]
+    names = [m[0] for m in MODULES] + macro_names()
     assert len(names) == len(set(names)), "duplicate module"
     for name in APPLE_ONLY_TESTS:
         assert name in dict(TEST_TARGETS), f"APPLE_ONLY_TESTS names unknown test target {name}"
     packages = [p[0] for p in PACKAGES]
-    for name, deps in [(m[0], m[3]) for m in MODULES] + [(e[0], e[2]) for e in EXECUTABLES]:
+    for name, deps in [(m[0], m[3]) for m in MODULES + MACROS] + [(e[0], e[2]) for e in EXECUTABLES]:
         for d in deps:
             if "/" in d:
                 assert d.split("/")[0] in packages, f"{name} depends on unknown package {d}"
             else:
                 assert d in names, f"{name} depends on unknown {d}"
+    for name, _, _, deps in MACROS:
+        assert all("/" in d for d in deps), f"the plugin {name} may depend on packages only"
+    for name, deps in TEST_TARGETS:
+        assert not (any(is_macro(d) for d in deps) and simulator_test(name)), f"{name} tests a plugin, which the simulator can't load"
+    for name in IOS_MODULES + NON_UMBRELLA_MODULES:
+        assert not is_macro(name), f"{name} is a plugin, which is never in the umbrella or IOS_MODULES"
     executables = [e[0] for e in EXECUTABLES]
     assert not set(executables) & set(names + [PROJECT]), "an executable shares a module's name"
     tests = [t[0] for t in TEST_TARGETS]
@@ -231,6 +260,15 @@ def simulator_test(name):
     """Whether test target `name` runs in the iOS simulator: it depends on an iOS module or a Bazel label."""
     deps = dict(TEST_TARGETS)[name]
     return any(d in IOS_MODULES or d.startswith("//") for d in deps)
+
+
+def macro_names():
+    return [m[0] for m in MACROS]
+
+
+def is_macro(d):
+    """Whether `d` names a compiler plugin (MACROS)."""
+    return d in macro_names()
 
 
 def spm_dep(d):
@@ -286,8 +324,19 @@ def apple_only(d):
     return "/" in d and d.split("/")[0] in APPLE_ONLY_PACKAGES
 
 
-def bazel_deps(deps):
-    """A `deps` attribute, or nothing when there are none; Apple-only products sit in a macOS `select`."""
+def bazel_deps(deps, testing=False):
+    """A `deps` attribute, or nothing when there are none; Apple-only products sit in a macOS `select`.
+    A module's compiler plugins (MACROS) go in a `plugins` attribute instead; a test target's
+    are the plugins' `Library` targets (see MACROS)."""
+    if testing:
+        return _bazel_deps([f":{d}Library" if is_macro(d) else d for d in deps])
+    plugins = [d for d in deps if is_macro(d)]
+    deps = [d for d in deps if not is_macro(d)]
+    plugins_attr = "    plugins = [\n" + "".join(f'        "{bazel_label(d)}",\n' for d in plugins) + "    ],\n" if plugins else ""
+    return _bazel_deps(deps) + plugins_attr
+
+
+def _bazel_deps(deps):
     if not deps:
         return ""
     listed = "".join(f'        "{bazel_label(d)}",\n' for d in deps if not apple_only(d))
@@ -305,7 +354,7 @@ def bazel_deps(deps):
 
 
 def bazel_label(d):
-    if d.startswith("//"):
+    if d.startswith("//") or d.startswith(":"):
         return d
     if "/" in d:
         package, product = d.split("/")
@@ -332,6 +381,7 @@ def exclude_arg(path):
 def package_swift():
     lines = [
         "// swift-tools-version: 6.4",
+    ] + (["import CompilerPluginSupport"] if MACROS else []) + [
         "import PackageDescription",
         "",
         "// GENERATED by scripts/modules.py — edit the table there, then run `just modules`.",
@@ -373,6 +423,10 @@ def package_swift():
             lines.append(f'    .target(name: "{name}", dependencies: [{dl}]{ex}{settings}),')
         else:
             lines.append(f'    .target(name: "{name}"{ex}),')
+    for name, g, _, deps in MACROS:
+        lines.append(f"    // {g}: compiler plugin")
+        dl = ", ".join(spm_dep(d) for d in deps)
+        lines.append(f'    .macro(name: "{name}", dependencies: [{dl}]{exclude_arg(f"Sources/{name}")}),')
     if EXECUTABLES:
         lines += ["", "    // Executables"]
     for name, _, deps in EXECUTABLES:
@@ -463,7 +517,7 @@ def build_bazel(name, description, deps, doc_modules=None):
             '    visibility = ["//visibility:public"],\n'
             ")\n"
         )
-    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in (deps if doc_modules is None else doc_modules) if "/" not in d)
+    doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in (deps if doc_modules is None else doc_modules) if "/" not in d and not is_macro(d))
     doc_deps_attr = f"    deps = [\n{doc_deps}    ],\n" if doc_deps else ""
     return (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
@@ -487,6 +541,61 @@ def build_bazel(name, description, deps, doc_modules=None):
         '    tags = ["manual"],\n'
         '    visibility = ["//visibility:public"],\n'
         ")\n"
+    )
+
+
+def macro_build_bazel(name, description, deps):
+    return (
+        "# GENERATED by scripts/modules.py — edit MACROS there, then run `just modules`.\n\n"
+        'load("//tools:swift_rules.bzl", "swift_compiler_plugin")\n\n'
+        f"# {description}\n"
+        "swift_compiler_plugin(\n"
+        f'    name = "{name}",\n'
+        '    srcs = [":srcs"],\n'
+        f'    module_name = "{name}",\n'
+        f"{bazel_deps(deps)}"
+        '    visibility = ["//visibility:public"],\n'
+        ")\n\n"
+        "# The sources, which the tests of the plugin also compile as a library (MACROS in\n"
+        "# scripts/modules.py).\n"
+        "filegroup(\n"
+        '    name = "srcs",\n'
+        '    srcs = glob(["**/*.swift"]),\n'
+        '    visibility = ["//Tests:__subpackages__"],\n'
+        ")\n"
+    )
+
+
+def macro_library_bazel(name):
+    """The testonly library of plugin `name`'s sources that a test package links (see MACROS)."""
+    deps = dict((m[0], m[3]) for m in MACROS)[name]
+    return (
+        f"# {name}'s sources as a library of the same module, for these tests to link (MACROS in\n"
+        "# scripts/modules.py). Its `@main` entry point is renamed, as swift_compiler_plugin renames\n"
+        "# it, so it doesn't clash with the test runner's.\n"
+        "swift_library(\n"
+        f'    name = "{name}Library",\n'
+        "    testonly = True,\n"
+        f'    srcs = ["//Sources/{name}:srcs"],\n'
+        f'    module_name = "{name}",\n'
+        "    copts = [\n"
+        '        "-Xfrontend",\n'
+        '        "-entry-point-function-name",\n'
+        '        "-Xfrontend",\n'
+        f'        "{name}_main",\n'
+        "    ],\n"
+        f'    tags = ["{RELEASE_EXCLUDED_TAG}"],\n'
+        f"{bazel_deps(deps)}"
+        ")\n\n"
+    )
+
+
+def macros_bzl():
+    packages = "".join(f'    "Sources/{name}",\n' for name in macro_names())
+    return (
+        '"""GENERATED by scripts/modules.py (MACROS) — edit the table there, then run `just modules`."""\n\n'
+        "# The source packages that hold compiler plugins, which have no documentation of their own.\n"
+        f"MACRO_PACKAGES = [\n{packages}]\n"
     )
 
 
@@ -549,7 +658,7 @@ def test_targets_bazel(name, deps, size, srcs, tags):
         f"{tags_attr}"
         "    # Read by //:package_swift_test, which checks Package.swift against the Bazel graph.\n"
         '    visibility = ["//:__pkg__"],\n'
-        f"{bazel_deps(deps)}"
+        f"{bazel_deps(deps, testing=True)}"
         ")\n\n"
         "# `bazel test` / `just test`: a standalone executable, fast to start and run in Bazel's sandbox.\n"
         "swift_test(\n"
@@ -633,6 +742,7 @@ def test_build_bazel(name, deps):
         f"Tagged `{RELEASE_EXCLUDED_TAG}`: none of these relies on speed, so\n"
         "# `--config=release` neither builds nor runs them (.bazelrc).\n"
     )
+    header += "".join(macro_library_bazel(d) for d in deps if is_macro(d))
     if name not in PERFORMANCE_TESTS:
         return (header + "# The tests, built once and linked into two runners.\n# " + excluded_note
                 + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"])', [RELEASE_EXCLUDED_TAG]))
@@ -669,7 +779,7 @@ def executables_bzl():
 
 def library_directories():
     """Every non-test target directory the root Package.swift declares."""
-    directories = [f"Sources/{m[0]}" for m in package_modules()] + [f"Sources/{e[0]}" for e in EXECUTABLES]
+    directories = [f"Sources/{m[0]}" for m in package_modules()] + [f"Sources/{e[0]}" for e in EXECUTABLES] + [f"Sources/{name}" for name in macro_names()]
     if umbrella():
         directories.append(f"Sources/{PROJECT}")
     return sorted(directories + [f"Tests/{TEST_SUPPORT}"])
@@ -774,6 +884,9 @@ def main():
     for name, description, deps in EXECUTABLES:
         d = os.path.join(ROOT, "Sources", name)
         write(os.path.join(d, "BUILD.bazel"), executable_build_bazel(name, description, deps))
+    for name, _, description, deps in MACROS:
+        write(os.path.join(ROOT, "Sources", name, "BUILD.bazel"), macro_build_bazel(name, description, deps))
+    write(os.path.join(ROOT, "tools", "macros.bzl"), macros_bzl())
     write(os.path.join(ROOT, "Tests", TEST_SUPPORT, "BUILD.bazel"), test_support_build_bazel())
     write(os.path.join(ROOT, "tools", "executables.bzl"), executables_bzl())
     write(os.path.join(ROOT, "tools", "performance_tests.bzl"), performance_tests_bzl())

@@ -45,6 +45,7 @@ use_repo(
     "swiftpkg_swift_distributed_tracing",
     "swiftpkg_swift_http_types",
     "swiftpkg_swift_log",
+    "swiftpkg_swift_syntax",
     "swiftpkg_swift_property_based",
     "swiftpkg_swift_system",
     "swiftpkg_swiftprng",

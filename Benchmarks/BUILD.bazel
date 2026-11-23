@@ -17,6 +17,8 @@ LIBRARY_DIRECTORIES = [
     "Sources/Checksums",
     "Sources/DestinationTesting",
     "Sources/Destinations",
+    "Sources/EventMacros",
+    "Sources/EventMacrosPlugin",
     "Sources/Events",
     "Sources/GRDBPersistence",
     "Sources/HTTPDestinations",
@@ -32,6 +34,7 @@ LIBRARY_DIRECTORIES = [
 BENCHMARKS = [
     "ChecksumsBenchmarks",
     "PersistenceBenchmarks",
+    "EventMacrosBenchmarks",
 ]
 
 simulated_benchmark(
@@ -59,6 +62,26 @@ simulated_benchmark(
         "//Sources/Persistence",
         "//Sources/Events",
         "//Sources/Trackers",
+    ],
+    manifests = MANIFESTS,
+    library_directories = LIBRARY_DIRECTORIES,
+    benchmarks = BENCHMARKS,
+    project = "traffluent",
+    harness = ".harness/bin/benchmark-harness",
+    # Empty until `just bench-simulated` copies the harness in; `bazel test //...` loads this anyway.
+    harness_files = glob([".harness/bin/*.bundle/**"], allow_empty = True),
+    stamp = ".harness/stamp",
+    # `manual`: measuring starts a VM, so `bazel build //...` leaves these out.
+    tags = ["manual"],
+)
+
+simulated_benchmark(
+    name = "EventMacrosBenchmarks",
+    srcs = glob(["Benchmarks/EventMacrosBenchmarks/**"]),
+    modules = [
+        "//Sources/EventMacros",
+        "//Sources/Events",
+        "//Sources/Persistence",
     ],
     manifests = MANIFESTS,
     library_directories = LIBRARY_DIRECTORIES,

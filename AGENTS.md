@@ -24,6 +24,8 @@ Sources/Traffluent/             Umbrella module (@_exported imports) and the lan
 Tests/<Module>Tests/             One test target per module; Performance/ holds speed-reliant tests
 Tests/TraffluentTests/          The README examples, verbatim
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
+Tests/CompileFailures/           Sources that must not compile, each checked for its errors
+                                 (tools/compile_failure_test.bzl); Bazel only
 scripts/modules.py               The module graph
 scripts/mutants/<Module>.py      Planted bugs for `just mutate <Module>` (scripts/mutate.py)
 Fuzz/Sources/Fuzz<Module>/       A libFuzzer target per module, in the separate Fuzz/ package
@@ -55,6 +57,11 @@ the umbrella module and `swift/Package.swift` from it. Never edit the generated 
 - Add a module: a row in `MODULES` (name, group, description, dependencies), then `just modules`.
 - Add a test target: a row in `TEST_TARGETS`. A target with a `Performance/` directory of Swift
   sources must be listed in `PERFORMANCE_TESTS`, and the reverse.
+- Add a compiler plugin (macros): a row in `MACROS`, listed among the dependencies of the module
+  that declares its macros (`EventMacros` for `EventMacrosPlugin`), which keeps swift-syntax out of
+  every other module. A test target that lists the plugin tests its expansions with
+  `SwiftSyntaxMacrosGenericTestSupport` (Swift Testing, through `failureHandler:`); under Bazel it
+  links the plugin's sources compiled as a library in the test's package (see `MACROS`).
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
 - Add an external package: a row in `PACKAGES`, its `swiftpkg_<identity>` repository in

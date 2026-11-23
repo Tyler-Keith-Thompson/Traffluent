@@ -261,6 +261,9 @@ version, is left untouched after a rollback. The store makes the log durable aga
 the background or terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
 context.
 
+An event declared with `@Event` (below) is `BinaryCodable` already, so a store keeps it with no
+conformance written by hand.
+
 An app on Apple platforms that already keeps a GRDB database can keep its records there instead:
 `DatabaseStore(events:database:table:byteBound:)` (module `GRDBPersistence`, a product of its own
 that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a table
@@ -268,6 +271,36 @@ name, creates the table with a migration of its own, and opens no second SQLite 
 the same promises as `SegmentStore`: the worker commits each record before publishing it, a batch is
 marked before it goes out and its rows deleted once delivered, the table is bounded by its records'
 encoded bytes with the oldest dropped and reported, and records are encoded the same way.
+
+### Deriving events with `@Event`
+
+`@Event` (module `EventMacros`, a product of its own that `import Traffluent` leaves out, so only
+apps that use it build swift-syntax) makes a struct an event from its declaration. It adds the
+`Event` and `BinaryCodable` conformances, the event's name and consent category when you give
+them, and a `schema`, an `EventSchema` value that tooling reads:
+
+```swift
+import EventMacros
+
+@Event(name: "checkout_started", version: 2)
+struct CheckoutStarted {
+    var cartSize: Int
+    var coupon: String?
+}
+
+let tracker = Tracker()
+tracker.track(CheckoutStarted(cartSize: 3, coupon: nil))
+let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", "coupon"]
+```
+
+The schema holds the name, the version and each stored property's name, type as written and
+optionality, in declaration order. The encoding writes and reads those properties in the same
+order, as the hand-written conformance under Persistence does, and a `Sensitive` property keeps its
+redaction. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`). A stored
+property whose type isn't `BinaryCodable` is a compile error that names it:
+`static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'`.
+So are `@Event` on anything but a struct and a stored property without a type annotation. Static
+and computed properties are left out. The struct keeps its memberwise initializer.
 
 ## Logging, tracing, metrics and analytics
 
@@ -280,7 +313,7 @@ says which facts go where, with the anti-patterns to avoid.
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
+| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `EventSchema`, an event type's name, version and stored properties as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
 | `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
@@ -290,6 +323,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
+| `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration; left out of `import Traffluent`, so only apps that use it build swift-syntax |
 
 ## Examples
 

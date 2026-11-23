@@ -38,6 +38,7 @@ docc_archive(
         "//Sources/Checksums:ChecksumsDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
         "//Sources/GRDBPersistence:GRDBPersistenceDocumentation",
+        "//Sources/EventMacros:EventMacrosDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

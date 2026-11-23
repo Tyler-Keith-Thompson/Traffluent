@@ -1,0 +1,31 @@
+# Sources that must fail to compile, each checked for the errors it must report
+# (tools/compile_failure_test.bzl). SwiftPM never sees this directory: no target holds it.
+
+load("//tools:compile_failure_test.bzl", "swift_compile_failure_test")
+
+# @Event on a struct with a stored property whose type isn't BinaryCodable: the error names the
+# property, through the requirement the macro generates for each one.
+swift_compile_failure_test(
+    name = "EventNonBinaryCodableProperty",
+    size = "small",
+    src = "EventNonBinaryCodableProperty.swift",
+    expected_errors = [
+        "error: static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same struct with every property BinaryCodable compiles, so the check above fails for the
+# property's type alone and not because this rule can't build the fixture.
+swift_compile_failure_test(
+    name = "EventBinaryCodablePropertiesControl",
+    size = "small",
+    src = "EventBinaryCodablePropertiesControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)

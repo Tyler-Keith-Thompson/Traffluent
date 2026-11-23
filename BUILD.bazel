@@ -3,6 +3,7 @@
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcodeproj", "xcschemes")
 load("//tools:docc.bzl", "docc_site")
 load("//tools:executables.bzl", "EXECUTABLE_PACKAGES")
+load("//tools:macros.bzl", "MACRO_PACKAGES")
 load("//tools:performance_tests.bzl", "PERFORMANCE_TEST_PACKAGES")
 load("//tools:swiftpm.bzl", "swiftpm_manifest_test")
 
@@ -18,11 +19,12 @@ APP_TARGETS = []
 # `Tests/` with a BUILD.bazel holding a swift_test is a test bundle. Listing them by hand means a
 # new suite is invisible in Xcode until somebody remembers to come back here.
 #
-# TraffluentTestSupport lives under Tests/ too, but it is a library, so it is excluded by name.
+# TraffluentTestSupport lives under Tests/ too, but it is a library, so it is excluded by name, and so
+# is CompileFailures, which holds no Swift test module: its tests check sources that must not compile.
 TEST_PACKAGES = sorted([
     package
     for package in subpackages(include = ["Tests/*"])
-    if package != "Tests/TraffluentTestSupport"
+    if package not in ["Tests/TraffluentTestSupport", "Tests/CompileFailures"]
 ])
 
 # Xcode runs each package's .xctest bundle target; `bazel test` runs its swift_test (see
@@ -98,7 +100,7 @@ docc_site(
     archives = [
         "//" + package + ":" + package.removeprefix("Sources/") + "Documentation"
         for package in sorted(subpackages(include = ["Sources/*"]))
-        if package not in EXECUTABLE_PACKAGES and package not in IOS_PACKAGES
+        if package not in EXECUTABLE_PACKAGES and package not in IOS_PACKAGES and package not in MACRO_PACKAGES
     ],
     landing_page_name = "Traffluent",
     tags = ["manual"],
