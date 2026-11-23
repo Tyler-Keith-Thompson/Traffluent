@@ -202,10 +202,10 @@ struct SegmentStoreRecoveryTests {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreRecoveryTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: directory.appending("00000000000000000001.segment").string, contents: Data())
-        FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]))
+        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000001.segment").string, contents: Data()))
+        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0])))
         // A short third segment, the only one recovery reports.
-        FileManager.default.createFile(atPath: directory.appending("00000000000000000003.segment").string, contents: Data([0x54, 0x52, 0x46]))
+        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000003.segment").string, contents: Data([0x54, 0x52, 0x46])))
         let expected = DropReport.corruption(byteCount: 3)
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)

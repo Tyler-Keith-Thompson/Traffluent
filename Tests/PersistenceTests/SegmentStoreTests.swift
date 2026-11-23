@@ -135,7 +135,7 @@ struct SegmentStoreTests {
         defer { try? FileManager.default.removeItem(atPath: root.string) }
         try FileManager.default.createDirectory(atPath: root.string, withIntermediateDirectories: true)
         let file = root.appending("file")
-        FileManager.default.createFile(atPath: file.string, contents: Data([1]))
+        try #require(FileManager.default.createFile(atPath: file.string, contents: Data([1])))
 
         #expect(throws: Errno.self) {
             _ = try SegmentStore(events: [Tapped.self], directory: file.appending("log"))
@@ -149,7 +149,7 @@ struct SegmentStoreTests {
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
         let expected = ["00000000000000000001.journal", "1.segment", "notes.txt"]
         for name in expected {
-            FileManager.default.createFile(atPath: directory.appending(name).string, contents: Data([1, 2, 3]))
+            try #require(FileManager.default.createFile(atPath: directory.appending(name).string, contents: Data([1, 2, 3])))
         }
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
