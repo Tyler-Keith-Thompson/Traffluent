@@ -118,7 +118,7 @@ TEST_TARGETS = [
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation", "swift-system/SystemPackage"]),
+    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the

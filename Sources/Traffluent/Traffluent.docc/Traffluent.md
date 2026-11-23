@@ -25,6 +25,10 @@ try await delivery.execute()
 
 ## Topics
 
+### Essentials
+
+- <doc:WhatGoesWhere>
+
 ### Modules
 
 - ``/Events``

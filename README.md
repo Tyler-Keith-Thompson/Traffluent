@@ -179,6 +179,13 @@ the same promises as `SegmentStore`: each record is committed before `track` ret
 marked before it goes out and its rows deleted once delivered, the table is bounded by its records'
 encoded bytes with the oldest dropped and reported, and records are encoded the same way.
 
+## Logging, tracing, metrics and analytics
+
+Each signal has one job: logs are for the developer debugging, traces for where time went, metrics
+for alerts, and analytics for what people do in the product. [Logging, Tracing, Metrics and
+Analytics](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/whatgoeswhere)
+says which facts go where, with the anti-patterns to avoid.
+
 ## Modules
 
 | Module | Holds |

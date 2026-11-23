@@ -20,6 +20,7 @@ swift_library(
     deps = [
         "//Sources/Traffluent",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_distributed_tracing//:Tracing",
         "@swiftpkg_swift_system//:SystemPackage",
     ],
 )
