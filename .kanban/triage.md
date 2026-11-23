@@ -132,12 +132,17 @@ bad row in a dashboard.
   build or test machinery returns. Until then an item asking for Wasm is turned down, pointing
   here.
 
+- D7. Swift types are the source of an event's schema (TRAF-15, decided by the agent working it,
+  2026-11-23; the owner asked for "codegen where it makes sense" and may change this). `@Event`
+  (module EventMacros, outside the umbrella) derives the conformance, the name, an `EventSchema`
+  value and the binary encoding from the declaration. A schema file such as a JSON Schema tracking
+  plan is an export of those types, never the input. Rejected: an external schema file with
+  codegen into Swift, which makes the Swift type a generated copy of something else; `Codable`
+  (too slow, per the owner); and a runtime Mirror walk (slow, can't see optionality).
+
 ## Open questions
 - Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its
   own persistence and networking.
-- Where does the event schema come from: Swift types first (macros, or protocols with derived
-  encoding), or an external schema file (JSON Schema, a tracking plan) with codegen? Should
-  codegen tooling live in this repo?
 - How much automatic instrumentation: lifecycle and sessions only, or also screen views
   (UIKit or SwiftUI), taps, deep links and network requests? Opt in or opt out?
 - Should there be adapters or a migration path from Segment's analytics-swift or vendor SDKs?
