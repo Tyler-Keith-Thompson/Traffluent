@@ -43,17 +43,17 @@ struct READMEExamplesTests {
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
-    enum SessionKey: ServiceContextKey {
+    enum ExperimentKey: ServiceContextKey {
         typealias Value = String
     }
 
     @Test("Context and enrichers")
     func contextAndEnrichers() async throws {
-        let session = Enricher { context in
-            context[SessionKey.self] = "s-42"
+        let experiment = Enricher { context in
+            context[ExperimentKey.self] = "new-checkout"
         }
-        let tracker = Tracker(enrichers: [session])
-        tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is "s-42"
+        let tracker = Tracker(enrichers: [experiment])
+        tracker.track(SignedUp(plan: "pro"))  // its record's context[ExperimentKey.self] is "new-checkout"
         await tracker.finish()
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()
     }
@@ -139,6 +139,20 @@ struct READMEExamplesTests {
         await lifecycle.finish()
         await tracker.finish()
         try await delivery.execute()  // prints: ApplicationOpened ApplicationOpened(fromBackground: false)
+    }
+
+    @Test("Sessions")
+    func sessions() async throws {
+        let tracker = Tracker(enrichers: [.sessions(timeout: .seconds(30 * 60))])
+        tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is the session's UUID
+        await tracker.finish()
+
+        var records = tracker.records.makeAsyncIterator()
+        let started = try #require(await records.next())
+        let signedUp = try #require(await records.next())
+        #expect(started.event is SessionStarted)
+        #expect(signedUp.context[SessionKey.self] != nil)
+        #expect(signedUp.context[SessionKey.self] == started.context[SessionKey.self])
     }
 
     @Event(name: "checkout_started", version: 2)

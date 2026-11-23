@@ -104,15 +104,15 @@ is tracked:
 ```swift
 import Instrumentation
 
-enum SessionKey: ServiceContextKey {
+enum ExperimentKey: ServiceContextKey {
     typealias Value = String
 }
 
-let session = Enricher { context in
-    context[SessionKey.self] = "s-42"
+let experiment = Enricher { context in
+    context[ExperimentKey.self] = "new-checkout"
 }
-let tracker = Tracker(enrichers: [session])
-tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is "s-42"
+let tracker = Tracker(enrichers: [experiment])
+tracker.track(SignedUp(plan: "pro"))  // its record's context[ExperimentKey.self] is "new-checkout"
 ```
 
 `tracker.enriched(by:)` gives the part of an app a value belongs to a copy of the tracker whose
@@ -363,6 +363,37 @@ to the background survives it being killed there. A delivery batched with `.life
 is pending as it reads the `ApplicationBackgrounded` record. The notification's handler only hands
 the transition on: the work runs on a task of its own, never on the main thread, and on platforms
 that suspend apps it holds background time from `ProcessInfo.performExpiringActivity` until done.
+
+### Sessions
+
+Every event can carry the session it was tracked in (module `Sessions`: every platform). Nothing is
+put in a session until the app adds the sessions enricher to the ones it builds its tracker with:
+
+```swift
+import Sessions
+
+let tracker = Tracker(enrichers: [.sessions(timeout: .seconds(30 * 60))])
+tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is the session's UUID
+```
+
+The tracker's worker sets each record's `SessionKey` to its session's identifier, through every copy
+of the tracker, the environment's and the traits' included. A session goes on while each event comes
+less than the timeout (30 minutes by default) after the one before it, measured between the events'
+timestamps, when each was tracked; the first event after that starts a new session. So the app coming
+back from the background past the timeout starts a new session with its first event, such as
+`ApplicationOpened`, without `Sessions` and `LifecycleTracking` knowing about each other.
+
+`SessionStarted` comes before each session's first event, at its time, and, from the second session
+on, `SessionEnded(duration:)` before that, stamped with the time of the ended session's last event,
+its duration running from the session's first event to its last. A session ends only when an event
+comes after the timeout, so a run's last session has no `SessionEnded`: a destination takes its end
+from its last event. `kinds:` turns either event off, or both, and every record still carries its
+session's key.
+
+The identifier is a random UUID, derived from nothing, and lives in the enricher's memory only:
+neither the tracker nor its store writes it to disk (a store keeps no record's context), and the
+next launch's tracker starts a new session with a new identifier. Traffluent keeps no identifier
+that links one session to another.
 
 ### Consent
 
@@ -714,6 +745,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `AutomaticScreenTracking` | `trackScreensAutomatically(kinds:_:)`, on a `UIWindowScene` or an `NSWindow`: opt-in screen views, which track `ScreenViewed` through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a closure given each `DiscoveredScreen`, and left to a manual `trackScreen(_:)` where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere |
 | `AutomaticControlTracking` | `trackControlsAutomatically(_:)`, on a `UIWindowScene`: opt-in control activations, which track `ControlActivated` through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a closure given each `DiscoveredControl`, with its screen as `ScreenKey`; SwiftUI's controls left to `trackOnTap(_:)`; without swizzling; `ControlActivated` on every platform, the tracking iOS, iPadOS, tvOS, visionOS and Mac Catalyst only |
 | `LifecycleTracking` | `trackLifecycle(kinds:version:versionStore:notificationCenter:)`, on a `Tracker`: opt-in lifecycle events, `ApplicationInstalled`, `ApplicationUpdated`, `ApplicationOpened`, `ApplicationBackgrounded` and `ApplicationTerminated`, from the platform's application notifications, installs and updates decided from the version a `VersionStore` keeps (`FileVersionStore`, `InMemoryVersionStore`); on backgrounding, the tracker's records made durable and `LifecycleBatchStrategy`'s batches flushed; each kind can be turned off; every platform, Linux tracking only its start and finish |
+| `Sessions` | `Enricher.sessions(timeout:kinds:)`: opt-in sessions, an enricher that stamps every record's context with its `SessionKey`, a random UUID held in memory only, and starts a new session when an event comes after the timeout's inactivity, measured between the events' timestamps, tracking `SessionEnded(duration:)` and `SessionStarted` before it; each kind can be turned off while the key stays; every platform |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

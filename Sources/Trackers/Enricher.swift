@@ -1,3 +1,4 @@
+public import Events
 public import Instrumentation
 
 /// Adds to the context of each event a tracker tracks, before the record is delivered.
@@ -6,14 +7,14 @@ public import Instrumentation
 /// type all the way to the destinations:
 ///
 /// ```swift
-/// enum SessionKey: ServiceContextKey {
+/// enum ExperimentKey: ServiceContextKey {
 ///     typealias Value = String
 /// }
 ///
-/// let session = Enricher { context in
-///     context[SessionKey.self] = "s-42"
+/// let experiment = Enricher { context in
+///     context[ExperimentKey.self] = "new-checkout"
 /// }
-/// let tracker = Tracker(enrichers: [session])
+/// let tracker = Tracker(enrichers: [experiment])
 /// ```
 ///
 /// A tracker's worker runs its enrichers in order, on the context `track` took from
@@ -22,20 +23,39 @@ public import Instrumentation
 /// tracking caller's thread, so it sees the caller's context only, not its other task-local
 /// values or its actor.
 public struct Enricher: Sendable {
-    private let enrich: @Sendable (inout ServiceContext) -> Void
+    // The whole record, and records to add before it, rather than the context alone: an enricher
+    // of the library's own (`Enricher.sessions`, module Sessions) reads the record's timestamp and
+    // adds the events that mark a session's end and start. A public enricher sets the context only.
+    private let enrich: @Sendable (inout EventRecord) -> [EventRecord]
 
     /// An enricher that changes each record's context with `enrich`.
     ///
     /// - Parameter enrich: Sets the values it adds on the context it is given. It runs on the
     ///   tracker's worker for every event, in order, so a slow one delays every record after it.
     public init(_ enrich: @escaping @Sendable (inout ServiceContext) -> Void) {
+        self.enrich = { record in
+            enrich(&record.context)
+            return []
+        }
+    }
+
+    /// An enricher that changes each record with `enrich`, and adds the records it returns before
+    /// that record.
+    ///
+    /// The tracker's worker runs the enrichers after this one on each added record, in order, as
+    /// on a tracked one, and delivers the added records first, in the order returned.
+    ///
+    /// - Parameter enrich: Changes the record it is given and returns the records to add before
+    ///   it; none, usually.
+    package init(records enrich: @escaping @Sendable (inout EventRecord) -> [EventRecord]) {
         self.enrich = enrich
     }
 
-    /// Changes `context` as this enricher does.
+    /// Changes `record` as this enricher does.
     ///
-    /// - Parameter context: The context to add to.
-    public func callAsFunction(_ context: inout ServiceContext) {
-        enrich(&context)
+    /// - Parameter record: The record to enrich.
+    /// - Returns: The records this enricher adds before `record`.
+    package func callAsFunction(_ record: inout EventRecord) -> [EventRecord] {
+        enrich(&record)
     }
 }

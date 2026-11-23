@@ -30,6 +30,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/LifecycleTracking",
     "Sources/LoggingDestinations",
     "Sources/Persistence",
+    "Sources/Sessions",
     "Sources/SwiftUITracking",
     "Sources/TracingDestinations",
     "Sources/Trackers",

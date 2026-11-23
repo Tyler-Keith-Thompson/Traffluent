@@ -78,11 +78,10 @@ MUTANTS = [
     Mutant("finishdoesntwait", I, "await worker.value", "", mode="stmt", nth=1),
     # The worker.
     Mutant("nosend", K, "records.forEach(sink.send)", "", mode="stmt"),
-    # The second: the first is the loop over the copy's enrichers (scopedskipped).
-    Mutant("enrichersskipped", K, "enricher(&record.context)", "", mode="stmt", nth=1),
-    Mutant("enricherinert", N, "enrich(&context)", "", mode="stmt"),
+    Mutant("enrichersskipped", K, "scopedEnrichers.count + enrichers.count", "scopedEnrichers.count"),
+    Mutant("enricherinert", N, "enrich(&record.context)", "", mode="stmt"),
     # Tracker.enriched(by:): the copy's enrichers, carried with each record to the worker.
-    Mutant("scopedskipped", K, "for enricher in scopedEnrichers {\n                    enricher(&record.context)\n                }", "", mode="stmt"),
+    Mutant("scopedskipped", K, "enrich(record, scopedEnrichers, from: 0, into: &enriched)", "enrich(record, scopedEnrichers, from: scopedEnrichers.count, into: &enriched)", mode="stmt"),
     Mutant("scopednotcarried", T, "intake.enqueue(.track(record, scopedEnrichers))", "intake.enqueue(.track(record, []))"),
     Mutant("scopedreplaced", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher]")),
     Mutant("scopedreversed", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher] + scopedEnrichers")),
@@ -94,9 +93,15 @@ MUTANTS = [
     Mutant("flushnotresumed", K, "continuation.resume(returning: true)", "continuation.resume(returning: false)", mode="stmt"),
     Mutant("nofinish", K, "sink.subscription.finish()", "", mode="stmt"),
     Mutant("finishkeepsheld", K, "membership?.leave()", "", mode="stmt"),
-    Mutant("gatebypassed", K, "admit([record], statuses: statuses)", "sink.send(record)", mode="stmt"),
+    Mutant("gatebypassed", K, "admit(enriched, statuses: statuses)", "enriched.forEach(sink.send)", mode="stmt"),
+    # Records an enricher adds (Enricher(records:)).
+    Mutant("addedreversed", K, "enricher(&record)", "enricher(&record).reversed()"),
+    Mutant("addeddropped", K, "!rejects(added)", "false"),
+    Mutant("addedunchecked", K, "!rejects(added)", "true"),
+    Mutant("addedunenriched", K, "index + 1", "scopedEnrichers.count + enrichers.count"),
+    Mutant("addedrerunsearlier", K, "index + 1", "0"),
     Mutant("admitdefaultgranted", K, "statuses[record.consentCategory, default: .undecided]", "statuses[record.consentCategory, default: .granted]"),
-    Mutant("grantednotsent", K, "sink.send(record)", "", mode="stmt", nth=1),
+    Mutant("grantednotsent", K, "sink.send(record)", "", mode="stmt"),
     # An untagged denied record is counted as a recovered one: reported, though never collected.
     Mutant("deniedreported", K, "guard record.deliveryTag != nil else { continue }", "", mode="stmt"),
     Mutant("overflownotcounted", K, "overflow.add(dropped)", "", mode="stmt"),

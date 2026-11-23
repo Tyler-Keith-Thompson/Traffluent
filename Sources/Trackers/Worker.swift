@@ -36,19 +36,12 @@ struct Worker: Sendable {
         }
         for await entry in entries {
             switch entry {
-            case .track(var record, let scopedEnrichers):
+            case .track(let record, let scopedEnrichers):
                 // First, so an invalid event is never enriched, held, written or delivered.
                 guard !rejects(record) else { continue }
-                // The copy's own enrichers stand in for the caller's context, so they run first and
-                // the tracker's see what they set.
-                for enricher in scopedEnrichers {
-                    enricher(&record.context)
-                }
-                for enricher in enrichers {
-                    enricher(&record.context)
-                }
-                record.revealsSensitiveValues = true
-                admit([record], statuses: statuses)
+                var enriched: [EventRecord] = []
+                enrich(record, scopedEnrichers, from: 0, into: &enriched)
+                admit(enriched, statuses: statuses)
             case .decide(let categories, let status):
                 for category in categories {
                     statuses[category] = status
@@ -65,6 +58,24 @@ struct Worker: Sendable {
 }
 
 extension Worker {
+    /// Appends `record` to `enriched` as the enrichers from `stage` on leave it, after the records
+    /// they add before it, each enriched by the enrichers after the one that added it and
+    /// checked as a tracked record is.
+    ///
+    /// The stages are the copy's enrichers, then the tracker's: the copy's stand in for the
+    /// caller's context, so they run first and the tracker's see what they set.
+    fileprivate func enrich(_ record: EventRecord, _ scopedEnrichers: [Enricher], from stage: Int, into enriched: inout [EventRecord]) {
+        var record = record
+        for index in stage ..< scopedEnrichers.count + enrichers.count {
+            let enricher = index < scopedEnrichers.count ? scopedEnrichers[index] : enrichers[index - scopedEnrichers.count]
+            for added in enricher(&record) where !rejects(added) {
+                enrich(added, scopedEnrichers, from: index + 1, into: &enriched)
+            }
+        }
+        record.revealsSensitiveValues = true
+        enriched.append(record)
+    }
+
     /// Whether `record`'s event breaks a constraint, reporting it if so.
     fileprivate func rejects(_ record: EventRecord) -> Bool {
         guard let violation = record.event.constraintViolation() else { return false }
