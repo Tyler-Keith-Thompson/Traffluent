@@ -28,6 +28,8 @@ let products: [Product] = [
     .library(name: "Persistence", targets: ["Persistence"]),
     .library(name: "GRDBPersistence", targets: ["GRDBPersistence"]),
     .library(name: "EventMacros", targets: ["EventMacros"]),
+    .library(name: "TrackingPlans", targets: ["TrackingPlans"]),
+    .plugin(name: "ExportTrackingPlan", targets: ["ExportTrackingPlan"]),
 ]
 
 let dependencies: [Package.Dependency] = [
@@ -43,6 +45,7 @@ let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
     .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
     .package(url: "https://github.com/swiftlang/swift-syntax", from: "604.0.0"),
+    .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
 ]
 
 let targets: [Target] = [
@@ -60,8 +63,12 @@ let targets: [Target] = [
     .target(name: "GRDBPersistence", dependencies: ["Events", "Persistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     // Schema
     .target(name: "EventMacros", dependencies: ["Events", "Persistence", "EventMacrosPlugin"], exclude: bazelFiles),
+    .target(name: "TrackingPlans", dependencies: ["Events"], exclude: bazelFiles),
     // Schema: compiler plugin
     .macro(name: "EventMacrosPlugin", dependencies: [.product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftCompilerPlugin", package: "swift-syntax"), .product(name: "SwiftDiagnostics", package: "swift-syntax")], exclude: bazelFiles),
+
+    // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build
+    .plugin(name: "ExportTrackingPlan", capability: .command(intent: .custom(verb: "export-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files."), permissions: [.writeToPackageDirectory(reason: "Writes the tracking plan's JSON Schema files into the package")])),
 
     // Umbrella: `import Traffluent` imports every module but the opt-in ones (NON_UMBRELLA_MODULES).
     .target(name: "Traffluent", dependencies: ["Events", "Destinations", "DestinationTesting", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "Trackers", "Checksums", "Persistence"], exclude: bazelFiles),
@@ -71,6 +78,7 @@ let targets: [Target] = [
 
     .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "TrackingPlansTests", dependencies: ["TrackingPlans", "EventMacros", "Events", .product(name: "JSONSchema", package: "swift-json-schema"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "EventMacrosPluginTests", dependencies: ["EventMacrosPlugin", .product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"), .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax")], exclude: bazelFiles),
     .testTarget(name: "DestinationsTests", dependencies: ["Destinations", "DestinationTesting", "Events", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "DestinationTestingTests", dependencies: ["DestinationTesting", "Destinations", "Events", "Trackers"], exclude: bazelFiles),
@@ -80,7 +88,7 @@ let targets: [Target] = [
     .testTarget(name: "TrackersTests", dependencies: ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", .product(name: "Afluent", package: "afluent"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
-    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
+    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
 ]
 
 let package = Package(

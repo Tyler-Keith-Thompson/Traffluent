@@ -1,0 +1,28 @@
+{
+  "$id": "signed_up.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "email": {
+      "type": "string",
+      "x-traffluent-sensitive": true
+    },
+    "plan": {
+      "type": "string"
+    },
+    "referrer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "plan",
+    "email"
+  ],
+  "title": "signed_up",
+  "type": "object",
+  "x-traffluent-consent-category": "functional",
+  "x-traffluent-version": 1
+}

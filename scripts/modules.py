@@ -63,6 +63,10 @@ PACKAGES = [
     # The @Event macro's compiler plugin (MACROS) and its expansion tests. Only the plugin and its
     # tests depend on it, so an app that doesn't use the macro never builds it.
     ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "604.0.0"),
+    # Tests only: validates the tracking plans TrackingPlans writes against JSON Schema 2020-12's
+    # meta-schema, and events against them. Its JSONSchema product needs only swift-collections; it
+    # is reported on Bowtie's conformance suite.
+    ("swift-json-schema", "https://github.com/ajevans99/swift-json-schema", "minor:0.15.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -101,6 +105,7 @@ MODULES = [
     ("GRDBPersistence", "Persistence", "DatabaseStore: a RecordStore that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only.", ["Events", "Persistence", "grdb.swift/GRDB", "swift-log/Logging"]),
     # Schema
     ("EventMacros", "Schema", "The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration.", ["Events", "Persistence", "EventMacrosPlugin"]),
+    ("TrackingPlans", "Schema", "TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes one.", ["Events"]),
 ]
 
 # Compiler plugins holding macros: (name, group, description, dependencies). A module lists one
@@ -127,8 +132,20 @@ IOS_MODULES = []
 # Modules the umbrella leaves out: each is a product of its own that an adopter adds by name, as
 # it pulls in a package the rest of the library doesn't need (GRDB, swift-syntax). The umbrella's docs still
 # link to them.
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans"]
 IOS_MINIMUM = "18.0"
+
+# SwiftPM command plugins: (name, verb, description, reason). Each is a `.plugin` target with its
+# sources in Plugins/<name>, SwiftPM's default, and a product of the same name, run with
+# `swift package <verb>`; `reason` is the one the plugin gives for writing to the package directory,
+# which the user allows with `--allow-writing-to-package-directory`. Bazel builds none of them:
+# PackagePlugin is SwiftPM's alone, so Plugins/ holds no BUILD.bazel, the docs leave them out and
+# //:package_swift_test doesn't compare them.
+PLUGINS = [
+    ("ExportTrackingPlan", "export-tracking-plan",
+     "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files.",
+     "Writes the tracking plan's JSON Schema files into the package"),
+]
 
 # Executables: (name, description, dependencies). Each is an `.executableTarget` and product in
 # Package.swift and a swift_binary in Bazel (`bazel run //Sources/<name>`). Keep them thin: the
@@ -141,6 +158,7 @@ EXECUTABLES = [
 TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation"]),
     ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "DestinationTesting", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "Destinations", "Events", "Trackers"]),
@@ -150,7 +168,7 @@ TEST_TARGETS = [
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
+    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the
@@ -230,6 +248,11 @@ def check():
         assert not is_macro(name), f"{name} is a plugin, which is never in the umbrella or IOS_MODULES"
     executables = [e[0] for e in EXECUTABLES]
     assert not set(executables) & set(names + [PROJECT]), "an executable shares a module's name"
+    plugins = [p[0] for p in PLUGINS]
+    assert len(plugins) == len(set(plugins)), "duplicate plugin"
+    assert not set(plugins) & set(names + executables + [PROJECT]), "a plugin shares a module's or an executable's name"
+    for name, _, _, _ in PLUGINS:
+        assert os.path.isdir(os.path.join(ROOT, "Plugins", name)), f"the plugin {name} has no Plugins/{name}"
     tests = [t[0] for t in TEST_TARGETS]
     assert len(tests) == len(set(tests)), "duplicate test target"
     for name, deps in TEST_TARGETS:
@@ -408,6 +431,7 @@ def package_swift():
         lines.append(f'    .library(name: "{PROJECT}", targets: ["{PROJECT}"]),')
     lines += [f'    .library(name: "{m[0]}", targets: ["{m[0]}"]),' for m in package_modules()]
     lines += [f'    .executable(name: "{e[0]}", targets: ["{e[0]}"]),' for e in EXECUTABLES]
+    lines += [f'    .plugin(name: "{p[0]}", targets: ["{p[0]}"]),' for p in PLUGINS]
     lines += ["]", "", "let dependencies: [Package.Dependency] = ["]
     lines += [f'    .package(url: "{url}", {requirement(version)}),' for _, url, version in package_dependencies()]
     lines += ["]", "", "let targets: [Target] = ["]
@@ -432,6 +456,13 @@ def package_swift():
     for name, _, deps in EXECUTABLES:
         dl = ", ".join(spm_dep(d) for d in deps)
         lines.append(f'    .executableTarget(name: "{name}", dependencies: [{dl}]{exclude_arg(f"Sources/{name}")}),')
+    if PLUGINS:
+        lines += ["", "    // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build"]
+    for name, verb, description, reason in PLUGINS:
+        lines.append(
+            f'    .plugin(name: "{name}", capability: .command(intent: .custom(verb: "{verb}", description: "{description}"), '
+            f'permissions: [.writeToPackageDirectory(reason: "{reason}")])),'
+        )
     all_deps = ", ".join(f'"{n}"' for n in umbrella_modules())
     support_deps = ", ".join(spm_dep(d) for d in TEST_SUPPORT_DEPENDENCIES)
     support_deps_arg = f"dependencies: [{support_deps}], " if TEST_SUPPORT_DEPENDENCIES else ""

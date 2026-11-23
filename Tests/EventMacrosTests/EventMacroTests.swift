@@ -70,7 +70,7 @@ struct EventMacroTests {
 
     @Test("The schema holds the name, the version and each stored property's name, type and optionality in declaration order")
     func schema() {
-        let expected = EventSchema(name: "SignedUp", version: 1, properties: [
+        let expected = EventSchema(name: "SignedUp", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
             EventSchema.Property(name: "seats", typeName: "Int", isOptional: true),
         ])
@@ -80,9 +80,9 @@ struct EventMacroTests {
         #expect(actual == expected)
     }
 
-    @Test("The schema takes the macro's name and version")
+    @Test("The schema takes the macro's name, version and consent category")
     func schemaNameAndVersion() {
-        let expected = EventSchema(name: "ad_clicked", version: 3, properties: [
+        let expected = EventSchema(name: "ad_clicked", version: 3, consentCategory: .advertising, properties: [
             EventSchema.Property(name: "campaign", typeName: "String", isOptional: false),
         ])
 
@@ -93,7 +93,7 @@ struct EventMacroTests {
 
     @Test("An event with no stored properties has an empty schema and encodes to no bytes")
     func empty() throws {
-        let expectedSchema = EventSchema(name: "Crashed", version: 1, properties: [])
+        let expectedSchema = EventSchema(name: "Crashed", version: 1, consentCategory: ConsentCategory("crash-reports"), properties: [])
         let expectedBytes: [UInt8] = []
         var encoder = BinaryEncoder()
         var decoder = BinaryDecoder([])
@@ -193,7 +193,7 @@ struct EventMacroTests {
 
     @Test("A generic event encodes its generic property")
     func generic() throws {
-        let expected = EventSchema(name: "Box<String>", version: 1, properties: [
+        let expected = EventSchema(name: "Box<String>", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: "Value", isOptional: false),
         ])
         var encoder = BinaryEncoder()

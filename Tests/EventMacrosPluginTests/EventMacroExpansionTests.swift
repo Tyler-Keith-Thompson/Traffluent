@@ -27,7 +27,7 @@ struct EventMacroExpansionTests {
 
                 extension SignedUp: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
                             Events.EventSchema.Property(name: "seats", typeName: "Int", isOptional: true),
                         ])
@@ -84,7 +84,7 @@ struct EventMacroExpansionTests {
                     }
 
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 2, properties: [
+                        Events.EventSchema(name: Self.name, version: 2, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "campaign", typeName: "String", isOptional: false),
                         ])
                     }
@@ -124,7 +124,7 @@ struct EventMacroExpansionTests {
 
                 extension Opened: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -161,7 +161,7 @@ struct EventMacroExpansionTests {
                     }
 
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -199,7 +199,7 @@ struct EventMacroExpansionTests {
                     }
 
                     public static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     public func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -215,7 +215,7 @@ struct EventMacroExpansionTests {
                     }
 
                     package static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     package func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -270,7 +270,7 @@ struct EventMacroExpansionTests {
 
                 extension Shapes: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false),
                             Events.EventSchema.Property(name: "first", typeName: "UInt16", isOptional: false),
                             Events.EventSchema.Property(name: "second", typeName: "UInt16", isOptional: false),
@@ -347,7 +347,7 @@ struct EventMacroExpansionTests {
 
                 extension Spellings: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "a", typeName: "Int", isOptional: true),
                             Events.EventSchema.Property(name: "b", typeName: "Int", isOptional: true),
                             Events.EventSchema.Property(name: "c", typeName: "Int", isOptional: true),
@@ -440,7 +440,7 @@ struct EventMacroExpansionTests {
 
                 extension Keywords: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "default", typeName: "Int", isOptional: false),
                             Events.EventSchema.Property(name: "var", typeName: "Int", isOptional: false),
                         ])
@@ -487,7 +487,7 @@ struct EventMacroExpansionTests {
 
                 extension Opened: Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -516,7 +516,7 @@ struct EventMacroExpansionTests {
 
                 extension Closed {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
@@ -549,7 +549,7 @@ struct EventMacroExpansionTests {
 
                 extension Checkout.Started: Events.Event, Persistence.BinaryCodable {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, properties: [])
+                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [])
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {

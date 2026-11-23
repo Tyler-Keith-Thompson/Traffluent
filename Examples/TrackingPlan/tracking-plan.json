@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "consentCategory": "analytics",
+      "name": "checkout_started",
+      "schema": "checkout_started.v2.schema.json",
+      "version": 2
+    },
+    {
+      "consentCategory": "analytics",
+      "name": "order_completed",
+      "schema": "order_completed.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "functional",
+      "name": "signed_up",
+      "schema": "signed_up.v1.schema.json",
+      "version": 1
+    }
+  ]
+}

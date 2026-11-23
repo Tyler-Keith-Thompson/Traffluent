@@ -21,6 +21,7 @@ every project built; delete a rule only when it cannot apply here, and say so in
 ```
 Sources/<Module>/                One directory per module, each with a generated BUILD.bazel
 Sources/Traffluent/             Umbrella module (@_exported imports) and the landing DocC catalog
+Plugins/<Plugin>/                SwiftPM command plugins (PLUGINS in scripts/modules.py); Bazel builds none
 Tests/<Module>Tests/             One test target per module; Performance/ holds speed-reliant tests
 Tests/TraffluentTests/          The README examples, verbatim
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
@@ -64,6 +65,9 @@ the umbrella module and `swift/Package.swift` from it. Never edit the generated 
   links the plugin's sources compiled as a library in the test's package (see `MACROS`).
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
+- Add a command plugin: a row in `PLUGINS` (name, verb, description, reason for writing to the
+  package) and its sources in `Plugins/<name>`. Only SwiftPM builds it (`swift package <verb>`), so
+  keep it thin and prove it by running it on a package, as `just example-tracking-plan` does.
 - Add an external package: a row in `PACKAGES`, its `swiftpkg_<identity>` repository in
   `MODULE.bazel`'s `use_repo`, then `just modules` and `just resolve`.
 - Generate mocks: uncomment the Mockable row in `PACKAGES`, add `mockable/Mockable` to the

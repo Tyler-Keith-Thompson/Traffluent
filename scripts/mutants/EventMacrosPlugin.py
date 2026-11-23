@@ -11,6 +11,10 @@
 # //Tests/CompileFailures and //Tests/EventMacrosTests do under Bazel.
 #
 # Known equivalent mutants (left out, as they would survive by design): none.
+#
+# Left out because a schema can't switch it: the schema's `consentCategory: Self.consentCategory`,
+# text inside a multi-line string literal. //Tests/EventMacrosTests pins each event's schema
+# category, and Events.py's schemaconsentfixed the stored field.
 
 TESTS = ["EventMacrosPluginTests"]
 

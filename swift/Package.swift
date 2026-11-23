@@ -20,5 +20,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "604.0.0"),
+        .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
     ]
 )

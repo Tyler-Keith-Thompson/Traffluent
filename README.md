@@ -293,14 +293,72 @@ tracker.track(CheckoutStarted(cartSize: 3, coupon: nil))
 let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", "coupon"]
 ```
 
-The schema holds the name, the version and each stored property's name, type as written and
-optionality, in declaration order. The encoding writes and reads those properties in the same
+The schema holds the name, the version, the consent category and each stored property's name, type
+as written and optionality, in declaration order. The encoding writes and reads those properties in the same
 order, as the hand-written conformance under Persistence does, and a `Sensitive` property keeps its
 redaction. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`). A stored
 property whose type isn't `BinaryCodable` is a compile error that names it:
 `static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'`.
 So are `@Event` on anything but a struct and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
+
+### Exporting a tracking plan
+
+The events' Swift types are their schema's source; a tracking plan, the JSON Schema (draft
+2020-12) of every event an app tracks, is exported from them for the people and tools outside the
+app. `TrackingPlan` (module `TrackingPlans`, a product of its own that `import Traffluent` leaves
+out) turns schemas into the plan's files, one document per event and an index, as values:
+
+```swift
+import TrackingPlans
+
+let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+let paths = plan.files.map(\.path)  // ["tracking-plan.json", "checkout_started.v2.schema.json"]
+```
+
+The bytes depend on the schemas alone: keys sorted, two-space indentation, a trailing newline and
+no timestamps, the same on every run and platform, so the plan can be committed and reviewed.
+Each document requires the properties that aren't optional, allows `null` for those that are,
+rejects any other property, and carries the event's version and consent category
+(`x-traffluent-version`, `x-traffluent-consent-category`); a `Sensitive` property is marked
+`x-traffluent-sensitive`. `TrackingPlan`'s documentation lists how each Swift type maps.
+
+A tool can only read the schemas of types it is compiled against, so the plan is written by a small
+executable in your package that lists your events:
+
+```swift
+// Package.swift
+.executableTarget(name: "AppTrackingPlan", dependencies: [
+    "AppEvents",
+    .product(name: "TrackingPlans", package: "Traffluent"),
+]),
+```
+
+```swift
+// Sources/AppTrackingPlan/AppTrackingPlan.swift
+import AppEvents
+import TrackingPlans
+
+@main
+struct AppTrackingPlan: TrackingPlanCommand {
+    static let trackingPlan = TrackingPlan(schemas: [
+        CheckoutStarted.schema,
+        SignedUp.schema,
+    ])
+}
+```
+
+Then one command, from the package's directory, builds it and writes the plan into `TrackingPlan/`:
+
+```sh
+swift package --allow-writing-to-package-directory export-tracking-plan
+```
+
+The `export-tracking-plan` plugin runs the package's one executable target that depends on
+`TrackingPlans`; `--product <name>` picks one of several, and `--output <directory>` writes
+elsewhere in the package. Writing again deletes the documents of events the plan no longer lists.
+[`Examples/Sources/StoreTrackingPlan`](Examples/Sources/StoreTrackingPlan) is such an executable,
+and [`Examples/TrackingPlan`](Examples/TrackingPlan) the plan it writes (`just example-tracking-plan`).
 
 ## Logging, tracing, metrics and analytics
 
@@ -313,7 +371,7 @@ says which facts go where, with the anti-patterns to avoid.
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `EventSchema`, an event type's name, version and stored properties as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
+| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; `EventSchema`, an event type's name, version, consent category and stored properties as a value; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
 | `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
@@ -324,6 +382,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
 | `EventMacros` | `@Event`: derives a struct's `Event` and `BinaryCodable` conformances, its name and its `EventSchema` from its declaration; left out of `import Traffluent`, so only apps that use it build swift-syntax |
+| `TrackingPlans` | `TrackingPlan`: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their `EventSchema` values; `TrackingPlanCommand`, the executable that writes one, which the `export-tracking-plan` command plugin runs; left out of `import Traffluent` |
 
 ## Examples
 

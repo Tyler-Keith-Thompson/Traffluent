@@ -6,6 +6,7 @@ import Instrumentation
 import SystemPackage
 import Traffluent
 import Testing
+import TrackingPlans
 
 @Suite("README examples", .timeLimit(.minutes(1)))
 struct READMEExamplesTests {
@@ -135,6 +136,14 @@ struct READMEExamplesTests {
         #expect(properties == ["cartSize", "coupon"])
         #expect(CheckoutStarted.name == "checkout_started")
         #expect(CheckoutStarted.schema.version == 2)
+    }
+
+    @Test("Exporting a tracking plan")
+    func exportingATrackingPlan() {
+        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let paths = plan.files.map(\.path)  // ["tracking-plan.json", "checkout_started.v2.schema.json"]
+
+        #expect(paths == ["tracking-plan.json", "checkout_started.v2.schema.json"])
     }
 }
 

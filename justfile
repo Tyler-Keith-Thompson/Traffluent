@@ -92,6 +92,13 @@ examples: example-ios example-mac example-catalyst example-visionos example-watc
 examples-test *args="":
     cd {{EXAMPLES}} && {{SWIFT}} test {{args}}
 
+[doc('Write the store example’s tracking plan into Examples/TrackingPlan with the export-tracking-plan plugin, and fail if it differs from the committed (or staged) one')]
+example-tracking-plan:
+    cd {{EXAMPLES}} && {{SWIFT}} package --allow-writing-to-package-directory export-tracking-plan
+    @git -C {{PROJECT_ROOT}} diff --exit-code -- Examples/TrackingPlan && \
+        test -z "$(git -C {{PROJECT_ROOT}} ls-files --others --exclude-standard -- Examples/TrackingPlan)" || \
+        { git -C {{PROJECT_ROOT}} status --short -- Examples/TrackingPlan; echo "Examples/TrackingPlan differs from the committed plan"; exit 1; }
+
 [doc('Build the iPhone and iPad example, one universal app, for the simulator')]
 example-ios:
     {{BAZEL}} build //Examples/Apps/ExampleApp:iOSExample

@@ -1,5 +1,5 @@
-/// The shape of an event type: its name, its schema version and its stored properties in
-/// declaration order, as a value tooling reads.
+/// The shape of an event type: its name, its schema version, its consent category and its stored
+/// properties in declaration order, as a value tooling reads.
 ///
 /// The `@Event` macro (module `EventMacros`) writes an event's schema from its declaration, so the
 /// two can't drift:
@@ -41,18 +41,23 @@ public struct EventSchema: Sendable, Hashable {
     public var name: String
     /// The version of the event's shape, which its author raises when the properties change.
     public var version: Int
+    /// The purpose the event is collected for, its `Event.consentCategory`.
+    public var consentCategory: ConsentCategory
     /// The event's stored properties, in declaration order.
     public var properties: [Property]
 
-    /// The schema of the event named `name`, at `version`, with `properties`.
+    /// The schema of the event named `name`, at `version`, collected for `consentCategory`, with
+    /// `properties`.
     ///
     /// - Parameters:
     ///   - name: The name the event is recorded under.
     ///   - version: The version of the event's shape.
+    ///   - consentCategory: The purpose the event is collected for.
     ///   - properties: The event's stored properties, in declaration order.
-    public init(name: String, version: Int, properties: [Property]) {
+    public init(name: String, version: Int, consentCategory: ConsentCategory, properties: [Property]) {
         self.name = name
         self.version = version
+        self.consentCategory = consentCategory
         self.properties = properties
     }
 }

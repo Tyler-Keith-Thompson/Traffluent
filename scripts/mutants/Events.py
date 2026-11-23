@@ -49,5 +49,6 @@ MUTANTS = [
     # The schema's own `self.name = name`, after the property's, which holds the text too.
     Mutant("schemaunnamed", S, "        self.name = name", '        self.name = ""', mode="stmt", nth=1),
     Mutant("schemaversionzero", S, "        self.version = version", "        self.version = 0", mode="stmt"),
+    Mutant("schemaconsentfixed", S, "        self.consentCategory = consentCategory", "        self.consentCategory = .analytics", mode="stmt"),
     Mutant("schemanoproperties", S, "        self.properties = properties", "        self.properties = []", mode="stmt"),
 ]

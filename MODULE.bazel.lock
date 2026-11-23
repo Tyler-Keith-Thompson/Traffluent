@@ -553,7 +553,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved d7edb552415b0607a2c9c2a6fa566caeeea4d37a941546594359dc9b915b0881"
+          "FILE:@@//swift/Package.resolved 08f514a86cb0c0fa1c1274d0ffdb05812a68b02d6fb1a1c56766172459106b74"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -571,7 +571,8 @@
                 "@swiftpkg_grdb.swift//:pkg_info.json": "grdb.swift",
                 "@swiftpkg_swift_http_types//:pkg_info.json": "swift-http-types",
                 "@swiftpkg_swift_collections//:pkg_info.json": "swift-collections",
-                "@swiftpkg_swift_syntax//:pkg_info.json": "swift-syntax"
+                "@swiftpkg_swift_syntax//:pkg_info.json": "swift-syntax",
+                "@swiftpkg_swift_json_schema//:pkg_info.json": "swift-json-schema"
               }
             }
           },
@@ -594,6 +595,7 @@
                 "swiftpkg_swift_distributed_tracing",
                 "swiftpkg_swift_http_types",
                 "swiftpkg_swift_issue_reporting",
+                "swiftpkg_swift_json_schema",
                 "swiftpkg_swift_log",
                 "swiftpkg_swift_property_based",
                 "swiftpkg_swift_syntax",
@@ -830,6 +832,25 @@
               "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
             }
           },
+          "swiftpkg_swift_json_schema": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_json_schema",
+              "commit": "a00dde585b7f55b343214cece9afcfeb613e7899",
+              "remote": "https://github.com/ajevans99/swift-json-schema",
+              "version": "0.15.0",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json"
+            }
+          },
           "swiftpkg_swift_issue_reporting": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -864,6 +885,7 @@
             "swiftpkg_swift_http_types",
             "swiftpkg_swift_collections",
             "swiftpkg_swift_syntax",
+            "swiftpkg_swift_json_schema",
             "swift_deps_info",
             "swift_package"
           ],

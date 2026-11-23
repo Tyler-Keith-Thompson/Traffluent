@@ -1,0 +1,44 @@
+{
+  "$id": "order_completed.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "express": {
+      "type": "boolean"
+    },
+    "itemCount": {
+      "maximum": 65535,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "items": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "orderID": {
+      "format": "uuid",
+      "type": "string"
+    },
+    "total": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "orderID",
+    "total",
+    "itemCount",
+    "items",
+    "completedAt",
+    "express"
+  ],
+  "title": "order_completed",
+  "type": "object",
+  "x-traffluent-consent-category": "analytics",
+  "x-traffluent-version": 1
+}

@@ -57,7 +57,7 @@ public struct EventMacro: ExtensionMacro {
         let list = entries.isEmpty ? "[]" : "[\n" + entries.joined(separator: "\n") + "\n    ]"
         return """
             \(access)static var schema: Events.EventSchema {
-                Events.EventSchema(name: Self.name, version: \(version), properties: \(list))
+                Events.EventSchema(name: Self.name, version: \(version), consentCategory: Self.consentCategory, properties: \(list))
             }
             """
     }
