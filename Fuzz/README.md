@@ -6,6 +6,7 @@ module, in their own package so the library never links the fuzzer runtime.
 | Target | Checks against |
 |---|---|
 | `FuzzPersistence` | Segment files built from records, delivery marks and undecodable records, then damaged (a flipped bit, a cut tail, garbage appended), or arbitrary bytes: recovery never crashes, returns exactly the decodable records of the intact frames a reference reader finds (so never one whose CRC-32 fails), in order, with their redelivery marks, and cuts the file to the intact prefix or deletes it |
+| `FuzzTrackers` | Two trackers sharing a `Consent` with a small hold, driven by tracks of three categories, grants, denials and finishes: after every operation the consent holds as many records as a model of plain arrays, each tracker's records are the model's, in order, and the drop reports are the model's, in order |
 
 Each target reads its input as a sequence of small choices (`FuzzInput`): an operation and its
 arguments. Every byte string decodes, and a mutation of one byte changes one choice, so libFuzzer

@@ -3,8 +3,8 @@ public import Foundation
 /// Records a store dropped before they were delivered, and why.
 ///
 /// A ``SegmentStore`` reports every drop on its ``SegmentStore/dropReports``. A dropped record is
-/// no longer kept on disk: if the app ends before it is delivered, it is lost. A record a
-/// delivery has already read may still be delivered in this run.
+/// no longer kept on disk: if the app ends before it is delivered, it is lost. A record already in
+/// memory, read by a delivery or held by a consent, may still be delivered in this run.
 public enum DropReport: Sendable, Hashable {
     /// The log reached its byte bound, so its oldest segment was deleted with `recordCount`
     /// records not yet delivered, tracked within `timestamps`.

@@ -36,7 +36,7 @@ struct RequestTrackingMiddlewareTests {
                 try await client.execute(uri: "/items/7?color=red", method: .get) { _ in }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
@@ -58,7 +58,7 @@ struct RequestTrackingMiddlewareTests {
                 }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
@@ -82,7 +82,7 @@ struct RequestTrackingMiddlewareTests {
                 try await client.execute(uri: "/items/1", method: .get) { _ in }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
@@ -105,7 +105,7 @@ struct RequestTrackingMiddlewareTests {
                 try await client.execute(uri: "/broken", method: .get) { _ in }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)
@@ -124,7 +124,7 @@ struct RequestTrackingMiddlewareTests {
                 try await client.execute(uri: "/items/3", method: .get) { _ in }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: recorder).execute()
 
         let actual = recorder.events(of: RequestServed.self)

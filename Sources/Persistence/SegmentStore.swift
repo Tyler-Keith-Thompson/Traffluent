@@ -10,10 +10,12 @@ public import SystemPackage
 /// let delivery = tracker.records.batch().deliver(to: vendor)
 /// ```
 ///
-/// - **Write-through.** `track` writes each record before it returns, with one `write()`, so the
-///   record survives the app crashing or being killed. The store makes the log durable against
+/// - **Write-through.** A tracker's worker writes each record as it reaches it, before publishing
+///   it, with one `write()`, off the tracking caller's thread, so the record survives the app
+///   crashing or being killed from then on. The store makes the log durable against
 ///   power loss too (`fsync`) once per batch, before the batch is delivered, and whenever
-///   ``synchronize()`` is called: call it as the app moves to the background or terminates.
+///   ``synchronize()`` is called: call it, after the tracker's `flush()`, as the app moves to the
+///   background or terminates.
 ///   A record whose write fails (the disk is full, say) is kept in memory only, and reported as
 ///   ``DropReport/writeFailed(recordCount:timestamps:)``.
 /// - **What is kept.** Only events of the types in `events`, which conform to ``BinaryCodable``.

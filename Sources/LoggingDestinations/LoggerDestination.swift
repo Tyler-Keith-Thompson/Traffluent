@@ -32,15 +32,17 @@ public struct LoggerDestination: Destination {
     }
 
     private func write(_ record: EventRecord) {
+        // A record whose call site was dropped is logged with empty names and line 0 rather
+        // than this file's, which would point at the wrong code.
         let location = record.sourceLocation
         logger.log(
             level: level,
             "\(record.name)",
             metadata: record.metadata,
-            source: location.moduleName,
-            file: location.fileID,
-            function: location.function,
-            line: UInt(location.line))
+            source: location?.moduleName,
+            file: location?.fileID ?? "",
+            function: location?.function ?? "",
+            line: UInt(location?.line ?? 0))
     }
 }
 
@@ -55,10 +57,12 @@ extension EventRecord {
         }
         metadata["event"] = .string(String(describing: event))
         metadata["event.timestamp"] = .string(timestamp.formatted(.iso8601))
-        metadata["code.filepath"] = .string(sourceLocation.fileID)
-        metadata["code.function"] = .string(sourceLocation.function)
-        metadata["code.lineno"] = .string(String(sourceLocation.line))
-        metadata["code.column"] = .string(String(sourceLocation.column))
+        if let sourceLocation {
+            metadata["code.filepath"] = .string(sourceLocation.fileID)
+            metadata["code.function"] = .string(sourceLocation.function)
+            metadata["code.lineno"] = .string(String(sourceLocation.line))
+            metadata["code.column"] = .string(String(sourceLocation.column))
+        }
         return metadata
     }
 }

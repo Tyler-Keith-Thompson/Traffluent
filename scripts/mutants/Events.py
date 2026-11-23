@@ -12,6 +12,8 @@ TESTS = ["EventsTests"]
 L = "SourceLocation.swift"
 R = "EventRecord.swift"
 E = "Event.swift"
+K = "ConsentCategory.swift"
+V = "Sensitive.swift"
 
 MUTANTS = [
     Mutant("modulewholefileid", L, 'String(fileID.prefix { $0 != "/" })', "fileID"),
@@ -27,8 +29,17 @@ MUTANTS = [
     Mutant("redeliveredforced", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = true", mode="stmt"),
     Mutant("redeliveredignored", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = false", mode="stmt"),
     Mutant("tagdropped", R, "self.deliveryTag = deliveryTag", "self.deliveryTag = nil", mode="stmt"),
-    # The second `false` is the default; the first is in its doc comment.
-    Mutant("defaultredelivered", R, "false", "true", nth=1),
+    # The default, after the `false`s of the doc comments before it.
+    Mutant("defaultredelivered", R, "false", "true", nth=2),
     Mutant("tagpositionzero", "DeliveryTag.swift", "self.position = position", "self.position = 0", mode="stmt"),
     Mutant("defaultnamelowercased", E, "String(describing: Self.self)", "String(describing: Self.self).lowercased()"),
+    Mutant("defaultcategory", E, ".analytics", ".advertising"),
+    Mutant("recordcategoryfixed", R, "type(of: event).consentCategory", ".analytics"),
+    Mutant("revealsredacted", R, "revealsSensitiveValues ? sensitive.value : nil", "sensitive.value"),
+    Mutant("recordreveals", R, "revealsSensitiveValues = false", "revealsSensitiveValues = true", mode="stmt"),
+    Mutant("categoryunnamed", K, "self.name = name", 'self.name = ""', mode="stmt"),
+    Mutant("advertisingnamed", K, 'ConsentCategory("advertising")', 'ConsentCategory("analytics")'),
+    Mutant("descriptionreveals", V, '"<redacted>"', '"\\(value)"', nth=0),
+    Mutant("debugdescriptionreveals", V, '"Sensitive(<redacted>)"', '"Sensitive(\\(value))"'),
+    Mutant("mirrorreveals", V, "Mirror(self, children: [], displayStyle: .struct)", 'Mirror(self, children: ["value": value], displayStyle: .struct)'),
 ]

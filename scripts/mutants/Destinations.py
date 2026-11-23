@@ -34,4 +34,11 @@ MUTANTS = [
     Mutant("defaultcount", B, ".count(20)", ".count(19)", nth=1),
     # After the doc comment's, defaulttimeonotherclock leaves two copies; the second is the original's.
     Mutant("defaultinterval", B, ".seconds(30)", ".seconds(31)", nth=2),
+    # The destination modifiers.
+    Mutant("acceptseverything", "Accepting.swift", "accepted.contains(record.consentCategory) ? record : nil", "record"),
+    Mutant("acceptsothers", "Accepting.swift", "accepted.contains(record.consentCategory) ? record : nil", "accepted.contains(record.consentCategory) ? nil : record"),
+    Mutant("emptytransformedsent", "TransformingDestination.swift", "guard !transformed.isEmpty else { return }", "", mode="stmt"),
+    Mutant("untransformedsent", "TransformingDestination.swift", "await base.receive(transformed)", "await base.receive(batch)", mode="stmt"),
+    Mutant("callsitekept", "DroppingCallSite.swift", "record.sourceLocation = nil", "", mode="stmt"),
+    Mutant("notredacted", "RedactingSensitiveValues.swift", "record.revealsSensitiveValues = false", "", mode="stmt"),
 ]

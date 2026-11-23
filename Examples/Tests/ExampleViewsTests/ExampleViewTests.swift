@@ -31,7 +31,7 @@
             let expected = [ButtonTapped(label: "Share")]
 
             try sut.inspect().find(button: "Share").tap()
-            tracker.finish()
+            await tracker.finish()
             try await tracker.records.batch().deliver(to: recorder).execute()
 
             let actual = recorder.events(of: ButtonTapped.self)

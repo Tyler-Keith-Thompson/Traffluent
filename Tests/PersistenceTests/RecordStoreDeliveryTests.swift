@@ -74,7 +74,7 @@ struct RecordStoreDeliveryTests {
         #expect(store.pendingRecordCount == 2)
 
         try slow.gate.send()
-        tracker.finish()
+        await tracker.finish()
         try await delivery.value
 
         #expect(store.pendingRecordCount == 0)
@@ -89,7 +89,7 @@ struct RecordStoreDeliveryTests {
         let tracker = Tracker(store: store)
 
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(1)).deliver().execute()
 
         #expect(store.pendingRecordCount == 0)
@@ -110,6 +110,7 @@ struct RecordStoreDeliveryTests {
         tracker.track(Tapped(number: 2))
         try await destination.entered.execute()
         tracker.track(Tapped(number: 3))
+        await tracker.flush()
         delivery.cancel()
         _ = try? await delivery.value
 
@@ -144,7 +145,7 @@ struct RecordStoreDeliveryTests {
         let next = try kind.open(at: copy, events: [Tapped.self]).store
         #expect(next.takeRecoveredRecords().map(\.isRedelivered) == [true])
         try destination.gate.send()
-        tracker.finish()
+        await tracker.finish()
         try await delivery.value
     }
 
@@ -176,7 +177,7 @@ struct RecordStoreDeliveryTests {
         tracker.track(Tapped(number: 2))
         tracker.track(Tapped(number: 3))
         try await thirdBuffered.execute()
-        tracker.finish()
+        await tracker.finish()
         try destination.gate.send()
         try await delivery.value
 
@@ -201,8 +202,10 @@ struct RecordStoreDeliveryTests {
         defer { try? FileManager.default.removeItem(atPath: path) }
         let timestamp = Date(timeIntervalSince1970: 0)
         // Room for three records, tracked from this function as the probe is, and their marks.
-        let opened = try kind.open(at: path, events: [Tapped.self], holding: 3) { probe in
-            Tracker(store: probe, now: { timestamp }).track(Tapped(number: 0))
+        let opened = try await kind.open(at: path, events: [Tapped.self], holding: 3) { probe in
+            let measuring = Tracker(store: probe, now: { timestamp })
+            measuring.track(Tapped(number: 0))
+            await measuring.finish()
         }
         let store = opened.store
         let tracker = Tracker(store: store, now: { timestamp })
@@ -236,7 +239,7 @@ struct RecordStoreDeliveryTests {
 
         destination.online.withLock { $0 = true }
         destination.retry.yield()
-        tracker.finish()
+        await tracker.finish()
         try await delivery.value
 
         // The dropped records were still in memory, so this run delivers them all.
@@ -253,7 +256,7 @@ struct RecordStoreDeliveryTests {
         let destination = InMemoryDestination()
 
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(1)).deliver(to: destination).execute()
 
         let actual = try #require(destination.records.first)

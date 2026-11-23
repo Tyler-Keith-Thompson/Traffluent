@@ -20,7 +20,7 @@ struct RecordStoreBoundTests {
         func record(_ number: Int) -> EventRecord {
             EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: Double(number)), sourceLocation: location)
         }
-        let opened = try kind.open(at: path, events: [Tapped.self], holding: 3) { _ = $0.append(record(0)) }
+        let opened = try await kind.open(at: path, events: [Tapped.self], holding: 3) { _ = $0.append(record(0)) }
         let sut = opened.store
         var reports = sut.dropReports.makeAsyncIterator()
         let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 0)...Date(timeIntervalSince1970: 0))
@@ -51,7 +51,7 @@ struct RecordStoreBoundTests {
         let small = EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
         // Longer than the room a segment store leaves for a delivery mark.
         let large = EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: Events.SourceLocation(file: "A", fileID: "A", function: "a much longer function name", line: 1, column: 1))
-        let sut = try kind.open(at: path, events: [Tapped.self], holding: 1) { _ = $0.append(small) }.store
+        let sut = try await kind.open(at: path, events: [Tapped.self], holding: 1) { _ = $0.append(small) }.store
         var reports = sut.dropReports.makeAsyncIterator()
         let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 0)...Date(timeIntervalSince1970: 0))
         _ = sut.append(small)
@@ -75,7 +75,7 @@ struct RecordStoreBoundTests {
         func record(_ number: Int) -> EventRecord {
             EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: Double(number)), sourceLocation: location)
         }
-        let sut = try kind.open(at: path, events: [Tapped.self], holding: 2) { _ = $0.append(record(0)) }.store
+        let sut = try await kind.open(at: path, events: [Tapped.self], holding: 2) { _ = $0.append(record(0)) }.store
         var reports = sut.dropReports.makeAsyncIterator()
         let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 1)...Date(timeIntervalSince1970: 1))
         let tag = try #require(sut.append(record(0)).deliveryTag)
@@ -97,7 +97,7 @@ struct RecordStoreBoundTests {
         func record(_ number: Int) -> EventRecord {
             EventRecord(event: Tapped(number: number), timestamp: Date(timeIntervalSince1970: Double(number)), sourceLocation: location)
         }
-        let earlier = try kind.open(at: path, events: [Tapped.self], holding: 100) { _ = $0.append(record(0)) }.store
+        let earlier = try await kind.open(at: path, events: [Tapped.self], holding: 100) { _ = $0.append(record(0)) }.store
         for number in 0..<3 {
             _ = earlier.append(record(number))
         }
@@ -106,7 +106,7 @@ struct RecordStoreBoundTests {
         try FileManager.default.copyItem(atPath: path, toPath: copy)
         let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 0)...Date(timeIntervalSince1970: 0))
 
-        let opened = try kind.open(at: copy, events: [Tapped.self], holding: 2) { _ = $0.append(record(0)) }
+        let opened = try await kind.open(at: copy, events: [Tapped.self], holding: 2) { _ = $0.append(record(0)) }
 
         let sut = opened.store
         var reports = sut.dropReports.makeAsyncIterator()

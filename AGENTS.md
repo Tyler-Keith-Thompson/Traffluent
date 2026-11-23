@@ -123,8 +123,9 @@ Started with Swift SDKs for WebAssembly" has the install command) and `brew inst
 the toolchain crashes on the manifest against a newer Xcode's SDK, pass `--xcode
 /Applications/Xcode-<older>.app`.
 
-WASI builds (`just wasi-test`, `just example-wasm`) wait on Afluent's AFLU-59: Afluent doesn't
-build for wasm32-wasi yet, so they fail until it does.
+WASI builds (`just wasi-test`, `just example-wasm`) fail in `HTTPDestinations`' dependency
+`HTTPTypesFoundation` (swift-http-types), whose `URLSession` extensions don't compile on WASI,
+where Foundation has no `URLSession`. Afluent builds for wasm32-wasi from 1.1.44 (AFLU-59).
 
 - One binary of every target can pass wasmtime's limit of a million functions, so targets run in
   groups (`<PROJECT>_WASI_TESTS`, the project's name in capitals, makes `Package.swift` declare

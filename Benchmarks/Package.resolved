@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
       "state" : {
-        "revision" : "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
-        "version" : "1.1.39"
+        "revision" : "d519b113dc6ba1a5fdca26506c2ff336c2f0e971",
+        "version" : "1.1.45"
       }
     },
     {
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "def9afdba446b03efbbbcecb3b892e97e8294214",
         "version" : "1.38.0"
+      }
+    },
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift",
+      "state" : {
+        "revision" : "92a554cd0d5e8d67cb18993c6054e73fe42c066c",
+        "version" : "7.12.0"
       }
     },
     {
@@ -56,12 +65,30 @@
       }
     },
     {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "88754449ab766a739610b660e117762115fabc9c",
+        "version" : "1.7.6"
+      }
+    },
+    {
       "identity" : "swift-distributed-tracing",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-distributed-tracing",
       "state" : {
         "revision" : "9f982a7ec8dd815bf57024e39de592813ca14399",
         "version" : "1.7.4"
+      }
+    },
+    {
+      "identity" : "swift-http-types",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-http-types",
+      "state" : {
+        "revision" : "bff4b6903cdc99dda49649dd52f46c11cfd3ed50",
+        "version" : "1.8.0"
       }
     },
     {

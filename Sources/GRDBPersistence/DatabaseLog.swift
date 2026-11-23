@@ -46,10 +46,10 @@ final class DatabaseLog: Acknowledger {
     let table: String
     private let registry: EventRegistry
     private let byteBound: Int
-    // A Mutex rather than an actor: `track` appends synchronously, before it returns, so it can't
-    // await an actor. The state changes only inside a write to the database, once it commits, so
-    // the lock is always taken inside GRDB's writer and never held while waiting for it: an app
-    // that tracks from inside its own write can't deadlock with a delivery.
+    // A Mutex rather than an actor: `append` is synchronous, as `RecordStore` declares it, so it
+    // can't await an actor. The state changes only inside a write to the database, once it
+    // commits, so the lock is always taken inside GRDB's writer and never held while waiting for
+    // it: the tracker's worker appending while the app writes can't deadlock with a delivery.
     private let state: Mutex<State>
     let dropReports: AsyncStream<DropReport>
     private let dropReporter: AsyncStream<DropReport>.Continuation
@@ -122,8 +122,8 @@ final class DatabaseLog: Acknowledger {
         let eviction: Eviction
         do {
             (position, eviction) = try writer.unsafeReentrantWrite { db in
-                // Reentrant, so tracking inside one of the app's own writes joins its transaction
-                // rather than trapping; a savepoint, so the deletions and the insert commit together
+                // Reentrant, so an append made directly inside one of the app's own writes joins
+                // its transaction rather than trapping; a savepoint, so the deletions and the insert commit together
                 // or not at all, inside a transaction or out of one.
                 var position: Int64 = 0
                 var eviction = Eviction()

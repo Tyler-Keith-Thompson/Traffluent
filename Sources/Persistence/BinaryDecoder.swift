@@ -2,13 +2,25 @@
 public struct BinaryDecoder: Sendable {
     private let bytes: ArraySlice<UInt8>
     private var position: Int
+    /// Whether a `Sensitive` value can be read; otherwise reading one throws.
+    ///
+    /// Only a store's decoder reads them, so code outside the library can't recover a sensitive
+    /// value from bytes it encoded itself.
+    package let readsSensitiveValues: Bool
 
-    /// A decoder reading `bytes` from their start.
+    /// A decoder reading `bytes` from their start, which can't read a `Sensitive` value.
     ///
     /// - Parameter bytes: The bytes to read.
     public init(_ bytes: ArraySlice<UInt8>) {
+        self.init(bytes, readingSensitiveValues: false)
+    }
+
+    /// A decoder reading `bytes` from their start, reading `Sensitive` values when
+    /// `readingSensitiveValues` is set: a store's.
+    package init(_ bytes: ArraySlice<UInt8>, readingSensitiveValues: Bool) {
         self.bytes = bytes
         position = bytes.startIndex
+        readsSensitiveValues = readingSensitiveValues
     }
 
     /// A decoder reading `bytes` from their start.

@@ -16,16 +16,18 @@ public import Instrumentation
 /// let tracker = Tracker(enrichers: [session])
 /// ```
 ///
-/// A tracker runs its enrichers in order, on the context `track` took from
-/// `ServiceContext.current`, as the event is tracked: an enricher sees what earlier ones set, and
-/// may override a value the caller's context already holds.
+/// A tracker's worker runs its enrichers in order, on the context `track` took from
+/// `ServiceContext.current` when the event was tracked: an enricher sees what earlier ones set,
+/// and may override a value the caller's context already holds. It runs on the worker, not the
+/// tracking caller's thread, so it sees the caller's context only, not its other task-local
+/// values or its actor.
 public struct Enricher: Sendable {
     private let enrich: @Sendable (inout ServiceContext) -> Void
 
     /// An enricher that changes each record's context with `enrich`.
     ///
     /// - Parameter enrich: Sets the values it adds on the context it is given. It runs on the
-    ///   tracking caller's thread for every event, so keep it fast.
+    ///   tracker's worker for every event, in order, so a slow one delays every record after it.
     public init(_ enrich: @escaping @Sendable (inout ServiceContext) -> Void) {
         self.enrich = enrich
     }

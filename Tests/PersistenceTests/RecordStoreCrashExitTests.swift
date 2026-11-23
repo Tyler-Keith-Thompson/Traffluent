@@ -8,8 +8,10 @@
 import DestinationTesting
 import Destinations
 import Events
+import Dispatch
 import Foundation
 import Persistence
+import Synchronization
 import Testing
 import Trackers
 
@@ -17,6 +19,19 @@ import Trackers
 struct RecordStoreCrashExitTests {
     struct Tapped: Event, Equatable {
         var number: Int
+    }
+
+    /// Counts its calls, from any thread.
+    final class Count: Sendable {
+        private let count = Mutex(0)
+
+        /// One more than the last call returned, starting at 1.
+        func next() -> Int {
+            count.withLock { count in
+                count += 1
+                return count
+            }
+        }
     }
 
     /// Crashes the process as soon as it receives a batch, after the batch is delivered and
@@ -27,7 +42,7 @@ struct RecordStoreCrashExitTests {
         }
     }
 
-    @Test("A record tracked right before the process crashes is delivered on the next launch, not marked redelivered", arguments: StoreKind.all)
+    @Test("A record flushed right before the process crashes is delivered on the next launch, not marked redelivered", arguments: StoreKind.all)
     func crashAfterTrack(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -38,16 +53,48 @@ struct RecordStoreCrashExitTests {
             let tracker = Tracker(store: try! kind.open(at: path, events: [Tapped.self]).store)
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
+            await tracker.flush()
             abort()
         }
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
         #expect(destination.events(of: Tapped.self) == expected)
         #expect(destination.records.map(\.isRedelivered) == [false, false])
         #expect(store.byteCount == 0)
+    }
+
+    @Test("A record the worker hasn't reached when the process crashes is lost: a record is durable once written, not once track returns", arguments: StoreKind.all)
+    func crashBeforeWritten(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let expected = [Tapped(number: 1)]
+
+        await #expect(processExitsWith: .failure) { [kind = kind as StoreKind, path = path as String] in
+            // Blocks the worker for good from the second event on, so the events after the
+            // first are tracked but never reached.
+            let enriched = Count()
+            let (reached, reaching) = AsyncStream.makeStream(of: Void.self)
+            let never = DispatchSemaphore(value: 0)
+            let enricher = Enricher { _ in
+                guard enriched.next() > 1 else { return }
+                reaching.yield()
+                never.wait()
+            }
+            let tracker = Tracker(store: try! kind.open(at: path, events: [Tapped.self]).store, enrichers: [enricher])
+            tracker.track(Tapped(number: 1))
+            await tracker.flush()
+            tracker.track(Tapped(number: 2))
+            tracker.track(Tapped(number: 3))
+            var reachedSecond = reached.makeAsyncIterator()
+            _ = await reachedSecond.next()
+            abort()
+        }
+        let recovered = try kind.open(at: path, events: [Tapped.self]).store.takeRecoveredRecords()
+
+        #expect(recovered.compactMap { $0.event as? Tapped } == expected)
     }
 
     @Test("A batch delivered right before the process crashes, and so never deleted, is resent on the next launch marked redelivered", arguments: StoreKind.all)
@@ -62,11 +109,12 @@ struct RecordStoreCrashExitTests {
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
             tracker.track(Tapped(number: 3))
+            await tracker.flush()
             try? await tracker.records.batch(strategy: .count(2)).deliver(to: CrashingDestination()).execute()
         }
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
         #expect(destination.events(of: Tapped.self) == expected)

@@ -81,7 +81,7 @@ struct HTTPDestinationTests {
 
         tracker.track(SignedUp(plan: "a"))
         tracker.track(SignedUp(plan: "b"))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(1)).deliver(to: sut).execute()
 
         let actual = transport.sent.withLock { $0 }
@@ -101,7 +101,7 @@ struct HTTPDestinationTests {
         for plan in ["a", "b", "c"] {
             tracker.track(SignedUp(plan: plan))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(3)).deliver(to: sut).execute()
 
         let actual = transport.sent.withLock { $0.map(\.body) }
@@ -136,7 +136,7 @@ struct HTTPDestinationTests {
 
         tracker.track(SignedUp(plan: "a"))
         tracker.track(SignedUp(plan: "b"))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(1)).deliver(to: sut, other).execute()
 
         let actualAttempts = transport.sent.withLock { $0.count }
@@ -155,7 +155,7 @@ struct HTTPDestinationTests {
 
         tracker.track(SignedUp(plan: "a"))
         tracker.track(SignedUp(plan: "b"))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(1)).deliver(to: sut).execute()
 
         let actual = transport.sent.withLock { $0.map(\.body) }

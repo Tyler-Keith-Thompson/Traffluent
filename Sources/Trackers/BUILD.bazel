@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.
+# Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; and Consent, which holds, delivers or drops each event by its ConsentCategory's status.
 swift_library(
     name = "Trackers",
     srcs = glob(["**/*.swift"]),
@@ -12,6 +12,7 @@ swift_library(
         "//Sources/Events",
         "//Sources/Persistence",
         "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_collections//:DequeModule",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_log//:Logging",
     ],

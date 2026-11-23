@@ -24,8 +24,8 @@ struct RecordStoreTests {
         var number: Int
     }
 
-    @Test("track writes the record before it returns, and a store opened next on it recovers it", arguments: StoreKind.all)
-    func writeThrough(kind: StoreKind) throws {
+    @Test("The worker writes each record before publishing it, and a store opened next on it recovers it", arguments: StoreKind.all)
+    func writeThrough(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let store = try kind.open(at: path, events: [Tapped.self]).store
@@ -33,6 +33,7 @@ struct RecordStoreTests {
         let expected = [Tapped(number: 1)]
 
         tracker.track(Tapped(number: 1))
+        await tracker.flush()
 
         #expect(store.pendingRecordCount == 1)
         #expect(store.byteCount > 0)
@@ -111,6 +112,7 @@ struct RecordStoreTests {
         let earlier = Tracker(store: try kind.open(at: path, events: [Tapped.self]).store)
         earlier.track(Tapped(number: 1))
         earlier.track(Tapped(number: 2))
+        await earlier.finish()
         let copy = path + "-copy"
         defer { try? FileManager.default.removeItem(atPath: copy) }
         try FileManager.default.copyItem(atPath: path, toPath: copy)
@@ -120,7 +122,7 @@ struct RecordStoreTests {
         let expected = [Tapped(number: 1), Tapped(number: 2), Tapped(number: 3)]
 
         sut.track(Tapped(number: 3))
-        sut.finish()
+        await sut.finish()
         try await sut.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
         #expect(destination.events(of: Tapped.self) == expected)
@@ -140,7 +142,7 @@ struct RecordStoreTests {
         for number in 0..<25 {
             tracker.track(Tapped(number: number))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
         #expect(destination.records.count == 25)
@@ -228,7 +230,7 @@ struct RecordStoreTests {
         let destination = InMemoryDestination()
 
         tracker.track(Untracked(number: 1))
-        tracker.finish()
+        await tracker.finish()
 
         #expect(store.byteCount == 0)
         #expect(store.pendingRecordCount == 0)
@@ -247,7 +249,7 @@ struct RecordStoreTests {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        let sut = try kind.open(at: path, events: [Tapped.self], holding: 1) { store in
+        let sut = try await kind.open(at: path, events: [Tapped.self], holding: 1) { store in
             _ = store.append(EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
         }.store
         var reports = sut.dropReports.makeAsyncIterator()
@@ -285,12 +287,13 @@ struct RecordStoreTests {
     }
 
     @Test("Synchronizing keeps every record", arguments: StoreKind.all)
-    func synchronize(kind: StoreKind) throws {
+    func synchronize(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let sut = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: sut)
         tracker.track(Tapped(number: 1))
+        await tracker.flush()
 
         sut.synchronize()
         sut.synchronize()
@@ -303,14 +306,14 @@ struct RecordStoreTests {
         #expect(next.takeRecoveredRecords().count == 1)
     }
 
-    @Test("An event tracked after finish isn't delivered in this run, but is written for the next", arguments: StoreKind.all)
+    @Test("An event tracked after finish is dropped: neither delivered in this run nor written for the next", arguments: StoreKind.all)
     func trackedAfterFinish(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let tracker = Tracker(store: try kind.open(at: path, events: [Tapped.self]).store)
         let destination = InMemoryDestination()
 
-        tracker.finish()
+        await tracker.finish()
         tracker.track(Tapped(number: 1))
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
@@ -319,7 +322,7 @@ struct RecordStoreTests {
         defer { try? FileManager.default.removeItem(atPath: copy) }
         try FileManager.default.copyItem(atPath: path, toPath: copy)
         let next = try kind.open(at: copy, events: [Tapped.self]).store
-        #expect(next.takeRecoveredRecords().compactMap { $0.event as? Tapped } == [Tapped(number: 1)])
+        #expect(next.takeRecoveredRecords().isEmpty)
     }
 }
 

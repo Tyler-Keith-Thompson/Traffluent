@@ -78,8 +78,8 @@ final class SegmentLog: Acknowledger {
     private let registry: EventRegistry
     private let byteBound: Int
     private let segmentByteCount: Int
-    // A Mutex rather than an actor: `track` appends synchronously, before it returns, so it can't
-    // await an actor. Every section is short (a write() of one record, or a few file deletions);
+    // A Mutex rather than an actor: `append` is synchronous, as `RecordStore` declares it, so it
+    // can't await an actor. Every section is short (a write() of one record, or a few file deletions);
     // fsync, the one slow call, runs outside it.
     private let state: Mutex<State>
     let dropReports: AsyncStream<DropReport>

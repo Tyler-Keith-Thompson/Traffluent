@@ -40,6 +40,7 @@ use_repo(
     "swiftpkg_afluent",
     "swiftpkg_grdb.swift",
     "swiftpkg_swift_clocks",
+    "swiftpkg_swift_collections",
     "swiftpkg_swift_concurrency_extras",
     "swiftpkg_swift_distributed_tracing",
     "swiftpkg_swift_http_types",

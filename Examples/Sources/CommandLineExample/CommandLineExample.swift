@@ -14,7 +14,7 @@ struct CommandLineExample {
         withTracker(tracker) {
             Tracker.current.track(AppLaunched(platform: .current))
         }
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()
     }
 }

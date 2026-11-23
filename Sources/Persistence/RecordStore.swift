@@ -2,15 +2,17 @@ public import Events
 
 /// Where a tracker keeps each record until it is delivered, so records survive the app ending.
 ///
-/// A tracker given a store (`Tracker(store:)`) appends each record to it before `track` returns,
-/// and starts its records with the ones the store kept from earlier runs. A store tags each record
+/// A tracker given a store (`Tracker(store:)`) appends each record to it as the tracker's worker
+/// reaches the record, before publishing it, and starts its records with the ones the store kept
+/// from earlier runs. A store tags each record
 /// it keeps with a `DeliveryTag` naming itself as the `Acknowledger`, so a
 /// delivery tells it when the record is about to be delivered and once it has been.
 /// ``SegmentStore`` is the default; conform to keep records elsewhere.
 public protocol RecordStore: Sendable {
     /// Keeps `record` until it is delivered.
     ///
-    /// Called by `track` on the tracking caller's thread, before it returns, so keep it fast.
+    /// Called on the tracker's worker, never on the tracking caller's thread, one record at a
+    /// time in the order tracked: a slow write delays the records after it, not `track`.
     ///
     /// - Parameter record: The record just tracked.
     /// - Returns: `record` with its `EventRecord.deliveryTag` set, or `record` as it was

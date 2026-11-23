@@ -35,7 +35,7 @@ struct InMemoryDestinationTests {
         for number in 1...3 {
             tracker.track(Tapped(number: number))
         }
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()
 
         let actualBatches = sut.batches.map { $0.compactMap { ($0.event as? Tapped)?.number } }
@@ -55,7 +55,7 @@ struct InMemoryDestinationTests {
         tracker.track(Tapped(number: 1))
         tracker.track(Viewed(screen: "Home"))
         tracker.track(Tapped(number: 2))
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()
 
         let actualTaps = sut.events(of: Tapped.self)
@@ -90,7 +90,7 @@ struct InMemoryDestinationTests {
         tracker.track(Tapped(number: 1))
         var deliveries = sut.deliveries.makeAsyncIterator()
         let batch = try #require(await deliveries.next())
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         let actual = batch.compactMap { $0.event as? Tapped }
@@ -119,7 +119,7 @@ struct InMemoryDestinationTests {
                 group.addTask { tracker.track(Tapped(number: number)) }
             }
         }
-        tracker.finish()
+        await tracker.finish()
         try await running.value
         reader.cancel()
         _ = await reader.value

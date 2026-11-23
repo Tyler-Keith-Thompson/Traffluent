@@ -24,5 +24,6 @@ let package = Package(
         .systemLibrary(name: "CLibFuzzer", path: "Sources/CLibFuzzer"),
         .target(name: "FuzzSupport", dependencies: ["CLibFuzzer"]),
         target("FuzzPersistence", ["Persistence", "Checksums", "Events"]),
+        target("FuzzTrackers", ["Trackers", "Events"]),
     ]
 )

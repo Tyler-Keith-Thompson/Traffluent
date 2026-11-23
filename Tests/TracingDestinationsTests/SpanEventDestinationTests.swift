@@ -26,7 +26,7 @@ struct SpanEventDestinationTests {
         ServiceContext.withValue(tracked.context) {
             tracker.track(SignedUp(plan: "pro"))
         }
-        tracker.finish()
+        await tracker.finish()
         try await ServiceContext.withValue(delivering.context) {
             try await tracker.records.batch().deliver(to: sut).execute()
         }
@@ -57,12 +57,32 @@ struct SpanEventDestinationTests {
         ServiceContext.withValue(span.context) {
             tracker.track(SignedUp(plan: "pro"), file: "/x/A.swift", fileID: "M/A.swift", function: "f()", line: 4, column: 2)
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
         span.end()
 
         let event = try #require(tracer.finishedSpans.first?.events.first)
         #expect(event.nanosecondsSinceEpoch == expectedNanoseconds)
+        #expect(event.attributes == expectedAttributes)
+    }
+
+    @Test("A span event of a record whose call site was dropped carries no code attributes")
+    func droppedCallSite() async throws {
+        let tracer = InMemoryTracer()
+        let sut = SpanEventDestination(tracer: tracer).droppingCallSite()
+        let tracker = Tracker()
+        let span = tracer.startSpan("checkout")
+        var expectedAttributes = SpanAttributes()
+        expectedAttributes["event"] = "SignedUp(plan: \"pro\")"
+
+        ServiceContext.withValue(span.context) {
+            tracker.track(SignedUp(plan: "pro"), file: "/x/A.swift", fileID: "M/A.swift", function: "f()", line: 4, column: 2)
+        }
+        await tracker.finish()
+        try await tracker.records.batch().deliver(to: sut).execute()
+        span.end()
+
+        let event = try #require(tracer.finishedSpans.first?.events.first)
         #expect(event.attributes == expectedAttributes)
     }
 
@@ -79,7 +99,7 @@ struct SpanEventDestinationTests {
         ServiceContext.withValue(first.context) { tracker.track(SignedUp(plan: "a")) }
         ServiceContext.withValue(second.context) { tracker.track(SignedUp(plan: "b")) }
         ServiceContext.withValue(first.context) { tracker.track(SignedUp(plan: "c")) }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
         first.end()
         second.end()
@@ -103,7 +123,7 @@ struct SpanEventDestinationTests {
         tracker.track(SignedUp(plan: "none"))
         ServiceContext.withValue(ended.context) { tracker.track(SignedUp(plan: "late")) }
         ended.end()
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let actual = try #require(tracer.finishedSpans.first).events
@@ -119,7 +139,7 @@ struct SpanEventDestinationTests {
         let expected: UInt64 = 0
 
         ServiceContext.withValue(span.context) { tracker.track(SignedUp(plan: "pro")) }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
         span.end()
 

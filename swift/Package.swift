@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
         .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.1"),
-        .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.39"),
+        .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.45"),
         .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
         .package(url: "https://github.com/apple/swift-log", from: "1.17.2"),
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
@@ -18,5 +18,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-system", from: "1.9.0"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.12.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
+        .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
     ]
 )

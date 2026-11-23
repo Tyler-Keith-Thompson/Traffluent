@@ -30,6 +30,10 @@ let benchmarks: @Sendable () -> Void = {
     let frame = [UInt8](repeating: 0x2A, count: 112)
 
     // MARK: track: the cost of one tracked event, written through to disk.
+    //
+    // `track` only queues the event, and the tracker's worker writes it, so these measure what the
+    // caller pays. The worker runs on a dispatch queue, which the simulated counts don't see; judge
+    // its cost by wall clock (`just bench`).
 
     // The hand-written form the library must keep pace with: one write() of a record-sized frame
     // to a file opened for appending, per event.
@@ -54,10 +58,10 @@ let benchmarks: @Sendable () -> Void = {
             tracker.track(Tapped(number: number, screen: "Checkout"))
         }
         benchmark.stopMeasurement()
-        blackHole(tracker)
+        await tracker.finish()
     }
 
-    // The same tracking with no store: what write-through adds to it.
+    // The same tracking with no store: what a store adds to the caller's cost.
     Benchmark("track: Tracker() in memory only", configuration: .init(scalingFactor: .kilo)) { benchmark in
         let tracker = Tracker()
         benchmark.startMeasurement()
@@ -65,7 +69,7 @@ let benchmarks: @Sendable () -> Void = {
             tracker.track(Tapped(number: number, screen: "Checkout"))
         }
         benchmark.stopMeasurement()
-        blackHole(tracker)
+        await tracker.finish()
     }
 }
 

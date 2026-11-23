@@ -61,7 +61,7 @@ struct RecordStoreWriteFailureExitTests {
             let destination = InMemoryDestination()
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
-            tracker.finish()
+            await tracker.finish()
             opened.failWrites()
 
             try? await tracker.records.batch(strategy: .count(2)).deliver(to: destination).execute()
@@ -72,7 +72,7 @@ struct RecordStoreWriteFailureExitTests {
         }
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
 
         #expect(destination.events(of: Tapped.self) == expected)

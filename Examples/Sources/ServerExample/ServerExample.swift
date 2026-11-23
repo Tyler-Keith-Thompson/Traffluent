@@ -22,8 +22,14 @@ struct ServerExample {
             Tracker.current.track(AppLaunched(platform: .current))
             try await withThrowingTaskGroup { group in
                 group.addTask { try await delivery.execute() }
-                defer { tracker.finish() }
-                try await application.runService()
+                // Finished whether the service returns or throws; a defer can't await.
+                do {
+                    try await application.runService()
+                } catch {
+                    await tracker.finish()
+                    throw error
+                }
+                await tracker.finish()
             }
         }
     }

@@ -2,15 +2,29 @@
 public struct BinaryEncoder: Sendable {
     /// The bytes written so far.
     public private(set) var bytes: [UInt8]
+    /// Whether a `Sensitive` value is written as its value; otherwise it writes nothing.
+    ///
+    /// Only a store's encoder writes them, so code outside the library can't turn a sensitive
+    /// value into bytes by encoding it, or the event holding it, itself.
+    package let writesSensitiveValues: Bool
 
-    /// An encoder with nothing written.
+    /// An encoder with nothing written, which writes nothing for a `Sensitive` value.
     public init() {
-        bytes = []
+        self.init(writingSensitiveValues: false)
     }
 
-    /// An encoder whose bytes start with `prefix`, written by the caller.
+    /// An encoder with nothing written, writing `Sensitive` values as their values when
+    /// `writingSensitiveValues` is set: a store's.
+    package init(writingSensitiveValues: Bool) {
+        bytes = []
+        writesSensitiveValues = writingSensitiveValues
+    }
+
+    /// A store's encoder whose bytes start with `prefix`, written by the caller: a segment
+    /// frame's, which may hold a record.
     init(prefix: [UInt8]) {
         bytes = prefix
+        writesSensitiveValues = true
     }
 
     /// Writes `value`.

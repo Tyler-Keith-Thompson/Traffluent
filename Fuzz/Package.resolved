@@ -1,13 +1,31 @@
 {
-  "originHash" : "28c5021605a413b089574d7eb5db140766a614414a95dfae90cf84f171b99ef5",
+  "originHash" : "c70a9c8df2c1cb1493966a06ae0af729a81484af485d6bbc654d0395ecd27518",
   "pins" : [
     {
       "identity" : "afluent",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
       "state" : {
-        "revision" : "03552a5584ed409c4c64837d116687f07af199ea",
-        "version" : "1.1.43"
+        "revision" : "d519b113dc6ba1a5fdca26506c2ff336c2f0e971",
+        "version" : "1.1.45"
+      }
+    },
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift",
+      "state" : {
+        "revision" : "92a554cd0d5e8d67cb18993c6054e73fe42c066c",
+        "version" : "7.12.0"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "88754449ab766a739610b660e117762115fabc9c",
+        "version" : "1.7.6"
       }
     },
     {
@@ -17,6 +35,15 @@
       "state" : {
         "revision" : "9f982a7ec8dd815bf57024e39de592813ca14399",
         "version" : "1.7.4"
+      }
+    },
+    {
+      "identity" : "swift-http-types",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-http-types",
+      "state" : {
+        "revision" : "bff4b6903cdc99dda49649dd52f46c11cfd3ed50",
+        "version" : "1.8.0"
       }
     },
     {

@@ -10,8 +10,8 @@ extension Tracker {
     ///     .deliver(to: ConsoleDestination())
     /// ```
     ///
-    /// The sequence ends once the tracker's ``Tracker/finish()`` is called and every record before
-    /// it has been read. Records tracked while nothing is reading wait in memory, without a
+    /// The sequence ends once the tracker's ``Tracker/finish()`` is called, or its every copy is
+    /// released, and every record before it has been read. Records tracked while nothing is reading wait in memory, without a
     /// bound, for the next read, so none tracked before a delivery starts, or between two, is lost.
     /// A read whose task is cancelled returns `nil` and takes nothing: the next read gets the
     /// record it was waiting for, and every one after. A ``Tracker/noOp`` tracker's records are
@@ -24,32 +24,27 @@ extension Tracker {
         public typealias Element = EventRecord
         public typealias Failure = Never
 
-        let backing: Backing
+        let subscription: Subscription?
 
         /// Reads a tracker's records.
         public struct AsyncIterator: AsyncIteratorProtocol {
             public typealias Element = EventRecord
             public typealias Failure = Never
 
-            let backing: Backing
+            let subscription: Subscription?
 
             /// The next record tracked, or `nil` once the tracker is finished or the reading task
             /// is cancelled.
             ///
             /// - Precondition: No other task's `next()` is waiting.
             public mutating func next() async -> EventRecord? {
-                switch backing {
-                case .subscription(let subscription):
-                    await subscription.next()
-                case .none:
-                    nil
-                }
+                await subscription?.next()
             }
         }
 
         /// An iterator over the records; reading starts with its first `next()`.
         public func makeAsyncIterator() -> AsyncIterator {
-            AsyncIterator(backing: backing)
+            AsyncIterator(subscription: subscription)
         }
     }
 }

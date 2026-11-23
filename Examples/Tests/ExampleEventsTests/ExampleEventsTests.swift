@@ -57,7 +57,7 @@ struct ExampleEventsTests {
         tracker.track(AppLaunched(platform: .mac))
         tracker.track(ButtonTapped(label: "Share"))
         tracker.track(RequestServed(path: "/", status: 404))
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         let actual = recorder.records.map { "\($0.name) \($0.event)" }

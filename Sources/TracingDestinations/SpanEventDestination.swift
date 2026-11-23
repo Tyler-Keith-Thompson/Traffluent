@@ -39,10 +39,12 @@ extension EventRecord {
     fileprivate var spanEvent: SpanEvent {
         var attributes = SpanAttributes()
         attributes["event"] = String(describing: event)
-        attributes["code.filepath"] = sourceLocation.fileID
-        attributes["code.function"] = sourceLocation.function
-        attributes["code.lineno"] = Int64(sourceLocation.line)
-        attributes["code.column"] = Int64(sourceLocation.column)
+        if let sourceLocation {
+            attributes["code.filepath"] = sourceLocation.fileID
+            attributes["code.function"] = sourceLocation.function
+            attributes["code.lineno"] = Int64(sourceLocation.line)
+            attributes["code.column"] = Int64(sourceLocation.column)
+        }
         let instant = DefaultTracerClock.Instant(nanosecondsSinceEpoch: nanosecondsSinceEpoch)
         return SpanEvent(name: name, at: instant, attributes: attributes)
     }

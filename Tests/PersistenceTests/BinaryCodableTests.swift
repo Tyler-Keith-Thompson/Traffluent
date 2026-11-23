@@ -1,3 +1,4 @@
+import Events
 import Foundation
 import Persistence
 import Testing
@@ -22,6 +23,20 @@ struct BinaryCodableTests {
             x = try decoder.decode()
             y = try decoder.decode()
         }
+    }
+
+    @Test("A store's encoder writes a sensitive value as its value, and its decoder reads it back marked sensitive")
+    func sensitive() throws {
+        let expectedBytes: [UInt8] = [7, 0, 0, 0, 0, 0, 0, 0]
+        var encoder = BinaryEncoder(writingSensitiveValues: true)
+
+        encoder.encode(Sensitive(7))
+        var decoder = BinaryDecoder(encoder.bytes[...], readingSensitiveValues: true)
+        let actual: Sensitive<Int> = try decoder.decode()
+
+        #expect(encoder.bytes == expectedBytes)
+        #expect(actual.value == 7)
+        #expect(decoder.isAtEnd)
     }
 
     @Test("Integers are written little-endian at their fixed width")

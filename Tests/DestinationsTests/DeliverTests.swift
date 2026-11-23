@@ -71,7 +71,7 @@ struct DeliverTests {
         for number in 1 ... 5 {
             tracker.track(Tapped(number: number))
         }
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         #expect(recorder.numbers == expected)
@@ -103,7 +103,7 @@ struct DeliverTests {
         _ = await deliveries.next()
         let actualFirst = recorder.numbers
         tracker.track(Tapped(number: 3))
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(actualFirst == expectedFirst)
@@ -120,7 +120,7 @@ struct DeliverTests {
         for number in 1 ... 41 {
             tracker.track(Tapped(number: number))
         }
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         #expect(recorder.numbers == expected)
@@ -142,7 +142,7 @@ struct DeliverTests {
         var deliveries = recorder.deliveries.makeAsyncIterator()
         _ = await deliveries.next()
         let actual = recorder.numbers
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(actual == expected)
@@ -162,7 +162,7 @@ struct DeliverTests {
         var deliveries = recorder.deliveries.makeAsyncIterator()
         _ = await deliveries.next()
         let actual = recorder.numbers
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(actual == expected)
@@ -179,7 +179,7 @@ struct DeliverTests {
         tracker.track(Tapped(number: 1))
         tracker.track(Tapped(number: 2))
         tracker.track(Tapped(number: 3))
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         #expect(first.numbers == expected)
@@ -193,7 +193,7 @@ struct DeliverTests {
         let sut = tracker.records.batch(strategy: .count(2)).deliver(to: recorder)
         let expected: [[Int]] = []
 
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         #expect(recorder.numbers == expected)
@@ -207,7 +207,7 @@ struct DeliverTests {
         let expected = [[7]]
 
         tracker.track(Tapped(number: 7))
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         #expect(recorder.numbers == expected)
@@ -219,7 +219,7 @@ struct DeliverTests {
         let sut = tracker.records.batch(strategy: .count(1)).deliver()
 
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
     }
 
@@ -231,7 +231,7 @@ struct DeliverTests {
         let expectedBefore: [[Int]] = []
         let expected = [[1]]
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
 
         let actualBefore = recorder.numbers
         try await sut.execute()
@@ -247,7 +247,7 @@ struct DeliverTests {
         let sut = tracker.records.batch(strategy: .count(5)).deliver(to: recorder)
         let expected = [[1]]
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
         try await sut.execute()
 
         try await sut.execute()
@@ -268,7 +268,7 @@ struct DeliverTests {
 
         running.cancel()
         _ = await running.result
-        tracker.finish()
+        await tracker.finish()
 
         #expect(recorder.numbers == expected)
     }
@@ -285,7 +285,7 @@ struct DeliverTests {
         running.cancel()
         _ = await running.result
         tracker.track(Tapped(number: 1))
-        tracker.finish()
+        await tracker.finish()
 
         await #expect(throws: CancellationError.self) {
             try await sut.execute()
@@ -311,7 +311,7 @@ struct DeliverTests {
         _ = await deliveries.next()
         let actual = recorder.numbers
         try stuck.gate.send()
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(actual == expected)
@@ -337,7 +337,7 @@ struct DeliverTests {
         var deliveries = recorder.deliveries.makeAsyncIterator()
         while let batch = await deliveries.next(), (batch.last?.event as? Tapped)?.number != 4 {}
         try stuck.gate.send()
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(stuck.batches.withLock { $0 } == expected)
@@ -362,7 +362,7 @@ struct DeliverTests {
         var deliveries = recorder.deliveries.makeAsyncIterator()
         while let batch = await deliveries.next(), (batch.last?.event as? Tapped)?.number != 102 {}
         try stuck.gate.send()
-        tracker.finish()
+        await tracker.finish()
         try await running.value
 
         #expect(stuck.batches.withLock { $0 } == expected)

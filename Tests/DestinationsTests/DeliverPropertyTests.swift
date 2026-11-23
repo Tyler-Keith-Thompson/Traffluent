@@ -28,7 +28,7 @@ struct DeliverPropertyTests {
             for number in numbers {
                 tracker.track(Tapped(number: number))
             }
-            tracker.finish()
+            await tracker.finish()
             try await sut.execute()
 
             #expect(first.numbers == expected)

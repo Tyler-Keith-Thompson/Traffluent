@@ -64,7 +64,7 @@ struct TrackerTests {
         sut.track(Tapped(number: 1))
         sut.track(Tapped(number: 2))
         sut.track(Tapped(number: 3))
-        sut.finish()
+        await sut.finish()
 
         var actual: [Int] = []
         for await record in sut.records {
@@ -80,7 +80,7 @@ struct TrackerTests {
         let expectedNumber = 9
 
         sut.track(Tapped(number: expectedNumber))
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let record = try #require(await records.next())
@@ -95,7 +95,7 @@ struct TrackerTests {
         let expected = [1]
 
         sut.track(Tapped(number: 1))
-        sut.finish()
+        await sut.finish()
         sut.track(Tapped(number: 2))
 
         var actual: [Int] = []
@@ -113,7 +113,7 @@ struct TrackerTests {
 
         sut.track(Tapped(number: 1))
         copy.track(Tapped(number: 2))
-        copy.finish()
+        await copy.finish()
 
         var actual: [Int] = []
         for await record in sut.records {
@@ -154,7 +154,7 @@ struct TrackerTests {
             }
             return await group.next() ?? nil
         }
-        sut.finish()
+        await sut.finish()
 
         var actual: [Int] = []
         for await record in sut.records {
@@ -170,7 +170,7 @@ struct TrackerTests {
         let expected: [Int] = []
 
         sut.track(Tapped(number: 1))
-        sut.finish()
+        await sut.finish()
 
         var actual: [Int] = []
         for await record in sut.records {
@@ -188,7 +188,7 @@ struct TrackerTests {
         sut.track(Tapped(number: 1))
         sut.track(Tapped(number: 2))
         sut.track(Tapped(number: 3))
-        sut.finish()
+        await sut.finish()
 
         var actual: [Date] = []
         for await record in sut.records {
@@ -204,7 +204,7 @@ struct TrackerTests {
 
         sut.track(Tapped(number: 1))
         let latest = Date.now
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).timestamp
@@ -225,10 +225,10 @@ struct TrackerTests {
         let expectedLine = #line + 2
 
         sut.track(Tapped(number: 1))
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
-        let actual = try #require(await records.next()).sourceLocation
+        let actual = try #require(await records.next()?.sourceLocation)
         #expect(actual.file == expectedFile)
         #expect(actual.fileID == expectedFileID)
         #expect(actual.moduleName == expectedModule)
@@ -243,11 +243,28 @@ struct TrackerTests {
         let expected = Events.SourceLocation(file: "/src/App/Cart.swift", fileID: "App/Cart.swift", function: "pay()", line: 41, column: 7)
 
         sut.track(Tapped(number: 1), file: "/src/App/Cart.swift", fileID: "App/Cart.swift", function: "pay()", line: 41, column: 7)
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).sourceLocation
         #expect(actual == expected)
+    }
+
+    @Test("A tracker's records reveal their events' sensitive values")
+    func revealsSensitiveValues() async throws {
+        struct SignedUp: Event {
+            var email: Sensitive<String>
+        }
+        let sut = Tracker()
+        let expected = "ada@example.com"
+
+        sut.track(SignedUp(email: Sensitive("ada@example.com")))
+        await sut.finish()
+
+        var records = sut.records.makeAsyncIterator()
+        let record = try #require(await records.next())
+        let event = try #require(record.event as? SignedUp)
+        #expect(record.reveal(event.email) == expected)
     }
 
     @Test("Events tracked before a delivery starts are delivered")
@@ -258,7 +275,7 @@ struct TrackerTests {
 
         sut.track(Tapped(number: 1))
         sut.track(Tapped(number: 2))
-        sut.finish()
+        await sut.finish()
         try await sut.records.batch(strategy: .count(5)).deliver(to: recorder).execute()
 
         let actual = recorder.events(of: Tapped.self).map(\.number)
@@ -279,7 +296,7 @@ struct TrackerTests {
 
         sut.track(Tapped(number: 2))
         sut.track(Tapped(number: 3))
-        sut.finish()
+        await sut.finish()
         try await sut.records.batch(strategy: .count(5)).deliver(to: recorder).execute()
 
         let actual = recorder.events(of: Tapped.self).map(\.number)
@@ -297,7 +314,7 @@ struct TrackerTests {
         try await retried.execute()
 
         sut.track(Tapped(number: 1))
-        sut.finish()
+        await sut.finish()
         try await running.value
 
         let actual = recorder.events(of: Tapped.self).map(\.number)

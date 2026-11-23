@@ -121,11 +121,11 @@ enum StoreKind: String, Codable, Sendable, CustomTestStringConvertible {
     ///   - events: The event types the store keeps.
     ///   - count: How many records the bound holds.
     ///   - probe: Writes one record to the store it is given, as the test writes its records.
-    func open(at path: String, events: [any (Event & BinaryCodable).Type], holding count: Int, probe: (any InspectableStore) -> Void) throws -> OpenedStore {
+    func open(at path: String, events: [any (Event & BinaryCodable).Type], holding count: Int, probe: (any InspectableStore) async -> Void) async throws -> OpenedStore {
         let probePath = path + "-probe"
         defer { try? FileManager.default.removeItem(atPath: probePath) }
         let measured = try open(at: probePath, events: events).store
-        probe(measured)
+        await probe(measured)
         let recordByteCount = measured.byteCount
         switch self {
         case .segments:

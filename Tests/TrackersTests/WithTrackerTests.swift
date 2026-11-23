@@ -18,7 +18,7 @@ struct WithTrackerTests {
         withTracker(tracker) {
             Tracker.current.track(Tapped(number: 1))
         }
-        tracker.finish()
+        await tracker.finish()
 
         var actual: [Int] = []
         for await record in tracker.records {
@@ -36,7 +36,7 @@ struct WithTrackerTests {
             await Task.yield()
             Tracker.current.track(Tapped(number: 1))
         }
-        tracker.finish()
+        await tracker.finish()
 
         var actual: [Int] = []
         for await record in tracker.records {
@@ -52,7 +52,7 @@ struct WithTrackerTests {
 
         Tracker.current.track(Tapped(number: 1))
         Tracker.noOp.track(Tapped(number: 2))
-        tracker.finish()
+        await tracker.finish()
 
         var actual: [Int] = []
         for await record in tracker.records {
@@ -72,7 +72,7 @@ struct WithTrackerTests {
                 group.addTask { Tracker.current.track(Tapped(number: 2)) }
             }
         }
-        tracker.finish()
+        await tracker.finish()
 
         var actual: [Int] = []
         for await record in tracker.records {
@@ -95,8 +95,8 @@ struct WithTrackerTests {
             }
             Tracker.current.track(Tapped(number: 3))
         }
-        outer.finish()
-        inner.finish()
+        await outer.finish()
+        await inner.finish()
 
         var actualOuter: [Int] = []
         for await record in outer.records {
@@ -119,7 +119,7 @@ struct WithTrackerTests {
             Tracker.current.track(Tapped(number: 1))
         }
         Tracker.current.track(Tapped(number: 2))
-        tracker.finish()
+        await tracker.finish()
 
         var actual: [Int] = []
         for await record in tracker.records {

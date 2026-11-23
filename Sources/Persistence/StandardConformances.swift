@@ -1,3 +1,4 @@
+public import Events
 public import Foundation
 
 extension BinaryCodable where Self: FixedWidthInteger {
@@ -189,5 +190,28 @@ extension UUID: BinaryCodable {
             target.copyBytes(from: bytes)
         }
         self = UUID(uuid: uuid)
+    }
+}
+
+extension Sensitive: BinaryCodable where Value: BinaryCodable {
+    /// Writes the value as it is to a store's encoder, so the store can deliver it to a
+    /// destination that reveals it; writes nothing to an encoder of your own,
+    /// ``BinaryEncoder/init()``'s.
+    ///
+    /// The bytes on disk hold the value in the clear, as every other property's do: the store is
+    /// the app's own, in its own container. An encoder of your own writes nothing, so encoding a
+    /// redacted record's event can't recover the value.
+    public func encode(to encoder: inout BinaryEncoder) {
+        guard encoder.writesSensitiveValues else { return }
+        encoder.encode(value)
+    }
+
+    /// Reads a value a store's encoder wrote, marked sensitive again.
+    ///
+    /// - Throws: ``BinaryDecodingError/invalidValue`` from a decoder of your own, which can't
+    ///   read sensitive values, or what reading the value throws.
+    public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        guard decoder.readsSensitiveValues else { throw .invalidValue }
+        self.init(try decoder.decode(Value.self))
     }
 }

@@ -17,7 +17,7 @@ struct READMEExamplesTests {
         let tracker = Tracker()
         let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
         tracker.track(SignedUp(plan: "pro"))
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
@@ -27,7 +27,7 @@ struct READMEExamplesTests {
         let delivery = tracker.records
             .batch(strategy: .either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock())))
             .deliver(to: ConsoleDestination(), batchBufferLimit: 10)
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()
     }
 
@@ -37,7 +37,7 @@ struct READMEExamplesTests {
         withTracker(tracker) {
             Tracker.current.track(SignedUp(plan: "pro"))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
@@ -52,8 +52,56 @@ struct READMEExamplesTests {
         }
         let tracker = Tracker(enrichers: [screen])
         tracker.track(SignedUp(plan: "pro"))  // its record's context[ScreenKey.self] is "Checkout"
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()
+    }
+
+    struct AdClicked: Event {
+        static let consentCategory = ConsentCategory.advertising
+        var campaign: String
+    }
+
+    @Test("Consent")
+    func consent() async throws {
+        let consent = Consent([.analytics: .granted])
+        let tracker = Tracker(consent: consent)
+        let delivery = tracker.records.batch().deliver(
+            to: ConsoleDestination(),
+            ConsoleDestination().accepting(.advertising)
+        )
+        tracker.track(SignedUp(plan: "pro"))          // delivered: analytics is granted
+        tracker.track(AdClicked(campaign: "spring"))  // held: advertising is undecided
+        consent.grant(.advertising)                   // delivers the held AdClicked
+        await tracker.finish()
+        try await delivery.execute()
+
+        #expect(consent.heldRecordCount == 0)
+    }
+
+    struct SignedIn: Event {
+        var email: Sensitive<String>
+    }
+
+    @Test("Sensitive values and call sites")
+    func sensitiveValuesAndCallSites() async throws {
+        let backend = InMemoryDestination()
+        let vendor = InMemoryDestination()
+        let tracker = Tracker()
+        let delivery = tracker.records.batch().deliver(
+            to: backend,
+            vendor.redactingSensitiveValues().droppingCallSite()
+        )
+        tracker.track(SignedIn(email: Sensitive("ada@example.com")))
+        await tracker.finish()
+        try await delivery.execute()
+        let event = backend.events(of: SignedIn.self)[0]
+        let email = backend.records[0].reveal(event.email)    // "ada@example.com"
+        let redacted = vendor.records[0].reveal(event.email)  // nil
+        let callSite = vendor.records[0].sourceLocation       // nil
+
+        #expect(email == "ada@example.com")
+        #expect(redacted == nil)
+        #expect(callSite == nil)
     }
 
     @Test("Persistence")
@@ -66,7 +114,7 @@ struct READMEExamplesTests {
         let tracker = Tracker(store: store)
         let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
         tracker.track(SignedUp(plan: "pro"))
-        tracker.finish()
+        await tracker.finish()
         try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 }

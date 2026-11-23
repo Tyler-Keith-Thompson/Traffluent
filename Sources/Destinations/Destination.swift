@@ -16,6 +16,10 @@ public import Events
 /// forgets those records. A destination that buffers or retries should return only once the
 /// batch is somewhere it won't be lost; a record whose `EventRecord.isRedelivered` is set may
 /// have reached it in an earlier run.
+///
+/// What a destination receives is narrowed by modifiers rather than by code of its own:
+/// ``accepting(_:)`` for the consent categories it serves, ``redactingSensitiveValues()`` and
+/// ``droppingCallSite()``. A destination given none receives every record as tracked.
 public protocol Destination: Sendable {
     /// Records `batch`.
     ///

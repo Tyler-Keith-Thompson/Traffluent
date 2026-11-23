@@ -54,6 +54,13 @@ struct EventRecordTests {
         #expect(actual.context[SessionKey.self] == expected)
     }
 
+    @Test("A record made with no source location has none")
+    func noSourceLocation() {
+        let actual = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+
+        #expect(actual.sourceLocation == nil)
+    }
+
     @Test("A record's context is empty unless one is given")
     func defaultContext() {
         let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)

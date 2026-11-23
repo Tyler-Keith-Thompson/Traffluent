@@ -10,7 +10,7 @@ import Synchronization
 /// let destination = InMemoryDestination()
 /// let tracker = Tracker()
 /// tracker.track(SignedUp(plan: "pro"))
-/// tracker.finish()
+/// await tracker.finish()
 /// try await tracker.records.batch().deliver(to: destination).execute()
 /// destination.events(of: SignedUp.self)  // [SignedUp(plan: "pro")]
 /// ```

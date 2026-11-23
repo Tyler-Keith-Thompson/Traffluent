@@ -213,41 +213,41 @@ struct DatabaseStoreTests {
         #expect(sut.pendingRecordCount == 1)
     }
 
-    @Test("Tracking inside one of the app's own writes joins its transaction: the record commits with the app's row")
-    func trackInsideAppWrite() throws {
+    @Test("Tracking inside one of the app's own writes neither waits for the write nor joins it: the worker commits the record after it")
+    func trackInsideAppWrite() async throws {
         let database = try DatabaseQueue()
-        try database.write { try $0.create(table: "player") { $0.autoIncrementedPrimaryKey("id") } }
+        try await database.write { try $0.create(table: "player") { $0.autoIncrementedPrimaryKey("id") } }
         let store = try DatabaseStore(events: [Tapped.self], database: database)
         let tracker = Tracker(store: store)
 
-        try database.write { db in
+        let pendingInsideWrite = try await database.write { db in
             try db.execute(sql: "INSERT INTO player DEFAULT VALUES")
             tracker.track(Tapped(number: 1))
+            return try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM traffluentRecord")
         }
+        await tracker.flush()
 
+        #expect(pendingInsideWrite == 0)
         #expect(store.pendingRecordCount == 1)
         let next = try DatabaseStore(events: [Tapped.self], database: database)
         #expect(next.takeRecoveredRecords().compactMap { $0.event as? Tapped } == [Tapped(number: 1)])
     }
 
-    @Test("A record tracked inside one of the app's writes that rolls back is lost from disk, but delivered in this run")
+    @Test("A record tracked inside one of the app's writes that rolls back is still written, outside the app's transaction")
     func trackInsideRolledBackWrite() async throws {
         struct Abandoned: Error {}
         let database = try DatabaseQueue()
         let store = try DatabaseStore(events: [Tapped.self], database: database)
         let tracker = Tracker(store: store)
-        let destination = InMemoryDestination()
 
         try? await database.write { _ in
             tracker.track(Tapped(number: 1))
             throw Abandoned()
         }
-        tracker.finish()
-        try await tracker.records.batch(strategy: .count(10)).deliver(to: destination).execute()
+        await tracker.flush()
 
         let rowCount = try await database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM traffluentRecord") }
-        #expect(destination.events(of: Tapped.self) == [Tapped(number: 1)])
-        #expect(rowCount == 0)
+        #expect(rowCount == 1)
     }
 
     @Test("An acknowledgement that can't be written leaves the rows, and the next launch delivers them marked redelivered")

@@ -29,7 +29,7 @@ struct TrackerContextTests {
         ServiceContext.withValue(context) {
             sut.track(Tapped(number: 1))
         }
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).context[SessionKey.self]
@@ -41,7 +41,7 @@ struct TrackerContextTests {
         let sut = Tracker()
 
         sut.track(Tapped(number: 1))
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).context[SessionKey.self]
@@ -59,7 +59,7 @@ struct TrackerContextTests {
 
         ServiceContext.withValue(first) { sut.track(Tapped(number: 1)) }
         ServiceContext.withValue(second) { sut.track(Tapped(number: 2)) }
-        sut.finish()
+        await sut.finish()
 
         var actual: [String?] = []
         for await record in sut.records {
@@ -76,7 +76,7 @@ struct TrackerContextTests {
 
         sut.track(Tapped(number: 1))
         sut.track(Tapped(number: 2))
-        sut.finish()
+        await sut.finish()
 
         var actual: [String?] = []
         for await record in sut.records {
@@ -98,7 +98,7 @@ struct TrackerContextTests {
         ServiceContext.withValue(context) {
             sut.track(Tapped(number: 1))
         }
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let record = try #require(await records.next())
@@ -115,7 +115,7 @@ struct TrackerContextTests {
             sut.track(Tapped(number: 1))
             return span.context.inMemorySpanContext
         }
-        sut.finish()
+        await sut.finish()
 
         var records = sut.records.makeAsyncIterator()
         let actual = try #require(await records.next()).context.inMemorySpanContext

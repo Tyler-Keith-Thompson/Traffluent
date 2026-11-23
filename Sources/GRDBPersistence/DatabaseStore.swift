@@ -21,14 +21,15 @@ public import Persistence
 ///   `Traffluent.DatabaseStore.<table>.v1`, sits in the database's `grdb_migrations` table beside
 ///   the app's, which the app's migrator ignores. A migrator with `eraseDatabaseOnSchemaChange`
 ///   sees the store's table as a schema change and erases the database, records and all.
-/// - **Write-through.** `track` inserts each record, in a transaction of its own, before it
-///   returns, so the record survives the app crashing or being killed once the transaction
-///   commits. How durable a commit is against power loss is the database's choice (its journal
+/// - **Write-through.** A tracker's worker inserts each record, in a transaction of its own, as
+///   it reaches the record, off the tracking caller's thread, so the record survives the app
+///   crashing or being killed once the transaction commits. How durable a commit is against power loss is the database's choice (its journal
 ///   mode and `synchronous` setting); ``synchronize()`` checkpoints a database in WAL mode, so
 ///   call it as the app moves to the background or terminates. A record whose insert fails is
 ///   kept in memory only, and reported as `DropReport.writeFailed(recordCount:timestamps:)`.
 ///   Tracking inside one of the app's own writes to the same database is allowed: the record
-///   then joins the app's transaction, and is lost from disk if that transaction rolls back.
+///   doesn't join the app's transaction, and the worker inserts it once that write is done, even
+///   if it rolls back.
 /// - **What is kept.** Only events of the types in `events`, which conform to `BinaryCodable`,
 ///   in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
 ///   they are delivered in this run like any other, are never written, and produce no drop

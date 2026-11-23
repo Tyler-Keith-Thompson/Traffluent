@@ -34,7 +34,7 @@ struct LoggerDestinationTests {
         ]
 
         tracker.track(SignedUp(plan: "pro"), file: "/x/A.swift", fileID: "M/A.swift", function: "f()", line: 4, column: 2)
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let entry = try #require(handler.entries.first)
@@ -42,6 +42,43 @@ struct LoggerDestinationTests {
         #expect(entry.level == .info)
         #expect(entry.message.description == "SignedUp")
         #expect(entry.metadata == expectedMetadata)
+    }
+
+    @Test("A record whose call site was dropped is written without code metadata")
+    func droppedCallSite() async throws {
+        let handler = InMemoryLogHandler()
+        let sut = LoggerDestination(logger: Logger(label: "test") { _ in handler }).droppingCallSite()
+        let tracker = Tracker(now: { Date(timeIntervalSince1970: 1_700_000_000) })
+        let expectedMetadata: Logger.Metadata = [
+            "event": "SignedUp(plan: \"pro\")",
+            "event.timestamp": "2023-11-14T22:13:20Z",
+        ]
+
+        tracker.track(SignedUp(plan: "pro"), file: "/x/A.swift", fileID: "M/A.swift", function: "f()", line: 4, column: 2)
+        await tracker.finish()
+        try await tracker.records.batch().deliver(to: sut).execute()
+
+        let entry = try #require(handler.entries.first)
+        #expect(entry.message.description == "SignedUp")
+        #expect(entry.metadata == expectedMetadata)
+    }
+
+    @Test("A sensitive property is written as <redacted>, never its value")
+    func sensitive() async throws {
+        struct SignedIn: Event {
+            var email: Sensitive<String>
+        }
+        let handler = InMemoryLogHandler()
+        let sut = LoggerDestination(logger: Logger(label: "test") { _ in handler })
+        let tracker = Tracker()
+        let expected: Logger.MetadataValue = "SignedIn(email: Sensitive(<redacted>))"
+
+        tracker.track(SignedIn(email: Sensitive("ada@example.com")))
+        await tracker.finish()
+        try await tracker.records.batch().deliver(to: sut).execute()
+
+        let actual = try #require(handler.entries.first).metadata["event"]
+        #expect(actual == expected)
     }
 
     @Test("Values of the record's ServiceContext are written as metadata under their key names")
@@ -56,7 +93,7 @@ struct LoggerDestinationTests {
         ServiceContext.withValue(context) {
             tracker.track(SignedUp(plan: "pro"))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let actual = try #require(handler.entries.first).metadata["session"]
@@ -72,7 +109,7 @@ struct LoggerDestinationTests {
         let expected = Logger.Level.debug
 
         tracker.track(SignedUp(plan: "pro"))
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let actual = try #require(handler.entries.first).level
@@ -89,7 +126,7 @@ struct LoggerDestinationTests {
         for plan in ["a", "b", "c"] {
             tracker.track(SignedUp(plan: plan))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let actual = handler.entries.map { $0.metadata["event"]?.description }
@@ -112,7 +149,7 @@ struct LoggerDestinationTests {
         ServiceContext.withValue(context) {
             tracker.track(SignedUp(plan: "pro"))
         }
-        tracker.finish()
+        await tracker.finish()
         try await tracker.records.batch().deliver(to: sut).execute()
 
         let actual = try #require(handler.entries.first).metadata["event"]

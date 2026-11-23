@@ -1,13 +1,13 @@
 {
-  "originHash" : "c2a5e2a3999ada03889f9702d0d4d896af017010fa964ad3dc21fb23075ce903",
+  "originHash" : "b5250e9c9aaaf08f711f6bc170e91627e93e15536a5cf0294929d97374419264",
   "pins" : [
     {
       "identity" : "afluent",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
       "state" : {
-        "revision" : "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
-        "version" : "1.1.39"
+        "revision" : "d519b113dc6ba1a5fdca26506c2ff336c2f0e971",
+        "version" : "1.1.45"
       }
     },
     {
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "82440fa0a8b1c381a6d1e8e0fc7bbba53ec63204",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "88754449ab766a739610b660e117762115fabc9c",
+        "version" : "1.7.6"
       }
     },
     {

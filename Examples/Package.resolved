@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
       "state" : {
-        "revision" : "c56c631bbe5edeee010e9ca3d32a1e2978b6439a",
-        "version" : "1.1.39"
+        "revision" : "d519b113dc6ba1a5fdca26506c2ff336c2f0e971",
+        "version" : "1.1.45"
       }
     },
     {

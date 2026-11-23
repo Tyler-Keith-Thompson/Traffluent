@@ -45,17 +45,21 @@ struct SignedUp: Event {
 let tracker = Tracker()
 let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
 tracker.track(SignedUp(plan: "pro"))
-tracker.finish()
+await tracker.finish()
 try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
 ```
 
-`track` returns at once, from any thread. It records the event as an `EventRecord`, with the time
-it was tracked and the caller's file, module, function, line and column, and adds the record to
-the tracker's `records`, an `AsyncSequence`. Delivering is a chain of operators over it:
+`track` returns at once, from any thread, the main thread included: it only reads the clock,
+captures the call site and the task's `ServiceContext`, and queues them. A worker the tracker
+owns, never on the main actor, does the rest in the order events were tracked, so no enricher,
+consent check, encoding or disk write runs on the caller. It records the event as an
+`EventRecord`, with the time it was tracked and the caller's file, module, function, line and
+column, and adds the record to the tracker's `records`, an `AsyncSequence`. Delivering is a chain of operators over it:
 `batch()` gathers the records into batches of 20, or every 30 seconds while any are waiting, and
 `deliver(to:)` hands each batch to every destination. The chain is lazy, an Afluent unit of
 work: nothing runs until `execute()`. Run it for as long as the app tracks events; `finish()`
-ends the records, so the delivery sends what is still pending and completes. Records tracked
+waits for the worker to catch up, then ends the records, so the delivery sends what is still
+pending and completes. Records tracked
 before the delivery starts, or between two, wait for it, so none is lost.
 
 Batching is Afluent's `batch(strategy:)`, so any of its strategies, or one of your own, chooses
@@ -83,7 +87,7 @@ let tracker = Tracker()
 withTracker(tracker) {
     Tracker.current.track(SignedUp(plan: "pro"))
 }
-tracker.finish()
+await tracker.finish()
 try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
 ```
 
@@ -126,7 +130,78 @@ To test what your code tracks, deliver its tracker's records to an `InMemoryDest
 `DestinationTesting`; it depends on no test framework) and read it after the delivery:
 `events(of: SignedUp.self)`, `records` or `batches`.
 
-Records waiting for a delivery are held in memory without a bound. Records a delivery has read
+### Consent
+
+Each event type names the purpose it is collected for, its `consentCategory`: `.analytics` unless
+it says otherwise. Give the tracker a `Consent`, which the app updates as the user decides, and an
+event reaches a destination only once its category is granted:
+
+```swift
+struct AdClicked: Event {
+    static let consentCategory = ConsentCategory.advertising
+    var campaign: String
+}
+
+let consent = Consent([.analytics: .granted])
+let tracker = Tracker(consent: consent)
+let delivery = tracker.records.batch().deliver(
+    to: ConsoleDestination(),
+    ConsoleDestination().accepting(.advertising)
+)
+tracker.track(SignedUp(plan: "pro"))          // delivered: analytics is granted
+tracker.track(AdClicked(campaign: "spring"))  // held: advertising is undecided
+consent.grant(.advertising)                   // delivers the held AdClicked
+```
+
+A category is undecided until the app grants or denies it. While undecided, its events are held in
+memory, not written to a store, up to `heldRecordLimit` records (1,000 by default) across every
+category, the oldest dropped first when the hold is full. Granting delivers them in the order they
+were tracked, before anything tracked after the grant; denying drops them. `grant` and `deny`
+return at once: they record the decision, and the tracker's worker releases or drops what it
+held. Events tracked while their category is denied are never collected. Every drop of a record
+that was held or kept is reported on `consent.dropReports`, as a `ConsentDropReport`, as it
+happens, so none is lost silently; held records are lost if the app ends first. Records a store
+recovered from an earlier run are gated again as the tracker starts: they are held outside the
+bound, as the store still keeps them, and a store forgets each one that is denied. A tracker given
+no consent delivers every event.
+
+A destination receives every category the consent lets through, unless `accepting(_:)` narrows it
+to the categories it serves, as the second destination above takes only advertising.
+
+### Sensitive values and call sites
+
+A property destinations shouldn't see unless they must is a `Sensitive` value. A destination reads
+it only through the record, with `reveal(_:)`, and printing or mirroring it shows `<redacted>`.
+`redactingSensitiveValues()` makes a destination's records reveal nothing, and
+`droppingCallSite()` removes their call sites; every other destination receives both:
+
+```swift
+struct SignedIn: Event {
+    var email: Sensitive<String>
+}
+
+let backend = InMemoryDestination()
+let vendor = InMemoryDestination()
+let tracker = Tracker()
+let delivery = tracker.records.batch().deliver(
+    to: backend,
+    vendor.redactingSensitiveValues().droppingCallSite()
+)
+tracker.track(SignedIn(email: Sensitive("ada@example.com")))
+await tracker.finish()
+try await delivery.execute()
+let event = backend.events(of: SignedIn.self)[0]
+let email = backend.records[0].reveal(event.email)    // "ada@example.com"
+let redacted = vendor.records[0].reveal(event.email)  // nil
+let callSite = vendor.records[0].sourceLocation       // nil
+```
+
+### Delivery guarantees
+
+`track` only queues an event; a record exists, in `records` and in a store, once the tracker's
+worker has reached it. `await tracker.flush()` waits until it has reached everything tracked so
+far; `await tracker.finish()` does too, then ends the records. Records waiting for a delivery are
+held in memory without a bound. Records a delivery has read
 but not yet delivered are lost to this run if the delivery is cancelled or fails, and so are
 batches dropped from a destination's full buffer: without a store they are gone, and with one
 they come back on the next launch.
@@ -135,8 +210,8 @@ One task reads a tracker's records at a time: a second reading at once traps.
 ### Persistence
 
 Without a store, records live in memory only: whatever isn't delivered when the process exits is
-lost. Give the tracker a `SegmentStore` (module `Persistence`) and each record is written to disk
-before `track` returns, and delivered on the next launch if this one ends first:
+lost. Give the tracker a `SegmentStore` (module `Persistence`) and the tracker's worker writes each
+record to disk before publishing it, and it is delivered on the next launch if this one ends first:
 
 ```swift
 import Persistence
@@ -156,6 +231,10 @@ let tracker = Tracker(store: store)
 let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
 ```
 
+A record is durable once written, not once `track` returns: one tracked moments before the process
+is killed, not yet reached by the worker, is lost. As the app moves to the background, call
+`await tracker.flush()`, then `store.synchronize()`.
+
 The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
 binary encoding written field by field. Any other event is kept in memory only: delivered in this
 run, never written. The log is a directory of append-only segment files, in Application Support on
@@ -173,15 +252,15 @@ started when the app ended comes back with `isRedelivered` set, so a destination
 have been sent before. A record is never sent without that mark on disk first: one whose mark can't
 be written waits for a later launch. A segment written by a newer release, in a later format
 version, is left untouched after a rollback. The store makes the log durable against power loss too
-(`fsync`) once per batch; call `store.synchronize()` as the app moves to the background or
-terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
+(`fsync`) once per batch; call `store.synchronize()`, after `tracker.flush()`, as the app moves to
+the background or terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
 context.
 
 An app on Apple platforms that already keeps a GRDB database can keep its records there instead:
 `DatabaseStore(events:database:table:byteBound:)` (module `GRDBPersistence`, a product of its own
 that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a table
 name, creates the table with a migration of its own, and opens no second SQLite database. It makes
-the same promises as `SegmentStore`: each record is committed before `track` returns, a batch is
+the same promises as `SegmentStore`: the worker commits each record before publishing it, a batch is
 marked before it goes out and its rows deleted once delivered, the table is bounded by its records'
 encoded bytes with the oldest dropped and reported, and records are encoded the same way.
 
@@ -196,13 +275,13 @@ says which facts go where, with the anti-patterns to avoid.
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
-| `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; and `batch()`, the default batching |
+| `Events` | `Event`: the protocol typed analytics events conform to, with its `ConsentCategory`; `Sensitive`, a property value destinations read only through its record; and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
+| `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; `batch()`, the default batching; and the destination modifiers `accepting(_:)`, `redactingSensitiveValues()` and `droppingCallSite()` |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder`, through an `HTTPTransport`; `URLSessionTransport`, the default transport (not on WASI) |
-| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context; and `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport` |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |
