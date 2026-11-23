@@ -1,0 +1,72 @@
+# Hand-written: UI tests, which drive an app with real touches through XCUIApplication, of what no
+# test inside the app can bring about, as UIKit has no public way to make a touch. SwiftPM never
+# sees this directory, and scripts/modules.py doesn't generate it.
+
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_ui_test")
+load("@rules_apple//apple/testing/default_runner:ios_xctestrun_runner.bzl", "ios_xctestrun_runner")
+load("//tools:swift_rules.bzl", "swift_library")
+
+swift_library(
+    name = "ControlTrackingAppLibrary",
+    testonly = True,
+    srcs = glob(["App/**/*.swift"]),
+    module_name = "ControlTrackingApp",
+    tags = ["debug-only"],
+    target_compatible_with = ["@platforms//os:ios"],
+    deps = [
+        "//Sources/AutomaticControlTracking",
+        "//Sources/SwiftUITracking",
+        "//Sources/Trackers",
+        "//Sources/UIKitTracking",
+    ],
+)
+
+ios_application(
+    name = "ControlTrackingApp",
+    testonly = True,
+    bundle_id = "com.example.traffluent.controltracking",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["App/Info.plist"],
+    minimum_os_version = "18.0",
+    tags = ["debug-only"],
+    deps = [":ControlTrackingAppLibrary"],
+)
+
+swift_library(
+    name = "AutomaticControlTrackingUITestsLibrary",
+    testonly = True,
+    srcs = glob(["Tests/**/*.swift"]),
+    module_name = "AutomaticControlTrackingUITests",
+    tags = ["debug-only"],
+    target_compatible_with = ["@platforms//os:ios"],
+)
+
+# An iPad, where a second scene shows beside the first (an iPhone shows one scene at a time), in
+# order. The OS version is --ios_simulator_version's (.bazelrc).
+ios_xctestrun_runner(
+    name = "ipad_runner",
+    device_type = "iPad Pro 13-inch (M4)",
+    random = False,
+)
+
+# `resources:simulator:1` runs one simulator test at a time (.bazelrc).
+ios_ui_test(
+    name = "AutomaticControlTrackingUITests",
+    size = "large",
+    minimum_os_version = "18.0",
+    tags = [
+        "debug-only",
+        "resources:simulator:1",
+    ],
+    runner = ":ipad_runner",
+    # The simulator is the Mac's alone, so elsewhere `bazel test //...` skips the bundle.
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    test_host = ":ControlTrackingApp",
+    deps = [":AutomaticControlTrackingUITestsLibrary"],
+)

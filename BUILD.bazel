@@ -9,10 +9,14 @@ load("//tools:performance_tests.bzl", "PERFORMANCE_TEST_PACKAGES")
 load("//tools:swiftpm.bzl", "swiftpm_manifest_test")
 
 # Nothing here builds for iOS only (IOS_MODULES in scripts/modules.py, which writes tools/ios.bzl
-# for an app). UIKitTrackingTests runs in the simulator (SIMULATOR_TESTS there).
+# for an app). UIKitTrackingTests and AutomaticScreenTrackingUIKitTests run in the simulator
+# (SIMULATOR_TESTS there).
 IOS_PACKAGES = []
 
-SIMULATOR_TEST_PACKAGES = ["Tests/UIKitTrackingTests"]
+SIMULATOR_TEST_PACKAGES = [
+    "Tests/AutomaticScreenTrackingUIKitTests",
+    "Tests/UIKitTrackingTests",
+]
 
 APP_TARGETS = []
 
@@ -22,11 +26,12 @@ APP_TARGETS = []
 #
 # TraffluentTestSupport lives under Tests/ too, but it is a library, so it is excluded by name, and
 # so is CompileFailures, which holds no test module: its tests check sources that must not compile
-# (tools/compile_failure_test.bzl).
+# (tools/compile_failure_test.bzl). So is AutomaticControlTrackingUITests, a hand-written UI test of
+# an app of its own, which Xcode would need a scheme of its own to run.
 TEST_PACKAGES = sorted([
     package
     for package in subpackages(include = ["Tests/*"])
-    if package not in ["Tests/TraffluentTestSupport", "Tests/CompileFailures"]
+    if package not in ["Tests/TraffluentTestSupport", "Tests/CompileFailures", "Tests/AutomaticControlTrackingUITests"]
 ])
 
 # Xcode runs each package's .xctest bundle target; `bazel test` runs its swift_test (see

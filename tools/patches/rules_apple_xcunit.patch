@@ -1,0 +1,11 @@
+--- a/apple/testing/default_runner/ios_xctestrun_runner.template.sh	2026-11-23 08:43:49
++++ b/apple/testing/default_runner/ios_xctestrun_runner.template.sh	2026-11-23 08:43:49
+@@ -232,7 +232,7 @@
+     cp -R "$libraries_path/Frameworks/XCTest.framework" "$runner_app_frameworks_destination/XCTest.framework"
+     cp -R "$libraries_path/PrivateFrameworks/XCTestCore.framework" "$runner_app_frameworks_destination/XCTestCore.framework"
+     cp -R "$libraries_path/PrivateFrameworks/XCTAutomationSupport.framework" "$runner_app_frameworks_destination/XCTAutomationSupport.framework"
+-    cp -R "$libraries_path/PrivateFrameworks/XCUnit.framework" "$runner_app_frameworks_destination/XCUnit.framework"
++    if [[ -d "$libraries_path/PrivateFrameworks/XCUnit.framework" ]]; then cp -R "$libraries_path/PrivateFrameworks/XCUnit.framework" "$runner_app_frameworks_destination/XCUnit.framework"; fi
+     cp "$developer_path/usr/lib/libXCTestSwiftSupport.dylib" "$runner_app_frameworks_destination/libXCTestSwiftSupport.dylib"
+     cp "$developer_path/usr/lib/libXCTestBundleInject.dylib" "$runner_app_frameworks_destination/libXCTestBundleInject.dylib"
+     # Added in Xcode 14.3

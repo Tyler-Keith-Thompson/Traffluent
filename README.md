@@ -269,6 +269,42 @@ screen's view finds up its responder chain. There, a `NavigationStack` draws wha
 a view controller, so give those views `trackScreen(_:)`. It swizzles nothing: the scene owns it,
 and it looks at the scene's view controllers after each turn of the main run loop.
 
+### Automatic control activations
+
+UIKit controls can track their own activations too (module `AutomaticControlTracking`: iOS,
+iPadOS, tvOS, visionOS and Mac Catalyst). Nothing is tracked until a window scene turns it on:
+
+```swift
+import AutomaticControlTracking
+
+// In the scene delegate's scene(_:willConnectTo:options:), beside the scene's tracker:
+windowScene.traitOverrides.tracker = tracker
+windowScene.trackControlsAutomatically { control in
+    switch control.identifier {
+    case "debug-menu-button": nil  // not tracked
+    case "checkout-button": ControlActivated(control: "Checkout", kind: control.kind)
+    case let identifier?: ControlActivated(control: identifier, kind: control.kind)
+    case nil: nil  // no identifier: not tracked
+    }
+}
+```
+
+Each time a touch activates a UIKit control in the scene's windows (a button tapped, a switch
+flipped), it tracks one `ControlActivated`, named after the control's `accessibilityIdentifier` and
+never its title or other text, with its kind, the first public UIKit class it is (`"UIButton"`).
+The closure gets each `DiscoveredControl`, its identifier, kind and screen, and returns the event,
+renamed, or `nil` to skip it; leave it out to track every control that has an identifier under it.
+A touch that ends off the control tracks nothing, and neither do activations without a touch, such
+as VoiceOver's, or, but for a control the last touch was on and didn't activate, actions the app
+sends itself. Each record's context carries the control's
+screen, the type of the view controller it is in, as `ScreenKey`, unless the tracker's enrichers
+set one. SwiftUI's controls are never tracked automatically: give them `trackOnTap(_:)`. A UIKit
+control inside a SwiftUI view is left out with them. Each activation goes through the tracker the
+control's traits hold, so each scene keeps its own. It swizzles nothing: the scene owns it, and it
+adds a gesture recognizer to each of the scene's windows that notes the control a touch begins on
+and never recognizes, so it holds no touch up, and a target to that control. macOS has no equivalent:
+an `NSControl` has one target, so give its controls `track(_:)`.
+
 To see events beside your logs or traces, deliver to `LoggerDestination(logger:)` (module
 `LoggingDestinations`) or `SpanEventDestination(tracer:)` (module `TracingDestinations`). Each is a
 module of its own, so only apps that use swift-log or swift-distributed-tracing that way link it.
@@ -637,6 +673,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `UIKitTracking` | `TrackerTrait`: the tracker in a UIKit trait collection, set with `traitOverrides.tracker` on a window scene, view controller or view and read as `traitCollection.tracker`; and `UIControl.track(_:for:)`, which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere |
 | `AppKitTracking` | `TrackerProviding`: a responder, window delegate or application delegate that holds a tracker; `NSView.tracker`, the tracker of the nearest one a view's actions reach; and `NSControl.track(_:)`, which tracks an event through it each time the control sends its action; macOS only, empty elsewhere |
 | `AutomaticScreenTracking` | `trackScreensAutomatically(kinds:_:)`, on a `UIWindowScene` or an `NSWindow`: opt-in screen views, which track `ScreenViewed` through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a closure given each `DiscoveredScreen`, and left to a manual `trackScreen(_:)` where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere |
+| `AutomaticControlTracking` | `trackControlsAutomatically(_:)`, on a `UIWindowScene`: opt-in control activations, which track `ControlActivated` through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a closure given each `DiscoveredControl`, with its screen as `ScreenKey`; SwiftUI's controls left to `trackOnTap(_:)`; without swizzling; `ControlActivated` on every platform, the tracking iOS, iPadOS, tvOS, visionOS and Mac Catalyst only |
 | `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
 | `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 | `GRDBPersistence` | `DatabaseStore`: a `RecordStore` that keeps records in a table of the app's own GRDB database, size-bounded, reporting every drop; Apple platforms only, and left out of `import Traffluent` |

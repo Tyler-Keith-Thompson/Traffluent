@@ -19,8 +19,8 @@ bad row in a dashboard.
 - The hard parts: batching, on-disk persistence across launches, retry with backoff, flushing on
   lifecycle events, consent gating (per destination and per purpose), schema enforcement and
   versioning, and identity as pseudonymous session IDs only (D4).
-- Automatic instrumentation: app lifecycle, sessions, screen views and similar events that need
-  no hand-written call sites. Each kind can be turned off.
+- Automatic instrumentation: app lifecycle, sessions, screen views, control taps and similar events
+  that need no hand-written call sites. Opt in, and each kind can be turned off (D8).
 - Support on Apple platforms and Linux (not WebAssembly: D6). Platform-only behaviour (UIKit or
   SwiftUI hooks, background tasks) goes behind `#if canImport` so the rest still builds.
 - Swift 6 strict concurrency from the start: no singletons and no global mutable state.
@@ -139,12 +139,19 @@ bad row in a dashboard.
   plan is an export of those types, never the input. Rejected: an external schema file with
   codegen into Swift, which makes the Swift type a generated copy of something else; `Codable`
   (too slow, per the owner); and a runtime Mirror walk (slow, can't see optionality).
+- D8. Automatic instrumentation covers screen views (TRAF-22) and control taps (TRAF-23), and is
+  opt in: nothing is tracked until the app turns it on for a scene or window, and each kind can be
+  turned off (owner, 2026-11-23, on TRAF-23: "In scope, opt in"). It never swizzles, never keeps
+  process-wide state (N2) and uses no Apple private API, so a kind that can only be reached that way
+  is left out: SwiftUI taps (no public signal identifies a SwiftUI Button) and macOS SwiftUI
+  NavigationStack pushes. Controls are named by accessibility identifier, never by label or text
+  (N8), and an unnamed control is skipped rather than reported as an unidentified row.
 
 ## Open questions
 - Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its
   own persistence and networking.
-- How much automatic instrumentation: lifecycle and sessions only, or also screen views
-  (UIKit or SwiftUI), taps, deep links and network requests? Opt in or opt out?
+- Do deep links and network requests also get automatic instrumentation (D8 covers screen views
+  and taps)?
 - Should there be adapters or a migration path from Segment's analytics-swift or vendor SDKs?
 - Is server-side Swift (Vapor services sending analytics) a target user, or only apps?
 - Are the template's minimum OS versions (macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2)
