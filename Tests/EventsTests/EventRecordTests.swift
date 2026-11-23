@@ -62,4 +62,33 @@ struct EventRecordTests {
 
         #expect(actual.context[SessionKey.self] == nil)
     }
+
+    final class Store: Acknowledger {
+        func willDeliver(_ positions: [UInt64]) -> Set<UInt64> { [] }
+        func acknowledge(_ positions: [UInt64]) {}
+    }
+
+    @Test("A record is not redelivered, and kept in memory only, unless it says otherwise")
+    func defaultDelivery() {
+        let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)
+
+        let actual = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
+
+        #expect(!actual.isRedelivered)
+        #expect(actual.deliveryTag == nil)
+    }
+
+    @Test("A record keeps the redelivery marker and delivery tag it is given")
+    func delivery() throws {
+        let location = Events.SourceLocation(file: "A/B.swift", fileID: "A/B.swift", function: "f()", line: 4, column: 2)
+        let store = Store()
+        let expectedPosition: UInt64 = 42
+
+        let actual = EventRecord(event: SignedUp(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location, isRedelivered: true, deliveryTag: DeliveryTag(acknowledger: store, position: expectedPosition))
+
+        let tag = try #require(actual.deliveryTag)
+        #expect(actual.isRedelivered)
+        #expect(tag.position == expectedPosition)
+        #expect(tag.acknowledger === store)
+    }
 }

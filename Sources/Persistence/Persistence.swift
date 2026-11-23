@@ -1,0 +1,1 @@
+// Persistence: RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.

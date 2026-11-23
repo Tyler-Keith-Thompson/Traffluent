@@ -10,6 +10,7 @@ swift_library(
     module_name = "Trackers",
     deps = [
         "//Sources/Events",
+        "//Sources/Persistence",
         "@swiftpkg_afluent//:Afluent",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_log//:Logging",
@@ -24,6 +25,7 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/Persistence:PersistenceDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

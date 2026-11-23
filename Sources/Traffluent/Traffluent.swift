@@ -8,3 +8,5 @@
 @_exported import LoggingDestinations
 @_exported import TracingDestinations
 @_exported import Trackers
+@_exported import Checksums
+@_exported import Persistence

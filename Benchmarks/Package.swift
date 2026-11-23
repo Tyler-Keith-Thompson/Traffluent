@@ -14,5 +14,25 @@ let package = Package(
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.27.0"),
     ],
     targets: [
+        .executableTarget(
+            name: "ChecksumsBenchmarks",
+            dependencies: [
+                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "Checksums", package: "Traffluent"),
+            ],
+            path: "Benchmarks/ChecksumsBenchmarks",
+            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]
+        ),
+        .executableTarget(
+            name: "PersistenceBenchmarks",
+            dependencies: [
+                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "Persistence", package: "Traffluent"),
+                .product(name: "Events", package: "Traffluent"),
+                .product(name: "Trackers", package: "Traffluent"),
+            ],
+            path: "Benchmarks/PersistenceBenchmarks",
+            plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]
+        ),
     ]
 )

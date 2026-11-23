@@ -24,5 +24,11 @@ MUTANTS = [
     Mutant("recordnamefixed", R, "type(of: event).name", '"Event"'),
     Mutant("recordtimestampfixed", R, "self.timestamp = timestamp", "self.timestamp = Date(timeIntervalSince1970: 0)", mode="stmt"),
     Mutant("recordcontextdropped", R, "self.context = context", "self.context = .topLevel", mode="stmt"),
+    Mutant("redeliveredforced", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = true", mode="stmt"),
+    Mutant("redeliveredignored", R, "self.isRedelivered = isRedelivered", "self.isRedelivered = false", mode="stmt"),
+    Mutant("tagdropped", R, "self.deliveryTag = deliveryTag", "self.deliveryTag = nil", mode="stmt"),
+    # The second `false` is the default; the first is in its doc comment.
+    Mutant("defaultredelivered", R, "false", "true", nth=1),
+    Mutant("tagpositionzero", "DeliveryTag.swift", "self.position = position", "self.position = 0", mode="stmt"),
     Mutant("defaultnamelowercased", E, "String(describing: Self.self)", "String(describing: Self.self).lowercased()"),
 ]

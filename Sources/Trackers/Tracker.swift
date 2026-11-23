@@ -2,6 +2,7 @@ public import Events
 public import Foundation
 import Instrumentation
 import Logging
+public import Persistence
 
 /// What app code tracks events with: it records each event, with the time, the caller's source
 /// location and the task's context, as one of its ``records``.
@@ -24,7 +25,10 @@ import Logging
 /// the child tasks it starts, but not callbacks a framework runs on tasks of its own, such as a
 /// UI framework's button actions: pass those a tracker.
 ///
-/// Records live in memory only. Records not yet delivered are lost if the process exits.
+/// Without a store, records live in memory only, and records not yet delivered are lost if the
+/// process exits. A tracker given a `RecordStore` (``init(store:enrichers:now:)``)
+/// writes each record to it before `track` returns, and delivers what the store kept from earlier
+/// runs first.
 public struct Tracker: Sendable {
     // An enum of what can back a tracker, so a no-op tracker is a case rather than an optional
     // subscription that every call checks.
@@ -36,6 +40,9 @@ public struct Tracker: Sendable {
     let backing: Backing
     private let enrichers: [Enricher]
     private let now: @Sendable () -> Date
+    // Existential rather than a generic parameter on Tracker, so a tracker with a store and one
+    // without are the same type, as `Tracker.current` needs.
+    private let store: (any RecordStore)?
 
     /// A tracker recording every event it tracks.
     ///
@@ -48,18 +55,42 @@ public struct Tracker: Sendable {
         // registrations, so that adopters don't need the DI framework.
         now: @escaping @Sendable () -> Date = { Date.now }
     ) {
-        self.init(backing: .subscription(Subscription()), enrichers: enrichers, now: now)
+        self.init(backing: .subscription(Subscription()), enrichers: enrichers, now: now, store: nil)
     }
 
-    private init(backing: Backing, enrichers: [Enricher], now: @escaping @Sendable () -> Date) {
+    /// A tracker that writes every record to `store` before `track` returns, so records survive
+    /// the app ending, and whose ``records`` start with the ones `store` kept from earlier runs.
+    ///
+    /// Write-through happens in `track` itself, rather than in a stage reading ``records``,
+    /// because a stage runs in the delivery's task, later: a record tracked just before the app
+    /// is killed would never reach the store.
+    ///
+    /// - Parameters:
+    ///   - store: Where each record is kept until it is delivered.
+    ///   - enrichers: What each event's context gains as it is tracked, applied in order.
+    ///   - now: The wall-clock time each event is stamped with when it is tracked.
+    public init(
+        store: some RecordStore,
+        enrichers: [Enricher] = [],
+        now: @escaping @Sendable () -> Date = { Date.now }
+    ) {
+        let subscription = Subscription()
+        for record in store.takeRecoveredRecords() {
+            subscription.send(record)
+        }
+        self.init(backing: .subscription(subscription), enrichers: enrichers, now: now, store: store)
+    }
+
+    private init(backing: Backing, enrichers: [Enricher], now: @escaping @Sendable () -> Date, store: (any RecordStore)?) {
         self.backing = backing
         self.enrichers = enrichers
         self.now = now
+        self.store = store
     }
 
     /// A tracker that drops every event, logging each one at debug level. Its ``records`` are
     /// empty.
-    public static let noOp = Tracker(backing: .none, enrichers: [], now: { Date.now })
+    public static let noOp = Tracker(backing: .none, enrichers: [], now: { Date.now }, store: nil)
 
     /// The tracker bound to the current task by the nearest enclosing `withTracker`, or
     /// ``noOp`` when none is.
@@ -79,8 +110,9 @@ public struct Tracker: Sendable {
     /// Records `event`, with the current wall-clock time, the caller's source location and the
     /// task's `ServiceContext` as the enrichers extend it.
     ///
-    /// Returns at once, from any thread; whatever reads ``records`` receives the record. An event
-    /// tracked after ``finish()`` is dropped. A ``noOp`` tracker drops the event and logs it at
+    /// Returns at once, from any thread; whatever reads ``records`` receives the record. With a
+    /// store, the record is written to it first. An event tracked after ``finish()`` isn't
+    /// delivered in this run; with a store, it is written, and delivered in the next. A ``noOp`` tracker drops the event and logs it at
     /// debug level, so a missing `withTracker` shows up in the logs rather than passing silently.
     ///
     /// - Parameters:
@@ -105,7 +137,8 @@ public struct Tracker: Sendable {
             for enricher in enrichers {
                 enricher(&context)
             }
-            subscription.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context))
+            let record = EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context)
+            subscription.send(store?.append(record) ?? record)
         case .none:
             Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound")
         }

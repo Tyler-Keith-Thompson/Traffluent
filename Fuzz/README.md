@@ -5,7 +5,7 @@ module, in their own package so the library never links the fuzzer runtime.
 
 | Target | Checks against |
 |---|---|
-| `FuzzGreetings` | Names from a small alphabet (combining accents, an emoji) and sequences of modifiers: the text written out from the name, register and punctuation after every modifier; an earlier copy unchanged; the checked initializer throwing exactly for an empty name; equality and hashing with a greeting rebuilt from the model |
+| `FuzzPersistence` | Segment files built from records, delivery marks and undecodable records, then damaged (a flipped bit, a cut tail, garbage appended), or arbitrary bytes: recovery never crashes, returns exactly the decodable records of the intact frames a reference reader finds (so never one whose CRC-32 fails), in order, with their redelivery marks, and cuts the file to the intact prefix or deletes it |
 
 Each target reads its input as a sequence of small choices (`FuzzInput`): an operation and its
 arguments. Every byte string decodes, and a mutation of one byte changes one choice, so libFuzzer
@@ -16,7 +16,7 @@ explores operation sequences rather than parse errors.
 | Command | Does |
 |---|---|
 | `just fuzz` | Every target for 60 s, all at once, splitting the cores between them |
-| `just fuzz FuzzGreetings -t 600 -j 16` | One target for 10 minutes on 16 workers |
+| `just fuzz FuzzPersistence -t 600 -j 16` | One target for 10 minutes on 16 workers |
 | `just fuzz-regress` | Replays every corpus once (seconds); run after changing a fuzzed module |
 | `just fuzz-repro <target> <crash file>` | Replays a crash and writes a minimized copy beside it |
 

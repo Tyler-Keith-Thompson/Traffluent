@@ -1,0 +1,42 @@
+{
+  "originHash" : "28c5021605a413b089574d7eb5db140766a614414a95dfae90cf84f171b99ef5",
+  "pins" : [
+    {
+      "identity" : "afluent",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Tyler-Keith-Thompson/Afluent",
+      "state" : {
+        "revision" : "03552a5584ed409c4c64837d116687f07af199ea",
+        "version" : "1.1.43"
+      }
+    },
+    {
+      "identity" : "swift-distributed-tracing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-distributed-tracing",
+      "state" : {
+        "revision" : "9f982a7ec8dd815bf57024e39de592813ca14399",
+        "version" : "1.7.4"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log",
+      "state" : {
+        "revision" : "c7413d967b97aae67c46452bf7645bdb7b200e8e",
+        "version" : "1.17.2"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-system",
+      "state" : {
+        "revision" : "640e5755b5826f4437eaeedd366fd776737db62c",
+        "version" : "1.9.0"
+      }
+    }
+  ],
+  "version" : 3
+}

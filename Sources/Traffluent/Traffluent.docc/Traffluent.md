@@ -4,7 +4,7 @@ Vendor-neutral analytics for Swift: typed events, tracked by a tracker and deliv
 
 ## Overview
 
-An event is a value conforming to `Event`. A `Tracker` is a value: tracking an event records it as an `EventRecord`, with its timestamp, the caller's `SourceLocation` and its `ServiceContext`, as one of the tracker's `records`. Delivering is a chain of operators over that sequence: Afluent's `batch(strategy:)` (or `batch()`, the default) gathers the records into batches, and `deliver(to:)` hands each batch to every destination, as a lazy unit of work. A `Destination` is a plain sink.
+An event is a value conforming to `Event`. A `Tracker` is a value: tracking an event records it as an `EventRecord`, with its timestamp, the caller's `SourceLocation` and its `ServiceContext`, as one of the tracker's `records`. Delivering is a chain of operators over that sequence: Afluent's `batch(strategy:)` (or `batch()`, the default) gathers the records into batches, and `deliver(to:)` hands each batch to every destination, as a lazy unit of work. A `Destination` is a plain sink. A tracker given a `SegmentStore` writes each record to disk before `track` returns and delivers what an earlier run left first.
 
 `import Traffluent` imports every module. Each module also has its own documentation and can be
 imported on its own.
@@ -33,3 +33,5 @@ try await delivery.execute()
 - ``/DestinationTesting``
 - ``/LoggingDestinations``
 - ``/TracingDestinations``
+- ``/Persistence``
+- ``/Checksums``

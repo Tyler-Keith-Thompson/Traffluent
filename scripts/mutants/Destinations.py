@@ -26,8 +26,8 @@ MUTANTS = [
     Mutant("defaultbufferlimit", D, "100", "99", nth=0),
     Mutant("bufferlimitzeroallowed", D, "batchBufferLimit >= 1", "batchBufferLimit >= 0"),
     Mutant("bufferonemore", D, ".bufferingNewest(batchBufferLimit)", ".bufferingNewest(batchBufferLimit + 1)"),
-    Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(batch) }", "buffers.first?.yield(batch)", mode="stmt"),
-    Mutant("nodelivery", D, "await destination.receive(batch)", "", mode="stmt"),
+    Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(delivery) }", "buffers.first?.yield(delivery)", mode="stmt"),
+    Mutant("nodelivery", D, "await destination.receive(delivery.batch)", "", mode="stmt"),
     Mutant("buffersneverfinish", D, "for buffer in buffers { buffer.finish() }", "", mode="stmt"),
     # The doc comment spells the default strategy out first, so the code's copy is the second.
     Mutant("defaulttimeonotherclock", B, ".time(interval: .seconds(30), clock: clock)", ".time(interval: .seconds(30), clock: ContinuousClock())", nth=1),

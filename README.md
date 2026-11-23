@@ -120,21 +120,69 @@ To test what your code tracks, deliver its tracker's records to an `InMemoryDest
 `DestinationTesting`; it depends on no test framework) and read it after the delivery:
 `events(of: SignedUp.self)`, `records` or `batches`.
 
-Records are kept in memory only, for now. Records waiting for a delivery are held without a
-bound, and records a delivery has read but not yet delivered are lost if the process exits or the
-delivery is cancelled.
+Records waiting for a delivery are held in memory without a bound. Records a delivery has read
+but not yet delivered are lost to this run if the delivery is cancelled or fails, and so are
+batches dropped from a destination's full buffer: without a store they are gone, and with one
+they come back on the next launch.
 One task reads a tracker's records at a time: a second reading at once traps.
+
+### Persistence
+
+Without a store, records live in memory only: whatever isn't delivered when the process exits is
+lost. Give the tracker a `SegmentStore` (module `Persistence`) and each record is written to disk
+before `track` returns, and delivered on the next launch if this one ends first:
+
+```swift
+import Persistence
+
+extension SignedUp: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encode(plan)
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        plan = try decoder.decode()
+    }
+}
+
+let store = try SegmentStore(events: [SignedUp.self])
+let tracker = Tracker(store: store)
+let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
+```
+
+The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
+binary encoding written field by field. Any other event is kept in memory only: delivered in this
+run, never written. The log is a directory of append-only segment files, in Application Support on
+Apple platforms (excluded from backups), and in the XDG state directory on Linux, unless
+`directory:` says otherwise. Each segment starts with a magic number and format
+version, and each record is framed by its length and CRC-32. A segment is deleted once every record
+in it has been delivered, so a log with nothing left to send holds no files.
+
+The log never holds more than its byte bound, 5 MiB unless `byteBound:` says otherwise. When a
+record won't fit, the oldest segments are dropped, and each drop is reported on the store's
+`dropReports` with the number of records dropped and their timestamp range; so is a record whose
+write to disk fails, which is kept in memory only. Recovery cuts a segment at its first torn or
+corrupt record, keeps every record before it, and reports what it cut. A record whose delivery had
+started when the app ended comes back with `isRedelivered` set, so a destination can tell it may
+have been sent before. A record is never sent without that mark on disk first: one whose mark can't
+be written waits for a later launch. A segment written by a newer release, in a later format
+version, is left untouched after a rollback. The store makes the log durable against power loss too
+(`fsync`) once per batch; call `store.synchronize()` as the app moves to the background or
+terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
+context.
 
 ## Modules
 
 | Module | Holds |
 |---|---|
-| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation` and `ServiceContext` |
+| `Events` | `Event`: the protocol typed analytics events conform to, and `EventRecord`: a tracked event with its timestamp, `SourceLocation`, `ServiceContext`, redelivery marker and the `DeliveryTag` of the store that keeps it |
 | `Destinations` | `Destination`, where batches of records are delivered; `ConsoleDestination`, which prints them; `deliver(to:)`, which hands each batch of a sequence to every destination; and `batch()`, the default batching |
 | `DestinationTesting` | `InMemoryDestination`: keeps every batch it receives, so tests read what was tracked |
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
-| `Trackers` | `Tracker`: records each tracked event as one of its `records`, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
+| `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, bound to a task with `withTracker` and read with `Tracker.current`, and `Enricher`, which adds to each record's context |
+| `Checksums` | `CRC32`: the CRC-32 checksum of raw bytes |
+| `Persistence` | `RecordStore`, where a tracker keeps each record until it is delivered; `SegmentStore`, the default, a size-bounded log of append-only segment files that reports every drop as a `DropReport`; and `BinaryCodable`, the binary encoding persisted events opt into |
 
 ## Examples
 

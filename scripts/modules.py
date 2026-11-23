@@ -44,6 +44,10 @@ PACKAGES = [
     # Tests only: withMainSerialExecutor, which orders tasks so a cancellation lands where a test
     # puts it.
     ("swift-concurrency-extras", "https://github.com/pointfreeco/swift-concurrency-extras", "1.4.3"),
+    # SegmentStore's file I/O: FileDescriptor and FilePath, the same code on Apple platforms, Linux
+    # and WASI. Foundation's FileHandle was rejected: it has no positioned truncate on every
+    # platform and its errors are untyped.
+    ("swift-system", "https://github.com/apple/swift-system", "1.9.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -74,7 +78,10 @@ MODULES = [
     ("DestinationTesting", "Pipeline", "InMemoryDestination: keeps every batch it receives, for tests.", ["Events", "Destinations"]),
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
-    ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.", ["Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
+    ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current.", ["Events", "Persistence", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
+    # Persistence
+    ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
+    ("Persistence", "Persistence", "RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; and BinaryCodable, the binary encoding persisted events opt into.", ["Events", "Checksums", "swift-system/SystemPackage", "swift-log/Logging"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -99,7 +106,9 @@ TEST_TARGETS = [
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("TrackersTests", ["Trackers", "DestinationTesting", "Destinations", "Events", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation"]),
+    ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("PersistenceTests", ["Persistence", "Checksums", "Events", "Trackers", "Destinations", "DestinationTesting", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    (f"{PROJECT}Tests", [PROJECT, "swift-distributed-tracing/Instrumentation", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the
@@ -141,6 +150,8 @@ SIMULATOR_TEST_TAG = "resources:simulator:1"
 # Benchmarks/Benchmarks/<name>; its Bazel target (tools/benchmarks.bzl) caches its simulated counts,
 # so `just bench-simulated` measures again only the targets whose modules or sources changed.
 BENCHMARKS = [
+    ("ChecksumsBenchmarks", ["Checksums"]),
+    ("PersistenceBenchmarks", ["Persistence", "Events", "Trackers"]),
 ]
 BENCHMARK_PACKAGE = ("https://github.com/ordo-one/benchmark", "1.27.0")
 

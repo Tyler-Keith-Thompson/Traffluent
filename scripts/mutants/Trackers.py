@@ -24,8 +24,9 @@ W = "WithTracker.swift"
 S = "Subscription.swift"
 N = "Enricher.swift"
 
-# track's one statement that sends the record.
-SEND = "subscription.send(EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context))"
+# The record track builds, to send (and write to its store, if any). Expressions rather than
+# statements: a mutated `let` would be scoped to its branch.
+SEND = "EventRecord(event: event, timestamp: timestamp, sourceLocation: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column), context: context)"
 
 MUTANTS = [
     Mutant("currentignoresbinding", T, "bound ?? .noOp", ".noOp"),
@@ -33,16 +34,16 @@ MUTANTS = [
     Mutant("asyncunbound", W, "return try await Tracker.$bound.withValue(tracker, operation: operation)", "return try await operation()", mode="stmt"),
     Mutant("defaultnow", T, "Date.now", "Date.distantPast", nth=0),
     Mutant("fixedtimestamp", T, "now()", "Date(timeIntervalSince1970: 0)"),
-    Mutant("nosend", T, SEND, "", mode="stmt"),
-    # Each swaps one field of the source location; the original statement stays in the innermost
+    Mutant("nosend", T, "subscription.send(store?.append(record) ?? record)", "", mode="stmt"),
+    # Each swaps one field of the source location; the original expression stays in the innermost
     # else branch, so every one finds it.
-    Mutant("filefromfileid", T, SEND, SEND.replace("file: file,", "file: fileID,"), mode="stmt"),
-    Mutant("fileidfromfile", T, SEND, SEND.replace("fileID: fileID,", "fileID: file,"), mode="stmt"),
-    Mutant("functionfromfile", T, SEND, SEND.replace("function: function,", "function: file,"), mode="stmt"),
-    Mutant("ownfunction", T, SEND, SEND.replace("function: function,", "function: #function,"), mode="stmt"),
-    Mutant("linefromcolumn", T, SEND, SEND.replace("line: line,", "line: column,"), mode="stmt"),
-    Mutant("ownline", T, SEND, SEND.replace("line: line,", "line: #line,"), mode="stmt"),
-    Mutant("columnfromline", T, SEND, SEND.replace("column: column)", "column: line)"), mode="stmt"),
+    Mutant("filefromfileid", T, SEND, SEND.replace("file: file,", "file: fileID,")),
+    Mutant("fileidfromfile", T, SEND, SEND.replace("fileID: fileID,", "fileID: file,")),
+    Mutant("functionfromfile", T, SEND, SEND.replace("function: function,", "function: file,")),
+    Mutant("ownfunction", T, SEND, SEND.replace("function: function,", "function: #function,")),
+    Mutant("linefromcolumn", T, SEND, SEND.replace("line: line,", "line: column,")),
+    Mutant("ownline", T, SEND, SEND.replace("line: line,", "line: #line,")),
+    Mutant("columnfromline", T, SEND, SEND.replace("column: column)", "column: line)")),
     Mutant("contextignored", T, "ServiceContext.current ?? .topLevel", "ServiceContext.topLevel"),
     Mutant("enrichersskipped", T, "enricher(&context)", "", mode="stmt"),
     Mutant("enrichersreversed", T, "self.enrichers = enrichers", "self.enrichers = enrichers.reversed()", mode="stmt"),

@@ -14,10 +14,12 @@ MANIFESTS = [
 
 # Every target directory SwiftPM needs to load the root manifest.
 LIBRARY_DIRECTORIES = [
+    "Sources/Checksums",
     "Sources/DestinationTesting",
     "Sources/Destinations",
     "Sources/Events",
     "Sources/LoggingDestinations",
+    "Sources/Persistence",
     "Sources/TracingDestinations",
     "Sources/Trackers",
     "Sources/Traffluent",
@@ -26,4 +28,44 @@ LIBRARY_DIRECTORIES = [
 
 # Every benchmark target, each of which SwiftPM needs to load this package's manifest.
 BENCHMARKS = [
+    "ChecksumsBenchmarks",
+    "PersistenceBenchmarks",
 ]
+
+simulated_benchmark(
+    name = "ChecksumsBenchmarks",
+    srcs = glob(["Benchmarks/ChecksumsBenchmarks/**"]),
+    modules = [
+        "//Sources/Checksums",
+    ],
+    manifests = MANIFESTS,
+    library_directories = LIBRARY_DIRECTORIES,
+    benchmarks = BENCHMARKS,
+    project = "traffluent",
+    harness = ".harness/bin/benchmark-harness",
+    # Empty until `just bench-simulated` copies the harness in; `bazel test //...` loads this anyway.
+    harness_files = glob([".harness/bin/*.bundle/**"], allow_empty = True),
+    stamp = ".harness/stamp",
+    # `manual`: measuring starts a VM, so `bazel build //...` leaves these out.
+    tags = ["manual"],
+)
+
+simulated_benchmark(
+    name = "PersistenceBenchmarks",
+    srcs = glob(["Benchmarks/PersistenceBenchmarks/**"]),
+    modules = [
+        "//Sources/Persistence",
+        "//Sources/Events",
+        "//Sources/Trackers",
+    ],
+    manifests = MANIFESTS,
+    library_directories = LIBRARY_DIRECTORIES,
+    benchmarks = BENCHMARKS,
+    project = "traffluent",
+    harness = ".harness/bin/benchmark-harness",
+    # Empty until `just bench-simulated` copies the harness in; `bazel test //...` loads this anyway.
+    harness_files = glob([".harness/bin/*.bundle/**"], allow_empty = True),
+    stamp = ".harness/stamp",
+    # `manual`: measuring starts a VM, so `bazel build //...` leaves these out.
+    tags = ["manual"],
+)
