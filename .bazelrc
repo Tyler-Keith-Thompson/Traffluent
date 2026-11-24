@@ -2,19 +2,23 @@
 # keep the two in step.
 build --macos_minimum_os=15.0
 build --host_macos_minimum_os=15.0
-build --ios_minimum_os=18.0
-
-# The simulator that SIMULATOR_TESTS' targets (scripts/modules.py) run in, one simulator
-# test at a time: each carries SIMULATOR_TEST_TAG and boots a simulator of its own. An execution
-# option, so it keeps the analysis cache.
-build --ios_simulator_device="iPhone 16 Pro"
-build --ios_simulator_version=26.2
-build --local_resources=simulator=1
 
 # Debug is the default, so a bare `bazel build` and `just build` resolve to the same
 # configuration. Keeping them in step matters because of the analysis-cache guardrail below:
 # two different defaults would discard the analysis cache every time you switched between them.
 build --compilation_mode=dbg
+
+# The simulator tests (SIMULATOR_TESTS and IOS_MODULES in scripts/modules.py), on the device and
+# runtime `bazel test` boots: Apple silicon simulators, the default on an Apple silicon Mac.
+# Naming sim_arm64 here would keep it in a device build too, since --ios_multi_cpus adds to the
+# list rather than replacing it. Keep --ios_minimum_os in step with IOS_MINIMUM there.
+build --ios_minimum_os=18.0
+build --ios_simulator_device="iPhone 16 Pro"
+build --ios_simulator_version=26.2
+run --run_env=BAZEL_APPLE_PREFER_PERSISTENT_SIMS=1
+# One simulator test at a time: each carries SIMULATOR_TEST_TAG (scripts/modules.py) and boots a
+# simulator of its own. An execution option, so it keeps the analysis cache.
+build --local_resources=simulator=1
 
 # Optimized builds, for benchmarks and for checking that tests pass under -O, where
 # copy-on-write and inlining bugs tend to show up.

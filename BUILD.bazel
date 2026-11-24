@@ -5,14 +5,9 @@ load("//tools:docc.bzl", "docc_site")
 load("//tools:examples.bzl", "EXAMPLE_PACKAGES")
 load("//tools:executables.bzl", "EXECUTABLE_PACKAGES")
 load("//tools:macros.bzl", "MACRO_PACKAGES")
+load("//tools:ios.bzl", "IOS_PACKAGES", "SIMULATOR_TEST_PACKAGES")
 load("//tools:performance_tests.bzl", "PERFORMANCE_TEST_PACKAGES")
 load("//tools:swiftpm.bzl", "swiftpm_manifest_test")
-
-# Nothing here builds for iOS only (IOS_MODULES in scripts/modules.py, which writes tools/ios.bzl
-# for an app), and no tests run in the simulator.
-IOS_PACKAGES = []
-
-SIMULATOR_TEST_PACKAGES = []
 
 APP_TARGETS = []
 

@@ -23,6 +23,7 @@ Sources/<Module>/                One directory per module, each with a generated
 Sources/Traffluent/             Umbrella module (@_exported imports) and the landing DocC catalog
 Plugins/<Plugin>/                SwiftPM command plugins (PLUGINS in scripts/modules.py); Bazel builds none
 Tests/<Module>Tests/             One test target per module; Performance/ holds speed-reliant tests
+tools/test_host/                 The empty app every simulator test runs inside, so windows get a scene
 Tests/TraffluentTests/          The README's and the umbrella catalog's examples, verbatim, one file
                                  per article, and SwiftPM's privacy manifest check
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
@@ -37,7 +38,6 @@ tools/                           Bazel rule wrappers (warnings as errors, Swift 
                                  tools/bazel turns BuildBuddy on when the Keychain holds its key, and
                                  on macOS sweeps stale output bases once a day (tools/sweep-output-bases):
                                  a deleted workspace's, or one idle 7 days
-tools/test_host/                 The iOS app the SIMULATOR_TESTS targets run inside, in the simulator
 ```
 
 `Benchmarks/` is a separate SwiftPM package (ordo-one/benchmark), generated from `BENCHMARKS` in
@@ -73,13 +73,11 @@ in beside the project's own: keep one definition, holding the project's rows, an
   test must run on the Mac, since Bazel's runner fails a run of none; a target whose Mac tests are
   Apple's alone goes in `APPLE_ONLY_TESTS` too. A target that depends on an iOS module or a Bazel
   label runs in the simulator alone already, so it isn't listed.
-  It needs the test host and the simulator settings in `.bazelrc`, which the app type and the
-  `--ios` option ship (`just modules` refuses the table without them).
   `just mutate` runs a spec's simulator targets through Bazel (`scripts/mutate.py`).
-- Add an iOS app, iOS modules and simulator tests to this project: from the project template's
-  checkout, `./template.py add <project> --ios` (after `just template-update`, if the stamp
-  predates the option). It brings `Apps/Traffluent`, the test host, the simulator settings and
-  `tools/ios.bzl`; until then `just modules` refuses `IOS_MODULES` and simulator tests.
+- Add an iOS app to this project: from the project template's checkout,
+  `./template.py add <project> --ios` (after `just template-update`, if the stamp predates the
+  option). It brings `Apps/Traffluent`, whose screens are iOS modules; the test host, the
+  simulator settings and `tools/ios.bzl` are here already (`--simulator`).
 - Give a test target an environment variable under `bazel test` (an integration test that runs
   only when `TEST_DATABASE_URL` is set, say): its name and the variables in `TEST_ENVIRONMENT`
   (`{"<Target>Tests": ["TEST_DATABASE_URL"]}`), then `just modules`. Bazel strips the test
