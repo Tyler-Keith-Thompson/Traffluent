@@ -5,15 +5,10 @@
 # statements rather than an expression. Every mutant must be caught; one that survives needs a test,
 # or a note here saying why it is equivalent to the original.
 #
-# MUTANTS run with `just mutate AutomaticScreenTracking`, against the Mac's tests
-# (AutomaticScreenTrackingTests): the name reading, the discovery the platforms share, AppKit's
-# side.
-#
-# UIKIT_MUTANTS plant bugs only the iOS simulator's tests reach (AutomaticScreenTrackingTests'
-# simulator bundle, SIMULATOR_TESTS): UIKit's side, and what only UIKit hosting shows (presentations,
-# a NavigationStack's root, a destination named after its value). They were planted one at a time
-# in the tree, as `new` in place of `old`, and caught by a failing
-# `bazel test //Tests/AutomaticScreenTrackingTests:AutomaticScreenTrackingTestsSimulator`.
+# MUTANTS run with `just mutate AutomaticScreenTracking`, against AutomaticScreenTrackingTests: its
+# Mac run (the name reading, the discovery the platforms share, AppKit's side) and its iOS
+# simulator bundle (SIMULATOR_TESTS), which alone reaches UIKit's side and what only UIKit hosting
+# shows: presentations, a NavigationStack's root, a destination named after its value.
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - `file:` swapped for `fileID:` in the call site: in the Swift 6 language mode `#file` is
@@ -83,7 +78,7 @@ MUTANTS = [
     Mutant("noroots", W, "(self?.contentViewController).map { [$0] } ?? []", "[ViewController]()"),
 ]
 
-UIKIT_MUTANTS = [
+MUTANTS += [
     Mutant("loadedonscreen", V, "viewIfLoaded?.window != nil", "viewIfLoaded != nil"),
     Mutant("presentedtwice", V, "presentedViewController.presentingViewController === self", "true"),
     Mutant("uikitmarkerunseen", V, MARKER, "", mode="stmt", nth=0),
