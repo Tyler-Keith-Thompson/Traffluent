@@ -2,7 +2,8 @@
 """The module graph, written once.
 
 Package.swift, swift/Package.swift, every Sources/*/BUILD.bazel and Tests/*/BUILD.bazel, the
-umbrella module, tools/performance_tests.bzl, tools/executables.bzl, tools/examples.bzl, tools/macros.bzl and tools/swift_version.bzl are generated from the tables below, so SwiftPM
+umbrella module, tools/performance_tests.bzl, tools/executables.bzl, tools/examples.bzl,
+tools/macros.bzl and tools/swift_version.bzl are generated from the tables below, so SwiftPM
 and Bazel cannot drift. Run `just modules` after editing them. `//:package_swift_test` fails when
 Package.swift disagrees with the Bazel graph.
 
@@ -24,15 +25,16 @@ import sys
 PROJECT = "Traffluent"
 TEST_SUPPORT = f"{PROJECT}TestSupport"
 
-# External packages: (identity, url, version). A dependency written "identity/Product" in the
-# tables below refers to a product of one of these. A plain version is a minimum, up to the next
-# major. One written "exact:1.2.3" pins that release, for a package whose later releases resolve
-# differently on different toolchains (Bazel resolves on each machine with its own swift). One
-# written "minor:0.1.3" takes patch releases only, for a 0.x package whose minor releases break its
-# API. One written "range:603.0.0..<605.0.0" takes the releases from the first version up to, not
-# including, the second, for a package that adopters' other dependencies cap below a major the
-# project builds with. After adding one: `just modules`, add `swiftpkg_<identity>` (hyphens as
-# underscores) to use_repo in MODULE.bazel, `just resolve`.
+# External packages: (identity, url, minimum version). A dependency written "identity/Product"
+# in the tables below refers to a product of one of these. A version written "exact:1.2.3" pins
+# that release, for a package whose later releases resolve differently on different toolchains
+# (Bazel resolves on each machine with its own swift). One written "minor:0.1.3" takes patch
+# releases only, for a 0.x package whose minor releases break its API. One written
+# "range:603.0.0..<605.0.0" admits every release from the first version up to, not including, the
+# second, for a package whose next major releases still work (swift-syntax for a macro, beside a
+# package capped below its newest major). After adding one:
+# `just modules`, add `swiftpkg_<identity>` (hyphens as underscores) to use_repo in MODULE.bazel,
+# `just resolve`.
 PACKAGES = [
     # Tests only: property checks with shrinking, for Swift Testing.
     ("swift-property-based", "https://github.com/x-sheep/swift-property-based", "2.0.1"),
@@ -107,6 +109,16 @@ APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests", "AutomaticScr
 # test host and .bazelrc's simulator settings, which the app type ships.
 SIMULATOR_TESTS = ["SwiftUITrackingTests", "AutomaticScreenTrackingTests"]
 
+# Environment variables a test target's tests read, by test target name: Bazel runs a test with
+# almost none of the caller's environment, so each name listed is handed through to that target's
+# runners alone (`env_inherit` on its swift_test, its Performance/ one and its simulator
+# ios_unit_test), and only those targets' cached results depend on the variable's value. For an
+# integration test that runs only when a variable is set, such as one naming a database the
+# developer starts. `--test_env` in .bazelrc would hand it to every test instead. SwiftPM passes the
+# whole environment already, so Package.swift is unchanged.
+# {"GreetingsTests": ["TEST_DATABASE_URL"]}
+TEST_ENVIRONMENT = {}
+
 # The product whose macro generates mocks. A module that depends on it is compiled with the
 # MOCKING condition in debug builds only (SwiftPM's debug configuration, Bazel's
 # --compilation_mode=dbg), so `@Mockable` emits Mock<Protocol> types for tests and release
@@ -176,17 +188,22 @@ NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "Trac
 # so `import Traffluent` never needs Testing.
 TESTING_MODULES = ["TrackingPlanTesting"]
 
-# Modules' resources, by name from MODULES: a list of (rule, path) per module, the path relative to
-# Sources/<name> (a file or a directory) and the rule SwiftPM's: "process" flattens the files into
-# the bundle's root (keeping a localization's `.lproj`), and processes them on Apple platforms as
-# Xcode does; "copy" keeps the entry whole, by its last path component. Package.swift gets
-# `resources: [.process(path), .copy(path)]`, and Bazel the same `<PROJECT>_<name>.bundle` and a
-# `Bundle.module` that finds it (tools/resources.bzl): in an app's or a test bundle's resources on
-# Apple platforms, in the runfiles of `bazel test` and `bazel run` on macOS and Linux. So the module
-# reads them through `Bundle.module` under either build system. Apple's privacy manifest is
-# ("copy", "PrivacyInfo.xcprivacy"), at the bundle's root where Apple reads it: a module holding one
-# must list it. Firmware modules have none: Embedded Swift has no Foundation and no bundles.
-# {"Greetings": [("process", "Data/greetings.json"), ("copy", "PrivacyInfo.xcprivacy")]}
+# Resources, by target name: a module from MODULES, a test target from TEST_TARGETS, or the
+# <X>PerformanceTests target of one in PERFORMANCE_TESTS. Each is a list of (rule, path), the path
+# relative to Sources/<name>, Tests/<name> or Tests/<X>/Performance (a file or a directory), and
+# the rule SwiftPM's: "process" flattens the files into the bundle's root (keeping a
+# localization's `.lproj`), and processes them on Apple platforms as Xcode does; "copy" keeps the
+# entry whole, by its last path component. Package.swift gets `resources: [.process(path),
+# .copy(path)]`, and Bazel the same `<PROJECT>_<name>.bundle` and a `Bundle.module` that finds it
+# (tools/resources.bzl): in an app's or a test bundle's resources on Apple platforms, in the
+# runfiles of `bazel test` and `bazel run` on macOS and Linux. So a module reads its resources
+# through `Bundle.module` under either build system, and a test target its fixtures the same way
+# (in its swift_test, its simulator ios_unit_test and its SwiftPM test target alike).
+# Apple's privacy manifest is ("copy", "PrivacyInfo.xcprivacy"), at the bundle's root where Apple
+# reads it: a module holding one must list it. Firmware modules have none: Embedded Swift has no
+# Foundation and no bundles.
+# {"Greetings": [("process", "Data/greetings.json"), ("copy", "PrivacyInfo.xcprivacy")],
+#  "GreetingsTests": [("copy", "Fixtures")], "GreetingsPerformanceTests": [("copy", "Fixtures")]}
 # Traffluent's: Apple's privacy manifest, in each module that calls a required-reason API or collects
 # data (Traffluent.docc's PrivacyManifests article records why each one does). Tests/PrivacyManifests
 # checks that a Bazel-built bundle holds every one.
@@ -199,6 +216,9 @@ RESOURCES = {
     "LifecycleTracking": [("copy", "PrivacyInfo.xcprivacy")],
     "Sessions": [("copy", "PrivacyInfo.xcprivacy")],
     "StandardContext": [("copy", "PrivacyInfo.xcprivacy")],
+    # The batch TraffluentCollector's ingest tests decode, which CollectorFixtureTests compares with
+    # the encoder's bytes.
+    "CollectorEncodingTests": [("copy", "Fixtures")],
 }
 
 # Compiler plugins holding macros: (name, group, description, dependencies), whose dependencies
@@ -337,7 +357,7 @@ SWIFT_SITES = [
     "Fuzz/Package.swift", "Explore/Package.swift", "Examples/Package.swift",
     ".github/workflows/*.yml", "Dockerfile", "justfile",
     "scripts/fuzz.py", "Explore/build.sh", "tools/embedded-swift", "tools/swift_rules.bzl",
-    "README.md", "AGENTS.md", ".github/README.md", "Fuzz/README.md", "Explore/README.md", "Examples/README.md",
+    "README.md", "AGENTS.md", ".github/README.md", ".github/docs/*.md", "Fuzz/README.md", "Explore/README.md", "Examples/README.md",
 ]
 
 
@@ -422,22 +442,50 @@ def duplicate_definitions():
 PRIVACY_MANIFEST = "PrivacyInfo.xcprivacy"
 
 
+def performance_parent(name):
+    """The PERFORMANCE_TESTS target whose speed-reliant target is `name`, or None."""
+    return next((test for test in PERFORMANCE_TESTS if performance_target(test) == name), None)
+
+
+def resources_directory(name):
+    """Where RESOURCES' paths for target `name` start: Tests/<X>/Performance for X's speed-reliant
+    target, Tests/<name> for a test target, else Sources/<name>."""
+    if performance_parent(name):
+        return f"Tests/{performance_parent(name)}/Performance"
+    return f"Tests/{name}" if name in [t[0] for t in TEST_TARGETS] else f"Sources/{name}"
+
+
+def resources_target(name):
+    """The name of target `name`'s module_resources call in its package's BUILD.bazel: a
+    speed-reliant target's sits in its test target's package, beside that one's."""
+    return "PerformanceResources" if performance_parent(name) else "Resources"
+
+
 def check_resources(names):
-    """RESOURCES names modules by `names`, each entry a "process" or "copy" of a path that exists
-    under the module, none listed twice or inside another; and a module holding a privacy manifest
+    """RESOURCES names modules by `names`, test targets or their speed-reliant targets, each entry a
+    "process" or "copy" of a path that exists under the target, none listed twice or inside
+    another, a test target's none under Performance/; and a module holding a privacy manifest
     lists it."""
+    tests = [t[0] for t in TEST_TARGETS]
     for name, entries in RESOURCES.items():
-        assert name in names, f"RESOURCES names unknown module {name}"
+        if name.endswith("PerformanceTests") and name not in names + tests:
+            assert performance_parent(name), \
+                f"RESOURCES names {name}, but no test target in PERFORMANCE_TESTS has a speed-reliant target of that name"
+        else:
+            assert name in names or name in tests, f"RESOURCES names {name}, which is neither a module nor a test target"
+        directory = resources_directory(name)
         paths = [path for _, path in entries]
         for rule, path in entries:
-            assert rule in ("process", "copy"), f"RESOURCES gives Sources/{name}/{path} the rule {rule!r}: use \"process\" or \"copy\""
+            assert rule in ("process", "copy"), f"RESOURCES gives {directory}/{path} the rule {rule!r}: use \"process\" or \"copy\""
             assert path == os.path.normpath(path) and not os.path.isabs(path) and not path.startswith(".."), \
-                f"RESOURCES lists {path!r} for {name}: give a path inside Sources/{name}, without ./, ../ or a trailing /"
-            assert os.path.exists(os.path.join(ROOT, "Sources", name, path)), \
-                f"RESOURCES lists Sources/{name}/{path}, which doesn't exist"
-            assert paths.count(path) == 1, f"RESOURCES lists Sources/{name}/{path} more than once"
+                f"RESOURCES lists {path!r} for {name}: give a path inside {directory}, without ./, ../ or a trailing /"
+            assert os.path.exists(os.path.join(ROOT, directory, path)), \
+                f"RESOURCES lists {directory}/{path}, which doesn't exist"
+            assert not (name in tests and (path == "Performance" or path.startswith("Performance/"))), \
+                f"RESOURCES lists {directory}/{path}, in the speed-reliant tests' directory, which the test target leaves out"
+            assert paths.count(path) == 1, f"RESOURCES lists {directory}/{path} more than once"
             outer = [other for other in paths if path.startswith(other + "/")]
-            assert not outer, f"RESOURCES lists Sources/{name}/{path} inside Sources/{name}/{outer[0]}, which it lists too"
+            assert not outer, f"RESOURCES lists {directory}/{path} inside {directory}/{outer[0]}, which it lists too"
     for name in names:
         if os.path.isfile(os.path.join(ROOT, "Sources", name, PRIVACY_MANIFEST)):
             assert PRIVACY_MANIFEST in [path for _, path in RESOURCES.get(name, [])], (
@@ -456,15 +504,37 @@ def check():
         assert name in dict(TEST_TARGETS), f"SIMULATOR_TESTS names unknown test target {name}"
         assert not simulator_only(name), \
             f"{name} depends on an iOS module or a Bazel label, so it runs in the simulator alone already: leave it out of SIMULATOR_TESTS"
-    if SIMULATOR_TESTS:
+    for name, variables in TEST_ENVIRONMENT.items():
+        assert name in dict(TEST_TARGETS), f"TEST_ENVIRONMENT names unknown test target {name}"
+        assert variables, f"TEST_ENVIRONMENT gives {name} no variables: list at least one, or leave {name} out"
+        for variable in variables:
+            assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", variable), \
+                f"TEST_ENVIRONMENT gives {name} {variable!r}, which isn't an environment variable's name"
+            assert variables.count(variable) == 1, f"TEST_ENVIRONMENT lists {variable} for {name} more than once"
+    # The root BUILD.bazel leaves iOS modules out of the docs and //:package_swift_test through
+    # tools/ios.bzl, which only the app type and --ios write.
+    assert not IOS_MODULES, (
+        "IOS_MODULES needs tools/ios.bzl, the iOS test host and the simulator settings the app type and the "
+        "--ios option ship: from the project template's checkout, ./template.py add <project> --ios")
+    simulator_tests = sorted(name for name, _ in TEST_TARGETS if simulator_test(name))
+    if simulator_tests:
         with open(os.path.join(ROOT, ".bazelrc")) as file:
             settings = "--local_resources=simulator=" in file.read()
         assert os.path.isfile(os.path.join(ROOT, "tools", "test_host", "BUILD.bazel")) and settings, (
-            "SIMULATOR_TESTS needs the iOS test host and simulator settings the app type ships: copy "
-            "tools/test_host and the simulator lines of .bazelrc (--ios_minimum_os, --ios_simulator_device, "
-            "--ios_simulator_version, --local_resources=simulator=1) from an app render of the project "
-            "template (bootstrap.sh --render-only --app <Name> <directory>)")
+            f"{', '.join(simulator_tests)} run in the iOS simulator (SIMULATOR_TESTS, or a dependency on an iOS "
+            "module or a Bazel label), which needs the test host (tools/test_host) and the simulator settings "
+            "in .bazelrc (--ios_minimum_os, --ios_simulator_device, --ios_simulator_version, "
+            "--local_resources=simulator=1) that the app type and the --ios option ship: from the project "
+            "template's checkout, ./template.py add <project> --ios")
     packages = [p[0] for p in PACKAGES]
+    for name, _, version in PACKAGES:
+        if version.startswith("range:"):
+            lower, upper = version_range(version)
+            assert "..<" in version and semantic_version(lower) and semantic_version(upper), (
+                f"PACKAGES gives {name} {version!r}: write a range as range:<lower>..<<upper>, two versions "
+                "such as range:603.0.0..<605.0.0")
+            assert semantic_version(lower) < semantic_version(upper), \
+                f"PACKAGES gives {name} {version!r}, whose lower bound isn't below its upper"
     for name, deps in [(m[0], m[3]) for m in MODULES + MACROS] + [(e[0], e[2]) for e in EXECUTABLES]:
         for d in deps:
             if "/" in d:
@@ -576,17 +646,28 @@ def spm_dep(d):
 def requirement(version):
     """A package's version requirement in a manifest: `from:` the minimum, `exact:` a pinned release,
     `.upToNextMinor(from:)` for `minor:`, patch releases only, or a half-open range
-    (`"603.0.0"..<"605.0.0"`) for `range:603.0.0..<605.0.0`. Raises on a range without both bounds."""
+    (`"603.0.0"..<"605.0.0"`) for `range:603.0.0..<605.0.0`. check() refuses a malformed range."""
     if version.startswith("exact:"):
         return f'exact: "{version.removeprefix("exact:")}"'
     if version.startswith("minor:"):
         return f'.upToNextMinor(from: "{version.removeprefix("minor:")}")'
     if version.startswith("range:"):
-        lower, separator, upper = version.removeprefix("range:").partition("..<")
-        if not (lower and separator and upper):
-            raise SystemExit(f"{version}: a range is written range:<lower>..<<upper>")
+        lower, upper = version_range(version)
         return f'"{lower}"..<"{upper}"'
     return f'from: "{version}"'
+
+
+def version_range(version):
+    """The (lower, upper) bounds of a `range:<lower>..<<upper>` version, as written."""
+    lower, _, upper = version.removeprefix("range:").partition("..<")
+    return lower, upper
+
+
+def semantic_version(text):
+    """`text`'s (major, minor, patch) when it is a semantic version (a pre-release or build suffix
+    allowed), else None."""
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", text)
+    return tuple(int(part) for part in match.groups()) if match else None
 
 
 def umbrella():
@@ -679,7 +760,7 @@ def bazel_label(d):
 
 def excluded(path):
     """Non-source files SwiftPM would otherwise warn about, for the target at `path`."""
-    return [f for f in ("BUILD.bazel", "README.md", "Performance", "__Snapshots__", "Fixtures") if os.path.exists(os.path.join(ROOT, path, f))]
+    return [f for f in ("BUILD.bazel", "README.md", "Performance", "__Snapshots__") if os.path.exists(os.path.join(ROOT, path, f))]
 
 
 def swift_string(text):
@@ -688,7 +769,7 @@ def swift_string(text):
 
 
 def resources_arg(name):
-    """Module `name`'s `resources:` argument in Package.swift (RESOURCES), or nothing."""
+    """Target `name`'s `resources:` argument in Package.swift (RESOURCES), or nothing."""
     entries = RESOURCES.get(name, [])
     if not entries:
         return ""
@@ -696,12 +777,18 @@ def resources_arg(name):
 
 
 def resources_bazel(name):
-    """Module `name`'s resources in its BUILD.bazel (RESOURCES): the load, the swift_library's `srcs`
+    """Target `name`'s resources in its BUILD.bazel (RESOURCES): the load, the swift_library's `srcs`
     and `data`, and the module_resources call (tools/resources.bzl). Without resources, the plain
     `srcs` and nothing else."""
     entries = RESOURCES.get(name, [])
     if not entries:
         return "", '    srcs = glob(["**/*.swift"]),\n', "", ""
+    what = ("speed-reliant tests' fixtures" if performance_parent(name)
+            else "tests' fixtures" if resources_directory(name).startswith("Tests/") else "module's resources")
+    target = resources_target(name)
+    # The speed-reliant target's SwiftPM path is the package's Performance/, which its entries are
+    # relative to.
+    directory = '    directory = "Performance",\n' if performance_parent(name) else ""
     lists = "".join(
         f"    {rule} = [\n" + "".join(f'        "{path}",\n' for r, path in entries if r == rule) + "    ],\n"
         for rule in ("process", "copy") if any(r == rule for r, _ in entries)
@@ -709,13 +796,14 @@ def resources_bazel(name):
     return (
         'load("//tools:resources.bzl", "module_resources", "module_resources_data")\n',
         '    # `Bundle.module`, as SwiftPM generates it, for the resources below.\n'
-        '    srcs = glob(["**/*.swift"]) + [":ResourcesAccessor"],\n',
-        '    data = module_resources_data("Resources"),\n',
-        "\n# The module's resources (RESOURCES in scripts/modules.py), in the bundle SwiftPM builds for them.\n"
+        f'    srcs = glob(["**/*.swift"]) + [":{target}Accessor"],\n',
+        f'    data = module_resources_data("{target}"),\n',
+        f"\n# The {what} (RESOURCES in scripts/modules.py), in the bundle SwiftPM builds for them.\n"
         "module_resources(\n"
-        '    name = "Resources",\n'
+        f'    name = "{target}",\n'
         f'    bundle_name = "{PROJECT}_{name}",\n'
         f'    bundle_id = "{PROJECT.lower()}.{name}.resources",\n'
+        f"{directory}"
         f"{lists}"
         ")\n",
     )
@@ -811,7 +899,7 @@ def package_swift():
         dl = ", ".join(spm_dep(d) for d in deps)
         files = excluded(f"Tests/{name}")
         ex = "[" + ", ".join(f'"{f}"' for f in files) + "]" if files != ["BUILD.bazel"] else "bazelFiles"
-        lines.append(f'    .testTarget(name: "{name}", dependencies: [{dl}], exclude: {ex}),')
+        lines.append(f'    .testTarget(name: "{name}", dependencies: [{dl}], exclude: {ex}{resources_arg(name)}),')
     if PERFORMANCE_TESTS:
         lines += [
             "",
@@ -820,7 +908,7 @@ def package_swift():
         for name, deps in TEST_TARGETS:
             if name in PERFORMANCE_TESTS:
                 dl = ", ".join(spm_dep(d) for d in deps)
-                lines.append(f'    .testTarget(name: "{performance_target(name)}", dependencies: [{dl}], path: "Tests/{name}/Performance"),')
+                lines.append(f'    .testTarget(name: "{performance_target(name)}", dependencies: [{dl}], path: "Tests/{name}/Performance"{resources_arg(performance_target(name))}),')
     lines += [
         "]",
         "",
@@ -1027,14 +1115,28 @@ def test_support_build_bazel():
     )
 
 
-def test_targets_bazel(name, deps, size, srcs, tags, simulator=False):
+def env_inherit_attr(name):
+    """The `env_inherit` line for test target `name`'s runners (TEST_ENVIRONMENT), or nothing."""
+    variables = TEST_ENVIRONMENT.get(name)
+    if not variables:
+        return ""
+    return "    env_inherit = [" + ", ".join(f'"{v}"' for v in variables) + "],\n"
+
+
+def test_targets_bazel(name, deps, size, srcs, tags, simulator=False, environment=None):
     """One test module: its library, the swift_test that `bazel test` runs, and the Xcode bundle; with
-    `simulator`, the ios_unit_test that runs the same library in the simulator too (SIMULATOR_TESTS)."""
+    `simulator`, the ios_unit_test that runs the same library in the simulator too (SIMULATOR_TESTS).
+    `environment` names the TEST_ENVIRONMENT entry its runners inherit, `name` by default."""
+    env_attr = env_inherit_attr(environment or name)
     tags_attr = f"    tags = {tags},\n".replace("'", '"') if tags else ""
     # SnapshotTesting finds a reference beside the test file through #filePath, which Bazel makes
     # relative to the workspace, and a test runs from its runfiles: so the references go in them.
-    data_attr = ('    data = glob(["__Snapshots__/**"], allow_empty = True),\n'
-                 if "swift-snapshot-testing/SnapshotTesting" in deps else "")
+    # A test target's fixtures (RESOURCES) are a bundle of their own, found by `Bundle.module`.
+    resources = bool(RESOURCES.get(name))
+    srcs += f' + [":{resources_target(name)}Accessor"]' if resources else ""
+    data = (['glob(["__Snapshots__/**"], allow_empty = True)'] if "swift-snapshot-testing/SnapshotTesting" in deps else []) \
+        + ([f'module_resources_data("{resources_target(name)}")'] if resources else [])
+    data_attr = f"    data = {' + '.join(data)},\n" if data else ""
     compatible_attr = ('    target_compatible_with = select({\n'
                        '        # APPLE_ONLY_TESTS in scripts/modules.py: nothing to run elsewhere.\n'
                        '        "@platforms//os:macos": [],\n'
@@ -1059,6 +1161,7 @@ def test_targets_bazel(name, deps, size, srcs, tags, simulator=False):
         "# `bazel test` / `just test`: a standalone executable, fast to start and run in Bazel's sandbox.\n"
         "swift_test(\n"
         f'    name = "{name}",\n'
+        f"{env_attr}"
         f'    size = "{size}",\n'
         f"{tags_attr}"
         f"{compatible_attr}"
@@ -1077,14 +1180,16 @@ def test_targets_bazel(name, deps, size, srcs, tags, simulator=False):
         '    visibility = ["//visibility:public"],\n'
         f'    deps = [":{name}Library"],\n'
         ")\n"
-    ) + (simulator_half_bazel(name, deps, srcs, tags) if simulator else "")
+    ) + (simulator_half_bazel(name, deps, srcs, tags, env_attr) if simulator else "")
 
 
-def simulator_half_bazel(name, deps, srcs, tags):
+def simulator_half_bazel(name, deps, srcs, tags, env_attr):
     """The same tests as test target `name`'s library, built for iOS and run in the simulator as well
-    (SIMULATOR_TESTS): a library of their own, without the Mac's `data`, which rules_apple would
-    flatten into the bundle as resources, and the ios_unit_test."""
+    (SIMULATOR_TESTS): a library of their own, without the Mac's snapshot references, which
+    rules_apple would flatten into the bundle as resources, but with its fixtures' bundle (RESOURCES),
+    which it nests; and the ios_unit_test."""
     tags_attr = f"    tags = {tags},\n".replace("'", '"') if tags else ""
+    data_attr = '    data = module_resources_data("Resources"),\n' if RESOURCES.get(name) else ""
     return (
         "\n# The same tests in the iOS simulator (SIMULATOR_TESTS in scripts/modules.py), where the code\n"
         "# under `#if canImport(UIKit)` compiles. iOS only, so `bazel build //...` builds it through the\n"
@@ -1094,6 +1199,7 @@ def simulator_half_bazel(name, deps, srcs, tags):
         "    testonly = True,\n"
         "    alwayslink = True,\n"
         f"    srcs = {srcs},\n"
+        f"{data_attr}"
         f'    module_name = "{name}",\n'
         f"{tags_attr}"
         '    target_compatible_with = ["@platforms//os:ios"],\n'
@@ -1103,6 +1209,8 @@ def simulator_half_bazel(name, deps, srcs, tags):
         f"# `{SIMULATOR_TEST_TAG}` runs one simulator test at a time (.bazelrc).\n"
         "ios_unit_test(\n"
         f'    name = "{name}Simulator",\n'
+        # rules_apple's runner hands the simulator only the variables listed here.
+        f"{env_attr}"
         f'    size = "{TEST_SIZES.get(name, "medium")}",\n'
         f'    minimum_os_version = "{IOS_MINIMUM}",\n'
         "    tags = [\n" + "".join(f'        "{t}",\n' for t in tags + [SIMULATOR_TEST_TAG]) + "    ],\n"
@@ -1119,19 +1227,24 @@ def simulator_half_bazel(name, deps, srcs, tags):
 
 
 def simulator_test_build_bazel(name, deps, size):
-    """A test module run in the iOS simulator: its library, its snapshot references and the ios_unit_test."""
+    """A test module run in the iOS simulator: its library, its snapshot references, its fixtures
+    (RESOURCES) and the ios_unit_test."""
+    resources_load, srcs_attr, _, resources = resources_bazel(name)
+    data_attr = ('    data = [":Snapshots"] + module_resources_data("Resources"),\n' if resources
+                 else '    data = [":Snapshots"],\n')
     return (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
         'load("@rules_apple//apple:ios.bzl", "ios_unit_test")\n'
         'load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")\n'
+        f"{resources_load}"
         'load("//tools:swift_rules.bzl", "swift_library")\n\n'
         "# The tests, run in the iOS simulator: the target depends on an iOS module (IOS_MODULES in\n"
         f"# scripts/modules.py). Tagged `{RELEASE_EXCLUDED_TAG}`, like every target but the speed-reliant ones.\n"
         "swift_library(\n"
         f'    name = "{name}Library",\n'
         "    testonly = True,\n"
-        '    srcs = glob(["**/*.swift"]),\n'
-        '    data = [":Snapshots"],\n'
+        f"{srcs_attr}"
+        f"{data_attr}"
         f'    module_name = "{name}",\n'
         f'    tags = ["{RELEASE_EXCLUDED_TAG}"],\n'
         '    target_compatible_with = ["@platforms//os:ios"],\n'
@@ -1150,13 +1263,20 @@ def simulator_test_build_bazel(name, deps, size):
         f"# `{SIMULATOR_TEST_TAG}` runs one simulator test at a time (.bazelrc).\n"
         "ios_unit_test(\n"
         f'    name = "{name}",\n'
+        f"{env_inherit_attr(name)}"
         f'    size = "{size}",\n'
         f'    minimum_os_version = "{IOS_MINIMUM}",\n'
         f'    tags = [\n        "{RELEASE_EXCLUDED_TAG}",\n        "{SIMULATOR_TEST_TAG}",\n    ],\n'
+        "    # The simulator is the Mac's alone, so elsewhere `bazel test //...` skips the bundle.\n"
+        "    target_compatible_with = select({\n"
+        '        "@platforms//os:macos": [],\n'
+        '        "//conditions:default": ["@platforms//:incompatible"],\n'
+        "    }),\n"
         '    test_host = "//tools/test_host",\n'
         '    visibility = ["//visibility:public"],\n'
         f'    deps = [":{name}Library"],\n'
         ")\n"
+        f"{resources}"
     )
 
 
@@ -1166,11 +1286,15 @@ def test_build_bazel(name, deps):
         # Booting a simulator takes much of a minute on its own.
         return simulator_test_build_bazel(name, deps, TEST_SIZES.get(name, "medium"))
     simulator = name in SIMULATOR_TESTS
+    resources_load, _, _, resources = resources_bazel(name)
+    performance_load, _, _, performance_resources = resources_bazel(performance_target(name)) if name in PERFORMANCE_TESTS else ("", "", "", "")
+    resources_load = resources_load or performance_load
     header = (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
         + ('load("@rules_apple//apple:ios.bzl", "ios_unit_test")\n' if simulator else "")
         + 'load("@rules_apple//apple:macos.bzl", "macos_unit_test")\n'
-        'load("//tools:swift_rules.bzl", "swift_library", "swift_test")\n\n'
+        + resources_load
+        + 'load("//tools:swift_rules.bzl", "swift_library", "swift_test")\n\n'
     )
     excluded_note = (
         f"Tagged `{RELEASE_EXCLUDED_TAG}`: none of these relies on speed, so\n"
@@ -1179,7 +1303,8 @@ def test_build_bazel(name, deps):
     header += "".join(macro_library_bazel(d) for d in deps if is_macro(d))
     if name not in PERFORMANCE_TESTS:
         return (header + "# The tests, built once and linked into two runners.\n# " + excluded_note
-                + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"])', [RELEASE_EXCLUDED_TAG], simulator))
+                + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"])', [RELEASE_EXCLUDED_TAG], simulator)
+                + resources)
     return (
         header
         + "# The tests, built once and linked into two runners; the speed-reliant ones, in Performance/, are\n"
@@ -1187,7 +1312,10 @@ def test_build_bazel(name, deps):
         + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"], exclude = ["Performance/**"])', [RELEASE_EXCLUDED_TAG], simulator)
         + "\n# The speed-reliant tests (PERFORMANCE_TESTS in scripts/modules.py): debug and `--config=release`\n"
         + "# both run them.\n"
-        + test_targets_bazel(performance_target(name), deps, PERFORMANCE_TEST_SIZE, 'glob(["Performance/**/*.swift"])', [])
+        + test_targets_bazel(performance_target(name), deps, PERFORMANCE_TEST_SIZE, 'glob(["Performance/**/*.swift"])', [],
+                             environment=name)
+        + resources
+        + performance_resources
     )
 
 

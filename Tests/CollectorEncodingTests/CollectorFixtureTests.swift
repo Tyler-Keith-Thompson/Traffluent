@@ -1,9 +1,6 @@
 // Fixtures/collector-batch.json is the batch TraffluentCollector's ingest tests
-// decode, so the collector reads the bytes this encoder writes. It is read through #filePath,
-// which SwiftPM's tests see and Bazel's sandbox doesn't, so this runs under SwiftPM alone
-// (SWIFT_PACKAGE); the bytes it compares are pinned in both, in CollectorBatchEncoderTests.
+// decode, so the collector reads the bytes this encoder writes.
 
-#if SWIFT_PACKAGE
 import CollectorEncoding
 import EventMacros
 import Foundation
@@ -58,8 +55,7 @@ struct CollectorFixtureTests {
 
     @Test("The hand-worked batch encodes to the fixture's bytes, byte for byte")
     func fixture() throws {
-        let fixture = URL(filePath: #filePath).deletingLastPathComponent()
-            .appending(path: "Fixtures/collector-batch.json")
+        let fixture = try #require(Bundle.module.url(forResource: "collector-batch", withExtension: "json", subdirectory: "Fixtures"))
         let expected = try Data(contentsOf: fixture)
         let plan = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: TraceParentInstrument())
@@ -103,4 +99,3 @@ struct CollectorFixtureTests {
         #expect(actual == expected)
     }
 }
-#endif

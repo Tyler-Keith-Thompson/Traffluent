@@ -73,9 +73,21 @@ in beside the project's own: keep one definition, holding the project's rows, an
   test must run on the Mac, since Bazel's runner fails a run of none; a target whose Mac tests are
   Apple's alone goes in `APPLE_ONLY_TESTS` too. A target that depends on an iOS module or a Bazel
   label runs in the simulator alone already, so it isn't listed.
-  The app type ships the test host; any other copies `tools/test_host` and the simulator lines of
-  `.bazelrc` from an app render first (`just modules` refuses the table without them).
+  It needs the test host and the simulator settings in `.bazelrc`, which the app type and the
+  `--ios` option ship (`just modules` refuses the table without them).
   `just mutate` runs a spec's simulator targets through Bazel (`scripts/mutate.py`).
+- Add an iOS app, iOS modules and simulator tests to this project: from the project template's
+  checkout, `./template.py add <project> --ios` (after `just template-update`, if the stamp
+  predates the option). It brings `Apps/Traffluent`, the test host, the simulator settings and
+  `tools/ios.bzl`; until then `just modules` refuses `IOS_MODULES` and simulator tests.
+- Give a test target an environment variable under `bazel test` (an integration test that runs
+  only when `TEST_DATABASE_URL` is set, say): its name and the variables in `TEST_ENVIRONMENT`
+  (`{"<Target>Tests": ["TEST_DATABASE_URL"]}`), then `just modules`. Bazel strips the test
+  environment; the generator writes the names as `env_inherit` on that target's `swift_test`, its
+  Performance one and its simulator `ios_unit_test`, so only those targets see the variable and
+  only their cached results depend on it. Not `--test_env` in `.bazelrc`, which hands it to every
+  test. SwiftPM passes the whole environment already. `check()` refuses a name that isn't a test
+  target.
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
 - Add an example module (a demo app's views, a sample server's routes): a row in `MODULES` and its
@@ -105,6 +117,14 @@ in beside the project's own: keep one definition, holding the project's rows, an
   that calls a required-reason API or collects data ships `PrivacyInfo.xcprivacy`, listed as
   `("copy", "PrivacyInfo.xcprivacy")` so it sits at the bundle's root; `check()` refuses one left
   out, a listed path that doesn't exist, and one inside another listed directory.
+- Give a test target fixture files (JSON to compare byte for byte, a sample input): put them under
+  `Tests/<Target>/` and list them in `RESOURCES` under the target's name
+  (`{"<Target>": [("copy", "Fixtures")]}`, paths relative to `Tests/<Target>`), then `just modules`.
+  The target gets its own `Traffluent_<Target>.bundle` the same way, in its swift_test, its
+  simulator ios_unit_test and its SwiftPM test target, and its tests read the files through
+  `Bundle.module`. Not under `Performance/`, which the target leaves out: the speed-reliant tests
+  of a `PERFORMANCE_TESTS` target list theirs under `<X>PerformanceTests`, paths relative to
+  `Tests/<X>/Performance`, and read them through `Bundle.module` in debug and release alike.
 - Add a macro: its compiler plugin is a row in `MACROS` (name, group, description, and only
   package products as dependencies: swift-syntax's, with `swift-syntax` in `PACKAGES`), its sources
   in `Sources/<Plugin>/` (an `@main` `CompilerPlugin` listing the macro types), then `just modules`
@@ -218,15 +238,17 @@ don't build for watchOS (exit tests are unavailable there), and arm64_32 runs on
 
 The owner's own libraries, first in line under "Don't reinvent the wheel" (House rules). Reach
 for them before writing a graph, a container or an operator chain by hand, and before adding a
-third-party package for the same job. Add one as a row in `PACKAGES` (`scripts/modules.py`).
+third-party package for the same job. Add one as a row in `PACKAGES` (`scripts/modules.py`) under its
+identity, the repository's name in lowercase (`swiftprng`), and list a product among a module's
+dependencies as `"<identity>/<Product>"` (`"swiftprng/Generators"`), as the rows below spell them.
 
 | Library | What it is | Use it for |
 |---|---|---|
-| [Grafluent](https://github.com/Tyler-Keith-Thompson/Grafluent) | A generic, high-performance graph library: copy-on-write representations (`AdjacencyList`, `CompressedSparseRow`, `AdjacencyMatrix`, pseudographs, stable graphs), graph classes with invariants (`DirectedAcyclicGraph`, `BipartiteGraph`, `Tree`) and algorithms (traversal, shortest paths, flows, matching, connectivity, isomorphism, layout) | Anything shaped like a graph or DAG: dependency orderings, scheduling, routing, state machines, reachability. Products are per module (`.product(name: "ShortestPaths", package: "Grafluent")`); the umbrella is `Grafluent`. |
-| [GrafluentCollections](https://github.com/Tyler-Keith-Thompson/GrafluentCollections) | Graph-shaped collections as copy-on-write values with the standard library's and swift-collections' API shape: balanced search trees (`AVLTree`/`AVLDictionary`, `RedBlackTree`, `Treap`, `SplayTree`) and `FenwickTree` so far; tries, suffix structures, decision diagrams, B-trees, segment, interval and spatial trees, ropes, persistent trees and an LRU cache planned. Tree- and graph-shaped ones convert to the matching Grafluent type | Sorted sets and dictionaries that take inserts and removals, prefix and range sums with updates; check its backlog before hand-writing a planned structure. Products are per module (`.product(name: "BinarySearchTrees", package: "GrafluentCollections")`); the umbrella is `GrafluentCollections`. |
-| [SwiftPRNG](https://github.com/Tyler-Keith-Thompson/SwiftPRNG) | Seeded random numbers that reproduce bit for bit on every platform and Swift release: generators as values (`Xoshiro256StarStar`, `Xoroshiro128Plus`, `SplitMix64`, with `jump()` for streams that never overlap), platform-stable draws (`uniform(in:)`, `integer(in:)`, `bernoulli(_:)`, with `checked` spellings), `SeedTree` (a seed per named decision, so adding a draw shifts nothing elsewhere, with overrides and `fitting` to search one subtree for a seed that meets a predicate) and `SeedSearch` (the smallest matching seed, concurrently) | Every seeded test, and any program whose randomness must replay: simulations, procedural generation, games, sampling. Never hand-write a generator. `Xoroshiro128Plus(seed:)` gives the same numbers as a hand-written `SeededRandomNumberGenerator` (xoroshiro128+ seeded by SplitMix64), so replacing one changes no pinned value. Products are per module (`.product(name: "Generators", package: "SwiftPRNG")`: `Generators`, `Sampling`, `SeedTrees`, `SeedDiscovery`); the umbrella is `SwiftPRNG`. |
-| [DependencyInjection](https://github.com/Tyler-Keith-Thompson/DependencyInjection) | Swift 6 dependency injection: `Factory` values on `Container`, `@Injected` / `@LazyInjected` / `@ConstructorInjected`, unique, cached and shared scopes, hierarchical containers, and `withTestContainer` so concurrent tests never share state | Any seam a test needs to replace (clocks, network, storage). Tests wrap their body in `withTestContainer { }` and register doubles there. Product `DependencyInjection`. |
-| [Afluent](https://github.com/Tyler-Keith-Thompson/Afluent) | Reactive operators over async/await: `DeferredTask` (a unit of work that yields one value) and `AsyncSequence` extensions with Combine's names (`map`, `flatMap`, `catch`, `retry`, `debounce`, `share`, …), plus `AfluentTesting` | Pipelines over async work where Combine would once have been used; a Combine replacement in new code. Products `Afluent` and, for test targets, `AfluentTesting`. |
+| [Grafluent](https://github.com/Tyler-Keith-Thompson/Grafluent) | A generic, high-performance graph library: copy-on-write representations (`AdjacencyList`, `CompressedSparseRow`, `AdjacencyMatrix`, pseudographs, stable graphs), graph classes with invariants (`DirectedAcyclicGraph`, `BipartiteGraph`, `Tree`) and algorithms (traversal, shortest paths, flows, matching, connectivity, isomorphism, layout) | Anything shaped like a graph or DAG: dependency orderings, scheduling, routing, state machines, reachability. Products are per module (`"grafluent/ShortestPaths"`); the umbrella is `grafluent/Grafluent`. |
+| [GrafluentCollections](https://github.com/Tyler-Keith-Thompson/GrafluentCollections) | Graph-shaped collections as copy-on-write values with the standard library's and swift-collections' API shape: balanced search trees (`AVLTree`/`AVLDictionary`, `RedBlackTree`, `Treap`, `SplayTree`) and `FenwickTree` so far; tries, suffix structures, decision diagrams, B-trees, segment, interval and spatial trees, ropes, persistent trees and an LRU cache planned. Tree- and graph-shaped ones convert to the matching Grafluent type | Sorted sets and dictionaries that take inserts and removals, prefix and range sums with updates; check its backlog before hand-writing a planned structure. Products are per module (`"grafluentcollections/BinarySearchTrees"`); the umbrella is `grafluentcollections/GrafluentCollections`. |
+| [SwiftPRNG](https://github.com/Tyler-Keith-Thompson/SwiftPRNG) | Seeded random numbers that reproduce bit for bit on every platform and Swift release: generators as values (`Xoshiro256StarStar`, `Xoroshiro128Plus`, `SplitMix64`, with `jump()` for streams that never overlap), platform-stable draws (`uniform(in:)`, `integer(in:)`, `bernoulli(_:)`, with `checked` spellings), `SeedTree` (a seed per named decision, so adding a draw shifts nothing elsewhere, with overrides and `fitting` to search one subtree for a seed that meets a predicate) and `SeedSearch` (the smallest matching seed, concurrently) | Every seeded test, and any program whose randomness must replay: simulations, procedural generation, games, sampling. Never hand-write a generator. `Xoroshiro128Plus(seed:)` gives the same numbers as a hand-written `SeededRandomNumberGenerator` (xoroshiro128+ seeded by SplitMix64), so replacing one changes no pinned value. Products are per module (`"swiftprng/Generators"`: `Generators`, `Sampling`, `SeedTrees`, `SeedDiscovery`); the umbrella is `swiftprng/SwiftPRNG`. |
+| [DependencyInjection](https://github.com/Tyler-Keith-Thompson/DependencyInjection) | Swift 6 dependency injection: `Factory` values on `Container`, `@Injected` / `@LazyInjected` / `@ConstructorInjected`, unique, cached and shared scopes, hierarchical containers, and `withTestContainer` so concurrent tests never share state | Any seam a test needs to replace (clocks, network, storage). Tests wrap their body in `withTestContainer { }` and register doubles there. Product `"dependencyinjection/DependencyInjection"`. |
+| [Afluent](https://github.com/Tyler-Keith-Thompson/Afluent) | Reactive operators over async/await: `DeferredTask` (a unit of work that yields one value) and `AsyncSequence` extensions with Combine's names (`map`, `flatMap`, `catch`, `retry`, `debounce`, `share`, …), plus `AfluentTesting` | Pipelines over async work where Combine would once have been used; a Combine replacement in new code. Products `"afluent/Afluent"` and, for test targets, `"afluent/AfluentTesting"`. |
 
 Their conventions carry over: value types, typed errors, `checked:` spellings that throw where
 the plain spelling traps, tests with Swift Testing.
