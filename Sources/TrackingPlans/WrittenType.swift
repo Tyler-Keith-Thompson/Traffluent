@@ -3,7 +3,7 @@
 ///
 /// The schema holds a type's text, not the type: the macro sees syntax only, so a typealias or a
 /// type of the app's own is just a name here.
-indirect enum WrittenType: Hashable {
+package indirect enum WrittenType: Hashable, Sendable {
     /// A named type: its dotted components (`Swift`, `Int`) and generic arguments.
     case named([String], [WrittenType])
     /// `T?` or `T!`.
@@ -15,7 +15,7 @@ indirect enum WrittenType: Hashable {
     /// a function, `some P` or `any P`).
     ///
     /// - Complexity: O(*n*) in the text's length.
-    init?(parsing text: String) {
+    package init?(parsing text: String) {
         var parser = Parser(Array(text))
         guard let type = parser.type(), parser.isAtEnd else { return nil }
         self = type
@@ -35,7 +35,7 @@ indirect enum WrittenType: Hashable {
 
     /// The type's generic arguments when it is named `name`, alone or qualified by one of
     /// `modules`; `nil` when it is another type.
-    func names(_ name: String, in modules: Set<String>) -> [WrittenType]? {
+    package func names(_ name: String, in modules: Set<String>) -> [WrittenType]? {
         guard case .named(let components, let arguments) = self, components.last == name else { return nil }
         switch components.count {
         case 1: return arguments

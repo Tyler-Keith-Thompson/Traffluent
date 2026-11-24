@@ -117,6 +117,7 @@ MODULES = [
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
     ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields; URLSessionTransport, the default transport.", ["Events", "Destinations", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
+    ("CollectorEncoding", "Pipeline", "CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them.", ["Events", "Persistence", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; Consent, which holds, delivers or drops each event by its ConsentCategory's status; and Samplers, which keep a seeded fraction of events, or of the groups a context key makes, stamping each kept record with its SampleRateKey.", ["Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees"]),
     # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
     ("TrackerTesting", "Pipeline", "withRecordingTracker(_:): runs a test's body with a fresh tracker bound to its task, then returns a TrackerRecording of every event tracked in it, in order, typed with events(of:).", ["Events", "Trackers"]),
@@ -248,6 +249,7 @@ TEST_TARGETS = [
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("HTTPDestinationsTests", ["HTTPDestinations", "Destinations", "Events", "Trackers", "afluent/Afluent", "swift-http-types/HTTPTypes", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
+    ("CollectorEncodingTests", ["CollectorEncoding", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackersTests", ["Trackers", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees", TEST_SUPPORT]),
     ("SwiftUITrackingTests", ["SwiftUITracking", "UIKitTracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
@@ -667,7 +669,7 @@ def bazel_label(d):
 
 def excluded(path):
     """Non-source files SwiftPM would otherwise warn about, for the target at `path`."""
-    return [f for f in ("BUILD.bazel", "README.md", "Performance", "__Snapshots__") if os.path.exists(os.path.join(ROOT, path, f))]
+    return [f for f in ("BUILD.bazel", "README.md", "Performance", "__Snapshots__", "Fixtures") if os.path.exists(os.path.join(ROOT, path, f))]
 
 
 def swift_string(text):

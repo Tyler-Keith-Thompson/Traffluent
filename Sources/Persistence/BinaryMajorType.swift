@@ -1,6 +1,6 @@
 /// A CBOR data item's major type (RFC 8949, section 3.1): the top three bits of its first byte.
 @usableFromInline
-enum BinaryMajorType: UInt8 {
+package enum BinaryMajorType: UInt8 {
     case unsignedInteger = 0
     case negativeInteger = 1
     case byteString = 2
@@ -12,7 +12,7 @@ enum BinaryMajorType: UInt8 {
 
     /// The first byte of a head of this type, before its additional information.
     @inlinable
-    var initialByte: UInt8 {
+    package var initialByte: UInt8 {
         rawValue << 5
     }
 }

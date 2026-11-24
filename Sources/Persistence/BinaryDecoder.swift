@@ -79,13 +79,13 @@ public struct BinaryDecoder: Sendable {
 
     /// The next byte, not yet read, or `nil` at the end.
     @inlinable
-    func peek() -> UInt8? {
+    package func peek() -> UInt8? {
         position < bytes.endIndex ? bytes[position] : nil
     }
 
     /// Reads one byte.
     @inlinable
-    mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
+    package mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
         guard position < bytes.endIndex else { throw .endOfData }
         defer { position += 1 }
         return bytes[position]
@@ -93,7 +93,7 @@ public struct BinaryDecoder: Sendable {
 
     /// Reads the next `count` bytes as they are.
     @inlinable
-    mutating func read(_ count: Int) throws(BinaryDecodingError) -> ArraySlice<UInt8> {
+    package mutating func read(_ count: Int) throws(BinaryDecodingError) -> ArraySlice<UInt8> {
         guard count <= remainingCount else { throw .endOfData }
         defer { position += count }
         return bytes[position ..< position + count]
@@ -101,7 +101,7 @@ public struct BinaryDecoder: Sendable {
 
     /// Reads an integer written most significant byte first.
     @inlinable
-    mutating func readBigEndian<Integer: FixedWidthInteger>(_ type: Integer.Type = Integer.self) throws(BinaryDecodingError) -> Integer {
+    package mutating func readBigEndian<Integer: FixedWidthInteger>(_ type: Integer.Type = Integer.self) throws(BinaryDecodingError) -> Integer {
         let size = MemoryLayout<Integer>.size
         guard size <= remainingCount else { throw .endOfData }
         defer { position += size }
@@ -117,7 +117,7 @@ public struct BinaryDecoder: Sendable {
     ///   ``BinaryDecodingError/invalidValue`` for additional information 28 to 31: reserved, or an
     ///   indefinite length, which this encoding never writes.
     @inlinable
-    mutating func readHead() throws(BinaryDecodingError) -> DataItemHead {
+    package mutating func readHead() throws(BinaryDecodingError) -> DataItemHead {
         let initial = try readByte()
         // Three bits always name one of the eight major types.
         let majorType = BinaryMajorType(rawValue: initial >> 5)!
@@ -149,7 +149,7 @@ public struct BinaryDecoder: Sendable {
     /// and checks that the bytes left can hold that many elements of at least `elementSize`
     /// bytes each, so a corrupt count can't make a reader allocate more than the input holds.
     @inlinable
-    mutating func readCount(of majorType: BinaryMajorType, elementSize: Int = 1) throws(BinaryDecodingError) -> Int {
+    package mutating func readCount(of majorType: BinaryMajorType, elementSize: Int = 1) throws(BinaryDecodingError) -> Int {
         try count(readArgument(of: majorType), elementSize: elementSize)
     }
 
@@ -281,7 +281,7 @@ public struct BinaryDecoder: Sendable {
     /// checked against the bytes left, each element taking at least `elementSize` of them: a
     /// corrupt count can't make a reader allocate, or skip, more than the input holds.
     @inlinable
-    func count(_ argument: UInt64, elementSize: Int) throws(BinaryDecodingError) -> Int {
+    package func count(_ argument: UInt64, elementSize: Int) throws(BinaryDecodingError) -> Int {
         // `Int(exactly:)`: on a 32-bit platform a count past `Int.max` can't be a valid count.
         guard let count = Int(exactly: argument), count <= remainingCount / elementSize else { throw .endOfData }
         return count

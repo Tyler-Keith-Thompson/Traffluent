@@ -7,6 +7,7 @@
 @_exported import LoggingDestinations
 @_exported import TracingDestinations
 @_exported import HTTPDestinations
+@_exported import CollectorEncoding
 @_exported import Trackers
 @_exported import SwiftUITracking
 @_exported import UIKitTracking

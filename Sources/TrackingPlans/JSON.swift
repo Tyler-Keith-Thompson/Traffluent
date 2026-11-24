@@ -11,7 +11,7 @@ import Foundation
 /// A number is ``integer(_:)`` when it is a whole number that fits an `Int64`, and
 /// ``number(_:)`` otherwise, both when a plan writes it (``number(exactly:)``) and when it reads one,
 /// so a value reads back as the case it was written as.
-indirect enum JSON: Hashable, Sendable {
+package indirect enum JSON: Hashable, Sendable {
     case null
     case string(String)
     case integer(Int64)
@@ -49,7 +49,7 @@ indirect enum JSON: Hashable, Sendable {
     /// ``number(_:)`` otherwise.
     ///
     /// - Precondition: `value` is finite, as every JSON number is.
-    static func number(exactly value: Double) -> JSON {
+    package static func number(exactly value: Double) -> JSON {
         precondition(value.isFinite, "A JSON number is finite, not \(value)")
         // -2^63 ..< 2^63: every whole Double in it converts to Int64 exactly.
         if value.rounded() == value, value >= -9_223_372_036_854_775_808, value < 9_223_372_036_854_775_808 {
@@ -82,6 +82,21 @@ indirect enum JSON: Hashable, Sendable {
             "{" + members.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }
                 .map { JSON.string($0.key).compact + ": " + $0.value.compact }
                 .joined(separator: ", ") + "}"
+        default:
+            rendered
+        }
+    }
+
+    /// The value as JSON text with no whitespace between its tokens, object keys in the order of
+    /// their UTF-8 bytes, as JavaScript's `JSON.stringify(value)` writes it: a request body.
+    package var minified: String {
+        switch self {
+        case .array(let elements):
+            "[" + elements.map(\.minified).joined(separator: ",") + "]"
+        case .object(let members):
+            "{" + members.sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }
+                .map { JSON.string($0.key).minified + ":" + $0.value.minified }
+                .joined(separator: ",") + "}"
         default:
             rendered
         }
@@ -147,7 +162,7 @@ extension JSON: Decodable {
     // Bool is tried before Int64, which JSONDecoder doesn't read from `true` or `false`, Int64
     // before Double, and both before String, so each value takes the one case that holds it on
     // every platform.
-    init(from decoder: any Decoder) throws {
+    package init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null

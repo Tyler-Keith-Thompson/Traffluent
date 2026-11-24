@@ -321,6 +321,13 @@ app's trace; the encoder's `Content-Type` always wins, and with no instrument bo
 header is added. Only the first record's context travels in the header fields; write each
 record's into the body if the server needs it.
 
+To send to a self-hosted TraffluentCollector, give `HTTPDestination` a
+`CollectorBatchEncoder(plan:)` (module `CollectorEncoding`) as its encoder and the collector's API
+key as an `Authorization: Bearer` header field. It writes the collector's ingest format: each
+record's identifier, which a redelivered record keeps, its name, timestamp and redelivery marker,
+its properties read through the event's schema in your `TrackingPlan`, and its standard context
+and trace context. A `Sensitive` value is sent only while the record reveals it.
+
 To read what was tracked inside the app, deliver to an `InMemoryDestination` too (module
 `Destinations`): an event inspector in a debug build, a recent-activity view, a SwiftUI preview,
 or a test of what your code tracks. It keeps the newest 1,000 records, or as many as you pass as
@@ -882,6 +889,7 @@ says which facts go where, with the anti-patterns to avoid.
 | `LoggingDestinations` | `LoggerDestination`: writes each event to a swift-log `Logger`, with its call site and context as metadata |
 | `TracingDestinations` | `SpanEventDestination`: adds each event to the span that was active when it was tracked |
 | `HTTPDestinations` | `HTTPDestination`: sends each batch to an HTTP endpoint as one request, its body written by a `BatchEncoder` and its first record's trace context in the header fields, through an `HTTPTransport`; `URLSessionTransport`, the default transport |
+| `CollectorEncoding` | `CollectorBatchEncoder`: the `BatchEncoder` of TraffluentCollector's ingest format, each record as JSON with its identifier, name, timestamp, redelivery marker, properties read through its event's schema in a `TrackingPlan`, and its standard context and trace context; a `Sensitive` value sent only while its record reveals it |
 | `Trackers` | `Tracker`: records each tracked event as one of its `records`, writing it first to a store when it has one, and rejects one that breaks its declared constraints, reporting each as a `RejectionReport`; bound to a task with `withTracker` and read with `Tracker.current`; `Enricher`, which adds to each record's context, for every event or, through `enriched(by:)`, for those of one tracker copy; `Consent`, which delivers, holds or drops each event by its category's `ConsentStatus`, reporting every drop as a `ConsentDropReport`; and `Sampler`, which keeps a seeded fraction of events, or of the groups a context key's values make, at a `SampleRate`, stamping each kept record with its `SampleRateKey` and reporting each drop as a `SamplingDropReport` |
 | `SwiftUITracking` | `EnvironmentValues.tracker`, set with `tracker(_:)` and shared with UIKit's `TrackerTrait`, and the view modifiers `trackOnAppear(_:)`, `trackOnTap(_:)`, `trackChange(of:_:)` and `trackScreen(_:)`, which tracks `ScreenViewed` and stamps the events tracked inside the screen with its `ScreenKey`; Apple platforms only, empty elsewhere |
 | `UIKitTracking` | `TrackerTrait`: the tracker in a UIKit trait collection, set with `traitOverrides.tracker` on a window scene, view controller or view and read as `traitCollection.tracker`; and `UIControl.track(_:for:)`, which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere |

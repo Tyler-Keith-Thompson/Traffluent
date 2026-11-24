@@ -159,7 +159,7 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 extension Optional: BinaryCodable where Wrapped: BinaryCodable {
     /// The head of a one-element array, which a value is wrapped in when its own bytes could be
     /// mistaken for `nil`'s or for this wrapper's.
-    @usableFromInline static var wrapperHead: UInt8 {
+    @usableFromInline package static var wrapperHead: UInt8 {
         BinaryMajorType.array.initialByte | 1
     }
 
@@ -245,7 +245,7 @@ extension UUID: BinaryCodable {
     }
 
     /// CBOR's tag for a UUID (RFC 9562's binary form).
-    @usableFromInline static let cborTag: UInt64 = 37
+    @usableFromInline package static let cborTag: UInt64 = 37
 }
 
 extension Sensitive: BinaryCodable where Value: BinaryCodable {

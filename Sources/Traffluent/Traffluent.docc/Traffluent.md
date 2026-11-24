@@ -52,6 +52,7 @@ try await delivery.execute()
 - ``/LoggingDestinations``
 - ``/TracingDestinations``
 - ``/HTTPDestinations``
+- ``/CollectorEncoding``
 - ``/Persistence``
 - ``/GRDBPersistence``
 - ``/EventMacros``
