@@ -40,7 +40,7 @@ PACKAGES = [
     ("swiftprng", "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", "0.0.6"),
     # A tracker's records go through a PassthroughSubject, are batched by `batch(strategy:)`, and
     # are delivered by a DeferredTask.
-    ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.45"),
+    ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.46"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
