@@ -4,7 +4,7 @@ public import Instrumentation
 
 extension HTTPDestination where Transport == URLSessionTransport {
     /// A destination that sends batches to `endpoint` with `URLSession.shared`, encoded by
-    /// `encoder`.
+    /// `encoder`, retrying a send that fails for now with the waits of `backoff` on `clock`.
     ///
     /// - Parameters:
     ///   - endpoint: The URL each batch is posted to.
@@ -15,17 +15,24 @@ extension HTTPDestination where Transport == URLSessionTransport {
     ///     fields; the bootstrapped `InstrumentationSystem.instrument`, read once here, by
     ///     default.
     ///   - encoder: What turns each batch into a request body.
+    ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up
+    ///     to 60 seconds, by default.
+    ///   - clock: The clock the waits are measured on.
     public init(
         endpoint: URL,
         headerFields: HTTPFields = [:],
         instrument: any Instrument = InstrumentationSystem.instrument,
-        encoder: Encoding
+        encoder: Encoding,
+        backoff: ExponentialBackoff = ExponentialBackoff(),
+        clock: some Clock<Duration> = ContinuousClock()
     ) {
         self.init(
             endpoint: endpoint,
             headerFields: headerFields,
             instrument: instrument,
             transport: URLSessionTransport(),
-            encoder: encoder)
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock)
     }
 }

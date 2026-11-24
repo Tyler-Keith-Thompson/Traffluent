@@ -27,9 +27,12 @@ public struct URLSessionTransport: HTTPTransport {
     /// On Linux, cancelling the calling task returns at once and leaves the upload to finish on its
     /// own, unread, as FoundationNetworking can't cancel one safely.
     ///
-    /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled, or
-    ///   ``HTTPTransportError/failed(reason:)`` with the session error's domain and code, never
-    ///   the request's URL, when no response arrived.
+    /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled;
+    ///   ``HTTPTransportError/invalidRequest(reason:)`` when the session can never send the
+    ///   request (`URLError` `badURL`, `unsupportedURL` or
+    ///   `appTransportSecurityRequiresSecureConnection`); otherwise
+    ///   ``HTTPTransportError/failed(reason:)`` when no response arrived. Each reason is the
+    ///   session error's domain and code, never the request's URL.
     public func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
         do {
             #if canImport(FoundationNetworking)
@@ -43,8 +46,20 @@ public struct URLSessionTransport: HTTPTransport {
             if Task.isCancelled || error is CancellationError {
                 throw .cancelled
             }
+            if let error = error as? URLError, error.code.meansInvalidRequest {
+                throw .invalidRequest(reason: error.failureReason)
+            }
             throw .failed(reason: error.failureReason)
         }
+    }
+}
+
+extension URLError.Code {
+    /// Whether the session can never send a request that failed with this code, however often
+    /// it tries. Kept to these three: a TLS or certificate failure may pass once the device leaves
+    /// a captive portal, so it stays a failure that is retried.
+    fileprivate var meansInvalidRequest: Bool {
+        self == .badURL || self == .unsupportedURL || self == .appTransportSecurityRequiresSecureConnection
     }
 }
 

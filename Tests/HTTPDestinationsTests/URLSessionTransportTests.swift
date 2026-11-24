@@ -25,6 +25,21 @@ struct URLSessionTransportTests {
         }
     }
 
+    @Test("A request of a scheme the session doesn't support throws invalidRequest, with the error's domain and code and not the URL")
+    func unsupportedScheme() async throws {
+        // URLSession reports unsupportedURL for a scheme it has no protocol for, on macOS and
+        // Linux alike (ftp is -1 on macOS, a refused connection on Linux).
+        let url = try #require(URL(string: "foo://127.0.0.1/batches?key=secret"))
+        let sut = URLSessionTransport()
+        let expected = HTTPTransportError.invalidRequest(reason: "\(NSURLErrorDomain) \(URLError.Code.unsupportedURL.rawValue)")
+
+        let actual = await #expect(throws: HTTPTransportError.self) {
+            try await sut.send(HTTPRequest(method: .post, url: url), body: Data("a".utf8))
+        }
+
+        #expect(actual == expected)
+    }
+
     @Test("A failure's reason names the error's domain and code, and holds neither the endpoint's URL nor its key")
     func reasonWithoutURL() async throws {
         // Port 1 on the loopback interface has no listener, so the connection is refused at once.
@@ -87,7 +102,7 @@ struct URLSessionTransportTests {
         #expect(actual.allSatisfy { error in
             switch error {
             case .cancelled?, .failed?: true
-            case nil: false
+            case .invalidRequest?, nil: false
             }
         })
     }

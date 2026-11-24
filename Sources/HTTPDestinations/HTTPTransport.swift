@@ -18,7 +18,8 @@ public protocol HTTPTransport: Sendable {
     ///   - request: The method, URL and header fields to send.
     ///   - body: The request's body.
     /// - Returns: The response the server sent, of any status.
-    /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled, or
-    ///   ``HTTPTransportError/failed(reason:)`` when no response arrived.
+    /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled,
+    ///   ``HTTPTransportError/invalidRequest(reason:)`` when the request can never be sent as it
+    ///   is, or ``HTTPTransportError/failed(reason:)`` when no response arrived otherwise.
     func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse
 }

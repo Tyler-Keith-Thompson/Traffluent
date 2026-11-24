@@ -148,10 +148,10 @@ struct HTTPDestinationTests {
         #expect(actual == expected)
     }
 
-    @Test("A transport failure is handled inside receive: the delivery completes, the next batch is still sent, and another destination receives every batch")
-    func transportFailure() async throws {
+    @Test("A rejected batch is handled inside receive: the delivery completes, the next batch is still sent, and another destination receives every batch")
+    func rejectionHandledInside() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
-        let transport = TransportDouble(.failure(.failed(reason: "offline")))
+        let transport = TransportDouble(.success(HTTPResponse(status: .badRequest)))
         let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: PlansEncoder())
         let other = InMemoryDestination()
         let tracker = Tracker()
@@ -173,7 +173,7 @@ struct HTTPDestinationTests {
     @Test("A rejected batch doesn't stop the next one being sent")
     func rejectionCarriesOn() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
-        let transport = TransportDouble(.success(HTTPResponse(status: .internalServerError)))
+        let transport = TransportDouble(.success(HTTPResponse(status: .notFound)))
         let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: PlansEncoder())
         let tracker = Tracker()
         let expected = [Data("a".utf8), Data("b".utf8)]
@@ -205,7 +205,7 @@ struct HTTPDestinationTests {
         #expect(actual == expected)
     }
 
-    @Test("A response outside 2xx means the batch was rejected", arguments: [199, 300, 404, 500])
+    @Test("A response outside 2xx, other than 408, 429 and 5xx, means the batch was rejected", arguments: [199, 300, 400, 404, 407, 409, 428, 430, 499])
     func rejected(code: Int) async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let transport = TransportDouble(.success(HTTPResponse(status: .init(code: code))))
@@ -242,23 +242,6 @@ struct HTTPDestinationTests {
         #expect(actualAttempts == expectedAttempts)
     }
 
-    @Test("A send that gets no response is not sent, and the outcome carries the transport's error")
-    func notSent() async throws {
-        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
-        let expected = HTTPTransportError.failed(reason: "offline")
-        let transport = TransportDouble(.failure(expected))
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: PlansEncoder())
-        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1))]
-
-        let outcome = await sut.send(batch)
-
-        guard case .notSent(let actual) = outcome else {
-            Issue.record("Expected notSent, got \(outcome)")
-            return
-        }
-        #expect(actual == expected)
-    }
-
     @Test("Cancelling the delivery's run cancels the send in flight, and receive returns")
     func cancellingDeliveryCancelsSend() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
@@ -280,7 +263,7 @@ struct HTTPDestinationTests {
         #expect(throws: CancellationError.self) { try result.get() }
     }
 
-    @Test("A cancelled send's outcome is notSent(cancelled), and receive returns")
+    @Test("A cancelled send's outcome is cancelled, and receive returns")
     func cancelledSendOutcome() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let transport = GatedTransport()
@@ -292,10 +275,9 @@ struct HTTPDestinationTests {
         sending.cancel()
         let outcome = await sending.value
 
-        guard case .notSent(let actual) = outcome else {
-            Issue.record("Expected notSent, got \(outcome)")
+        guard case .cancelled = outcome else {
+            Issue.record("Expected cancelled, got \(outcome)")
             return
         }
-        #expect(actual == .cancelled)
     }
 }

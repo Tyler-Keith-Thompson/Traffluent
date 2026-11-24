@@ -18,9 +18,24 @@ the span that was active when the event was tracked, even if delivery runs later
 
 To send batches to a server, deliver to `HTTPDestination(endpoint:headerFields:encoder:)` (module
 ``/HTTPDestinations``). It posts each batch as one request whose body is what your `BatchEncoder`
-writes for it, so events need no `Codable` conformance and the wire format is yours. A failed send
-is logged and dropped, without holding up the other destinations. It sends with `URLSession` by
-default, or through any `HTTPTransport` you pass as `transport:`.
+writes for it, so events need no `Codable` conformance and the wire format is yours. It sends with
+`URLSession` by default, or through any `HTTPTransport` you pass as `transport:`.
+
+A send that gets no response, or a 5xx, 408 or 429 status, is sent again after a wait, until it is
+answered with 2xx. The waits start at 1 second and double up to 60 seconds; pass an
+`ExponentialBackoff` as `backoff:` for others, and a test clock as `clock:` in tests. The
+destination takes the next batch only once this one arrives, so a tracker's store keeps its records
+until then, and a batch still being retried when the app ends is sent again on the next launch.
+Other destinations aren't held up. Meanwhile the delivery's later batches wait in this
+destination's buffer of `batchBufferLimit` batches, which drops its oldest when full; a store keeps
+the records of a dropped batch for the next launch.
+
+Some batches won't succeed if sent again, so they are dropped: one the endpoint answers with any
+other status, one whose request the transport can never send (a malformed URL, a scheme it doesn't
+support, or an `http` URL that App Transport Security refuses), and one the encoder can't encode.
+The destination logs each at error level and reports it on `dropReports`, with the records'
+identifiers and the status, the transport's reason or the encoder's error. Cancelling the delivery
+stops the retries.
 
 The bootstrapped tracing instrument, or the one you pass as `instrument:`, injects the trace
 context of the batch's first record into the request's header fields, so a server that extracts it

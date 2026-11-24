@@ -3,11 +3,12 @@
 Traffluent is a vendor-neutral analytics library for Swift. Each event is a Swift type, so its
 name and properties are checked by the compiler instead of living in a string and a
 `[String: Any]` bag. A tracker records the events, and a delivery sends each batch of them to as
-many destinations as you like. Traffluent also batches, persists records on disk, retries, holds
-events until the user consents, enforces each event's schema and tracks screens, controls and the
-app's lifecycle automatically. It is built for Swift 6 strict concurrency, has no singletons, and
-runs on Apple platforms and Linux. Apps that would otherwise write their own typed event layer can
-use it instead, with vendor SDKs as plain destinations.
+many destinations as you like. Traffluent also batches, persists records on disk, retries failed
+sends to a server with backoff until they arrive, holds events until the user consents, enforces
+each event's schema and tracks screens, controls and the app's lifecycle automatically. It is
+built for Swift 6 strict concurrency, has no singletons, and runs on Apple platforms and Linux.
+Apps that would otherwise write their own typed event layer can use it instead, with vendor SDKs
+as plain destinations.
 
 [Documentation](https://tyler-keith-thompson.github.io/Traffluent/documentation/)
 
@@ -76,7 +77,7 @@ delivery batches the records and hands each batch to its destinations when `exec
 - [`Destinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/destinations): `Destination`, `ConsoleDestination`, `InMemoryDestination`, `batch()` and `deliver(to:)`
 - [`LoggingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/loggingdestinations): `LoggerDestination`, which writes events to a swift-log `Logger`
 - [`TracingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/tracingdestinations): `SpanEventDestination`, which adds events to the active span
-- [`HTTPDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/httpdestinations): `HTTPDestination`, which posts each batch to an HTTP endpoint
+- [`HTTPDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/httpdestinations): `HTTPDestination`, which posts each batch to an HTTP endpoint and retries it until it arrives
 - [`CollectorEncoding`](https://tyler-keith-thompson.github.io/Traffluent/documentation/collectorencoding): `CollectorBatchEncoder`, TraffluentCollector's ingest format
 - [`SwiftUITracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/swiftuitracking): The environment's `tracker` and the `trackOnAppear`, `trackOnTap`, `trackChange` and `trackScreen` modifiers
 - [`UIKitTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/uikittracking): `TrackerTrait` and `UIControl.track(_:for:)`

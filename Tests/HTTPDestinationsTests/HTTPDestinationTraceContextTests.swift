@@ -1,3 +1,4 @@
+import Clocks
 import Destinations
 import Events
 import Foundation
@@ -216,18 +217,22 @@ struct HTTPDestinationTraceContextTests {
         #expect(tracer.performedContextInjections.isEmpty)
     }
 
-    @Test("The URLSession destination injects through the instrument it is given")
+    @Test("The URLSession destination injects through the instrument it is given, and waits between attempts on the clock it is given")
     func urlSessionInstrument() async throws {
         // Port 1 on the loopback interface has no listener, so the send fails at once, after
-        // the context was injected.
+        // the context was injected, and the destination waits on its clock to send again.
         let endpoint = try #require(URL(string: "http://127.0.0.1:1/batches"))
         let tracer = InMemoryTracer()
-        let sut = HTTPDestination(endpoint: endpoint, instrument: tracer, encoder: PlansEncoder())
+        let clock = TestClock()
+        let sut = HTTPDestination(endpoint: endpoint, instrument: tracer, encoder: PlansEncoder(), clock: clock)
         let span = tracer.startSpan("checkout")
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: span.context)]
         let expected = [span.traceID]
+        let receiving = Task { await sut.receive(batch) }
 
-        await sut.receive(batch)
+        while (try? await clock.checkSuspension()) != nil {}
+        receiving.cancel()
+        await receiving.value
         span.end()
 
         let actual = tracer.performedContextInjections.compactMap { $0.values[InMemoryTracer.traceIDKey] }
