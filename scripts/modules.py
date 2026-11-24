@@ -24,13 +24,15 @@ import sys
 PROJECT = "Traffluent"
 TEST_SUPPORT = f"{PROJECT}TestSupport"
 
-# External packages: (identity, url, minimum version). A dependency written "identity/Product"
-# in the tables below refers to a product of one of these. A version written "exact:1.2.3" pins
-# that release, for a package whose later releases resolve differently on different toolchains
-# (Bazel resolves on each machine with its own swift). One written "minor:0.1.3" takes patch
-# releases only, for a 0.x package whose minor releases break its API. After adding one:
-# `just modules`, add `swiftpkg_<identity>` (hyphens as underscores) to use_repo in MODULE.bazel,
-# `just resolve`.
+# External packages: (identity, url, version). A dependency written "identity/Product" in the
+# tables below refers to a product of one of these. A plain version is a minimum, up to the next
+# major. One written "exact:1.2.3" pins that release, for a package whose later releases resolve
+# differently on different toolchains (Bazel resolves on each machine with its own swift). One
+# written "minor:0.1.3" takes patch releases only, for a 0.x package whose minor releases break its
+# API. One written "range:603.0.0..<605.0.0" takes the releases from the first version up to, not
+# including, the second, for a package that adopters' other dependencies cap below a major the
+# project builds with. After adding one: `just modules`, add `swiftpkg_<identity>` (hyphens as
+# underscores) to use_repo in MODULE.bazel, `just resolve`.
 PACKAGES = [
     # Tests only: property checks with shrinking, for Swift Testing.
     ("swift-property-based", "https://github.com/x-sheep/swift-property-based", "2.0.1"),
@@ -68,8 +70,10 @@ PACKAGES = [
     # once the hold is full. Foundation has no double-ended queue.
     ("swift-collections", "https://github.com/apple/swift-collections", "1.7.6"),
     # The @Event macro's compiler plugin (MACROS) and its expansion tests. Only the plugin and its
-    # tests depend on it, so an app that doesn't use the macro never builds it.
-    ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "604.0.0"),
+    # tests depend on it, so an app that doesn't use the macro never builds it. A range down to 603:
+    # Mockable 0.6.5 caps swift-syntax below 604, and an adopter's package that uses both must
+    # resolve; the plugin builds against 603 and 604.
+    ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "range:603.0.0..<605.0.0"),
     # Tests only: validates the tracking plans TrackingPlans writes against JSON Schema 2020-12's
     # meta-schema, and events against them. Its JSONSchema product needs only swift-collections; it
     # is reported on Bowtie's conformance suite.
@@ -571,11 +575,17 @@ def spm_dep(d):
 
 def requirement(version):
     """A package's version requirement in a manifest: `from:` the minimum, `exact:` a pinned release,
-    or `.upToNextMinor(from:)` for `minor:`, patch releases only."""
+    `.upToNextMinor(from:)` for `minor:`, patch releases only, or a half-open range
+    (`"603.0.0"..<"605.0.0"`) for `range:603.0.0..<605.0.0`. Raises on a range without both bounds."""
     if version.startswith("exact:"):
         return f'exact: "{version.removeprefix("exact:")}"'
     if version.startswith("minor:"):
         return f'.upToNextMinor(from: "{version.removeprefix("minor:")}")'
+    if version.startswith("range:"):
+        lower, separator, upper = version.removeprefix("range:").partition("..<")
+        if not (lower and separator and upper):
+            raise SystemExit(f"{version}: a range is written range:<lower>..<<upper>")
+        return f'"{lower}"..<"{upper}"'
     return f'from: "{version}"'
 
 
