@@ -18,13 +18,21 @@ struct EventSchemaTests {
         #expect(sut.properties == expectedProperties)
     }
 
-    @Test("A property holds its name, type name and optionality")
+    @Test("A property holds its name, type name and optionality, and has no default value unless it says so")
     func propertyHoldsItsParts() {
         let sut = EventSchema.Property(name: "seats", typeName: "Int", isOptional: true)
 
         #expect(sut.name == "seats")
         #expect(sut.typeName == "Int")
         #expect(sut.isOptional)
+        #expect(!sut.hasDefaultValue)
+    }
+
+    @Test("A property holds whether it has a default value")
+    func propertyHoldsDefaultValue() {
+        let sut = EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true)
+
+        #expect(sut.hasDefaultValue)
     }
 
     @Test("Schemas that differ in any part are unequal")
@@ -39,6 +47,7 @@ struct EventSchemaTests {
             EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "tier", typeName: "String", isOptional: false)]),
             EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "Int", isOptional: false)]),
             EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: true)]),
+            EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false, hasDefaultValue: true)]),
         ]
 
         #expect(sut == EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [property]))

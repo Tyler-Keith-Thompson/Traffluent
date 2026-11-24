@@ -50,6 +50,32 @@ struct RecordStoreSchemaChangeTests {
         var label: String
     }
 
+    struct WithCurrency: Event, Equatable {
+        static let name = "Tapped"
+        var number: Int
+        var label: String
+        var currency: String = "USD"
+    }
+
+    /// `Original` with its version raised and its shape kept.
+    struct OriginalVersion2: Event, Equatable {
+        static let name = "Tapped"
+        static let schemaVersion = 2
+        var number: Int
+        var label: String
+    }
+
+    /// Another event, "Swiped", at two versions.
+    struct Swiped: Event, Equatable {
+        var number: Int
+    }
+
+    struct SwipedVersion3: Event, Equatable {
+        static let name = "Swiped"
+        static let schemaVersion = 3
+        var number: Int
+    }
+
     @Test("A record stored before an optional property was added decodes with it nil", arguments: StoreKind.all)
     func optionalAdded(kind: StoreKind) throws {
         let path = StoreKind.temporaryPath()
@@ -99,6 +125,56 @@ struct RecordStoreSchemaChangeTests {
 
         let actual = sut.takeRecoveredRecords().compactMap { $0.event as? Reordered }
         #expect(actual == expected)
+    }
+
+    @Test("A record stored before a property with a default value was added decodes with the default", arguments: StoreKind.all)
+    func defaultedAdded(kind: StoreKind) throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
+        do {
+            let earlier = try kind.open(at: path, events: [Original.self]).store
+            _ = earlier.append(EventRecord(event: Original(number: 3, label: "Checkout"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        }
+        let expected = [WithCurrency(number: 3, label: "Checkout", currency: "USD")]
+
+        let sut = try kind.open(at: path, events: [WithCurrency.self]).store
+
+        let actual = sut.takeRecoveredRecords().compactMap { $0.event as? WithCurrency }
+        #expect(actual == expected)
+    }
+
+    @Test("Records stored at another version than their type's are dropped unread, one report per event and stored version, by name; the rest are kept", arguments: StoreKind.all)
+    func versionMismatch(kind: StoreKind) async throws {
+        let path = StoreKind.temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
+        do {
+            let earlier = try kind.open(at: path, events: [Swiped.self, Original.self, Marker.self]).store
+            _ = earlier.append(EventRecord(event: Swiped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+            _ = earlier.append(EventRecord(event: Original(number: 2, label: "Old"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: location))
+            _ = earlier.append(EventRecord(event: Marker(number: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: location))
+            _ = earlier.append(EventRecord(event: Original(number: 4, label: "Old"), timestamp: Date(timeIntervalSince1970: 3), sourceLocation: location))
+        }
+        let expectedReports: [DropReport] = [
+            .versionMismatch(event: "Swiped", storedVersion: 1, currentVersion: 3, recordCount: 1),
+            .versionMismatch(event: "Tapped", storedVersion: 1, currentVersion: 2, recordCount: 2),
+        ]
+        let expected = [Marker(number: 3)]
+
+        let sut = try kind.open(at: path, events: [OriginalVersion2.self, SwipedVersion3.self, Marker.self]).store
+
+        let recovered = sut.takeRecoveredRecords()
+        let actual = recovered.compactMap { $0.event as? Marker }
+        #expect(recovered.count == expected.count)
+        #expect(actual == expected)
+        var reports = sut.dropReports.makeAsyncIterator()
+        var actualReports: [DropReport] = []
+        for _ in expectedReports {
+            if let report = await reports.next() { actualReports.append(report) }
+        }
+        #expect(actualReports == expectedReports)
+        #expect(sut.pendingRecordCount == expected.count)
     }
 
     @Test("A record stored before a required property was added can't decode: it is dropped and reported, and the records that decode are kept", arguments: StoreKind.all)
@@ -233,6 +309,64 @@ extension RecordStoreSchemaChangeTests.Retyped: BinaryCodable {
         var map = try decoder.decodeMap()
         number = try map.decode(forKey: "number")
         label = try map.decode(forKey: "label")
+    }
+}
+
+extension RecordStoreSchemaChangeTests.WithCurrency: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+            map.encode(label, forKey: "label")
+            map.encode(currency, forKey: "currency")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+        label = try map.decode(forKey: "label")
+        currency = try map.decode(forKey: "currency", default: "USD")
+    }
+}
+
+extension RecordStoreSchemaChangeTests.OriginalVersion2: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+            map.encode(label, forKey: "label")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+        label = try map.decode(forKey: "label")
+    }
+}
+
+extension RecordStoreSchemaChangeTests.Swiped: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+    }
+}
+
+extension RecordStoreSchemaChangeTests.SwipedVersion3: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
     }
 }
 

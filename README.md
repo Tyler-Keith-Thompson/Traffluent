@@ -628,8 +628,8 @@ CBOR decoder can read. Any other event is kept in memory only: delivered in this
 written. The log is a directory of append-only segment files, in Application Support on Apple
 platforms (excluded from backups), and in the XDG state directory on Linux, unless `directory:`
 says otherwise. Each segment starts with a magic number and format version, and each record, a
-CBOR map of its identifier, timestamp, event name, call site and event, is framed by its length
-and CRC-32. A segment is deleted once every record in it has been delivered, so a log with nothing
+CBOR map of its identifier, timestamp, event name and schema version, call site and event, is
+framed by its length and CRC-32. A segment is deleted once every record in it has been delivered, so a log with nothing
 left to send holds no files.
 
 The log never holds more than its byte bound, 5 MiB unless `byteBound:` says otherwise. When a
@@ -648,9 +648,16 @@ context.
 
 An event's type can change while records of it are still on disk, as each property is found by
 its name: an app update reads the records the release before it left. A property removed since is
-skipped, an optional property added since reads as `nil`, and properties can be reordered. A record
-the type can no longer read, after a required property was added or a property's type changed, is
-dropped and reported on `dropReports` as undecodable, never delivered with a made-up value.
+skipped, an optional property added since reads as `nil`, one with a default value added since
+reads as its default, and properties can be reordered. Those changes keep the event's
+`schemaVersion` (1 unless the event says otherwise). A change the earlier records can't be read
+through (a property's type changed, a required property added without a default, an optional
+property made required) raises it, and a record stored at another version than its type's now is
+dropped without being read and reported on `dropReports` with the event and both versions. A
+record without a version has none to compare and is read by name. A
+record that can't be read at the same version, after such a change without a new version, is
+dropped and reported as undecodable. Neither is ever delivered with a made-up value; records are
+never migrated from one version to another.
 
 An event declared with `@Event` (below) is `BinaryCodable` already, so a store keeps it with no
 conformance written by hand.
@@ -667,8 +674,8 @@ encoded bytes with the oldest dropped and reported, and records are encoded the 
 
 `@Event` (module `EventMacros`, a product of its own that `import Traffluent` leaves out, so only
 apps that use it build swift-syntax) makes a struct an event from its declaration. It adds the
-`Event` and `BinaryCodable` conformances, the event's name and consent category when you give
-them, and a `schema`, an `EventSchema` value that tooling reads:
+`Event` and `BinaryCodable` conformances, the event's name, consent category and schema version
+when you give them, and a `schema`, an `EventSchema` value that tooling reads:
 
 ```swift
 import EventMacros
@@ -685,9 +692,11 @@ let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", 
 ```
 
 The schema holds the name, the version, the consent category and each stored property's name, type
-as written and optionality, in declaration order. The encoding writes each of those properties under its name,
+as written, optionality and whether it has a default value, in declaration order. The encoding writes each of those properties under its name,
 as the hand-written conformance under Persistence does, and a `Sensitive` property keeps its
-redaction. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`). A stored
+redaction; a record stored before a property with a default value (`var currency: String = "USD"`)
+was added reads it as its default. `version:` counts breaking changes only (`@Event`'s
+documentation shows each kind of change), and is 1 when left out. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`). A stored
 property whose type isn't `BinaryCodable` is a compile error that names it:
 `static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'`.
 So are `@Event` on anything but a struct and a stored property without a type annotation. Static
@@ -766,10 +775,13 @@ let paths = plan.files.map(\.path)
 
 The bytes depend on the schemas alone: keys sorted, two-space indentation, a trailing newline and
 no timestamps, the same on every run and platform, so the plan can be committed and reviewed.
-Each document requires the properties that aren't optional, allows `null` for those that are,
-rejects any other property, and carries the event's version and consent category
-(`x-traffluent-version`, `x-traffluent-consent-category`); a `Sensitive` property is marked
-`x-traffluent-sensitive`. `TrackingPlan`'s documentation lists how each Swift type maps.
+Each document requires the properties that are neither optional nor have a default value, allows
+`null` for the optional ones, rejects any other property, and carries the event's version and
+consent category (`x-traffluent-version`, `x-traffluent-consent-category`); a `Sensitive` property
+is marked `x-traffluent-sensitive`, and one with a default value `x-traffluent-default`, not
+required, as an earlier release's payload lacks it. A property removed at the same version stays in
+the document with the schema it had, marked `deprecated` and not required, so the payloads of
+releases that still send it validate: exporting over the committed plan carries it forward. `TrackingPlan`'s documentation lists how each Swift type maps.
 Beside each document is the event's example, a conformance vector: the payload with every property
 set to a fixed value its schema accepts (`"example"`, 0, `false`, one array element), which another
 platform's client can encode the same event against.
@@ -820,11 +832,13 @@ when the Swift events no longer match it, with a line naming each event and prop
 swift package check-tracking-plan
 ```
 
-A difference is breaking when a payload the committed plan accepts may be one the events' plan
-rejects now: a removed or renamed event, a removed property, a retyped one, an optional property
-made required, or a new required property. Anything else (a new event, a new optional property, a
-changed consent category) leaves the committed plan out of date, which fails with its own message
-telling you to export it again. A constraint is compared keyword by keyword: tightening one (a
+A difference is breaking when, at the same version, a record a store still holds or a payload an
+already-released app sends may stop decoding or validating: a removed or renamed event, a retyped
+property, an optional property made required, a new required property without a default value, a
+default value removed, or a deprecated property declared again with another type or as required.
+Anything else (a new event, a new optional property or one with a default value, a removed
+property, a deprecated one declared again as it was, a changed consent category) leaves the
+committed plan out of date, which fails with its own message telling you to export it again. A constraint is compared keyword by keyword: tightening one (a
 higher `minLength` or `minimum`, a lower `maxLength` or `maximum`, a new bound, a new or changed
 `pattern`) is breaking, and loosening one only leaves the plan out of date. An integer type
 narrowed to one of fewer bits tightens its bounds the same way. Raising an event's version (`@Event(version: 3)`) is how a breaking

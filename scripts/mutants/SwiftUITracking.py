@@ -63,9 +63,8 @@ MUTANTS = [
     Mutant("screennotinenvironment", S, "screenTracker", "tracker", nth=1),
     Mutant("viewedwithoutscreen", S, "screenTracker", "tracker", nth=2),
     # ScreenViewed.
-    Mutant("screennotencoded", V, "encoder.encode(screen)", "", mode="stmt"),
-    # The second `1` is the schema's version; the first, its doc comment's.
-    Mutant("schemaversion", V, "1", "0", nth=1),
+    Mutant("screennotencoded", V, 'map.encode(screen, forKey: "screen")', "", mode="stmt"),
+    Mutant("schemaversion", V, "schemaVersion", "0"),
     # The whole list first, so the property's own mutants find it in the else branch.
     Mutant("schemanoproperty", V, "[" + PROPERTY + "]", "[]"),
     Mutant("schemaoptional", V, PROPERTY, PROPERTY.replace("isOptional: false", "isOptional: true")),

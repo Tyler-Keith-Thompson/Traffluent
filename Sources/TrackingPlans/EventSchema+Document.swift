@@ -26,16 +26,22 @@ extension EventSchema {
         return "\(encoded).v\(version)"
     }
 
-    /// The event's JSON Schema document, as ``TrackingPlan`` describes it.
-    var document: JSON {
-        .object([
+    /// The event's JSON Schema document, as ``TrackingPlan`` describes it, keeping each property
+    /// `committed`, the document of this event and version exported before, has that the event no
+    /// longer declares: with its schema there, marked `deprecated`.
+    func document(keepingRemovedFrom committed: JSON?) -> JSON {
+        // Unique: TrackingPlan's initializer rejects a schema with two properties of one name.
+        let declared = Dictionary(uniqueKeysWithValues: properties.map { ($0.name, JSON.object($0.schema)) })
+        let committedProperties = committed?.object?["properties"]?.object ?? [:]
+        let deprecated = committedProperties.compactMapValues { $0.object.map { JSON.object($0.merging(["deprecated": .boolean(true)]) { $1 }) } }
+        return .object([
             "$schema": .string("https://json-schema.org/draft/2020-12/schema"),
             "$id": .string(fileName),
             "title": .string(name),
             "type": .string("object"),
-            // Unique: TrackingPlan's initializer rejects a schema with two properties of one name.
-            "properties": .object(Dictionary(uniqueKeysWithValues: properties.map { ($0.name, .object($0.schema)) })),
-            "required": .array(properties.filter { !$0.isOptional }.map { .string($0.name) }),
+            // A property declared again is the declaration's, not the deprecated one's.
+            "properties": .object(declared.merging(deprecated, uniquingKeysWith: { current, _ in current })),
+            "required": .array(properties.filter(\.isRequired).map { .string($0.name) }),
             "additionalProperties": .boolean(false),
             "x-traffluent-version": .integer(Int64(version)),
             "x-traffluent-consent-category": .string(consentCategory.name),
@@ -44,13 +50,21 @@ extension EventSchema {
 }
 
 extension EventSchema.Property {
+    /// Whether every payload of the event holds the property, whichever release wrote it: one
+    /// that is neither optional nor has a default value, which a release before it was added
+    /// leaves out.
+    fileprivate var isRequired: Bool {
+        !isOptional && !hasDefaultValue
+    }
+
     /// The property's schema: its type's, with `null` allowed when it is optional, narrowed by its
-    /// keywords.
+    /// keywords, and marked `x-traffluent-default` when it has a default value.
     var schema: [String: JSON] {
-        guard let type = WrittenType(parsing: typeName) else {
-            return ["x-traffluent-swift-type": .string(typeName)].narrowed(by: keywords)
+        var schema = WrittenType(parsing: typeName)?.schema(isNullable: isOptional) ?? ["x-traffluent-swift-type": .string(typeName)]
+        if hasDefaultValue {
+            schema["x-traffluent-default"] = .boolean(true)
         }
-        return type.schema(isNullable: isOptional).narrowed(by: keywords)
+        return schema.narrowed(by: keywords)
     }
 }
 

@@ -284,26 +284,36 @@ final class DatabaseLog: Acknowledger {
     ) throws -> Recovery {
         var recovery = Recovery(records: [], byteCount: 0)
         var undecodable: [Int64] = []
+        var mismatched: [Int64] = []
+        var mismatches = VersionMismatchCounts()
         let rows = try Row.fetchAll(db, sql: "SELECT position, payload, isBeingDelivered FROM \(table.quotedDatabaseIdentifier) ORDER BY position")
         for row in rows {
             let position: Int64 = row[0]
             let payload: Data = row[1]
             do throws(BinaryDecodingError) {
-                var record = try RecordEncoding.record(from: Array(payload)[...], registry: registry)
-                record.isRedelivered = row[2]
-                recovery.records.append(Recovered(record: record, position: position, byteCount: payload.count))
-                recovery.byteCount += payload.count
+                switch try RecordEncoding.record(from: Array(payload)[...], registry: registry) {
+                case .record(var record):
+                    record.isRedelivered = row[2]
+                    recovery.records.append(Recovered(record: record, position: position, byteCount: payload.count))
+                    recovery.byteCount += payload.count
+                case .versionMismatch(let event, let storedVersion, let currentVersion):
+                    mismatched.append(position)
+                    mismatches.add(event: event, storedVersion: storedVersion, currentVersion: currentVersion)
+                }
             } catch {
                 undecodable.append(position)
             }
         }
-        if !undecodable.isEmpty {
+        if !undecodable.isEmpty || !mismatched.isEmpty {
             let statement = try db.makeStatement(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position = ?")
-            for position in undecodable {
+            for position in undecodable + mismatched {
                 try statement.execute(arguments: [position])
             }
+        }
+        if !undecodable.isEmpty {
             reports.append(.undecodable(recordCount: undecodable.count))
         }
+        reports += mismatches.reports
         var eviction = Eviction()
         while recovery.byteCount > byteBound, !recovery.records.isEmpty {
             let oldest = recovery.records.removeFirst()

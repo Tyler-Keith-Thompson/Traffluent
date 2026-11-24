@@ -49,7 +49,7 @@ MUTANTS = [
     Mutant("indexcategoryfixed", T, '.string(consentCategory.name)', '.string("analytics")'),
     Mutant("indexschemaname", T, ".string(fileName)", ".string(name)"),
     Mutant("notrailingnewline", T, 'json.rendered + "\\n"', "json.rendered"),
-    Mutant("noexamples", T, "[File(path: schema.fileName, json: schema.document), File(path: schema.exampleFileName, json: schema.example)]", "[File(path: schema.fileName, json: schema.document)]"),
+    Mutant("noexamples", T, "[File(path: schema.fileName, json: document), File(path: schema.exampleFileName, json: schema.example)]", "[File(path: schema.fileName, json: document)]"),
     Mutant("indexexampleisdocument", T, '.string(exampleFileName)', '.string(fileName)'),
     # JSON: the rendering.
     Mutant("emptyarraymultiline", J, "!elements.isEmpty", "true"),
@@ -74,16 +74,14 @@ MUTANTS = [
     Mutant("examplefilename", D, '"\\(fileStem).example.json"', '"\\(fileStem).sample.json"'),
     Mutant("idisname", D, ".string(fileName)", ".string(name)"),
     Mutant("titlerenamed", D, '"title"', '"name"'),
-    Mutant("requiredinverted", D, "properties.filter { !$0.isOptional }", "properties.filter { $0.isOptional }"),
+    Mutant("requiredinverted", D, r"properties.filter(\.isRequired)", "properties.filter { !$0.isRequired }"),
     Mutant("additionalallowed", D, ".boolean(false)", ".boolean(true)"),
     Mutant("documentversionfixed", D, ".integer(Int64(version))", ".integer(1)"),
     Mutant("documentcategoryfixed", D, ".string(consentCategory.name)", '.string("analytics")'),
-    # keywordsignored first: it copies the text optionalnotnullable plants in, which then takes the
-    # copy every other mutant runs, the second.
-    Mutant("keywordsignored", D, "type.schema(isNullable: isOptional).narrowed(by: keywords)", "type.schema(isNullable: isOptional)"),
-    Mutant("optionalnotnullable", D, "type.schema(isNullable: isOptional)", "type.schema(isNullable: false)", nth=1),
-    Mutant("unknowntypekeywordsignored", D, '["x-traffluent-swift-type": .string(typeName)].narrowed(by: keywords)', '["x-traffluent-swift-type": .string(typeName)]'),
-    Mutant("unparsedunnamed", D, '["x-traffluent-swift-type": .string(typeName)]', '["x-traffluent-swift-type": .string("")]', nth=1),
+    # One narrowing serves a mapped type and one the plan can't map, so keywordsignored covers both.
+    Mutant("keywordsignored", D, "return schema.narrowed(by: keywords)", "return schema", mode="stmt"),
+    Mutant("optionalnotnullable", D, "WrittenType(parsing: typeName)?.schema(isNullable: isOptional)", "WrittenType(parsing: typeName)?.schema(isNullable: false)"),
+    Mutant("unparsedunnamed", D, '["x-traffluent-swift-type": .string(typeName)]', '["x-traffluent-swift-type": .string("")]'),
     Mutant("wrappednotnullable", D, "wrapped.schema(isNullable: true)", "wrapped.schema(isNullable: false)"),
     Mutant("optionalgenericnotnullable", D, "arguments[0].schema(isNullable: true)", "arguments[0].schema(isNullable: false)"),
     Mutant("optionalunqualified", D, 'names("Optional", in: ["Swift"])', 'names("Optional", in: [])'),
@@ -170,13 +168,13 @@ MUTANTS = [
     Mutant("committedadded", K, "!committedKeys.contains(event.key)", "true"),
     Mutant("consentignored", K, "consentCategory != current.consentCategory", "false"),
     Mutant("retypeignored", K, "before.type != after.type", "false"),
-    Mutant("maderequiredignored", K, "!before.isRequired && after.isRequired", "false"),
-    Mutant("madeoptionalignored", K, "before.isRequired && !after.isRequired", "false"),
+    Mutant("maderequiredignored", K, "before.isNullable && !after.isNullable", "false", nth=1),  # the first is inside the default value comparison
+    Mutant("madeoptionalignored", K, "!before.isNullable && after.isNullable", "false"),
     Mutant("sensitivityignored", K, "before.isSensitive != after.isSensitive", "false"),
     Mutant("sensitivityinverted", K, "after.isSensitive", "before.isSensitive", nth=1),
     Mutant("removedasoptional", K, ".propertyRemoved(event: name, version: version, property: property)", ".propertyMadeOptional(event: name, version: version, property: property)"),
-    Mutant("addedalwaysrequired", K, "after.isRequired", "true", nth=2),
-    Mutant("nullkept", K, "!isRequired", "false"),
+    Mutant("addedalwaysrequired", K, "after.isNullable", "false", nth=3),
+    Mutant("nullkept", K, 'type["type"] = named.count == 1 ? named[0] : .array(named)', "", mode="stmt"),
     Mutant("nulltypelist", K, "named.count == 1 ? named[0] : .array(named)", ".array(named)"),
     Mutant("sensitivitykept", K, 'type["x-traffluent-sensitive"] = nil', "", mode="stmt"),
     Mutant("sensitivityunread", K, 'schema["x-traffluent-sensitive"] == .boolean(true)', "false"),
@@ -217,4 +215,27 @@ MUTANTS = [
     Mutant("constraintsdespiteretype", K, "before.type != after.type", "before.type != after.type && false"),
     Mutant("tightenedwording", X, r'"\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is tighter"', r'"\(event) v\(version): property \"\(property)\" \(TrackingPlanDifference.change(keyword, committed, current)), which is looser"'),
     Mutant("gainedwording", X, '"gained \\(keyword) \\(current)"', '"lost \\(keyword) \\(current)"'),
+    # Default values (TRAF-18): marked in the document, and compared by the check.
+    Mutant("defaultunmarked", D, 'schema["x-traffluent-default"] = .boolean(true)', "", mode="stmt"),
+    Mutant("defaultunread", K, 'schema["x-traffluent-default"] == .boolean(true)', "false"),
+    Mutant("defaultkeptintype", K, 'type["x-traffluent-default"] = nil', "", mode="stmt"),
+    Mutant("defaultedasrequired", K, ".defaultedPropertyAdded(event: name, version: version, property: property)", ".requiredPropertyAdded(event: name, version: version, property: property)"),
+    Mutant("defaultchangeignored", K, "before.hasDefaultValue != after.hasDefaultValue", "false"),
+    Mutant("defaultchangeinverted", K, ".defaultValueAdded(event: name, version: version, property: property)", ".defaultValueRemoved(event: name, version: version, property: property)"),
+    Mutant("defaultchangeoptional", K, "!before.isNullable && !after.isNullable", "true"),
+    # Defaulted properties aren't required (TRAF-18 review): an earlier release's payload lacks them.
+    Mutant("defaultedrequired", D, "!isOptional && !hasDefaultValue", "!isOptional"),
+    # Deprecated properties (TRAF-46): a removed property stays in its version's document, the
+    # export and the check carry it forward from the committed plan, and declaring it again is
+    # compared with the schema it had.
+    Mutant("deprecatednotmarked", D, '$0.merging(["deprecated": .boolean(true)]) { $1 }', "$0"),
+    Mutant("deprecatednotkept", D, "declared.merging(deprecated, uniquingKeysWith: { current, _ in current })", "declared"),
+    Mutant("restoredkeepsdeprecated", D, "{ current, _ in current }", "{ _, deprecated in deprecated }"),
+    Mutant("writenotcarried", F, "files(carryingForward: TrackingPlan.planFiles(in: directory))", "files(carryingForward: [])"),
+    Mutant("checknotcarried", K, "files(carryingForward: committed)", "files"),
+    Mutant("deprecatedunread", K, 'schema["deprecated"] == .boolean(true)', "false"),
+    Mutant("deprecatedkeptintype", K, 'type["deprecated"] = nil', "", mode="stmt"),
+    Mutant("deprecatedremovalreported", K, "!before.isDeprecated", "true"),
+    Mutant("restoredrequiredignored", K, "before.isDeprecated && before.isRequiredWhenDeclared && after.isRequiredWhenDeclared", "false"),
+    Mutant("unknowntypenevernullable", K, "allowsNull ?? (!isRequired && !hasDefaultValue)", "allowsNull ?? false"),
 ]

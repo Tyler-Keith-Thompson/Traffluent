@@ -43,7 +43,7 @@ struct TrackingPlanCheckTests {
         #expect(actual == expected)
     }
 
-    @Test("A removed property breaks the plan")
+    @Test("A removed property only dates the plan: a stored record that holds it reads with it skipped")
     func removedProperty() {
         let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
@@ -52,7 +52,7 @@ struct TrackingPlanCheckTests {
         let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
         ])])
-        let expected = TrackingPlanCheck.breaking([.propertyRemoved(event: "checkout_started", version: 2, property: "currency")])
+        let expected = TrackingPlanCheck.outOfDate([.propertyRemoved(event: "checkout_started", version: 2, property: "currency")])
 
         let actual = sut.check(against: committed.files)
 
@@ -140,6 +140,54 @@ struct TrackingPlanCheckTests {
 
         #expect(actualRequired == expectedRequired)
         #expect(actualOptional == expectedOptional)
+    }
+
+    @Test("An added property with a default value only dates the plan, though it is required")
+    func addedWithDefault() {
+        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
+        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true),
+        ])])
+        let expected = TrackingPlanCheck.outOfDate([.defaultedPropertyAdded(event: "signed_up", version: 1, property: "currency")])
+
+        let actual = sut.check(against: committed.files)
+
+        #expect(actual == expected)
+    }
+
+    @Test("A required property that loses its default value breaks the plan; one that gains a default only dates it")
+    func defaultValueChanged() {
+        let withoutDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "currency", typeName: "String", isOptional: false),
+        ])])
+        let withDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true),
+        ])])
+        let expectedLost = TrackingPlanCheck.breaking([.defaultValueRemoved(event: "signed_up", version: 1, property: "currency")])
+        let expectedGained = TrackingPlanCheck.outOfDate([.defaultValueAdded(event: "signed_up", version: 1, property: "currency")])
+
+        let actualLost = withoutDefault.check(against: withDefault.files)
+        let actualGained = withDefault.check(against: withoutDefault.files)
+
+        #expect(actualLost == expectedLost)
+        #expect(actualGained == expectedGained)
+    }
+
+    @Test("An optional property's default value gained or lost is no difference of meaning, only of bytes")
+    func optionalDefaultValueChanged() {
+        let withoutDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
+        ])])
+        let withDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "coupon", typeName: "String", isOptional: true, hasDefaultValue: true),
+        ])])
+        let expected = TrackingPlanCheck.outOfDate([.fileOutOfDate(path: "signed_up.v1.schema.json")])
+
+        let actualLost = withoutDefault.check(against: withDefault.files)
+        let actualGained = withDefault.check(against: withoutDefault.files)
+
+        #expect(actualLost == expected)
+        #expect(actualGained == expected)
     }
 
     @Test("A required property made optional, a changed consent category and a changed sensitivity only date the plan")
@@ -275,9 +323,9 @@ struct TrackingPlanCheckTests {
         let sut = CheckoutCommand.trackingPlan
         let expected = TrackingPlanCheck.breaking([.unreadableFile(path: "tracking-plan.json")])
         let expectedReport = """
-            The events break the committed tracking plan: an app already sending them sends payloads it no longer accepts.
+            The events break the committed tracking plan: at the same version, a stored record or an already-released app's payload may no longer decode or validate.
               - tracking-plan.json is missing from the committed plan, or isn't a tracking plan file
-            Restore what was removed or changed, or raise the version of each event that changed (@Event(version:)), then export the plan again: swift package --allow-writing-to-package-directory export-tracking-plan
+            Undo each breaking change, or raise the version of each event that changed (@Event(version:)), then export the plan again: swift package --allow-writing-to-package-directory export-tracking-plan
             """
 
         let actual = sut.check(against: [])
@@ -354,14 +402,15 @@ struct TrackingPlanCheckTests {
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
         ])])
         let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+            EventSchema.Property(name: "cartSize", typeName: "String", isOptional: false),
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
         ])])
         let expected = """
-            The events break the committed tracking plan: an app already sending them sends payloads it no longer accepts.
-              - checkout_started v2: property "cartSize" was removed
+            The events break the committed tracking plan: at the same version, a stored record or an already-released app's payload may no longer decode or validate.
+              - checkout_started v2: property "cartSize" changed type from {"type": "integer"} to {"type": "string"}
             It is also out of date:
               - checkout_started v2: optional property "coupon" was added
-            Restore what was removed or changed, or raise the version of each event that changed (@Event(version:)), then export the plan again: swift package --allow-writing-to-package-directory export-tracking-plan
+            Undo each breaking change, or raise the version of each event that changed (@Event(version:)), then export the plan again: swift package --allow-writing-to-package-directory export-tracking-plan
             """
 
         let actual = sut.check(against: committed.files).description
@@ -385,14 +434,17 @@ struct TrackingPlanCheckTests {
 
     @Test("Each difference's line names the event and the property", arguments: [
         (TrackingPlanDifference.eventRemoved(event: "checkout_started", version: 2), "checkout_started v2 is in the committed plan, but no event named checkout_started has version 2 or later: it was renamed or removed", true),
-        (.propertyRemoved(event: "e", version: 1, property: "p"), #"e v1: property "p" was removed"#, true),
+        (.propertyRemoved(event: "e", version: 1, property: "p"), #"e v1: property "p" was removed"#, false),
         (.propertyRetyped(event: "e", version: 1, property: "p", committed: #"{"type": "integer"}"#, current: #"{"type": "string"}"#), #"e v1: property "p" changed type from {"type": "integer"} to {"type": "string"}"#, true),
         (.propertyMadeRequired(event: "e", version: 1, property: "p"), #"e v1: property "p" was optional and is now required"#, true),
-        (.requiredPropertyAdded(event: "e", version: 1, property: "p"), #"e v1: required property "p" was added"#, true),
+        (.requiredPropertyAdded(event: "e", version: 1, property: "p"), #"e v1: required property "p" was added without a default value"#, true),
+        (.defaultValueRemoved(event: "e", version: 1, property: "p"), #"e v1: property "p" lost its default value"#, true),
         (.unreadableFile(path: "tracking-plan.json"), "tracking-plan.json is missing from the committed plan, or isn't a tracking plan file", true),
         (.eventAdded(event: "e", version: 1), "e v1 is new", false),
         (.versionRaised(event: "e", committed: 1, current: 2), "e went from version 1 to 2", false),
         (.optionalPropertyAdded(event: "e", version: 1, property: "p"), #"e v1: optional property "p" was added"#, false),
+        (.defaultedPropertyAdded(event: "e", version: 1, property: "p"), #"e v1: property "p" was added with a default value"#, false),
+        (.defaultValueAdded(event: "e", version: 1, property: "p"), #"e v1: property "p" gained a default value"#, false),
         (.propertyMadeOptional(event: "e", version: 1, property: "p"), #"e v1: property "p" was required and is now optional"#, false),
         (.consentCategoryChanged(event: "e", version: 1, committed: "analytics", current: "functional"), "e v1: consent category changed from analytics to functional", false),
         (.sensitivityChanged(event: "e", version: 1, property: "p", isSensitive: true), #"e v1: property "p" is now sensitive"#, false),
@@ -455,11 +507,9 @@ struct TrackingPlanCheckTests {
         ),
         (
             EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
-                EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
                 EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
-                EventSchema.Property(name: "currency", typeName: "String", isOptional: true),
             ]),
-            .propertyRemoved(event: "checkout_started", version: 2, property: "currency")
+            .requiredPropertyAdded(event: "checkout_started", version: 2, property: "cartSize")
         ),
         (
             EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
@@ -477,7 +527,7 @@ struct TrackingPlanCheckTests {
         ),
     ]
 
-    @Test("The command's check exits 1 for a renamed event, a removed property, a retyped one and one made required, and the report names them", arguments: breakingEdits)
+    @Test("The command's check exits 1 for a renamed event, a required property added, a retyped one and one made required, and the report names them", arguments: breakingEdits)
     func commandBreaking(committed: EventSchema, expectedDifference: TrackingPlanDifference) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

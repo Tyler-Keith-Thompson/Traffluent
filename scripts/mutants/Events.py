@@ -108,4 +108,9 @@ MUTANTS = [
     Mutant("violationkeywordfixed", CV, "self.keyword = keyword", "self.keyword = .minLength(0)", mode="stmt"),
     Mutant("violationdescribed", CV, '"\\"\\(property)\\" breaks \\(keyword)"', '"\\(property) breaks \\(keyword)"'),
     Mutant("schemakeywordsdropped", S, "            self.keywords = keywords", "            self.keywords = []", mode="stmt"),
+    # The schema version's default and a property's default value (TRAF-18). The sixth `1` in
+    # Event.swift is schemaVersion's body: the doc comments hold three, and the switches of the
+    # two mutants before it, __mutant(17) and __mutant(18), two more.
+    Mutant("defaultschemaversiontwo", E, "1", "2", nth=5),
+    Mutant("defaultvaluedropped", S, "            self.hasDefaultValue = hasDefaultValue", "            self.hasDefaultValue = false", mode="stmt"),
 ]

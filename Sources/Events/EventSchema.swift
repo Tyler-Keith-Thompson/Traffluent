@@ -14,8 +14,8 @@
 /// SignedUp.schema.properties.map(\.name)  // ["plan", "referrer"]
 /// ```
 public struct EventSchema: Sendable, Hashable {
-    /// One stored property of an event: its name, its type as written, whether it is optional and
-    /// the keywords its value satisfies.
+    /// One stored property of an event: its name, its type as written, whether it is optional,
+    /// whether it has a default value and the keywords its value satisfies.
     public struct Property: Sendable, Hashable {
         /// The property's name.
         public var name: String
@@ -24,29 +24,36 @@ public struct EventSchema: Sendable, Hashable {
         public var typeName: String
         /// Whether the property is optional, written `T?`, `T!` or `Optional<T>`.
         public var isOptional: Bool
+        /// Whether the property's declaration gives it an initial value, which a stored record
+        /// written before the property was added reads as.
+        public var hasDefaultValue: Bool
         /// The validation keywords the property's value satisfies, when it has one: its
         /// ``Refined`` type's rule's, then those declared beside it, in order.
         public var keywords: [ValidationKeyword]
 
-        /// The property `name` of type `typeName`, optional when `isOptional` is set, whose value
-        /// satisfies `keywords`.
+        /// The property `name` of type `typeName`, optional when `isOptional` is set, with a
+        /// default value when `hasDefaultValue` is set, whose value satisfies `keywords`.
         ///
         /// - Parameters:
         ///   - name: The property's name.
         ///   - typeName: The property's type as written, without the optional.
         ///   - isOptional: Whether the property is optional.
+        ///   - hasDefaultValue: Whether the declaration gives the property an initial value; `false`
+        ///     by default.
         ///   - keywords: The keywords the property's value satisfies; none by default.
-        public init(name: String, typeName: String, isOptional: Bool, keywords: [ValidationKeyword] = []) {
+        public init(name: String, typeName: String, isOptional: Bool, hasDefaultValue: Bool = false, keywords: [ValidationKeyword] = []) {
             self.name = name
             self.typeName = typeName
             self.isOptional = isOptional
+            self.hasDefaultValue = hasDefaultValue
             self.keywords = keywords
         }
     }
 
     /// The name the event is recorded under, its `Event.name`.
     public var name: String
-    /// The version of the event's shape, which its author raises when the properties change.
+    /// The version of the event's shape, its `Event.schemaVersion`, which its author raises for a
+    /// change records stored at the earlier version can't be read through.
     public var version: Int
     /// The purpose the event is collected for, its `Event.consentCategory`.
     public var consentCategory: ConsentCategory

@@ -30,7 +30,14 @@ public import Events
 ///   to it resolve against the directory the plan is written to.
 /// - `title` is the event's name, `type` is `object` and `additionalProperties` is `false`.
 /// - `properties` holds each stored property's schema, and `required` the names of the properties
-///   that aren't optional, in declaration order.
+///   that are neither optional nor have a default value, in declaration order: those every
+///   release's payloads hold. A property with a default value is marked `x-traffluent-default:
+///   true`, as a reader of a stored payload without it reads the default.
+/// - A property the event declared at this version and no longer does stays in `properties`, with
+///   the schema it had and `deprecated: true`, and out of `required`: the payloads and records of
+///   releases that sent it still hold it, and `additionalProperties` would otherwise reject them.
+///   ``write(to:)`` and ``check(againstDirectory:)`` carry it forward from the plan already
+///   exported, as ``files(carryingForward:)`` does.
 /// - `x-traffluent-version` is the event's version and `x-traffluent-consent-category` the name of
 ///   its consent category.
 ///
@@ -111,8 +118,27 @@ public struct TrackingPlan: Sendable, Hashable {
     ///
     /// - Complexity: O(*n* log *n*) in the plan's properties, for sorting each object's keys.
     public var files: [File] {
-        [File(path: TrackingPlan.indexFileName, json: index)] + schemas.flatMap { schema in
-            [File(path: schema.fileName, json: schema.document), File(path: schema.exampleFileName, json: schema.example)]
+        files(carryingForward: [])
+    }
+
+    /// The plan's files, as ``files`` lists them, with each event's document keeping the
+    /// properties its document in `committed`, at the same name and version, has that the event
+    /// no longer declares: each with its schema there, marked `deprecated: true`.
+    ///
+    /// ``write(to:)`` writes these, carrying forward the plan already in its directory, so a
+    /// property once in a version's document stays in it: payloads of the releases that sent it,
+    /// and records they stored, still hold it.
+    ///
+    /// - Parameter committed: The files of a plan exported before; any that isn't a document of
+    ///   one of the plan's events, or isn't JSON, is ignored.
+    /// - Returns: The index, then each event's document and its example, in the order of
+    ///   ``schemas``.
+    /// - Complexity: O(*n* log *n*) in the size of the two plans.
+    public func files(carryingForward committed: [File]) -> [File] {
+        let committedDocuments = Dictionary(committed.map { ($0.path, $0.contents) }) { first, _ in first }
+        return [File(path: TrackingPlan.indexFileName, json: index)] + schemas.flatMap { schema in
+            let document = schema.document(keepingRemovedFrom: committedDocuments[schema.fileName].flatMap(JSON.init(parsing:)))
+            return [File(path: schema.fileName, json: document), File(path: schema.exampleFileName, json: schema.example)]
         }
     }
 

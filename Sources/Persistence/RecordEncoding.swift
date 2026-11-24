@@ -2,11 +2,15 @@ import Events
 import Foundation
 
 /// A record's bytes on disk, the same for every store: a CBOR map of its identifier (`id`), its
-/// timestamp (`timestamp`), its event type's name (`name`), its call site (`sourceLocation`, `null`
-/// when the record has none) and its event (`event`), in that order, each in its
-/// ``BinaryCodable`` form. The call site is a map of `fileID`, `file` (`null` when it equals
-/// `fileID`), `function`, `line` and `column`. Every key is written, `null` for a value there
-/// isn't, so a reader finds each in place rather than searching the map for one left out.
+/// timestamp (`timestamp`), its event type's name (`name`) and `Event.schemaVersion` (`version`),
+/// its call site (`sourceLocation`, `null` when the record has none) and its event (`event`), in
+/// that order, each in its ``BinaryCodable`` form. The call site is a map of `fileID`, `file`
+/// (`null` when it equals `fileID`), `function`, `line` and `column`. Every key is written, `null`
+/// for a value there isn't, so a reader finds each in place rather than searching the map for one
+/// left out.
+///
+/// A record without `version` has no version to compare: it is read by its event's name, whatever
+/// version the registered type is at, and dropped as undecodable if its bytes don't read.
 ///
 /// A record's context and delivery state are not part of it: a store keeps those, if at all, in a
 /// form of its own.
@@ -22,6 +26,7 @@ package enum RecordEncoding {
             map.encode(record.id, forKey: "id")
             map.encode(record.timestamp, forKey: "timestamp")
             map.encode(registration.name, forKey: "name")
+            map.encode(registration.version, forKey: "version")
             map.encode(record.sourceLocation.map(StoredSourceLocation.init(location:)), forKey: "sourceLocation")
             map.encode(forKey: "event") { registration.encode(record.event, &$0) }
         }
@@ -39,27 +44,44 @@ package enum RecordEncoding {
         return encoder.bytes
     }
 
-    /// The record `bytes` hold, decoded through `registry`: a record with its identifier, no tag,
-    /// tracked in the top-level context.
+    /// What reading a record's bytes found: the record, or a record of a registered event type
+    /// stored at another version than the type's, which is left undecoded.
+    package enum Reading {
+        /// The record, with its identifier, no tag, tracked in the top-level context.
+        case record(EventRecord)
+        /// A record of the event named `event`, stored at `storedVersion` while its registered type
+        /// is at `currentVersion`.
+        case versionMismatch(event: String, storedVersion: Int, currentVersion: Int)
+    }
+
+    /// The record `bytes` hold, decoded through `registry`, or the versions that kept it from
+    /// being decoded.
     ///
     /// - Parameters:
     ///   - bytes: A record's bytes, as ``encode(_:registration:to:)`` wrote them.
     ///   - registry: The event types the store keeps.
-    /// - Returns: The record.
+    /// - Returns: The record, or ``Reading/versionMismatch(event:storedVersion:currentVersion:)``
+    ///   when it holds a version that isn't its registered type's.
     /// - Throws: ``BinaryDecodingError`` when the bytes aren't a record of a registered event type,
     ///   or hold bytes past the record's map.
-    package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> EventRecord {
+    package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> Reading {
         var decoder = BinaryDecoder(bytes, readingSensitiveValues: true)
         var map = try decoder.decodeMap()
         guard decoder.isAtEnd else { throw .invalidValue }
         let id: UUID = try map.decode(forKey: "id")
         let timestamp: Date = try map.decode(forKey: "timestamp")
         let name: String = try map.decode(forKey: "name")
-        let location: StoredSourceLocation? = try map.decode(forKey: "sourceLocation")
+        let version: Int? = try map.decode(forKey: "version")
         guard let registration = registry.registration(named: name) else { throw .invalidValue }
+        // Checked before the event is read: a version raised for a change whose bytes would still
+        // decode, such as a property whose meaning changed, must not be read as the new one.
+        if let version, version != registration.version {
+            return .versionMismatch(event: name, storedVersion: version, currentVersion: registration.version)
+        }
+        let location: StoredSourceLocation? = try map.decode(forKey: "sourceLocation")
         guard var eventDecoder = try map.decoder(forKey: "event") else { throw .keyNotFound }
         let event = try registration.decode(&eventDecoder)
-        return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location)
+        return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))
     }
 }
 

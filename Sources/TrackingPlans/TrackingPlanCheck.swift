@@ -43,13 +43,13 @@ public enum TrackingPlanCheck: Sendable, Hashable, CustomStringConvertible {
         case .breaking(let differences):
             let breaking = differences.filter(\.isBreaking)
             let others = differences.filter { !$0.isBreaking }
-            var lines = ["The events break the committed tracking plan: an app already sending them sends payloads it no longer accepts."]
+            var lines = ["The events break the committed tracking plan: at the same version, a stored record or an already-released app's payload may no longer decode or validate."]
             lines += breaking.map { "  - \($0)" }
             if !others.isEmpty {
                 lines.append("It is also out of date:")
                 lines += others.map { "  - \($0)" }
             }
-            lines.append("Restore what was removed or changed, or raise the version of each event that changed (@Event(version:)), then export the plan again: " + TrackingPlanCheck.exportCommand)
+            lines.append("Undo each breaking change, or raise the version of each event that changed (@Event(version:)), then export the plan again: " + TrackingPlanCheck.exportCommand)
             return lines.joined(separator: "\n")
         }
     }

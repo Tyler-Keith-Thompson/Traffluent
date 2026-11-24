@@ -22,6 +22,13 @@ struct DatabaseStoreTests {
         var number: Int
     }
 
+    /// `Tapped` with its version raised.
+    struct TappedVersion2: Event, Equatable {
+        static let name = "Tapped"
+        static let schemaVersion = 2
+        var number: Int
+    }
+
     @Test("The default bound is 5 MiB, and the default table traffluentRecord")
     func defaults() {
         let expectedBound = 5_242_880
@@ -212,6 +219,20 @@ struct DatabaseStoreTests {
         #expect(sut.pendingRecordCount == 1)
     }
 
+    @Test("Rows stored at another version are deleted at recovery, so a later store at that version gets none")
+    func versionMismatchDeleted() throws {
+        let database = try DatabaseQueue()
+        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
+        let earlier = try DatabaseStore(events: [Tapped.self], database: database)
+        _ = earlier.append(EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        _ = try DatabaseStore(events: [TappedVersion2.self], database: database)
+
+        let sut = try DatabaseStore(events: [Tapped.self], database: database)
+
+        #expect(sut.takeRecoveredRecords().isEmpty)
+        #expect(sut.pendingRecordCount == 0)
+    }
+
     @Test("Tracking inside one of the app's own writes neither waits for the write nor joins it: the worker commits the record after it")
     func trackInsideAppWrite() async throws {
         let database = try DatabaseQueue()
@@ -304,6 +325,19 @@ struct DatabaseStoreTests {
 }
 
 extension DatabaseStoreTests.Tapped: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+    }
+}
+
+extension DatabaseStoreTests.TappedVersion2: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
         encoder.encodeMap { map in
             map.encode(number, forKey: "number")

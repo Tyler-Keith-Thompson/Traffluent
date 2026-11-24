@@ -15,7 +15,7 @@ public struct ScreenViewed: Event, BinaryCodable, Hashable {
     /// screen's name.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: [EventSchema.Property(name: "screen", typeName: "String", isOptional: false)]
     )

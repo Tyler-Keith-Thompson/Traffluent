@@ -11,6 +11,8 @@ struct StoredProperty {
     let typeName: String
     /// Whether the type is optional.
     let isOptional: Bool
+    /// Whether the declaration gives it an initial value, which a map without its key reads as.
+    let hasDefaultValue: Bool
     /// The keywords `@Constrained` declares on it, in order.
     let constraints: [DeclaredConstraint]
 
@@ -68,6 +70,8 @@ struct StoredProperty {
                     name: pattern.identifier.identifier?.name ?? identifier,
                     typeName: (wrapped ?? type).trimmedDescription,
                     isOptional: wrapped != nil,
+                    // A `let` with one was skipped above, so this is a `var`'s.
+                    hasDefaultValue: binding.initializer != nil,
                     // An attribute applies to every binding of its declaration: `var a, b: String`.
                     constraints: constraints
                 ))

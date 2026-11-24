@@ -16,8 +16,15 @@ public enum DropReport: Sendable, Hashable {
     case writeFailed(recordCount: Int, timestamps: ClosedRange<Date>)
     /// Recovery read `recordCount` intact records it couldn't decode: their event type isn't in
     /// the store's `events`, or its ``BinaryCodable/init(from:)`` threw, as it does for a record
-    /// written before a required property was added or a property's type changed.
+    /// written before a required property was added or a property's type changed while the
+    /// event's `Event.schemaVersion` stayed the same.
     case undecodable(recordCount: Int)
+    /// Recovery read `recordCount` intact records of the event named `event` stored at
+    /// `storedVersion`, while the store's type of that name is at `currentVersion`
+    /// (`Event.schemaVersion`), and dropped them without decoding them: the version changed for a
+    /// change their bytes can't be read through. Reported once per segment, or per database, for
+    /// each event and stored version, by the event's name and then the stored version.
+    case versionMismatch(event: String, storedVersion: Int, currentVersion: Int, recordCount: Int)
     /// Recovery found a torn or corrupt record, or a segment header it couldn't read, and
     /// discarded the `byteCount` bytes from there to the end of the segment.
     case corruption(byteCount: Int)

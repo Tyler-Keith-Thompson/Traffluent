@@ -9,8 +9,10 @@
 // A segment whose header names a later version is left as it is, and nothing is read from it.
 // Record payloads are written here as the model's own CBOR (RFC 8949), not through the library's
 // encoder: a record with its keys in another order or with keys the store doesn't know must still
-// decode, and one missing a required key, holding a value of another type, an unknown event type
-// or bytes past its map must not.
+// decode, and so must one without a version, read by name like one at its type's version; one
+// missing a required key,
+// holding a value of another type, an unknown event type, bytes past its map or a version other
+// than its type's must not.
 
 import Checksums
 import Events
@@ -84,18 +86,22 @@ enum FuzzPersistence {
     }
 
     /// A record's payload as the format lays it out, kind byte first: a map of its identifier,
-    /// timestamp, event name, call site and event, with `extra` entries after them.
-    static func recordPayload(id: UUID, name: String, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
+    /// timestamp, event name, version (left out when `nil`, a record with no version to compare),
+    /// call site and event, with `extra` entries after them.
+    static func recordPayload(id: UUID, name: String, version: Int? = 1, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
         let identifier = withUnsafeBytes(of: id.uuid) { Array($0) }
         let location = map([("fileID", text("App/File.swift")), ("function", text("f()")), ("line", integer(1)), ("column", integer(1))])
-        return [0] + map([
+        var entries: [(key: String, value: [UInt8])] = [
             ("id", head(6, 37) + head(2, 16) + identifier),
             // 0.0 as a double-precision float.
             ("timestamp", [0xFB, 0, 0, 0, 0, 0, 0, 0, 0]),
             ("name", text(name)),
-            ("sourceLocation", location),
-            ("event", event),
-        ] + extra)
+        ]
+        if let version {
+            entries.append(("version", integer(version)))
+        }
+        entries += [("sourceLocation", location), ("event", event)]
+        return [0] + map(entries + extra)
     }
 
     /// `event`'s map, its keys in the declaration's order or reversed, and an entry the type
@@ -179,19 +185,23 @@ enum FuzzPersistence {
                     // written by another release, and still decodable.
                     let eventBytes = eventMap(event, reversed: input.int(below: 2) == 0, unknown: input.int(below: 2) == 0)
                     let extra: [(key: String, value: [UInt8])] = input.int(below: 2) == 0 ? [("context", map([("k", text("v"))]))] : []
-                    let payload = recordPayload(id: id, name: "Tapped", event: eventBytes, extra: extra)
+                    // Version 1, written or left out.
+                    let version: Int? = input.int(below: 3) == 0 ? nil : 1
+                    let payload = recordPayload(id: id, name: "Tapped", version: version, event: eventBytes, extra: extra)
                     built[Array(payload.dropFirst())] = Built(id: id, event: event)
                     bytes += frame(payload)
                     records += 1
                 case 3:
                     // A record the store can't decode: an unlisted type, bytes past its map, an
-                    // event missing a required property, or one whose property has another type.
+                    // event missing a required property, one whose property has another type, or
+                    // a readable event stored at another version than Tapped's, 1.
                     let id = UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
                     let payload: [UInt8]
-                    switch input.int(below: 4) {
+                    switch input.int(below: 5) {
                     case 0: payload = recordPayload(id: id, name: "Other", event: map([]))
                     case 1: payload = recordPayload(id: id, name: "Tapped", event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false)) + [0x00]
                     case 2: payload = recordPayload(id: id, name: "Tapped", event: map([("number", integer(1))]))
+                    case 3: payload = recordPayload(id: id, name: "Tapped", version: [0, 2, 7][input.int(below: 3)], event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false))
                     default: payload = recordPayload(id: id, name: "Tapped", event: map([("number", text("1")), ("label", text(""))]))
                     }
                     built[Array(payload.dropFirst())] = .some(nil)

@@ -32,6 +32,7 @@ try await delivery.execute()
 ### Essentials
 
 - <doc:WhatGoesWhere>
+- <doc:ChangingEvents>
 - <doc:IdentifyingPeople>
 - <doc:PrivacyManifests>
 

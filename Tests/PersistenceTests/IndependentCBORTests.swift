@@ -63,7 +63,7 @@ struct IndependentCBORTests {
         #expect(actual == expected)
     }
 
-    @Test("A record a store keeps is the CBOR map another decoder reads: its identifier, timestamp, name, call site and event")
+    @Test("A record a store keeps is the CBOR map another decoder reads: its identifier, timestamp, name, version, call site and event")
     func persistedRecord() throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("IndependentCBORTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -75,6 +75,7 @@ struct IndependentCBORTests {
             .utf8String("id"): .tagged(CBOR.Tag(rawValue: 37), .byteString(identifier)),
             .utf8String("timestamp"): .double(2.5),
             .utf8String("name"): .utf8String("Tapped"),
+            .utf8String("version"): .unsignedInt(1),
             .utf8String("sourceLocation"): .map([
                 .utf8String("fileID"): .utf8String("App/View.swift"),
                 .utf8String("file"): .utf8String("/src/App/View.swift"),
@@ -104,7 +105,7 @@ struct IndependentCBORTests {
             try? FileManager.default.removeItem(atPath: withFileID.string)
         }
         let location = Events.SourceLocation(file: "App/View.swift", fileID: "App/View.swift", function: "body", line: 1, column: 1)
-        let expectedRecordKeys: Set<CBOR> = [.utf8String("id"), .utf8String("timestamp"), .utf8String("name"), .utf8String("sourceLocation"), .utf8String("event")]
+        let expectedRecordKeys: Set<CBOR> = [.utf8String("id"), .utf8String("timestamp"), .utf8String("name"), .utf8String("version"), .utf8String("sourceLocation"), .utf8String("event")]
         let expectedLocationKeys: Set<CBOR> = [.utf8String("fileID"), .utf8String("file"), .utf8String("function"), .utf8String("line"), .utf8String("column")]
 
         _ = try SegmentStore(events: [Tapped.self], directory: withoutCallSite)

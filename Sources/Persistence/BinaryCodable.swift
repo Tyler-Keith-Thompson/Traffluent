@@ -42,9 +42,12 @@
 ///
 /// Because each property is found by its name, an event type can change while records written
 /// before the change are still on disk. A property removed since leaves an entry the decoder
-/// skips, an optional property added since reads as `nil`, and properties can be reordered. A
+/// skips, an optional property added since reads as `nil`, one with a default value reads it
+/// through ``KeyedBinaryDecoder/decode(_:forKey:default:)``, and properties can be reordered. A
 /// change the older bytes can't satisfy, such as a required property added or a property's type
-/// changed, makes ``init(from:)`` throw, and the store drops the record and reports it.
+/// changed, needs a new `Event.schemaVersion`: the store drops records stored at another version
+/// without reading them, and reports them. One that throws from ``init(from:)`` all the same is
+/// dropped and reported too.
 ///
 /// Each value is one CBOR data item, so any CBOR decoder can read the bytes. Integers are CBOR
 /// integers in the fewest bytes that hold them, `Bool` is `true` or `false`, `Double` and `Float`

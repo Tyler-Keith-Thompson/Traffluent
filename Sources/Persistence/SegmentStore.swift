@@ -44,9 +44,12 @@ public import SystemPackage
 ///   one can't read, is deleted and reported as a
 ///   ``DropReport/corruption(byteCount:)``.
 /// - **Changed event types.** Each record's event is a map of its properties by name, so a record
-///   written before its type changed still reads: a property removed since is skipped and an
-///   optional one added since is `nil`. One that can't, after a required property was added or a
-///   property's type changed, is dropped and reported as
+///   written before its type changed still reads: a property removed since is skipped, an
+///   optional one added since is `nil` and one with a default value added since has it. A record
+///   stored at another `Event.schemaVersion` than its type's now is dropped without being read and
+///   reported as ``DropReport/versionMismatch(event:storedVersion:currentVersion:recordCount:)``.
+///   One at the same version that can't be read all the same, after a required property was added
+///   or a property's type changed without raising the version, is dropped and reported as
 ///   ``DropReport/undecodable(recordCount:)``.
 ///
 /// Open one store per directory at a time; two would delete each other's segments. Copies of a

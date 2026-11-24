@@ -21,16 +21,18 @@
 ///
 /// - `static var name`, when `name` is given; otherwise the type's name, `Event`'s default.
 /// - `static var consentCategory`, when `consent` is given; otherwise ``/Events/ConsentCategory/analytics``.
-/// - `static var schema`: an ``/Events/EventSchema`` with the event's name, `version` and each stored
-///   property's name, type as written, optionality and validation keywords (its
-///   ``/Events/Refined`` type's rule's, then those ``Constrained(_:)`` declares), in declaration
-///   order.
+/// - `static var schemaVersion`, when `version` is given; otherwise 1, `Event`'s default.
+/// - `static var schema`: an ``/Events/EventSchema`` with the event's name, version and each stored
+///   property's name, type as written, optionality, whether it has a default value and validation
+///   keywords (its ``/Events/Refined`` type's rule's, then those ``Constrained(_:)`` declares), in
+///   declaration order.
 /// - `constraintViolation()`, when a property declares constraints with ``Constrained(_:)``: the
 ///   first property, in declaration order, whose value breaks one, which a tracker rejects.
 /// - `encode(to:)` and `init(from:)`, which write a CBOR map of the stored properties, each under
 ///   its name, in declaration order, and read each back by its name, as a hand-written conformance
-///   would. An optional property missing from the map reads as `nil`. A ``/Events/Sensitive``
-///   property goes through its own conformance, so only a store's encoder writes its value.
+///   would. An optional property missing from the map reads as `nil`, and one with a default
+///   value as that value. A ``/Events/Sensitive`` property goes through its own conformance, so
+///   only a store's encoder writes its value.
 ///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
@@ -42,21 +44,64 @@
 /// type annotation, a `lazy` property, a destructuring pattern, a name that isn't a non-empty string
 /// literal and a version that isn't a positive integer literal are compile errors too.
 ///
-/// A store may still hold records written before an event's stored properties changed, and reads
-/// them by name: a property removed since is skipped, an optional one added since is `nil`, and
-/// the order doesn't matter. A record that can't be read, after a required property was added or
-/// a property's type changed, is dropped and reported. To keep such records, add the property as
-/// an optional, or raise `version` and give the new shape a new `name`.
+/// ## Changing an event
+///
+/// A store may still hold records written before an event's stored properties changed: an app
+/// updates with records on disk it hasn't delivered. `version` counts the changes those records
+/// can't be read through, and only those. Each record carries the version it was stored at, and a
+/// store drops one stored at another version than the type's now without reading it, reporting the
+/// event and both versions (`DropReport.versionMismatch`). A tracking plan's check
+/// (module `TrackingPlans`) fails on a change that needs a new version while the version stayed
+/// the same, naming the event, the property and the change.
+///
+/// These changes are compatible. Keep the version, and the records stored before the change are
+/// read by each property's name, in any order:
+///
+/// ```swift
+/// // Version 1, as released.
+/// @Event(name: "checkout_started")
+/// struct CheckoutStarted {
+///     var cartSize: Int
+///     var screen: String
+/// }
+///
+/// // Still version 1: a record stored above reads with coupon nil, currency "USD" and screen
+/// // skipped.
+/// @Event(name: "checkout_started")
+/// struct CheckoutStarted {
+///     var cartSize: Int
+///     var coupon: String?          // an optional property added: nil
+///     var currency: String = "USD" // a property with a default value added: the default
+///                                  // screen removed: its stored value is skipped
+/// }
+/// ```
+///
+/// These changes are breaking. Raise the version with each, and the records stored at the earlier
+/// one are dropped and reported:
+///
+/// ```swift
+/// @Event(name: "checkout_started", version: 2)
+/// struct CheckoutStarted {
+///     var cartSize: Double  // a property's type changed (it was Int)
+///     var coupon: String    // an optional property made required (it was String?)
+///     var paymentMethod: String // a required property added, with no default value
+/// }
+/// ```
+///
+/// A version raised for a change whose bytes would still read, such as a property that keeps its
+/// type but changes its meaning, drops the earlier records all the same, so they are never read
+/// as the new shape. Records are never migrated from one version to another.
 ///
 /// - Parameters:
 ///   - name: The name destinations record the event under, a string literal; the type's name when
 ///     `nil`.
 ///   - consent: The purpose the event is collected for; ``/Events/ConsentCategory/analytics`` when `nil`.
-///   - version: The schema version, a positive integer literal; 1 by default.
+///   - version: The schema version, `Event.schemaVersion`: a positive integer literal, raised for
+///     each breaking change; 1 by default.
 @attached(
     extension,
     conformances: Event, BinaryCodable,
-    names: named(name), named(consentCategory), named(schema), named(constraintViolation), named(encode(to:)),
+    names: named(name), named(consentCategory), named(schemaVersion), named(schema), named(constraintViolation), named(encode(to:)),
     named(init(from:)), named(requireBinaryCodable), named(binaryCodableRequirements)
 )
 public macro Event(

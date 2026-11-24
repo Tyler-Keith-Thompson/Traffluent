@@ -6,6 +6,8 @@ package struct EventRegistry: Sendable {
     package struct Registration: Sendable {
         /// The type's `Event.name`, which each of its records on disk carries.
         package let name: String
+        /// The type's `Event.schemaVersion`, which each of its records on disk carries.
+        package let version: Int
         /// Writes an event of this type.
         package let encode: @Sendable (any Event, inout BinaryEncoder) -> Void
         /// Reads an event of this type.
@@ -17,7 +19,8 @@ package struct EventRegistry: Sendable {
 
     /// The registry of `types`.
     ///
-    /// - Precondition: No two of `types` share an `Event.name`.
+    /// - Precondition: No two of `types` share an `Event.name`: one type per event, at its current
+    ///   `Event.schemaVersion`.
     package init(_ types: [any (Event & BinaryCodable).Type]) {
         var byType: [ObjectIdentifier: Registration] = [:]
         var byName: [String: Registration] = [:]
@@ -25,7 +28,7 @@ package struct EventRegistry: Sendable {
             let registration = Self.registration(of: type)
             // A trap rather than an error: two types under one name is a programming mistake,
             // and recovery couldn't tell their records apart.
-            precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \(registration.name); give one an explicit Event.name")
+            precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \(registration.name): register one type per event name, and raise its Event.schemaVersion for a new shape rather than keeping the old type beside it")
             byType[ObjectIdentifier(type)] = registration
             byName[registration.name] = registration
         }
@@ -46,6 +49,7 @@ package struct EventRegistry: Sendable {
     private static func registration<E: Event & BinaryCodable>(of type: E.Type) -> Registration {
         Registration(
             name: E.name,
+            version: E.schemaVersion,
             encode: { event, encoder in
                 // The registry finds a registration by the event's own type, so the cast holds.
                 (event as! E).encode(to: &encoder)

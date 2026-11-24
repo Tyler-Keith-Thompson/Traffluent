@@ -14,7 +14,7 @@ public struct ApplicationInstalled: Event, BinaryCodable, Hashable {
     /// version installed.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: [EventSchema.Property(name: "version", typeName: "String", isOptional: false)]
     )

@@ -11,6 +11,10 @@ struct EventTests {
         static let name = "renamed_event"
     }
 
+    struct Versioned: Event {
+        static let schemaVersion = 3
+    }
+
     @Test("An event's name defaults to its type's name")
     func defaultName() {
         let expected = "SignedUp"
@@ -25,6 +29,24 @@ struct EventTests {
         let expected = "renamed_event"
 
         let actual = Renamed.name
+
+        #expect(actual == expected)
+    }
+
+    @Test("An event's schema version defaults to 1")
+    func defaultSchemaVersion() {
+        let expected = 1
+
+        let actual = SignedUp.schemaVersion
+
+        #expect(actual == expected)
+    }
+
+    @Test("An event type can give its own schema version")
+    func customSchemaVersion() {
+        let expected = 3
+
+        let actual = Versioned.schemaVersion
 
         #expect(actual == expected)
     }

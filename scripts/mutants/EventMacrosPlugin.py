@@ -24,8 +24,13 @@ P = "StoredProperty.swift"
 D = "EventMacroDiagnostic.swift"
 C = "DeclaredConstraint.swift"
 X = "ConstrainedMacro.swift"
+# decode's lines, as EventMacro.swift writes them.
+DECODE_LINES = r'''properties.map {
+            let fallback = $0.hasDefaultValue ? ", default: self.\($0.identifier)" : ""
+            return "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\"\(fallback))\n"
+        }'''
 # A schema property's entry, as EventMacro.swift writes it.
-PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), keywords: \($0.keywords)),"'
+PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)keywords: \($0.keywords)),"'
 
 MUTANTS = [
     # EventMacro: the extension.
@@ -37,7 +42,7 @@ MUTANTS = [
     Mutant("conformancesfirstonly", M, 'conformances.joined(separator: ", ")', 'conformances.first ?? ""'),
     Mutant("nameignored", M, 'arguments.name.map { "\\(access)static var name: String {\\n    \\($0)\\n}" }', "nil"),
     Mutant("consentignored", M, 'arguments.consent.map { "\\(access)static var consentCategory: Events.ConsentCategory {\\n    \\($0)\\n}" }', "nil"),
-    Mutant("versionfixed", M, "arguments.version", "1"),
+    Mutant("versionfixed", M, "arguments.version", "Int?.some(1)"),
     # Two mutants of the property entry's literal: the first leaves the original once, in its
     # unmutated branch, for the second.
     Mutant("schemanamebackticked", M, PROPERTY, PROPERTY.replace("$0.name", "$0.identifier")),
@@ -46,11 +51,11 @@ MUTANTS = [
     Mutant("encodereversed", M, 'properties.map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }', 'properties.reversed().map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }'),
     # After encodereversed, its literal occurs twice; the second is the original's.
     Mutant("encodeunqualified", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', nth=1),
-    Mutant("decodereversed", M, 'properties.map { "    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n" }', 'properties.reversed().map { "    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n" }'),
+    Mutant("decodereversed", M, DECODE_LINES, "properties.reversed()" + DECODE_LINES.removeprefix("properties")),
     # A key is the property's name without backticks, as the schema's is. After the mutants
     # above, each literal occurs twice, the second the original's.
     Mutant("encodekeybackticked", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.identifier)\\")\\n"', nth=1),
-    Mutant("decodekeybackticked", M, '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n"', '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.identifier)\\")\\n"', nth=1),
+    Mutant("decodekeybackticked", M, '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\"\\(fallback))\\n"', '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.identifier)\\"\\(fallback))\\n"', nth=1),
     Mutant("emptymapnotwritten", M, '"    encoder.encodeMap { _ in\\n    }\\n"', '""'),
     Mutant("requirementsnone", M, "        guard !properties.isEmpty else { return [] }", "        return []", mode="stmt"),
     Mutant("requirementlabelidentifier", M, '"private static func requireBinaryCodable(\\($0.label): KeyPath<Self, some Persistence.BinaryCodable>) {}"', '"private static func requireBinaryCodable(\\($0.identifier): KeyPath<Self, some Persistence.BinaryCodable>) {}"'),
@@ -107,4 +112,10 @@ MUTANTS = [
     Mutant("staticconstrained", X, "!variable.isStatic && !variable.bindings.contains { $0.isComputed }", "!variable.bindings.contains { $0.isComputed }"),
     Mutant("computedconstrained", X, "!variable.isStatic && !variable.bindings.contains { $0.isComputed }", "!variable.isStatic"),
     Mutant("anystructconstrained", X, "!isStored || !inEvent", "!isStored"),
+    # A property's default value (TRAF-18): marked in the schema, and read back when its key is
+    # missing.
+    Mutant("defaultvalueundetected", P, "binding.initializer != nil", "false", nth=1),
+    Mutant("defaultnotinschema", M, '$0.hasDefaultValue ? "hasDefaultValue: true, " : ""', '""'),
+    # After decodereversed, decode's fallback occurs twice, the second the original's.
+    Mutant("defaultnotdecoded", M, '$0.hasDefaultValue ? ", default: self.\\($0.identifier)" : ""', '""', nth=1),
 ]

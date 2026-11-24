@@ -24,6 +24,48 @@ struct KeyedBinaryCodingTests {
         #expect(decoder.isAtEnd)
     }
 
+    @Test("A missing key read with a default gives the default; a present one its value, wherever it is in the map")
+    func defaultWhenMissing() throws {
+        let expectedMissing = "USD"
+        let expectedPresent = 7
+        var encoder = BinaryEncoder()
+        encoder.encodeMap { map in
+            map.encode(1, forKey: "first")
+            map.encode(expectedPresent, forKey: "present")
+        }
+        var decoder = BinaryDecoder(encoder.bytes)
+        var sut = try decoder.decodeMap()
+
+        let missing: String = try sut.decode(forKey: "currency", default: "USD")
+        let present: Int = try sut.decode(forKey: "present", default: 0)
+        let first: Int = try sut.decode(forKey: "first", default: 0)
+
+        #expect(missing == expectedMissing)
+        #expect(present == expectedPresent)
+        #expect(first == 1)
+        #expect(decoder.isAtEnd)
+    }
+
+    @Test("A null entry read with a default is the value's own reading of null: nil for an optional, typeMismatch otherwise")
+    func defaultNotForNull() throws {
+        var encoder = BinaryEncoder()
+        encoder.encodeMap { map in
+            map.encode(String?.none, forKey: "coupon")
+            map.encode(String?.none, forKey: "currency")
+        }
+        let expectedError = BinaryDecodingError.typeMismatch
+        var decoder = BinaryDecoder(encoder.bytes)
+        var sut = try decoder.decodeMap()
+
+        let coupon: String? = try sut.decode(forKey: "coupon", default: "WELCOME")
+        func decodeCurrency() throws(BinaryDecodingError) {
+            let _: String = try sut.decode(forKey: "currency", default: "USD")
+        }
+
+        #expect(coupon == nil)
+        #expect(throws: expectedError) { try decodeCurrency() }
+    }
+
     @Test("An entry whose key is never read is skipped, nested arrays, maps and tags included, and the decoder moves past the whole map")
     func unknownKeySkipped() throws {
         let expected = "after"

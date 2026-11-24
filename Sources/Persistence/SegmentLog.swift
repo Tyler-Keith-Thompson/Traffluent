@@ -455,14 +455,22 @@ final class SegmentLog: Acknowledger {
             var segment = Segment(number: number, file: file, byteCount: contents.validByteCount, timestamps: [], acknowledged: [], pendingCount: 0, needsSynchronization: false)
             var segmentRecords: [Recovered] = []
             var undecodable = 0
+            var mismatches = VersionMismatchCounts()
             for frame in contents.records {
                 do throws(BinaryDecodingError) {
-                    var record = try RecordEncoding.record(from: bytes[frame.payload], registry: registry)
-                    record.isRedelivered = contents.marked.contains(frame.index)
-                    segment.timestamps.append(record.timestamp)
-                    segment.acknowledged.append(false)
-                    segment.pendingCount += 1
-                    segmentRecords.append(Recovered(record: record, position: number << 32 | UInt64(frame.index)))
+                    switch try RecordEncoding.record(from: bytes[frame.payload], registry: registry) {
+                    case .record(var record):
+                        record.isRedelivered = contents.marked.contains(frame.index)
+                        segment.timestamps.append(record.timestamp)
+                        segment.acknowledged.append(false)
+                        segment.pendingCount += 1
+                        segmentRecords.append(Recovered(record: record, position: number << 32 | UInt64(frame.index)))
+                    case .versionMismatch(let event, let storedVersion, let currentVersion):
+                        // Reported once for the segment below, as an undecodable record is.
+                        mismatches.add(event: event, storedVersion: storedVersion, currentVersion: currentVersion)
+                        segment.timestamps.append(.distantPast)
+                        segment.acknowledged.append(true)
+                    }
                 } catch {
                     // Reported once for the segment below; it counts as delivered, so it never
                     // holds the segment back.
@@ -474,6 +482,7 @@ final class SegmentLog: Acknowledger {
             if undecodable > 0 {
                 reports.append(.undecodable(recordCount: undecodable))
             }
+            reports += mismatches.reports
             guard segment.pendingCount > 0 else {
                 try path.removeFile()
                 continue

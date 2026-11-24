@@ -14,7 +14,7 @@ public struct ApplicationOpened: Event, BinaryCodable, Hashable {
     /// app came back from the background.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: [EventSchema.Property(name: "fromBackground", typeName: "Bool", isOptional: false)]
     )

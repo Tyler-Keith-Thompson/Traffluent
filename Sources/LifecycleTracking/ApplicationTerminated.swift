@@ -10,7 +10,7 @@ public struct ApplicationTerminated: Event, BinaryCodable, Hashable {
     /// The schema of an end: version 1, collected for analytics, with no properties.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: []
     )

@@ -19,6 +19,25 @@ public protocol Event: Sendable {
     /// Defaults to ``ConsentCategory/analytics``.
     static var consentCategory: ConsentCategory { get }
 
+    /// The version of the event's shape, raised only for a change a record stored at the earlier
+    /// version can't be read through: a property's type changed, a required property added
+    /// without a default value, or an optional property made required. Defaults to 1.
+    ///
+    /// A store writes it with each record, and drops a record stored at another version than its
+    /// type's now, reporting both versions. A tracking plan exports it, and its check fails on a
+    /// change that needs a new version when the version stayed the same. A compatible change, an
+    /// optional property or one with a default value added or a property removed, keeps it, and
+    /// records stored before the change are read as they are.
+    ///
+    /// ```swift
+    /// struct SignedUp: Event {
+    ///     // Version 1's seats was an Int?, which version 2 requires.
+    ///     static let schemaVersion = 2
+    ///     var seats: Int
+    /// }
+    /// ```
+    static var schemaVersion: Int { get }
+
     /// The first property whose value breaks a constraint declared on it, and the keyword it
     /// breaks; `nil` when every property satisfies its constraints. Defaults to `nil`.
     ///
@@ -38,6 +57,9 @@ extension Event {
 
     /// ``ConsentCategory/analytics``.
     public static var consentCategory: ConsentCategory { .analytics }
+
+    /// 1: the event's shape has had no change that needs a new version.
+    public static var schemaVersion: Int { 1 }
 
     /// `nil`: no property declares a constraint.
     public func constraintViolation() -> ConstraintViolation? { nil }

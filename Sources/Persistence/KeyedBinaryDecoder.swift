@@ -52,6 +52,30 @@ public struct KeyedBinaryDecoder: Sendable {
         return try decodeValue()
     }
 
+    /// Reads the value under `key`, or `defaultValue` when the map has no entry for it: a property
+    /// with a default value, added since the map was written.
+    ///
+    /// An entry that holds `null` is read as the value's type reads it: `nil` for an optional,
+    /// an error for a type that isn't one. Only a missing entry gives `defaultValue`.
+    ///
+    /// - Parameters:
+    ///   - type: The type to read; inferred from the context when left out.
+    ///   - key: The value's key: a property's name.
+    ///   - defaultValue: The value when the map has no entry for `key`.
+    /// - Returns: The value, or `defaultValue`.
+    /// - Throws: What reading the value throws.
+    /// - Complexity: O(1) besides reading the value when `key` is the entry after the last one
+    ///   read; otherwise O(*n*), where *n* is the number of bytes the map takes.
+    @inlinable
+    public mutating func decode<Value: BinaryCodable>(
+        _ type: Value.Type = Value.self,
+        forKey key: StaticString,
+        default defaultValue: Value
+    ) throws(BinaryDecodingError) -> Value {
+        guard try find(key) else { return defaultValue }
+        return try decodeValue()
+    }
+
     /// A decoder positioned at the value under `key`, or `nil` when the map has no entry for
     /// it: for a value read through its registration, such as a record's event.
     package mutating func decoder(forKey key: StaticString) throws(BinaryDecodingError) -> BinaryDecoder? {

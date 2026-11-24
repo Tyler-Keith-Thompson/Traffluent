@@ -35,6 +35,7 @@ C = "StandardConformances.swift"
 D = "BinaryDecoder.swift"
 E = "BinaryEncoder.swift"
 N = "RecordEncoding.swift"
+V = "VersionMismatchCounts.swift"
 K = "KeyedBinaryDecoder.swift"
 KE = "KeyedBinaryEncoder.swift"
 
@@ -57,7 +58,7 @@ MUTANTS = [
     Mutant("trailingbytesaccepted", N, "guard decoder.isAtEnd else { throw .invalidValue }", "", mode="stmt"),
     # The record's identifier, written first and given back on recovery.
     Mutant("idnotwritten", N, 'map.encode(record.id, forKey: "id")', "", mode="stmt"),
-    Mutant("idnotrestored", N, "return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location)", "return EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location)", mode="stmt"),
+    Mutant("idnotrestored", N, "return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))", "return .record(EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location))", mode="stmt"),
     Mutant("lengthnotwritten", F, "encoder.overwriteLittleEndian(length, at: 0)", "", mode="stmt"),
     Mutant("checksumnotwritten", F, "encoder.overwriteLittleEndian(checksum, at: 4)", "", mode="stmt"),
     Mutant("markoffbyone", F, "encoder.writeLittleEndian(index)", "encoder.writeLittleEndian(index + 1)", mode="stmt"),
@@ -122,7 +123,7 @@ MUTANTS = [
     Mutant("defaultsegment", S, "max(byteBound / 8, 1)", "max(byteBound / 4, 1)"),
     Mutant("boundatheaderallowed", S, "byteBound > SegmentFormat.header.count", "byteBound >= SegmentFormat.header.count"),
     Mutant("zerosegmentallowed", S, "$0 > 0", "$0 >= 0"),
-    Mutant("duplicatenamesallowed", R, 'precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \\(registration.name); give one an explicit Event.name")', "", mode="stmt"),
+    Mutant("duplicatenamesallowed", R, 'precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \\(registration.name): register one type per event name, and raise its Event.schemaVersion for a new shape rather than keeping the old type beside it")', "", mode="stmt"),
     Mutant("repeatedtypetraps", R, "byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil", "byName[registration.name] == nil"),
     Mutant("notfoundbyname", R, "byName[registration.name] = registration", "", mode="stmt"),
     # The binary encoding.
@@ -210,4 +211,19 @@ MUTANTS = [
     # A recovered record a constraint added since rejects: dropped and forgotten by the store.
     Mutant("recoveredrejectedadmitted", "Worker.swift", "rejected.append(record)", "admitted.append(record)", mode="stmt", module="Trackers"),
     Mutant("recoveredrejectedkept", "Worker.swift", "forget(rejected)", "", mode="stmt", module="Trackers"),
+    # The record's schema version (TRAF-18): written with it, checked before its event is read, and
+    # each mismatch reported by event and version.
+    Mutant("versionnotwritten", N, 'map.encode(registration.version, forKey: "version")', "", mode="stmt"),
+    # A record without a version is read by name: defaulting it to 1 would drop it at version 2.
+    Mutant("versionmissingmismatches", N, 'try map.decode(forKey: "version")', 'try map.decode(forKey: "version", default: 1)'),
+    Mutant("versionnotchecked", N, "version != registration.version", "false"),
+    Mutant("mismatchversionsswapped", N, ".versionMismatch(event: name, storedVersion: version, currentVersion: registration.version)", ".versionMismatch(event: name, storedVersion: registration.version, currentVersion: version)"),
+    Mutant("registryversionfixed", R, "E.schemaVersion", "1"),
+    Mutant("mismatchnotcounted", L, "mismatches.add(event: event, storedVersion: storedVersion, currentVersion: currentVersion)", "", mode="stmt"),
+    Mutant("mismatchnotreported", L, "reports += mismatches.reports", "", mode="stmt"),
+    Mutant("mismatchcountdoubled", V, "counts[Key(event: event, storedVersion: storedVersion, currentVersion: currentVersion), default: 0] += 1", "counts[Key(event: event, storedVersion: storedVersion, currentVersion: currentVersion), default: 0] += 2", mode="stmt"),
+    Mutant("mismatchnameorderreversed", V, "event.utf8.lexicographicallyPrecedes(other.event.utf8)", "other.event.utf8.lexicographicallyPrecedes(event.utf8)"),
+    Mutant("mismatchversionorderreversed", V, "storedVersion < other.storedVersion", "storedVersion > other.storedVersion"),
+    Mutant("mismatchcurrentisstored", V, "key.currentVersion", "key.storedVersion"),
+    Mutant("defaultalways", K, "        guard try find(key) else { return defaultValue }", "        return defaultValue", mode="stmt"),
 ]

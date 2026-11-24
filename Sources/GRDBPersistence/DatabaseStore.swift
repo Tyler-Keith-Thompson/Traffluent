@@ -45,7 +45,9 @@ public import Persistence
 /// - **Recovery.** A store opened on a table recovers the records earlier runs left there, and a
 ///   tracker given the store delivers them first. A row whose record can't be decoded (its event
 ///   type isn't in `events`, or its decoding throws) is deleted and reported as
-///   `DropReport.undecodable(recordCount:)`. Each record a delivery had started on comes back with
+///   `DropReport.undecodable(recordCount:)`, and one stored at another `Event.schemaVersion` than
+///   its type's now is deleted without being read and reported as
+///   `DropReport.versionMismatch(event:storedVersion:currentVersion:recordCount:)`. Each record a delivery had started on comes back with
 ///   `isRedelivered` set, as it may have reached a destination already. A delivery marks a
 ///   batch's rows, in one transaction, before any destination receives it; a batch whose mark
 ///   can't be written is held back from that delivery, so it is never sent twice unannounced, and

@@ -4,9 +4,10 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 /// `@Event`: an extension of the struct it is attached to that conforms it to `Event` and
-/// `BinaryCodable`, with its `name`, `consentCategory`, `schema` and, when a property declares
-/// constraints with `@Constrained`, its `constraintViolation()`, and its encoding: a map of its
-/// stored properties, each under its name.
+/// `BinaryCodable`, with its `name`, `consentCategory`, `schemaVersion`, `schema` and, when a
+/// property declares constraints with `@Constrained`, its `constraintViolation()`, and its
+/// encoding: a map of its stored properties, each under its name, read back with each property's
+/// default value when its key is missing.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
@@ -40,7 +41,8 @@ public struct EventMacro: ExtensionMacro {
         let members = [
             arguments.name.map { "\(access)static var name: String {\n    \($0)\n}" },
             arguments.consent.map { "\(access)static var consentCategory: Events.ConsentCategory {\n    \($0)\n}" },
-            schema(of: properties, version: arguments.version, access: access),
+            arguments.version.map { "\(access)static var schemaVersion: Int {\n    \($0)\n}" },
+            schema(of: properties, access: access),
             constraintViolation(of: properties, access: access),
         ] + requirements(of: properties) + [
             encode(properties, access: access),
@@ -52,14 +54,15 @@ public struct EventMacro: ExtensionMacro {
         return [DeclSyntax(stringLiteral: source).cast(ExtensionDeclSyntax.self)]
     }
 
-    private static func schema(of properties: [StoredProperty], version: Int, access: String) -> String {
+    private static func schema(of properties: [StoredProperty], access: String) -> String {
         let entries = properties.map {
-            "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), keywords: \($0.keywords)),"
+            let defaultValue = $0.hasDefaultValue ? "hasDefaultValue: true, " : ""
+            return "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)keywords: \($0.keywords)),"
         }
         let list = entries.isEmpty ? "[]" : "[\n" + entries.joined(separator: "\n") + "\n    ]"
         return """
             \(access)static var schema: Events.EventSchema {
-                Events.EventSchema(name: Self.name, version: \(version), consentCategory: Self.consentCategory, properties: \(list))
+                Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: \(list))
             }
             """
     }
@@ -91,9 +94,15 @@ public struct EventMacro: ExtensionMacro {
 
     /// `init(from:)`, reading each property by its name, in declaration order, which finds each
     /// at once while the declaration hasn't changed. An optional property missing from the map, as
-    /// one added since it was written is, reads as `nil`: `decode(forKey:)`'s optional overload.
+    /// one added since it was written is, reads as `nil`: `decode(forKey:)`'s optional overload. One
+    /// with a default value reads as that value, which the property already holds as the
+    /// initializer starts: the decoder is given the property itself rather than a copy of the
+    /// declaration's expression, which so runs once, in its own context.
     private static func decode(_ properties: [StoredProperty], access: String) -> String {
-        let lines = properties.map { "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\")\n" }.joined()
+        let lines = properties.map {
+            let fallback = $0.hasDefaultValue ? ", default: self.\($0.identifier)" : ""
+            return "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\"\(fallback))\n"
+        }.joined()
         let body = properties.isEmpty ? "    _ = try decoder.decodeMap()\n" : "    var map = try decoder.decodeMap()\n\(lines)"
         return "\(access)init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {\n\(body)}"
     }

@@ -33,7 +33,7 @@ struct EventMacroConstraintExpansionTests {
 
                 extension Searched: Events.Event, Persistence.BinaryCodable {
                     public static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.Constraint<String>]).map(\.keyword)),
                             Events.EventSchema.Property(name: "ratio", typeName: "Double", isOptional: true, keywords: Events.ValidationKeyword.keywords(of: \Self.ratio) + ([.minimum(-1.5), .maximum(10)] as [Events.Constraint<Double>]).map(\.keyword)),
                             Events.EventSchema.Property(name: "page", typeName: "Int", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.page)),
@@ -214,7 +214,7 @@ struct EventMacroConstraintExpansionTests {
 
                 extension Searched {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \\Self.query) + ([.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] as [Events.Constraint<String>]).map(\\.keyword)),
                         ])
                     }
@@ -293,7 +293,7 @@ struct EventMacroConstraintExpansionTests {
 
                 extension Searched {
                     static var schema: Events.EventSchema {
-                        Events.EventSchema(name: Self.name, version: 1, consentCategory: Self.consentCategory, properties: [
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.pattern(#"^\d+$"#, example: "12")] as [Events.Constraint<String>]).map(\.keyword)),
                         ])
                     }

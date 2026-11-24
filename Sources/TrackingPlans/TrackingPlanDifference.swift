@@ -2,28 +2,40 @@
 /// ``TrackingPlan/check(against:)`` reports it.
 ///
 /// An event is named by its name and version, `checkout_started v2`. A difference is breaking
-/// (``isBreaking``) when a payload the committed plan accepts may be one the current plan rejects:
-/// an app already released sends events of the committed shape, and whatever validates them
-/// against the plan would start refusing them. Every other difference leaves those payloads valid
-/// and only means the committed plan is out of date.
+/// (``isBreaking``) when, at the same version, a record a store still holds or a payload an
+/// already-released app sends may stop decoding or validating against the current event. A
+/// breaking change needs a new version (`Event.schemaVersion`, `@Event(version:)`), and a store
+/// then drops the records stored at the earlier one, reporting both versions. Every other
+/// difference keeps them decoding and validating: keep the version, and the committed plan is only
+/// out of date.
 ///
 /// | Difference | Breaking |
 /// |---|---|
 /// | ``eventRemoved(event:version:)``, which is also how a rename shows | yes |
-/// | ``propertyRemoved(event:version:property:)`` | yes |
 /// | ``propertyRetyped(event:version:property:committed:current:)`` | yes |
 /// | ``propertyMadeRequired(event:version:property:)`` | yes |
 /// | ``requiredPropertyAdded(event:version:property:)`` | yes |
+/// | ``defaultValueRemoved(event:version:property:)`` | yes |
 /// | ``constraintTightened(event:version:property:keyword:committed:current:)`` | yes |
 /// | ``unreadableFile(path:)`` | yes |
 /// | ``eventAdded(event:version:)`` | no |
 /// | ``versionRaised(event:committed:current:)`` | no |
 /// | ``optionalPropertyAdded(event:version:property:)`` | no |
+/// | ``defaultedPropertyAdded(event:version:property:)`` | no |
+/// | ``propertyRemoved(event:version:property:)`` | no |
 /// | ``propertyMadeOptional(event:version:property:)`` | no |
+/// | ``defaultValueAdded(event:version:property:)`` | no |
 /// | ``consentCategoryChanged(event:version:committed:current:)`` | no |
 /// | ``sensitivityChanged(event:version:property:isSensitive:)`` | no |
 /// | ``constraintLoosened(event:version:property:keyword:committed:current:)`` | no |
 /// | ``fileOutOfDate(path:)`` | no |
+///
+/// A removed property is compatible: a stored record that still holds it decodes with the entry
+/// skipped, and the event's document keeps it, marked `deprecated` and not required, so a payload
+/// that holds it still validates. Declaring it again is compared with the schema it had: another
+/// type is ``propertyRetyped(event:version:property:committed:current:)``, and the same one is
+/// compatible unless it is now required, as ``requiredPropertyAdded(event:version:property:)``,
+/// since the records and payloads written while it was gone lack it.
 ///
 /// Raising an event's version is how its author marks a breaking change: the plan then holds a
 /// new document, and the committed version's properties aren't compared with the new one's.
@@ -31,16 +43,22 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// The committed plan has `event` at `version`, and no event of that name has that version or
     /// a later one now: it was removed or renamed, or its version was lowered.
     case eventRemoved(event: String, version: Int)
-    /// A property of the committed event is gone.
+    /// A property of the committed event is gone; a stored payload that holds it reads with it
+    /// skipped, and the event's document keeps it, marked `deprecated`.
     case propertyRemoved(event: String, version: Int, property: String)
     /// A property's schema changed, given by its JSON Schema keywords on one line, without the
     /// `null` an optional property allows.
     case propertyRetyped(event: String, version: Int, property: String, committed: String, current: String)
-    /// A property the committed plan lets an event leave out is required now.
+    /// An optional property, whose value the committed plan lets be `null`, isn't optional now, so
+    /// a stored `null` can't be read.
     case propertyMadeRequired(event: String, version: Int, property: String)
-    /// The event has a required property the committed plan doesn't, which every committed
-    /// payload lacks.
+    /// The event has a property that is neither optional nor has a default value, and that the
+    /// committed plan doesn't have, or marks `deprecated`: the payloads and records written without
+    /// it can't be read.
     case requiredPropertyAdded(event: String, version: Int, property: String)
+    /// A property that isn't optional, which the committed plan gives a default value, has none
+    /// now, so a stored payload written before the property was added can't be read.
+    case defaultValueRemoved(event: String, version: Int, property: String)
     /// A property's constraint keyword is tighter: a lower bound (`minLength`, `minimum`,
     /// `minItems`) rose, an upper one (`maxLength`, `maximum`, `maxItems`) fell, or one was added,
     /// or a `pattern` was added or changed. `committed` and `current` are its values as JSON, `nil`
@@ -56,7 +74,13 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     case versionRaised(event: String, committed: Int, current: Int)
     /// The event has an optional property the committed plan doesn't.
     case optionalPropertyAdded(event: String, version: Int, property: String)
-    /// A property the committed plan requires is optional now.
+    /// The event has a property with a default value, not optional, that the committed plan
+    /// doesn't, which a stored payload without it reads.
+    case defaultedPropertyAdded(event: String, version: Int, property: String)
+    /// A property that isn't optional, which the committed plan gives no default value, has one
+    /// now.
+    case defaultValueAdded(event: String, version: Int, property: String)
+    /// A property whose value the committed plan doesn't let be `null` is optional now.
     case propertyMadeOptional(event: String, version: Int, property: String)
     /// The event's consent category changed, from the committed name to the current one.
     case consentCategoryChanged(event: String, version: Int, committed: String, current: String)
@@ -75,10 +99,11 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// table in ``TrackingPlanDifference`` lists which differences are.
     public var isBreaking: Bool {
         switch self {
-        case .eventRemoved, .propertyRemoved, .propertyRetyped, .propertyMadeRequired, .requiredPropertyAdded, .constraintTightened, .unreadableFile:
+        case .eventRemoved, .propertyRetyped, .propertyMadeRequired, .requiredPropertyAdded, .defaultValueRemoved, .constraintTightened,
+            .unreadableFile:
             true
-        case .eventAdded, .versionRaised, .optionalPropertyAdded, .propertyMadeOptional, .consentCategoryChanged, .sensitivityChanged,
-            .constraintLoosened, .fileOutOfDate:
+        case .eventAdded, .versionRaised, .optionalPropertyAdded, .defaultedPropertyAdded, .propertyRemoved, .propertyMadeOptional,
+            .defaultValueAdded, .consentCategoryChanged, .sensitivityChanged, .constraintLoosened, .fileOutOfDate:
             false
         }
     }
@@ -95,7 +120,9 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
         case .propertyMadeRequired(let event, let version, let property):
             "\(event) v\(version): property \"\(property)\" was optional and is now required"
         case .requiredPropertyAdded(let event, let version, let property):
-            "\(event) v\(version): required property \"\(property)\" was added"
+            "\(event) v\(version): required property \"\(property)\" was added without a default value"
+        case .defaultValueRemoved(let event, let version, let property):
+            "\(event) v\(version): property \"\(property)\" lost its default value"
         case .unreadableFile(let path):
             "\(path) is missing from the committed plan, or isn't a tracking plan file"
         case .eventAdded(let event, let version):
@@ -104,6 +131,10 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
             "\(event) went from version \(committed) to \(current)"
         case .optionalPropertyAdded(let event, let version, let property):
             "\(event) v\(version): optional property \"\(property)\" was added"
+        case .defaultedPropertyAdded(let event, let version, let property):
+            "\(event) v\(version): property \"\(property)\" was added with a default value"
+        case .defaultValueAdded(let event, let version, let property):
+            "\(event) v\(version): property \"\(property)\" gained a default value"
         case .propertyMadeOptional(let event, let version, let property):
             "\(event) v\(version): property \"\(property)\" was required and is now optional"
         case .consentCategoryChanged(let event, let version, let committed, let current):

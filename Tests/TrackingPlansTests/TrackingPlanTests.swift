@@ -23,6 +23,12 @@ struct TrackingPlanTests {
         var express: Bool
     }
 
+    @Event(name: "cart_viewed", version: 3)
+    struct CartViewed {
+        var currency: String = "USD"
+        var coupon: String? = "WELCOME"
+    }
+
     @Event(name: "signed_up", consent: .functional)
     struct SignedUp {
         var plan: String
@@ -235,6 +241,41 @@ struct TrackingPlanTests {
 
         #expect(actual.map(\.path) == expectedPaths)
         #expect(actual.map { String(decoding: $0.contents, as: UTF8.self) } == [expectedIndex])
+    }
+
+    @Test("An event's document marks each property with a default value and requires none of them, as a payload from before one was added lacks it; its version is the macro's")
+    func defaultValues() throws {
+        let expected = """
+            {
+              "$id": "cart_viewed.v3.schema.json",
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "additionalProperties": false,
+              "properties": {
+                "coupon": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "x-traffluent-default": true
+                },
+                "currency": {
+                  "type": "string",
+                  "x-traffluent-default": true
+                }
+              },
+              "required": [],
+              "title": "cart_viewed",
+              "type": "object",
+              "x-traffluent-consent-category": "analytics",
+              "x-traffluent-version": 3
+            }
+
+            """
+        let sut = TrackingPlan(schemas: [CartViewed.schema])
+
+        let actual = try #require(sut.files.first { $0.path == "cart_viewed.v3.schema.json" })
+
+        #expect(String(decoding: actual.contents, as: UTF8.self) == expected)
     }
 
     @Test("An event with no properties has empty properties and requires nothing")

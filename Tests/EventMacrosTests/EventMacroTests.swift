@@ -107,7 +107,7 @@ struct EventMacroTests {
         #expect(decoder.isAtEnd)
     }
 
-    @Test("The schema leaves out static and computed properties and a let with an initial value, and keeps observed ones")
+    @Test("The schema leaves out static and computed properties and a let with an initial value, and keeps observed ones and marks a var with an initial value as having a default")
     func schemaSkips() {
         let expected = [
             EventSchema.Property(name: "count", typeName: "Int", isOptional: false),
@@ -122,7 +122,7 @@ struct EventMacroTests {
             EventSchema.Property(name: "first", typeName: "UInt16", isOptional: false),
             EventSchema.Property(name: "second", typeName: "UInt16", isOptional: false),
             EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false),
-            EventSchema.Property(name: "observed", typeName: "Int32", isOptional: false),
+            EventSchema.Property(name: "observed", typeName: "Int32", isOptional: false, hasDefaultValue: true),
         ]
 
         let actual = Shapes.schema.properties

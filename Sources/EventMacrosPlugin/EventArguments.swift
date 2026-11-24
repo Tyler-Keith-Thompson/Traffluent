@@ -7,8 +7,8 @@ struct EventArguments {
     var name: ExprSyntax?
     /// The consent category's expression, or `nil` when the event keeps `Event`'s default.
     var consent: ExprSyntax?
-    /// The schema version.
-    var version = 1
+    /// The schema version, or `nil` when the event keeps `Event`'s default, 1.
+    var version: Int?
 
     /// The arguments of `attribute`, with the diagnostics of the ones the macro can't use.
     static func arguments(of attribute: AttributeSyntax) -> (arguments: EventArguments, diagnostics: [Diagnostic]) {

@@ -116,8 +116,8 @@ struct SegmentStoreTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
         let expectedHeader: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
-        // A map of five entries, the first "id": a 16-byte byte string tagged 37.
-        let expectedMapStart: [UInt8] = [0xA5, 0x62, 0x69, 0x64, 0xD8, 0x25, 0x50]
+        // A map of six entries, the first "id": a 16-byte byte string tagged 37.
+        let expectedMapStart: [UInt8] = [0xA6, 0x62, 0x69, 0x64, 0xD8, 0x25, 0x50]
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
 
         let record = EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)

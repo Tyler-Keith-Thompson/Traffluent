@@ -1,5 +1,6 @@
 // Property tests of the check against a naive reference: any plan checks clean against its own
-// export, and any one breaking edit of it is reported as exactly the difference the edit makes.
+// export, any one breaking edit of it is reported as exactly the difference the edit makes, the
+// same edit with the version raised breaks nothing, and any one compatible edit breaks nothing.
 
 import Events
 import PropertyBased
@@ -50,8 +51,10 @@ struct TrackingPlanCheckPropertyTests {
                 current[event].name += "_renamed"
                 expectedPrefix = TrackingPlanDifference.eventRemoved(event: name, version: 1).description
             case 1:
-                current[event].properties.remove(at: property)
-                expectedPrefix = TrackingPlanDifference.propertyRemoved(event: name, version: 1, property: propertyName).description
+                committed[event].properties[property].isOptional = false
+                committed[event].properties[property].hasDefaultValue = true
+                current[event].properties[property].isOptional = false
+                expectedPrefix = TrackingPlanDifference.defaultValueRemoved(event: name, version: 1, property: propertyName).description
             case 2:
                 let type = TrackingPlanCheckPropertyTests.typeNames.firstIndex(of: committed[event].properties[property].typeName) ?? 0
                 current[event].properties[property].typeName = TrackingPlanCheckPropertyTests.typeNames[(type + 1) % TrackingPlanCheckPropertyTests.typeNames.count]
@@ -72,6 +75,79 @@ struct TrackingPlanCheckPropertyTests {
             #expect(breaking.count == 1)
             #expect(breaking.first?.description.hasPrefix(expectedPrefix) == true)
             #expect(actual == .breaking(actual.differences))
+        }
+    }
+
+    @Test("Any one breaking edit with the event's version raised breaks nothing: the check reports the raise", .tags(.randomized))
+    func breakingEditWithRaisedVersion() async {
+        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
+            var committed = events.enumerated().map { event, types in
+                EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
+                    EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
+                })
+            }
+            let event = eventChoice % committed.count
+            let property = propertyChoice % committed[event].properties.count
+            var current = committed
+            switch edit {
+            case 0:
+                committed[event].properties[property].isOptional = false
+                committed[event].properties[property].hasDefaultValue = true
+                current[event].properties[property].isOptional = false
+            case 1:
+                let type = TrackingPlanCheckPropertyTests.typeNames.firstIndex(of: committed[event].properties[property].typeName) ?? 0
+                current[event].properties[property].typeName = TrackingPlanCheckPropertyTests.typeNames[(type + 1) % TrackingPlanCheckPropertyTests.typeNames.count]
+            case 2:
+                committed[event].properties[property].isOptional = true
+                current[event].properties[property].isOptional = false
+            default:
+                current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: false))
+            }
+            current[event].version = 2
+            let expected = TrackingPlanDifference.versionRaised(event: committed[event].name, committed: 1, current: 2)
+            let committedFiles = TrackingPlan(schemas: committed).files
+
+            let actual = TrackingPlan(schemas: current).check(against: committedFiles)
+
+            #expect(actual == .outOfDate([expected]))
+        }
+    }
+
+    @Test("Any one compatible edit keeps the version and breaks nothing: the check reports it as the difference it is", .tags(.randomized))
+    func compatibleEdit() async {
+        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
+            var committed = events.enumerated().map { event, types in
+                EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
+                    EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
+                })
+            }
+            let event = eventChoice % committed.count
+            let property = propertyChoice % committed[event].properties.count
+            var current = committed
+            let name = committed[event].name
+            let propertyName = committed[event].properties[property].name
+            let expected: TrackingPlanDifference
+            switch edit {
+            case 0:
+                current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: true))
+                expected = .optionalPropertyAdded(event: name, version: 1, property: "added")
+            case 1:
+                current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: false, hasDefaultValue: true))
+                expected = .defaultedPropertyAdded(event: name, version: 1, property: "added")
+            case 2:
+                current[event].properties.remove(at: property)
+                expected = .propertyRemoved(event: name, version: 1, property: propertyName)
+            default:
+                committed[event].properties[property].isOptional = false
+                current[event].properties[property].isOptional = false
+                current[event].properties[property].hasDefaultValue = true
+                expected = .defaultValueAdded(event: name, version: 1, property: propertyName)
+            }
+            let committedFiles = TrackingPlan(schemas: committed).files
+
+            let actual = TrackingPlan(schemas: current).check(against: committedFiles)
+
+            #expect(actual == .outOfDate([expected]))
         }
     }
 }

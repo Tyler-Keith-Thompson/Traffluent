@@ -20,7 +20,7 @@ public struct ControlActivated: Event, BinaryCodable, Hashable {
     /// properties, the control's name and its kind.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: [
             EventSchema.Property(name: "control", typeName: "String", isOptional: false),

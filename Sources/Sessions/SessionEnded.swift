@@ -18,7 +18,7 @@ public struct SessionEnded: Event, BinaryCodable, Hashable {
     /// session's duration.
     public static let schema = EventSchema(
         name: name,
-        version: 1,
+        version: schemaVersion,
         consentCategory: consentCategory,
         properties: [EventSchema.Property(name: "duration", typeName: "Duration", isOptional: false)]
     )
