@@ -81,16 +81,16 @@ fuzz-regress *args="":
 fuzz-repro target input:
     python3 {{PROJECT_ROOT}}/scripts/fuzz.py repro {{target}} {{input}}
 
-# ── Examples (Examples/, a SwiftPM package of its own; README.md, "Examples") ──
+# ── Examples (Examples/, a SwiftPM package of its own; Examples/README.md) ──
 
 EXAMPLES := PROJECT_ROOT / "Examples"
 
-[doc('Build every example app')]
-examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-server
+[doc('Build every example app, then run the examples’ tests')]
+examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-server examples-test
 
 [doc('Run the examples’ tests (SwiftPM, in Examples/)')]
 examples-test *args="":
-    cd {{EXAMPLES}} && {{SWIFT}} test {{args}}
+    cd {{PROJECT_ROOT}}/Examples && {{SWIFT}} test {{args}}
 
 [doc('Check the store example’s events against Examples/TrackingPlan with the check-tracking-plan plugin, write the plan again with export-tracking-plan, and fail if it differs from the committed (or staged) one')]
 example-tracking-plan:

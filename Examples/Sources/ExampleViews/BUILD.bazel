@@ -1,7 +1,8 @@
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Hand-written, like ../ExampleEvents/BUILD.bazel: only the Apple apps build it with Bazel, and
-# `manual` keeps it out of `bazel build //...`. Its tests run under SwiftPM (`just examples-test`).
+# Hand-written, not generated: the Examples/ package is SwiftPM's (Examples/Package.swift), and
+# Bazel builds only what the Apple apps need (Examples/Apps/ExampleApp). `manual` keeps it out of
+# `bazel build //...`, so `just test` never builds the examples; `just examples-test` tests it.
 swift_library(
     name = "ExampleViews",
     srcs = glob(["**/*.swift"]),

@@ -9,7 +9,12 @@ load("//tools:ios.bzl", "IOS_PACKAGES", "SIMULATOR_TEST_PACKAGES")
 load("//tools:performance_tests.bzl", "PERFORMANCE_TEST_PACKAGES")
 load("//tools:swiftpm.bzl", "swiftpm_manifest_test")
 
-APP_TARGETS = []
+# The example apps (Examples/Apps/ExampleApp), each launched from a scheme of its own. They are
+# `manual`, so `bazel test //...` builds none of them, on a Mac or on Linux.
+APP_TARGETS = [
+    "//Examples/Apps/ExampleApp:" + name
+    for name in ["iOSExample", "MacExample", "VisionExample", "WatchExample"]
+]
 
 # Test bundles are derived from the directory layout rather than listed: a directory under
 # `Tests/` with a BUILD.bazel holding a swift_test is a test bundle. Listing them by hand means a

@@ -20,5 +20,19 @@ library by path (`..`). Each builds a `Tracker` at its composition root, deliver
 
 SwiftPM builds and tests the package (`just examples-test`). The Apple apps need application
 bundles, which SwiftPM doesn't make, so Bazel builds them from the hand-written `BUILD.bazel` files
-here; every one of those targets is `manual`, so the library's `bazel test //...` leaves them out.
-The root README's "Examples" section lists each build command.
+here. Every one of those targets is `manual`, so the library's `bazel test //...` leaves them out;
+the recipes name them:
+
+| Recipe | Builds |
+|---|---|
+| `just example-ios` | The iPhone and iPad app, for the simulator |
+| `just example-mac` | The Mac app |
+| `just example-catalyst` | The iOS app for Mac Catalyst, which rules_apple has no rule for (`scripts/catalyst_app.py`) |
+| `just example-visionos` | The visionOS app, for the simulator |
+| `just example-watchos` | The watchOS app, for the simulator |
+| `just example-linux` | The command-line and server examples on Linux, in Docker, then runs the command-line one |
+| `just example-server` | The server; `just serve-example` runs it on 127.0.0.1:8080 |
+| `just examples` | Every example above, then `just examples-test` |
+| `just example-tracking-plan` | Checks the store's events against `TrackingPlan`, writes it again and fails if it changed |
+
+`just generate` gives each Apple app a scheme in the Xcode project.

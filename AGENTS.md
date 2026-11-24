@@ -34,6 +34,7 @@ Tests/PrivacyManifests/          A Mac bundle of the modules with privacy manife
 scripts/modules.py               The module graph
 scripts/mutants/<Module>.py      Planted bugs for `just mutate <Module>` (scripts/mutate.py)
 Fuzz/Sources/Fuzz<Module>/       A libFuzzer target per module, in the separate Fuzz/ package
+Examples/                        The example apps, a SwiftPM package of their own; Apps/ExampleApp the Apple apps Bazel builds
 tools/                           Bazel rule wrappers (warnings as errors, Swift 6 mode), DocC rules;
                                  tools/bazel turns BuildBuddy on when the Keychain holds its key, and
                                  on macOS sweeps stale output bases once a day (tools/sweep-output-bases):
@@ -43,14 +44,17 @@ tools/                           Bazel rule wrappers (warnings as errors, Swift 
 `Benchmarks/` is a separate SwiftPM package (ordo-one/benchmark), generated from `BENCHMARKS` in
 `scripts/modules.py`. Bazel builds none of it; `Benchmarks/BUILD.bazel` only caches each target's
 simulated counts (`tools/benchmarks.bzl`). See `Benchmarks/README.md`.
-`Examples/` is a separate SwiftPM package of example apps that depends on the library by path, so
-the published package never depends on what the examples use (Hummingbird, ViewInspector). Its
-`Package.swift` and its few `BUILD.bazel` files are hand-written: Bazel builds only the Apple apps
-(`Examples/Apps/ExampleApp`, every target `manual`, so `just test` never builds them). Mac Catalyst
-has no rules_apple rule; `Examples/scripts/catalyst_app.py` builds the same app source for it.
-The `just example-*` recipes build each app; see `Examples/README.md`.
 `Fuzz/` is a separate SwiftPM package of libFuzzer targets that Bazel ignores, built with a
 swift.org toolchain through swiftly (`swiftly install 6.4.3`); see `Fuzz/README.md`.
+`Examples/` is a separate SwiftPM package of example apps that depends on the library by path, so
+the published package never depends on what the examples use. Its `Package.swift` and its few
+`BUILD.bazel` files are hand-written, not generated: SwiftPM builds and tests it
+(`just examples-test`), and Bazel builds only the Apple apps (`Examples/Apps/ExampleApp`: iPhone and
+iPad, Mac, visionOS, watchOS), every target `manual`, so `just test` never builds them, on a Mac
+or on Linux. The root BUILD.bazel lists them in `APP_TARGETS`, so `just generate` gives each an
+Xcode scheme. rules_apple has no Mac Catalyst rule: `Examples/scripts/catalyst_app.py` builds the
+same app source for it (`just example-catalyst`). The examples use Hummingbird and ViewInspector.
+See `Examples/README.md`.
 
 ### Module graph
 
@@ -187,6 +191,7 @@ Every shell command gets a timeout. macOS has no `timeout`; use
 | `just filter <pattern>` | Tests whose name matches |
 | `just mutate <Module> [--all]` | Mutation testing: every planted bug in `scripts/mutants/<Module>.py` must be caught |
 | `just fuzz [Fuzz<Module>] [-t secs]` | libFuzzer, time-boxed (60 s per target); `just fuzz-regress` replays the corpus, `just fuzz-repro <target> <file>` a crash |
+| `just examples-test`, `just example-ios` / `-mac` / `-catalyst` / `-visionos` / `-watchos` / `-linux` / `-server`, `just examples` | The examples' tests (SwiftPM, in `Examples/`); build one example app; every app, then the tests |
 | `just build-arm64_32` | Compiles the library for watchOS arm64_32, a 32-bit `Int` (see below) |
 | `just test-release` | `--config=release`: builds and runs only the `XPerformanceTests` targets |
 | `just spm-test`, `just verify` | SwiftPM tests; both build systems |
@@ -312,8 +317,8 @@ Watch for these:
 | `scripts/modules.py` | `just modules`, `just test` (which runs `//:package_swift_test`), `just spm` |
 | A fuzzed module | `just fuzz-regress` |
 | Integer arithmetic that could overflow, or anything platform-conditional | `just build-arm64_32` (compiles for a 32-bit `Int`; nothing runs the tests there) |
-| `Examples/`, or an API the examples call | `just examples-test`, then each `just example-*` the change touches (`just examples` for all) |
 | `Benchmarks/`, or an API the benchmarks call | `cd Benchmarks && env -u TOOLCHAINS xcrun --toolchain default swift build -c release` |
+| `Examples/`, or an API the examples call | `just examples-test`, then each `just example-*` the change touches (`just examples` for all) |
 | A change meant to be faster | `just bench-simulated-compare --target <Module>Benchmarks`, not `just bench-compare` |
 
 ### Pushing

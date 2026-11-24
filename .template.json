@@ -13,5 +13,6 @@
   "database": false,
   "ci": true,
   "trunk": false,
-  "simulator": true
+  "simulator": true,
+  "examples": true
 }

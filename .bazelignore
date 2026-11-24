@@ -19,9 +19,10 @@ Benchmarks/.swiftpm
 # The fuzz package builds with SwiftPM.
 Fuzz/.build
 
-# Overlays the bootstrap script copies over the template (server and embedded types); not built in place.
-templates
-
-# The examples package builds with SwiftPM; Bazel loads only its hand-written BUILD files.
+# The example package's SwiftPM build. Bazel loads only the hand-written BUILD files beside its
+# sources, for the Apple apps.
 Examples/.build
 Examples/.swiftpm
+
+# Overlays the bootstrap script copies over the template (server and embedded types); not built in place.
+templates
