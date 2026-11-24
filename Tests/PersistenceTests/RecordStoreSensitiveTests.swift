@@ -41,10 +41,13 @@ struct RecordStoreSensitiveTests {
 
 extension RecordStoreSensitiveTests.SignedUp: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(email)
+        encoder.encodeMap { map in
+            map.encode(email, forKey: "email")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        email = try decoder.decode()
+        var map = try decoder.decodeMap()
+        email = try map.decode(forKey: "email")
     }
 }

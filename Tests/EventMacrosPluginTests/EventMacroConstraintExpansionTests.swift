@@ -68,15 +68,18 @@ struct EventMacroConstraintExpansionTests {
                     }
 
                     public func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.query)
-                        encoder.encode(self.ratio)
-                        encoder.encode(self.page)
+                        encoder.encodeMap { map in
+                            map.encode(self.query, forKey: "query")
+                            map.encode(self.ratio, forKey: "ratio")
+                            map.encode(self.page, forKey: "page")
+                        }
                     }
 
                     public init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.query = try decoder.decode()
-                        self.ratio = try decoder.decode()
-                        self.page = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.query = try map.decode(forKey: "query")
+                        self.ratio = try map.decode(forKey: "ratio")
+                        self.page = try map.decode(forKey: "page")
                     }
                 }
                 """#,
@@ -231,11 +234,14 @@ struct EventMacroConstraintExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.query)
+                        encoder.encodeMap { map in
+                            map.encode(self.query, forKey: "query")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.query = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.query = try map.decode(forKey: "query")
                     }
                 }
                 """,
@@ -307,11 +313,14 @@ struct EventMacroConstraintExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.query)
+                        encoder.encodeMap { map in
+                            map.encode(self.query, forKey: "query")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.query = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.query = try map.decode(forKey: "query")
                     }
                 }
                 """##,

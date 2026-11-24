@@ -32,13 +32,15 @@ struct ControlActivatedTests {
         #expect(decoder.isAtEnd)
     }
 
-    @Test("Bytes holding a name but no kind don't decode")
+    @Test("A map holding a name but no kind doesn't decode")
     func truncated() {
         var encoder = BinaryEncoder()
-        encoder.encode("checkout-button")
+        encoder.encodeMap { map in
+            map.encode("checkout-button", forKey: "control")
+        }
         var decoder = BinaryDecoder(encoder.bytes)
 
-        #expect(throws: BinaryDecodingError.self) {
+        #expect(throws: BinaryDecodingError.keyNotFound) {
             try ControlActivated(from: &decoder)
         }
     }
@@ -60,15 +62,17 @@ struct ControlActivatedTests {
         #expect(actual == expected)
     }
 
-    @Test("An activation encodes as its name then its kind, and decodes back, for any two strings")
+    @Test("An activation encodes as a map of its name then its kind, and decodes back, for any two strings")
     func encodingProperty() async {
         await propertyCheck(count: 300, input: Gen.uint8().array(of: 0...24), Gen.uint8().array(of: 0...24)) { controlBytes, kindBytes in
             let control = String(decoding: controlBytes, as: UTF8.self)
             let kind = String(decoding: kindBytes, as: UTF8.self)
             let activation = ControlActivated(control: control, kind: kind)
             var reference = BinaryEncoder()
-            reference.encode(control)
-            reference.encode(kind)
+            reference.encodeMap { map in
+                map.encode(control, forKey: "control")
+                map.encode(kind, forKey: "kind")
+            }
 
             var encoder = BinaryEncoder()
             activation.encode(to: &encoder)

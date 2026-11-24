@@ -26,18 +26,21 @@ public struct ApplicationOpened: Event, BinaryCodable, Hashable {
         self.fromBackground = fromBackground
     }
 
-    /// Writes whether the app came from the background to `encoder`.
+    /// Writes a map of whether the app came from the background (`fromBackground`) to `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(fromBackground)
+        encoder.encodeMap { map in
+            map.encode(fromBackground, forKey: "fromBackground")
+        }
     }
 
     /// Reads whether the app came from the background from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a `Bool`.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with that `Bool`.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        fromBackground = try decoder.decode()
+        var map = try decoder.decodeMap()
+        fromBackground = try map.decode(forKey: "fromBackground")
     }
 }

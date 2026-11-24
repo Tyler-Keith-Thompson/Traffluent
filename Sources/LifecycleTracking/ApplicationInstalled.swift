@@ -26,18 +26,21 @@ public struct ApplicationInstalled: Event, BinaryCodable, Hashable {
         self.version = version
     }
 
-    /// Writes the version to `encoder`.
+    /// Writes a map of the version (`version`) to `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(version)
+        encoder.encodeMap { map in
+            map.encode(version, forKey: "version")
+        }
     }
 
     /// Reads the version from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a version.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with a version.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        version = try decoder.decode()
+        var map = try decoder.decodeMap()
+        version = try map.decode(forKey: "version")
     }
 }

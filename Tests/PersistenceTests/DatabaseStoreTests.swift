@@ -158,7 +158,7 @@ struct DatabaseStoreTests {
     @Test("One record that needs the room of several older ones drops them all, in one report over their timestamps")
     func dropsSeveral() async throws {
         let small = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        let large = Events.SourceLocation(file: "A", fileID: "A", function: String(repeating: "f", count: 200), line: 1, column: 1)
+        let large = Events.SourceLocation(file: "A", fileID: "A", function: String(repeating: "f", count: 400), line: 1, column: 1)
         let probe = try DatabaseStore(events: [Tapped.self], database: try DatabaseQueue())
         _ = probe.append(EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: large))
         let database = try DatabaseQueue()
@@ -305,21 +305,27 @@ struct DatabaseStoreTests {
 
 extension DatabaseStoreTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
     }
 }
 
 extension DatabaseStoreTests.Retired: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
     }
 }
 #endif

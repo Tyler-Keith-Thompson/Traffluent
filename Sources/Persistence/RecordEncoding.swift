@@ -1,10 +1,12 @@
 import Events
 import Foundation
 
-/// A record's bytes on disk, the same for every store: its identifier's 16 bytes, its timestamp, `fileID`, `file` (`nil` when
-/// it equals `fileID`), function, line, column and event name, then the event's own
-/// ``BinaryCodable`` bytes, all in the binary encoding. A record with no call site is written with
-/// empty names and line 0, which no call site has, as lines count from 1.
+/// A record's bytes on disk, the same for every store: a CBOR map of its identifier (`id`), its
+/// timestamp (`timestamp`), its event type's name (`name`), its call site (`sourceLocation`, `null`
+/// when the record has none) and its event (`event`), in that order, each in its
+/// ``BinaryCodable`` form. The call site is a map of `fileID`, `file` (`null` when it equals
+/// `fileID`), `function`, `line` and `column`. Every key is written, `null` for a value there
+/// isn't, so a reader finds each in place rather than searching the map for one left out.
 ///
 /// A record's context and delivery state are not part of it: a store keeps those, if at all, in a
 /// form of its own.
@@ -16,18 +18,13 @@ package enum RecordEncoding {
     ///   - registration: The registration of the record's event type.
     ///   - encoder: Where the bytes go.
     package static func encode(_ record: EventRecord, registration: EventRegistry.Registration, to encoder: inout BinaryEncoder) {
-        // Line 0 marks a missing call site rather than a flag of its own, so records written
-        // before call sites could be missing read the same.
-        let location = record.sourceLocation ?? SourceLocation(file: "", fileID: "", function: "", line: 0, column: 0)
-        encoder.encode(record.id)
-        encoder.encode(record.timestamp)
-        encoder.encode(location.fileID)
-        encoder.encode(location.file == location.fileID ? nil : location.file)
-        encoder.encode(location.function)
-        encoder.encode(location.line)
-        encoder.encode(location.column)
-        encoder.encode(registration.name)
-        registration.encode(record.event, &encoder)
+        encoder.encodeMap { map in
+            map.encode(record.id, forKey: "id")
+            map.encode(record.timestamp, forKey: "timestamp")
+            map.encode(registration.name, forKey: "name")
+            map.encode(record.sourceLocation.map(StoredSourceLocation.init(location:)), forKey: "sourceLocation")
+            map.encode(forKey: "event") { registration.encode(record.event, &$0) }
+        }
     }
 
     /// The bytes of `record`, whose event `registration` encodes.
@@ -50,21 +47,51 @@ package enum RecordEncoding {
     ///   - registry: The event types the store keeps.
     /// - Returns: The record.
     /// - Throws: ``BinaryDecodingError`` when the bytes aren't a record of a registered event type,
-    ///   or hold bytes past the event's.
+    ///   or hold bytes past the record's map.
     package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> EventRecord {
         var decoder = BinaryDecoder(bytes, readingSensitiveValues: true)
-        let id: UUID = try decoder.decode()
-        let timestamp: Date = try decoder.decode()
-        let fileID: String = try decoder.decode()
-        let file: String? = try decoder.decode()
-        let function: String = try decoder.decode()
-        let line: Int = try decoder.decode()
-        let column: Int = try decoder.decode()
-        let name: String = try decoder.decode()
-        guard let registration = registry.registration(named: name) else { throw .invalidValue }
-        let event = try registration.decode(&decoder)
+        var map = try decoder.decodeMap()
         guard decoder.isAtEnd else { throw .invalidValue }
-        let location = line == 0 ? nil : SourceLocation(file: file ?? fileID, fileID: fileID, function: function, line: line, column: column)
-        return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location)
+        let id: UUID = try map.decode(forKey: "id")
+        let timestamp: Date = try map.decode(forKey: "timestamp")
+        let name: String = try map.decode(forKey: "name")
+        let location: StoredSourceLocation? = try map.decode(forKey: "sourceLocation")
+        guard let registration = registry.registration(named: name) else { throw .invalidValue }
+        guard var eventDecoder = try map.decoder(forKey: "event") else { throw .keyNotFound }
+        let event = try registration.decode(&eventDecoder)
+        return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location)
+    }
+}
+
+/// A record's call site in its ``BinaryCodable`` form: a map, its file `null` when it equals
+/// its file ID, as it does unless `#filePath` was passed.
+private struct StoredSourceLocation: BinaryCodable {
+    let location: SourceLocation
+
+    init(location: SourceLocation) {
+        self.location = location
+    }
+
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(location.fileID, forKey: "fileID")
+            map.encode(location.file == location.fileID ? nil : location.file, forKey: "file")
+            map.encode(location.function, forKey: "function")
+            map.encode(location.line, forKey: "line")
+            map.encode(location.column, forKey: "column")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        let fileID: String = try map.decode(forKey: "fileID")
+        let file: String? = try map.decode(forKey: "file")
+        location = SourceLocation(
+            file: file ?? fileID,
+            fileID: fileID,
+            function: try map.decode(forKey: "function"),
+            line: try map.decode(forKey: "line"),
+            column: try map.decode(forKey: "column")
+        )
     }
 }

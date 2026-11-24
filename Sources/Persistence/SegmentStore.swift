@@ -38,9 +38,16 @@ public import SystemPackage
 ///   delivered before the app ended, or one delivered just as it ended, before the store could
 ///   delete its segment. A record whose delivery mark can't be written is held back from that
 ///   delivery, so it is never sent twice unannounced, and delivered on a later launch.
-/// - **Newer versions.** A segment a newer release of the app wrote, in a later version of the
+/// - **Other versions.** A segment a newer release of the app wrote, in a later version of the
 ///   format, is left on disk untouched after a rollback, for that release to deliver: this one
-///   neither reads it nor counts it toward the bound.
+///   neither reads it nor counts it toward the bound. A segment in an earlier version, which this
+///   one can't read, is deleted and reported as a
+///   ``DropReport/corruption(byteCount:)``.
+/// - **Changed event types.** Each record's event is a map of its properties by name, so a record
+///   written before its type changed still reads: a property removed since is skipped and an
+///   optional one added since is `nil`. One that can't, after a required property was added or a
+///   property's type changed, is dropped and reported as
+///   ``DropReport/undecodable(recordCount:)``.
 ///
 /// Open one store per directory at a time; two would delete each other's segments. Copies of a
 /// store share its log.

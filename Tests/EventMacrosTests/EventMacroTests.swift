@@ -30,6 +30,7 @@ struct EventMacroTests {
         var `default`: UInt8
         var encoder: Int16
         var decoder: Int16
+        var map: Int16
         var first, second: UInt16
         let fixed = 7
         let assigned: Bool
@@ -91,12 +92,12 @@ struct EventMacroTests {
         #expect(actual == expected)
     }
 
-    @Test("An event with no stored properties has an empty schema and encodes to no bytes")
+    @Test("An event with no stored properties has an empty schema and encodes to an empty map")
     func empty() throws {
         let expectedSchema = EventSchema(name: "Crashed", version: 1, consentCategory: ConsentCategory("crash-reports"), properties: [])
-        let expectedBytes: [UInt8] = []
+        let expectedBytes: [UInt8] = [0xA0]
         var encoder = BinaryEncoder()
-        var decoder = BinaryDecoder([])
+        var decoder = BinaryDecoder(expectedBytes)
 
         Crashed().encode(to: &encoder)
         _ = try Crashed(from: &decoder)
@@ -117,6 +118,7 @@ struct EventMacroTests {
             EventSchema.Property(name: "default", typeName: "UInt8", isOptional: false),
             EventSchema.Property(name: "encoder", typeName: "Int16", isOptional: false),
             EventSchema.Property(name: "decoder", typeName: "Int16", isOptional: false),
+            EventSchema.Property(name: "map", typeName: "Int16", isOptional: false),
             EventSchema.Property(name: "first", typeName: "UInt16", isOptional: false),
             EventSchema.Property(name: "second", typeName: "UInt16", isOptional: false),
             EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false),
@@ -128,12 +130,10 @@ struct EventMacroTests {
         #expect(actual == expected)
     }
 
-    @Test("Each stored property is written in declaration order, in its own binary form")
+    @Test("The event is a map with each stored property under its name, in declaration order, in its own binary form")
     func encodesInOrder() {
-        var reference = BinaryEncoder()
-        reference.encode("pro")
-        reference.encode(Int?.some(3))
-        let expected = reference.bytes
+        // {"plan": "pro", "seats": 3}
+        let expected: [UInt8] = [0xA2, 0x64, 0x70, 0x6C, 0x61, 0x6E, 0x63, 0x70, 0x72, 0x6F, 0x65, 0x73, 0x65, 0x61, 0x74, 0x73, 0x03]
         var sut = BinaryEncoder()
 
         SignedUp(plan: "pro", seats: 3).encode(to: &sut)
@@ -141,11 +141,13 @@ struct EventMacroTests {
         #expect(sut.bytes == expected)
     }
 
-    @Test("Each stored property is read back in declaration order")
-    func decodesInOrder() throws {
+    @Test("Each stored property is read back by its name, whatever the order of the map's entries")
+    func decodesByName() throws {
         var encoder = BinaryEncoder()
-        encoder.encode("team")
-        encoder.encode(Int?.none)
+        encoder.encodeMap { map in
+            map.encode(Int?.none, forKey: "seats")
+            map.encode("team", forKey: "plan")
+        }
         var decoder = BinaryDecoder(encoder.bytes)
 
         let actual = try SignedUp(from: &decoder)
@@ -157,7 +159,7 @@ struct EventMacroTests {
 
     @Test("Properties named like the encoding's parameters, or with backticks, still encode and decode themselves")
     func awkwardNames() throws {
-        let value = Shapes(count: 1, tags: ["a"], ratio: 0.5, wrapped: true, qualified: -2, default: 9, encoder: 10, decoder: 11, first: 12, second: 13, assigned: true, observed: 14)
+        let value = Shapes(count: 1, tags: ["a"], ratio: 0.5, wrapped: true, qualified: -2, default: 9, encoder: 10, decoder: 11, map: 15, first: 12, second: 13, assigned: true, observed: 14)
         var encoder = BinaryEncoder()
         value.encode(to: &encoder)
         var decoder = BinaryDecoder(encoder.bytes)
@@ -172,6 +174,7 @@ struct EventMacroTests {
         #expect(actual.default == 9)
         #expect(actual.encoder == 10)
         #expect(actual.decoder == 11)
+        #expect(actual.map == 15)
         #expect(actual.first == 12)
         #expect(actual.second == 13)
         #expect(actual.assigned)
@@ -183,8 +186,8 @@ struct EventMacroTests {
     @Test("Bytes cut short of an event throw rather than read past the end")
     func truncated() {
         var encoder = BinaryEncoder()
-        encoder.encode("pro")
-        var decoder = BinaryDecoder(encoder.bytes)
+        SignedUp(plan: "pro", seats: 3).encode(to: &encoder)
+        var decoder = BinaryDecoder(Array(encoder.bytes.dropLast()))
 
         #expect(throws: BinaryDecodingError.endOfData) {
             _ = try SignedUp(from: &decoder)

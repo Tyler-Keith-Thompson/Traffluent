@@ -149,6 +149,14 @@ bad row in a dashboard.
   is left out: SwiftUI taps (no public signal identifies a SwiftUI Button) and macOS SwiftUI
   NavigationStack pushes. Controls are named by accessibility identifier, never by label or text
   (N8), and an unnamed control is skipped rather than reported as an unidentified row.
+- D9. Persisted events and records are CBOR (RFC 8949) maps keyed by property name (TRAF-35, the
+  owner's choice of CBOR over a custom JSON encoder, 2026-11-23), so a stored record survives an
+  added optional property or a removed one; a record that no longer decodes is dropped with a drop
+  report. The writer and reader are hand-written in Persistence and must keep `@Event`
+  encode and decode together within 2× the simulated instructions of the positional form (a
+  BASELINE in the EventMacros benchmarks). The Persistence benchmarks' positional BASELINEs are a
+  floor for the store's append and recovery, without a ratio budget. Rejected: the positional encoding (breaks on any field
+  change), SwiftCBOR (an allocation per item), and Codable-based CBOR packages (D7).
 
 ## Open questions
 - Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its

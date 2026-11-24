@@ -27,9 +27,10 @@
 ///   order.
 /// - `constraintViolation()`, when a property declares constraints with ``Constrained(_:)``: the
 ///   first property, in declaration order, whose value breaks one, which a tracker rejects.
-/// - `encode(to:)` and `init(from:)`, which write and read each stored property in declaration
-///   order, as a hand-written conformance would. A ``/Events/Sensitive`` property goes through its
-///   own conformance, so only a store's encoder writes its value.
+/// - `encode(to:)` and `init(from:)`, which write a CBOR map of the stored properties, each under
+///   its name, in declaration order, and read each back by its name, as a hand-written conformance
+///   would. An optional property missing from the map reads as `nil`. A ``/Events/Sensitive``
+///   property goes through its own conformance, so only a store's encoder writes its value.
 ///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
@@ -41,8 +42,11 @@
 /// type annotation, a `lazy` property, a destructuring pattern, a name that isn't a non-empty string
 /// literal and a version that isn't a positive integer literal are compile errors too.
 ///
-/// Changing an event's stored properties changes its binary format, which records a store holds
-/// may still be in: add a new event type, or raise `version` and give the new shape a new `name`.
+/// A store may still hold records written before an event's stored properties changed, and reads
+/// them by name: a property removed since is skipped, an optional one added since is `nil`, and
+/// the order doesn't matter. A record that can't be read, after a required property was added or
+/// a property's type changed, is dropped and reported. To keep such records, add the property as
+/// an optional, or raise `version` and give the new shape a new `name`.
 ///
 /// - Parameters:
 ///   - name: The name destinations record the event under, a string literal; the type's name when

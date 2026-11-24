@@ -43,10 +43,15 @@ MUTANTS = [
     Mutant("schemanamebackticked", M, PROPERTY, PROPERTY.replace("$0.name", "$0.identifier")),
     Mutant("schemanotoptional", M, PROPERTY, PROPERTY.replace(r"\($0.isOptional)", "false")),
     Mutant("emptylistbracketed", M, '"[]"', '"[\\n    ]"'),
-    Mutant("encodereversed", M, 'properties.map { "    encoder.encode(self.\\($0.identifier))" }', 'properties.reversed().map { "    encoder.encode(self.\\($0.identifier))" }'),
+    Mutant("encodereversed", M, 'properties.map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }', 'properties.reversed().map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }'),
     # After encodereversed, its literal occurs twice; the second is the original's.
-    Mutant("encodeunqualified", M, '"    encoder.encode(self.\\($0.identifier))"', '"    encoder.encode(\\($0.identifier))"', nth=1),
-    Mutant("decodereversed", M, 'properties.map { "    self.\\($0.identifier) = try decoder.decode()" }', 'properties.reversed().map { "    self.\\($0.identifier) = try decoder.decode()" }'),
+    Mutant("encodeunqualified", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', nth=1),
+    Mutant("decodereversed", M, 'properties.map { "    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n" }', 'properties.reversed().map { "    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n" }'),
+    # A key is the property's name without backticks, as the schema's is. After the mutants
+    # above, each literal occurs twice, the second the original's.
+    Mutant("encodekeybackticked", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.identifier)\\")\\n"', nth=1),
+    Mutant("decodekeybackticked", M, '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\")\\n"', '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.identifier)\\")\\n"', nth=1),
+    Mutant("emptymapnotwritten", M, '"    encoder.encodeMap { _ in\\n    }\\n"', '""'),
     Mutant("requirementsnone", M, "        guard !properties.isEmpty else { return [] }", "        return []", mode="stmt"),
     Mutant("requirementlabelidentifier", M, '"private static func requireBinaryCodable(\\($0.label): KeyPath<Self, some Persistence.BinaryCodable>) {}"', '"private static func requireBinaryCodable(\\($0.identifier): KeyPath<Self, some Persistence.BinaryCodable>) {}"'),
     Mutant("requirementsuncalled", M, '["private static var binaryCodableRequirements: Void {\\n\\(calls)}"]', "[]"),

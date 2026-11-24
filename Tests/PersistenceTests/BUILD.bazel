@@ -27,6 +27,7 @@ swift_library(
         "@swiftpkg_afluent//:Afluent",
         "@swiftpkg_swift_system//:SystemPackage",
         "@swiftpkg_swift_property_based//:PropertyBased",
+        "@swiftpkg_swiftcbor//:SwiftCBOR",
         "//Tests/TraffluentTestSupport",
     ] + select({
         # Apple-only packages (APPLE_ONLY_PACKAGES in scripts/modules.py).

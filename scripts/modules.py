@@ -74,6 +74,11 @@ PACKAGES = [
     # meta-schema, and events against them. Its JSONSchema product needs only swift-collections; it
     # is reported on Bowtie's conformance suite.
     ("swift-json-schema", "https://github.com/ajevans99/swift-json-schema", "minor:0.15.0"),
+    # Tests only: an independent CBOR (RFC 8949) decoder, which reads what BinaryCodable and the
+    # record encoding write, so a mistake in the encoding can't hide behind the same mistake in
+    # its decoder. Rejected for the encoding itself: it decodes every value into an indirect enum
+    # tree, with an allocation per item and a dictionary per map, and its typed path is Codable.
+    ("swiftcbor", "https://github.com/valpackett/SwiftCBOR", "0.6.0"),
     # Mocks generated from protocols (`@Mockable`). Uncomment when a module first needs one; see
     # MOCKING below.
     # ("mockable", "https://github.com/Kolos65/Mockable", "0.6.4"),
@@ -204,7 +209,7 @@ EXECUTABLES = [
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
     ("EventsTests", ["Events", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
     ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", TEST_SUPPORT]),
@@ -224,7 +229,7 @@ TEST_TARGETS = [
     ("SessionsTests", ["Sessions", "Events", "Persistence", "Trackers", "LifecycleTracking", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
     ("StandardContextTests", ["StandardContext", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "TrackerTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
@@ -277,7 +282,7 @@ SIMULATOR_TEST_TAG = "resources:simulator:1"
 # so `just bench-simulated` measures again only the targets whose modules or sources changed.
 BENCHMARKS = [
     ("ChecksumsBenchmarks", ["Checksums"]),
-    ("PersistenceBenchmarks", ["Persistence", "Events", "Trackers"]),
+    ("PersistenceBenchmarks", ["Persistence", "Events", "Trackers", "Checksums"]),
     ("EventMacrosBenchmarks", ["EventMacros", "Events", "Persistence"]),
     ("StandardContextBenchmarks", ["StandardContext", "Events", "Trackers"]),
 ]

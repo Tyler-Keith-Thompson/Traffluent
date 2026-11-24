@@ -17,19 +17,22 @@ struct SensitiveCodingTests {
         }
 
         func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(plan)
-            encoder.encode(email)
+            encoder.encodeMap { map in
+                map.encode(plan, forKey: "plan")
+                map.encode(email, forKey: "email")
+            }
         }
 
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            plan = try decoder.decode()
-            email = try decoder.decode()
+            var map = try decoder.decodeMap()
+            plan = try map.decode(forKey: "plan")
+            email = try map.decode(forKey: "email")
         }
     }
 
-    @Test("An encoder of one's own writes nothing for a sensitive value")
-    func ownEncoderWritesNothing() {
-        let expected: [UInt8] = []
+    @Test("An encoder of one's own writes CBOR's undefined for a sensitive value, never the value")
+    func ownEncoderWritesUndefined() {
+        let expected: [UInt8] = [0xF7]
         var sut = BinaryEncoder()
 
         sut.encode(Sensitive("ada@example.com"))
@@ -37,13 +40,12 @@ struct SensitiveCodingTests {
         #expect(sut.bytes == expected)
     }
 
-    @Test("A redacted record's event encoded with an encoder of one's own holds its other properties, not its sensitive value")
+    @Test("A redacted record's event encoded with an encoder of one's own holds its other properties, and undefined for its sensitive value")
     func redactedEventNotRecovered() {
         let record = EventRecord(event: SignedUp(plan: "pro", email: Sensitive("ada@example.com")), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let secret = Array("ada@example.com".utf8)
-        var plan = BinaryEncoder()
-        plan.encode("pro")
-        let expected = plan.bytes
+        // {"plan": "pro", "email": undefined}
+        let expected: [UInt8] = [0xA2, 0x64, 0x70, 0x6C, 0x61, 0x6E, 0x63, 0x70, 0x72, 0x6F, 0x65, 0x65, 0x6D, 0x61, 0x69, 0x6C, 0xF7]
         var sut = BinaryEncoder()
 
         (record.event as? SignedUp)?.encode(to: &sut)

@@ -602,11 +602,14 @@ import Persistence
 
 extension SignedUp: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(plan)
+        encoder.encodeMap { map in
+            map.encode(plan, forKey: "plan")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        plan = try decoder.decode()
+        var map = try decoder.decodeMap()
+        plan = try map.decode(forKey: "plan")
     }
 }
 
@@ -620,12 +623,14 @@ is killed, not yet reached by the worker, is lost. As the app moves to the backg
 `await tracker.flush()`, then `store.synchronize()`, or let `trackLifecycle` (above) do both.
 
 The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
-binary encoding written field by field. Any other event is kept in memory only: delivered in this
-run, never written. The log is a directory of append-only segment files, in Application Support on
-Apple platforms (excluded from backups), and in the XDG state directory on Linux, unless
-`directory:` says otherwise. Each segment starts with a magic number and format
-version, and each record is framed by its length and CRC-32. A segment is deleted once every record
-in it has been delivered, so a log with nothing left to send holds no files.
+binary encoding: CBOR (RFC 8949), each event a map of its properties under their names, which any
+CBOR decoder can read. Any other event is kept in memory only: delivered in this run, never
+written. The log is a directory of append-only segment files, in Application Support on Apple
+platforms (excluded from backups), and in the XDG state directory on Linux, unless `directory:`
+says otherwise. Each segment starts with a magic number and format version, and each record, a
+CBOR map of its identifier, timestamp, event name, call site and event, is framed by its length
+and CRC-32. A segment is deleted once every record in it has been delivered, so a log with nothing
+left to send holds no files.
 
 The log never holds more than its byte bound, 5 MiB unless `byteBound:` says otherwise. When a
 record won't fit, the oldest segments are dropped, and each drop is reported on the store's
@@ -635,10 +640,17 @@ corrupt record, keeps every record before it, and reports what it cut. A record 
 started when the app ended comes back with `isRedelivered` set, so a destination can tell it may
 have been sent before. A record is never sent without that mark on disk first: one whose mark can't
 be written waits for a later launch. A segment written by a newer release, in a later format
-version, is left untouched after a rollback. The store makes the log durable against power loss too
+version, is left untouched after a rollback; one in an earlier format version is deleted and
+reported as a corruption. The store makes the log durable against power loss too
 (`fsync`) once per batch; call `store.synchronize()`, after `tracker.flush()`, as the app moves to
 the background or terminates. A recovered record's `ServiceContext` is not kept: it comes back in the top-level
 context.
+
+An event's type can change while records of it are still on disk, as each property is found by
+its name: an app update reads the records the release before it left. A property removed since is
+skipped, an optional property added since reads as `nil`, and properties can be reordered. A record
+the type can no longer read, after a required property was added or a property's type changed, is
+dropped and reported on `dropReports` as undecodable, never delivered with a made-up value.
 
 An event declared with `@Event` (below) is `BinaryCodable` already, so a store keeps it with no
 conformance written by hand.
@@ -673,8 +685,8 @@ let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", 
 ```
 
 The schema holds the name, the version, the consent category and each stored property's name, type
-as written and optionality, in declaration order. The encoding writes and reads those properties in the same
-order, as the hand-written conformance under Persistence does, and a `Sensitive` property keeps its
+as written and optionality, in declaration order. The encoding writes each of those properties under its name,
+as the hand-written conformance under Persistence does, and a `Sensitive` property keeps its
 redaction. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`). A stored
 property whose type isn't `BinaryCodable` is a compile error that names it:
 `static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'`.

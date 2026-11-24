@@ -69,12 +69,15 @@ struct SegmentStorePropertyTests {
 
 extension SegmentStorePropertyTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
-        encoder.encode(label)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+            map.encode(label, forKey: "label")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
-        label = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+        label = try map.decode(forKey: "label")
     }
 }

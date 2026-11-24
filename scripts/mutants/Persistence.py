@@ -13,9 +13,14 @@
 # - Marking a recovered undecodable record as not acknowledged: it never counts as pending, so
 #   it can only change a drop report's count for a recovered segment the bound evicts while it
 #   holds an undecodable record, which no test arranges.
-# - readCount's check that a count fits in the bytes left: every reader of a count still throws
-#   endOfData without it (a string's read checks again; an array's elements run out). It only
-#   bounds the memory an array reserves for a corrupt count, which a test can't observe safely.
+# - count(_:elementSize:)'s check that a count fits in the bytes left: every reader of a count
+#   still throws endOfData without it (a string's read checks again; an array's elements and a
+#   skip run out). It only bounds the memory an array reserves for a corrupt count, which a test
+#   can't observe safely.
+# - find's restoring the position after a key that doesn't match in place: the search that
+#   follows saves the position it is given and returns to it after a miss, so the next key in
+#   place is read from the value after the key the search skipped, which no key matches; the
+#   search then finds it. Only the work done differs.
 # - The directory's fsync after a new segment (pending.directory, synchronizeDirectory): only a
 #   power cut on Linux could observe the entry it makes durable.
 # - The fsync shim's own failure path: fsync on an open regular file doesn't fail in a test.
@@ -30,11 +35,13 @@ C = "StandardConformances.swift"
 D = "BinaryDecoder.swift"
 E = "BinaryEncoder.swift"
 N = "RecordEncoding.swift"
+K = "KeyedBinaryDecoder.swift"
+KE = "KeyedBinaryEncoder.swift"
 
 MUTANTS = [
     # The format.
-    Mutant("headermagic", F, "[0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4D, 1, 0, 0, 0]"),
-    Mutant("headerversion", F, "[0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]"),
+    Mutant("headermagic", F, "[0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4D, 2, 0, 0, 0]"),
+    Mutant("headerversion", F, "[0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0]"),
     Mutant("magicnotchecked", F, "bytes[0..<4].elementsEqual(header[0..<4])", "true"),
     Mutant("newerunreadable", F, "guard version <= Self.version else { return .newerVersion(version) }", "", mode="stmt"),
     Mutant("reservednotchecked", F, "guard bytes[4..<header.count].elementsEqual(header[4...]) else { return .unreadable }", "", mode="stmt"),
@@ -45,15 +52,15 @@ MUTANTS = [
     Mutant("validcountnotadvanced", F, "contents.validByteCount = offset", "", mode="stmt"),
     Mutant("marknotread", F, "contents.marked.insert(bytes.littleEndianUInt32(at: numberOffset))", "", mode="stmt"),
     Mutant("payloadwithkind", F, "start + 1..<payload.upperBound", "start..<payload.upperBound"),
-    Mutant("filealwaysnil", N, "encoder.encode(location.file == location.fileID ? nil : location.file)", "encoder.encode(String?.none)", mode="stmt"),
+    Mutant("filealwaysnil", N, "location.file == location.fileID", "true"),
     Mutant("filefromfileid", N, "file ?? fileID", "fileID"),
     Mutant("trailingbytesaccepted", N, "guard decoder.isAtEnd else { throw .invalidValue }", "", mode="stmt"),
     # The record's identifier, written first and given back on recovery.
-    Mutant("idnotwritten", N, "encoder.encode(record.id)", "", mode="stmt"),
-    Mutant("idnotrestored", N, "return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location)", "return EventRecord(event: event, timestamp: timestamp, sourceLocation: location)", mode="stmt"),
+    Mutant("idnotwritten", N, 'map.encode(record.id, forKey: "id")', "", mode="stmt"),
+    Mutant("idnotrestored", N, "return EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location)", "return EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location)", mode="stmt"),
     Mutant("lengthnotwritten", F, "encoder.overwriteLittleEndian(length, at: 0)", "", mode="stmt"),
     Mutant("checksumnotwritten", F, "encoder.overwriteLittleEndian(checksum, at: 4)", "", mode="stmt"),
-    Mutant("markoffbyone", F, "encoder.encode(index)", "encoder.encode(index + 1)", mode="stmt"),
+    Mutant("markoffbyone", F, "encoder.writeLittleEndian(index)", "encoder.writeLittleEndian(index + 1)", mode="stmt"),
     # Appending.
     Mutant("notwritten", L, "try withErrno { try state.segments[active].file.descriptor.writeAll(frame) }", "", mode="stmt"),
     Mutant("nottagged", L, "tagged.deliveryTag = DeliveryTag(acknowledger: self, position: position)", "", mode="stmt"),
@@ -119,14 +126,42 @@ MUTANTS = [
     Mutant("repeatedtypetraps", R, "byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil", "byName[registration.name] == nil"),
     Mutant("notfoundbyname", R, "byName[registration.name] = registration", "", mode="stmt"),
     # The binary encoding.
-    Mutant("intas32bits", C, "encoder.writeLittleEndian(Int64(self))", "encoder.writeLittleEndian(Int32(truncatingIfNeeded: self))", mode="stmt"),
-    Mutant("truebyte", C, "UInt8(self ? 1 : 0)", "UInt8(self ? 2 : 0)"),
-    Mutant("somebyte", C, "encoder.writeLittleEndian(UInt8(1))", "encoder.writeLittleEndian(UInt8(2))", mode="stmt"),
-    Mutant("arraycount", C, "encoder.writeCount(count)", "encoder.writeCount(count + 1)", mode="stmt"),
+    Mutant("headwidth", E, "buffer.append(initial | 25)", "buffer.append(initial | 26)", mode="stmt"),
+    Mutant("truebyte", C, "self ? BinarySimpleValue.true : BinarySimpleValue.false", "self ? BinarySimpleValue.false : BinarySimpleValue.true"),
+    Mutant("nullbyte", C, "encoder.write(BinarySimpleValue.null)", "encoder.write(BinarySimpleValue.undefined)", mode="stmt"),
+    Mutant("arraycount", C, "encoder.writeHead(.array, count: count)", "encoder.writeHead(.array, count: count + 1)", mode="stmt"),
     Mutant("datesince1970", C, "encoder.encode(timeIntervalSinceReferenceDate)", "encoder.encode(timeIntervalSince1970)", mode="stmt"),
-    Mutant("doubleswapped", C, "encoder.writeLittleEndian(bitPattern)", "encoder.writeLittleEndian(bitPattern.byteSwapped)", mode="stmt", nth=0),
+    Mutant("doubleswapped", C, "encoder.writeBigEndian(bitPattern)", "encoder.writeBigEndian(bitPattern.byteSwapped)", mode="stmt", nth=0),
     Mutant("writebigendian", E, "value.littleEndian", "value.bigEndian", nth=0),
-    Mutant("readbigendian", D, "Integer(littleEndian: raw.loadUnaligned(fromByteOffset: start - bytes.startIndex, as: Integer.self))", "Integer(bigEndian: raw.loadUnaligned(fromByteOffset: start - bytes.startIndex, as: Integer.self))"),
+    Mutant("readbigendian", D, "Integer(bigEndian: raw.loadUnaligned(fromByteOffset: start - bytes.startIndex, as: Integer.self))", "Integer(littleEndian: raw.loadUnaligned(fromByteOffset: start - bytes.startIndex, as: Integer.self))"),
+    # Maps: each key found by its name, in place or by a search, entries never read skipped.
+    Mutant("keyprefixmatches", D, "guard key.count == count else { return .different(end: end) }", "guard key.count <= count else { return .different(end: end) }", mode="stmt"),
+    Mutant("keybytesnotcompared", D, "key[index] != buffer[cursor + index]", "false"),
+    Mutant("keynotwritten", KE, "encoder.writeKey(key)", "", mode="stmt", nth=0),
+    Mutant("entrynotcounted", KE, "count += 1", "", mode="stmt", nth=0),
+    Mutant("mapcountnotpatched", E, "buffer[start] |= UInt8(map.count)", "", mode="stmt"),
+    Mutant("mapheadnotwidened", E, "map.count < 24", "map.count <= 24"),
+    Mutant("outofplacenotsearched", K, "return try search(key)", "return false", mode="stmt"),
+    Mutant("missnotrestored", K, "decoder.position = position", "", mode="stmt", nth=1),
+    # The second copy is decodeValue's; decoder(forKey:)'s, the first, serves only a record's
+    # event, its last key read, so leaving it out changes nothing a caller sees.
+    Mutant("readnotadvanced", K, "nextIndex += 1", "", mode="stmt", nth=1),
+    Mutant("searchindexlost", K, "nextIndex = index", "nextIndex = 0", mode="stmt"),
+    Mutant("mapnotskipped", D, "try skip(itemCount: 2 * count)", "try skip(itemCount: count)", mode="stmt"),
+    Mutant("skipstringnotpassed", D, "cursor += Int(argument)", "", mode="stmt"),
+    Mutant("skiparrayflat", D, "remaining += Int(argument)", "", mode="stmt"),
+    Mutant("skipmaphalf", D, "remaining += 2 * Int(argument)", "remaining += Int(argument)", mode="stmt"),
+    Mutant("skiptagalone", D, "remaining += 1", "", mode="stmt"),
+    Mutant("pendingnotcounted", D, "max(buffer.count - cursor - remaining, 0)", "buffer.count - cursor"),
+    Mutant("skipargumentbytes", D, "argument = argument << 8 | UInt64(buffer[index])", "argument = UInt64(buffer[index])", mode="stmt", nth=0),
+    # A missing optional reads nil; a value of another type throws, so its record is dropped.
+    Mutant("missingoptionalthrows", K, "guard try find(key) else { return nil }", "guard try find(key) else { throw .keyNotFound }", mode="stmt", nth=0),
+    Mutant("nullnotnil", C, "self = .none", "self = .some(try decoder.decode())", mode="stmt"),
+    Mutant("nestednotwrapped", C, "encoder.buffer[start] == BinarySimpleValue.null", "false"),
+    Mutant("arraynotwrapped", C, "encoder.buffer[start] == Self.wrapperHead", "false"),
+    Mutant("typenotchecked", D, "guard head.majorType == majorType else { throw .typeMismatch }", "", mode="stmt"),
+    Mutant("mismatchreadaszero", C, "throw .typeMismatch", "self = Self.zero", mode="stmt", nth=0),
+    Mutant("unsignedtakesnegative", C, "Self.isSigned", "true"),
     Mutant("readunchecked", D, "guard count <= remainingCount else { throw .endOfData }", "", mode="stmt", nth=0),
     Mutant("endbeforeend", D, "position == bytes.endIndex", "position >= bytes.endIndex - 1"),
     # Delivery's acknowledgement, in Destinations.
@@ -158,19 +193,20 @@ MUTANTS = [
     # Sensitive values: only a store's coders write and read them.
     Mutant("ownencoderwrites", E, "self.init(writingSensitiveValues: false)", "self.init(writingSensitiveValues: true)", mode="stmt"),
     Mutant("owndecoderreads", D, "self.init(bytes, readingSensitiveValues: false)", "self.init(bytes, readingSensitiveValues: true)", mode="stmt"),
-    Mutant("sensitivewrittenanyway", C, "guard encoder.writesSensitiveValues else { return }", "", mode="stmt"),
+    Mutant("sensitivewrittenanyway", C, "encoder.writesSensitiveValues", "true"),
+    # nullbyte, in Optional's encoding above Sensitive's, writes the same text first.
+    Mutant("redactednotundefined", C, "encoder.write(BinarySimpleValue.undefined)", "", mode="stmt", nth=1),
     Mutant("sensitivereadanyway", C, "guard decoder.readsSensitiveValues else { throw .invalidValue }", "", mode="stmt"),
     Mutant("segmentwritesnosensitive", E, "writesSensitiveValues = true", "writesSensitiveValues = false", mode="stmt"),
     Mutant("storewritesnosensitive", N, "BinaryEncoder(writingSensitiveValues: true)", "BinaryEncoder(writingSensitiveValues: false)"),
     Mutant("storereadsnosensitive", N, "BinaryDecoder(bytes, readingSensitiveValues: true)", "BinaryDecoder(bytes, readingSensitiveValues: false)"),
     # A record's missing call site.
-    Mutant("nocallsitedecoded", N, "line == 0", "false"),
-    Mutant("nocallsitewrittenline1", N, 'SourceLocation(file: "", fileID: "", function: "", line: 0, column: 0)', 'SourceLocation(file: "", fileID: "", function: "", line: 1, column: 0)'),
+    Mutant("callsitenotdecoded", N, 'try map.decode(forKey: "sourceLocation")', "StoredSourceLocation?.none"),
     # Sensitive's encoding; the first copy is Optional's.
     Mutant("sensitivenotwritten", C, "encoder.encode(value)", "", mode="stmt", nth=1),
     # Refined's encoding: its value as it is, checked again as it is read.
     Mutant("refinednotwritten", C, "encoder.encode(value)", "", mode="stmt", nth=2),
-    Mutant("refinedwrongerror", C, ".invalidValue", "BinaryDecodingError.endOfData", nth=6),
+    Mutant("refinedwrongerror", C, ".invalidValue", "BinaryDecodingError.endOfData", nth=5),
     # A recovered record a constraint added since rejects: dropped and forgotten by the store.
     Mutant("recoveredrejectedadmitted", "Worker.swift", "rejected.append(record)", "admitted.append(record)", mode="stmt", module="Trackers"),
     Mutant("recoveredrejectedkept", "Worker.swift", "forget(rejected)", "", mode="stmt", module="Trackers"),

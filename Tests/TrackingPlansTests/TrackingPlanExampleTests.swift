@@ -38,11 +38,14 @@ struct TrackingPlanExampleTests {
         var latitude: Double
 
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            latitude = try decoder.decode()
+            var map = try decoder.decodeMap()
+            latitude = try map.decode(forKey: "latitude")
         }
 
         func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(latitude)
+            encoder.encodeMap { map in
+                map.encode(latitude, forKey: "latitude")
+            }
         }
     }
 

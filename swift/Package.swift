@@ -21,5 +21,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "604.0.0"),
         .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
+        .package(url: "https://github.com/valpackett/SwiftCBOR", from: "0.6.0"),
     ]
 )

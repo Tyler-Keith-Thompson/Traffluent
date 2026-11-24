@@ -7,6 +7,10 @@
 // and the redelivery marks the intact frames give, and the file cut to the intact prefix, or
 // deleted when nothing is left to deliver.
 // A segment whose header names a later version is left as it is, and nothing is read from it.
+// Record payloads are written here as the model's own CBOR (RFC 8949), not through the library's
+// encoder: a record with its keys in another order or with keys the store doesn't know must still
+// decode, and one missing a required key, holding a value of another type, an unknown event type
+// or bytes past its map must not.
 
 import Checksums
 import Events
@@ -21,13 +25,16 @@ struct Tapped: Event, Hashable {
 
 extension Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
-        encoder.encode(label)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+            map.encode(label, forKey: "label")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
-        label = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
+        label = try map.decode(forKey: "label")
     }
 }
 
@@ -35,7 +42,7 @@ extension Tapped: BinaryCodable {
 enum FuzzPersistence {
     static func main() { runFuzzer(fuzz) }
 
-    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]
+    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
 
     /// A frame of `payload`: its length and CRC-32, little-endian, then the payload.
     static func frame(_ payload: [UInt8]) -> [UInt8] {
@@ -47,21 +54,57 @@ enum FuzzPersistence {
         (0 ..< 4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
     }
 
-    /// A record's payload as the format lays it out, for a record identified by `id` of an event
-    /// named `name` whose fields are `fields`.
-    static func recordPayload(id: UUID, name: String, fields: (inout BinaryEncoder) -> Void) -> [UInt8] {
-        var encoder = BinaryEncoder()
-        encoder.encode(UInt8(0))
-        encoder.encode(id)
-        encoder.encode(Date(timeIntervalSinceReferenceDate: 0))
-        encoder.encode("App/File.swift")
-        encoder.encode(String?.none)
-        encoder.encode("f()")
-        encoder.encode(1)
-        encoder.encode(1)
-        encoder.encode(name)
-        fields(&encoder)
-        return encoder.bytes
+    /// A CBOR head: the major type in the top three bits, the argument in the fewest bytes.
+    static func head(_ majorType: UInt8, _ argument: UInt64) -> [UInt8] {
+        let initial = majorType << 5
+        switch argument {
+        case 0 ..< 24: return [initial | UInt8(argument)]
+        case 24 ... 0xFF: return [initial | 24, UInt8(argument)]
+        case 0x100 ... 0xFFFF: return [initial | 25] + bigEndian(argument, count: 2)
+        case 0x1_0000 ... 0xFFFF_FFFF: return [initial | 26] + bigEndian(argument, count: 4)
+        default: return [initial | 27] + bigEndian(argument, count: 8)
+        }
+    }
+
+    static func bigEndian(_ value: UInt64, count: Int) -> [UInt8] {
+        (0 ..< count).reversed().map { UInt8(truncatingIfNeeded: value >> (8 * UInt64($0))) }
+    }
+
+    static func text(_ string: String) -> [UInt8] {
+        head(3, UInt64(string.utf8.count)) + Array(string.utf8)
+    }
+
+    static func integer(_ value: Int) -> [UInt8] {
+        value < 0 ? head(1, UInt64(-1 - value)) : head(0, UInt64(value))
+    }
+
+    /// A CBOR map of `entries`, in order.
+    static func map(_ entries: [(key: String, value: [UInt8])]) -> [UInt8] {
+        head(5, UInt64(entries.count)) + entries.flatMap { text($0.key) + $0.value }
+    }
+
+    /// A record's payload as the format lays it out, kind byte first: a map of its identifier,
+    /// timestamp, event name, call site and event, with `extra` entries after them.
+    static func recordPayload(id: UUID, name: String, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
+        let identifier = withUnsafeBytes(of: id.uuid) { Array($0) }
+        let location = map([("fileID", text("App/File.swift")), ("function", text("f()")), ("line", integer(1)), ("column", integer(1))])
+        return [0] + map([
+            ("id", head(6, 37) + head(2, 16) + identifier),
+            // 0.0 as a double-precision float.
+            ("timestamp", [0xFB, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ("name", text(name)),
+            ("sourceLocation", location),
+            ("event", event),
+        ] + extra)
+    }
+
+    /// `event`'s map, its keys in the declaration's order or reversed, and an entry the type
+    /// doesn't have (a property removed since) when `unknown` is set.
+    static func eventMap(_ event: Tapped, reversed: Bool, unknown: Bool) -> [UInt8] {
+        var entries: [(key: String, value: [UInt8])] = [("number", integer(event.number)), ("label", text(event.label))]
+        if reversed { entries.reverse() }
+        if unknown { entries.insert(("removed", head(4, 2) + integer(1) + text("x")), at: 1) }
+        return map(entries)
     }
 
     /// A record frame the fuzzer built: the record's identifier and event.
@@ -77,7 +120,7 @@ enum FuzzPersistence {
         /// Each intact record frame's number and payload, in order.
         var records: [(index: UInt32, payload: [UInt8])] = []
         var marked: Set<UInt32> = []
-        /// Whether the header names a later version than 1, which recovery leaves alone.
+        /// Whether the header names a later version than 2, which recovery leaves alone.
         var isNewerVersion = false
     }
 
@@ -85,7 +128,7 @@ enum FuzzPersistence {
     static func read(_ bytes: [UInt8]) -> Reading {
         var reading = Reading()
         guard bytes.count >= 8, Array(bytes[0 ..< 4]) == Array(header[0 ..< 4]) else { return reading }
-        if Int(bytes[4]) | Int(bytes[5]) << 8 > 1 {
+        if Int(bytes[4]) | Int(bytes[5]) << 8 > 2 {
             reading.isNewerVersion = true
             return reading
         }
@@ -123,24 +166,34 @@ enum FuzzPersistence {
             bytes = []
             while !input.isEmpty { bytes.append(UInt8(input.byte())) }
         } else {
-            bytes = input.int(below: 16) == 0 ? [0x54, 0x52, 0x46, 0x4C, UInt8(input.int(below: 3)), 0, 0, 0] : header
+            bytes = input.int(below: 16) == 0 ? [0x54, 0x52, 0x46, 0x4C, UInt8(input.int(below: 4)), 0, 0, 0] : header
             var records: UInt32 = 0
             while !input.isEmpty {
                 switch input.int(below: 8) {
                 case 0, 1, 2:
-                    let event = Tapped(number: input.int(in: -2 ... 2), label: String(repeating: "é", count: input.int(below: 4)))
+                    let event = Tapped(number: input.int(in: -30 ... 300), label: String(repeating: "é", count: input.int(below: 4)))
                     // Identifiers from a few values, so two frames can share one and recovery
                     // must still give each record its own frame's.
                     let id = UUID(uuid: (UInt8(input.int(below: 4)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
-                    let payload = recordPayload(id: id, name: "Tapped") { event.encode(to: &$0) }
+                    // Keys reordered, or ones the store doesn't know, in the event or the record:
+                    // written by another release, and still decodable.
+                    let eventBytes = eventMap(event, reversed: input.int(below: 2) == 0, unknown: input.int(below: 2) == 0)
+                    let extra: [(key: String, value: [UInt8])] = input.int(below: 2) == 0 ? [("context", map([("k", text("v"))]))] : []
+                    let payload = recordPayload(id: id, name: "Tapped", event: eventBytes, extra: extra)
                     built[Array(payload.dropFirst())] = Built(id: id, event: event)
                     bytes += frame(payload)
                     records += 1
                 case 3:
-                    // A record the store can't decode: an unlisted type, or bytes past the event's.
-                    let payload = input.int(below: 2) == 0
-                        ? recordPayload(id: UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), name: "Other") { _ in }
-                        : recordPayload(id: UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), name: "Tapped") { Tapped(number: 0, label: "").encode(to: &$0); $0.encode(UInt8(9)) }
+                    // A record the store can't decode: an unlisted type, bytes past its map, an
+                    // event missing a required property, or one whose property has another type.
+                    let id = UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                    let payload: [UInt8]
+                    switch input.int(below: 4) {
+                    case 0: payload = recordPayload(id: id, name: "Other", event: map([]))
+                    case 1: payload = recordPayload(id: id, name: "Tapped", event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false)) + [0x00]
+                    case 2: payload = recordPayload(id: id, name: "Tapped", event: map([("number", integer(1))]))
+                    default: payload = recordPayload(id: id, name: "Tapped", event: map([("number", text("1")), ("label", text(""))]))
+                    }
                     built[Array(payload.dropFirst())] = .some(nil)
                     bytes += frame(payload)
                     records += 1

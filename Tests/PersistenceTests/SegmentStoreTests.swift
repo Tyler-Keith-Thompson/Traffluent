@@ -110,12 +110,14 @@ struct SegmentStoreTests {
         #expect(actual.map(\.isRedelivered) == expectedRedelivered)
     }
 
-    @Test("A segment is the TRFL header, version 1, then frames of length, CRC-32 and payload, a record's payload starting with its identifier")
+    @Test("A segment is the TRFL header, version 2, then frames of length, CRC-32 and payload, a record's payload a CBOR map starting with its identifier")
     func format() throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
-        let expectedHeader: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]
+        let expectedHeader: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
+        // A map of five entries, the first "id": a 16-byte byte string tagged 37.
+        let expectedMapStart: [UInt8] = [0xA5, 0x62, 0x69, 0x64, 0xD8, 0x25, 0x50]
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
 
         let record = EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location)
@@ -133,7 +135,8 @@ struct SegmentStoreTests {
         #expect(length == payload.count)
         #expect(checksum == payload.withUnsafeBytes { CRC32.checksum(of: $0) })
         #expect(payload.first == 0)
-        #expect(Array(payload[1..<17]) == expectedIdentifier)
+        #expect(Array(payload[1..<8]) == expectedMapStart)
+        #expect(Array(payload[8..<24]) == expectedIdentifier)
         #expect(sut.byteCount == bytes.count)
     }
 
@@ -219,10 +222,13 @@ struct SegmentStoreTests {
 
 extension SegmentStoreTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
     }
 }

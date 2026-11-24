@@ -42,15 +42,22 @@ struct DatabaseStoreExitTests {
 }
 
 extension DatabaseStoreExitTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {}
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { _ in }
+    }
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        _ = try decoder.decodeMap()
+    }
 }
 
 extension DatabaseStoreExitTests.Renamed: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {}
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { _ in }
+    }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        _ = try decoder.decodeMap()
         self = .only
     }
 }

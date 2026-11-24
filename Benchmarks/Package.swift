@@ -30,6 +30,7 @@ let package = Package(
                 .product(name: "Persistence", package: "Traffluent"),
                 .product(name: "Events", package: "Traffluent"),
                 .product(name: "Trackers", package: "Traffluent"),
+                .product(name: "Checksums", package: "Traffluent"),
             ],
             path: "Benchmarks/PersistenceBenchmarks",
             plugins: [.plugin(name: "BenchmarkPlugin", package: "benchmark")]

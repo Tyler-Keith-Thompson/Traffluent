@@ -18,13 +18,18 @@ public struct ApplicationBackgrounded: Event, BinaryCodable, Hashable {
     /// The event for a move to the background.
     public init() {}
 
-    /// Writes nothing: the event has no properties.
+    /// Writes an empty map: the event has no properties.
     ///
-    /// - Parameter encoder: Where the bytes would go.
-    public func encode(to encoder: inout BinaryEncoder) {}
+    /// - Parameter encoder: Where the bytes go.
+    public func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { _ in }
+    }
 
-    /// Reads nothing: the event has no properties.
+    /// Reads a map, skipping any entries: the event has no properties.
     ///
-    /// - Parameter decoder: Where the bytes would come from.
-    public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
+    /// - Parameter decoder: Where the bytes come from.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map.
+    public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        _ = try decoder.decodeMap()
+    }
 }

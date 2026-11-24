@@ -15,7 +15,8 @@ public enum DropReport: Sendable, Hashable {
     /// enough, lost if it ends first.
     case writeFailed(recordCount: Int, timestamps: ClosedRange<Date>)
     /// Recovery read `recordCount` intact records it couldn't decode: their event type isn't in
-    /// the store's `events`, or its ``BinaryCodable/init(from:)`` threw.
+    /// the store's `events`, or its ``BinaryCodable/init(from:)`` threw, as it does for a record
+    /// written before a required property was added or a property's type changed.
     case undecodable(recordCount: Int)
     /// Recovery found a torn or corrupt record, or a segment header it couldn't read, and
     /// discarded the `byteCount` bytes from there to the end of the segment.

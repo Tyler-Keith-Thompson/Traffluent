@@ -24,10 +24,13 @@ struct EventMacroSensitiveTests {
         #expect(actual == expected)
     }
 
-    @Test("An encoder of one's own writes the other properties and nothing for the sensitive one")
+    @Test("An encoder of one's own writes the other properties and undefined for the sensitive one")
     func ownEncoderRedacts() {
         var reference = BinaryEncoder()
-        reference.encode("pro")
+        reference.encodeMap { map in
+            map.encode("pro", forKey: "plan")
+            map.encode(Sensitive("anything"), forKey: "email")
+        }
         let expected = reference.bytes
         var sut = BinaryEncoder()
 

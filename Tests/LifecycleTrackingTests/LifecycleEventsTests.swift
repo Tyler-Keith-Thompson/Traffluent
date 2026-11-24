@@ -19,12 +19,14 @@ struct LifecycleEventsTests {
         #expect(decoder.isAtEnd)
     }
 
-    @Test("An update encodes its previous version, then its version, and decodes back")
+    @Test("An update encodes as a map of its previous version, then its version, and decodes back")
     func updatedRoundTrip() throws {
         let expected = ApplicationUpdated(previousVersion: "1.1.0", version: "1.2.0")
         var reference = BinaryEncoder()
-        reference.encode("1.1.0")
-        reference.encode("1.2.0")
+        reference.encodeMap { map in
+            map.encode("1.1.0", forKey: "previousVersion")
+            map.encode("1.2.0", forKey: "version")
+        }
         var encoder = BinaryEncoder()
         expected.encode(to: &encoder)
         var decoder = BinaryDecoder(encoder.bytes)
@@ -36,13 +38,15 @@ struct LifecycleEventsTests {
         #expect(decoder.isAtEnd)
     }
 
-    @Test("Bytes holding a previous version but no version don't decode as an update")
+    @Test("A map holding a previous version but no version doesn't decode as an update")
     func updatedTruncated() {
         var encoder = BinaryEncoder()
-        encoder.encode("1.1.0")
+        encoder.encodeMap { map in
+            map.encode("1.1.0", forKey: "previousVersion")
+        }
         var decoder = BinaryDecoder(encoder.bytes)
 
-        #expect(throws: BinaryDecodingError.self) {
+        #expect(throws: BinaryDecodingError.keyNotFound) {
             try ApplicationUpdated(from: &decoder)
         }
     }
@@ -69,20 +73,23 @@ struct LifecycleEventsTests {
         }
     }
 
-    @Test("A move to the background and an end encode as no bytes, and decode from none")
+    @Test("A move to the background and an end encode as an empty map, and decode from one")
     func propertylessRoundTrip() throws {
+        let expectedBytes: [UInt8] = [0xA0]
         var backgroundedEncoder = BinaryEncoder()
         ApplicationBackgrounded().encode(to: &backgroundedEncoder)
         var terminatedEncoder = BinaryEncoder()
         ApplicationTerminated().encode(to: &terminatedEncoder)
-        var backgroundedDecoder = BinaryDecoder([])
-        var terminatedDecoder = BinaryDecoder([])
+        var backgroundedDecoder = BinaryDecoder(expectedBytes)
+        var terminatedDecoder = BinaryDecoder(expectedBytes)
 
         let actualBackgrounded = try ApplicationBackgrounded(from: &backgroundedDecoder)
         let actualTerminated = try ApplicationTerminated(from: &terminatedDecoder)
 
-        #expect(backgroundedEncoder.bytes.isEmpty)
-        #expect(terminatedEncoder.bytes.isEmpty)
+        #expect(backgroundedEncoder.bytes == expectedBytes)
+        #expect(terminatedEncoder.bytes == expectedBytes)
+        #expect(backgroundedDecoder.isAtEnd)
+        #expect(terminatedDecoder.isAtEnd)
         #expect(actualBackgrounded == ApplicationBackgrounded())
         #expect(actualTerminated == ApplicationTerminated())
     }
@@ -115,15 +122,17 @@ struct LifecycleEventsTests {
         #expect(actual == expected)
     }
 
-    @Test("An update encodes as its two versions and decodes back, for any two strings")
+    @Test("An update encodes as a map of its two versions and decodes back, for any two strings")
     func updatedEncodingProperty() async {
         await propertyCheck(count: 300, input: Gen.uint8().array(of: 0...24), Gen.uint8().array(of: 0...24)) { previousBytes, versionBytes in
             let previous = String(decoding: previousBytes, as: UTF8.self)
             let version = String(decoding: versionBytes, as: UTF8.self)
             let update = ApplicationUpdated(previousVersion: previous, version: version)
             var reference = BinaryEncoder()
-            reference.encode(previous)
-            reference.encode(version)
+            reference.encodeMap { map in
+                map.encode(previous, forKey: "previousVersion")
+                map.encode(version, forKey: "version")
+            }
 
             var encoder = BinaryEncoder()
             update.encode(to: &encoder)

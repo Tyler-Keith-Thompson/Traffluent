@@ -16,14 +16,6 @@ struct SegmentStoreRecoveryTests {
 
     struct Other: Event {}
 
-    /// An earlier version of `Tapped`, with a field the current one doesn't have.
-    struct WiderTapped: Event {
-        static let name = "Tapped"
-
-        var number: Int
-        var extra: Int
-    }
-
     @Test("A torn last record is cut off; every record before it is recovered, and the cut bytes are reported")
     func tornLastRecord() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreRecoveryTests-\(UUID().uuidString)")
@@ -157,8 +149,8 @@ struct SegmentStoreRecoveryTests {
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
         let newer = directory.appending("00000000000000000001.segment")
-        // Version 2, with a reserved byte set and bytes this version can't read.
-        let expected = Data([0x54, 0x52, 0x46, 0x4C, 2, 0, 7, 0, 0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3])
+        // Version 3, with a reserved byte set and bytes this version can't read.
+        let expected = Data([0x54, 0x52, 0x46, 0x4C, 3, 0, 7, 0, 0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3])
         try expected.write(to: URL(fileURLWithPath: newer.string))
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
@@ -172,7 +164,7 @@ struct SegmentStoreRecoveryTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.string) == ["00000000000000000001.segment"])
     }
 
-    @Test("A segment whose header has the wrong magic number, or names an earlier version than 1, is discarded whole and reported")
+    @Test("A segment whose header has the wrong magic number, or names an earlier version than 2, version 1's records included, is discarded whole and reported")
     func unreadableHeader() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreRecoveryTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -182,16 +174,19 @@ struct SegmentStoreRecoveryTests {
         let path = directory.appending("00000000000000000001.segment")
         var magic = try #require(FileManager.default.contents(atPath: path.string))
         var version = magic
+        var first = magic
         magic[0] = 0x55
         version[4] = 0
+        first[4] = 1
         try magic.write(to: URL(fileURLWithPath: path.string))
         try version.write(to: URL(fileURLWithPath: directory.appending("00000000000000000002.segment").string))
-        let expected = [DropReport.corruption(byteCount: magic.count), .corruption(byteCount: version.count)]
+        try first.write(to: URL(fileURLWithPath: directory.appending("00000000000000000003.segment").string))
+        let expected = [DropReport.corruption(byteCount: magic.count), .corruption(byteCount: version.count), .corruption(byteCount: first.count)]
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
 
         var reports = sut.dropReports.makeAsyncIterator()
-        let actual = [try #require(await reports.next()), try #require(await reports.next())]
+        let actual = [try #require(await reports.next()), try #require(await reports.next()), try #require(await reports.next())]
         #expect(actual == expected)
         #expect(sut.takeRecoveredRecords().isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.string).isEmpty)
@@ -203,7 +198,7 @@ struct SegmentStoreRecoveryTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
         try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000001.segment").string, contents: Data()))
-        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0])))
+        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0])))
         // A short third segment, the only one recovery reports.
         try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000003.segment").string, contents: Data([0x54, 0x52, 0x46])))
         let expected = DropReport.corruption(byteCount: 3)
@@ -286,13 +281,21 @@ struct SegmentStoreRecoveryTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.string).isEmpty)
     }
 
-    @Test("A record holding bytes past its event's fields, from a different version of the type, is undecodable")
+    @Test("A record holding bytes past its map, in an intact frame, is undecodable")
     func trailingBytes() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreRecoveryTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
-        let earlier = try SegmentStore(events: [WiderTapped.self], directory: directory)
-        _ = earlier.append(EventRecord(event: WiderTapped(number: 1, extra: 2), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        let earlier = try SegmentStore(events: [Tapped.self], directory: directory)
+        _ = earlier.append(EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        let path = directory.appending("00000000000000000001.segment")
+        let bytes = try #require(FileManager.default.contents(atPath: path.string)).map { $0 }
+        // The record's frame again, its payload one byte longer, its length and checksum to match.
+        let payload = Array(bytes[16...]) + [0x00]
+        let length = UInt32(payload.count)
+        let checksum = payload.withUnsafeBytes { CRC32.checksum(of: $0) }
+        let frame = (0 ..< 4).map { UInt8(truncatingIfNeeded: length >> (8 * $0)) } + (0 ..< 4).map { UInt8(truncatingIfNeeded: checksum >> (8 * $0)) } + payload
+        try Data(Array(bytes[0 ..< 8]) + frame).write(to: URL(fileURLWithPath: path.string))
         let expected = DropReport.undecodable(recordCount: 1)
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
@@ -344,28 +347,23 @@ struct SegmentStoreRecoveryTests {
 
 extension SegmentStoreRecoveryTests.Tapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
+        encoder.encodeMap { map in
+            map.encode(number, forKey: "number")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
+        var map = try decoder.decodeMap()
+        number = try map.decode(forKey: "number")
     }
 }
 
 extension SegmentStoreRecoveryTests.Other: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {}
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
-}
-
-extension SegmentStoreRecoveryTests.WiderTapped: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(number)
-        encoder.encode(extra)
+        encoder.encodeMap { _ in }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        number = try decoder.decode()
-        extra = try decoder.decode()
+        _ = try decoder.decodeMap()
     }
 }

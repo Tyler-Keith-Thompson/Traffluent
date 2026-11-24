@@ -13,7 +13,9 @@ struct RecordStoreConstraintTests {
         var count: Int
 
         func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(count)
+            encoder.encodeMap { map in
+                map.encode(count, forKey: "count")
+            }
         }
 
         init(count: Int) {
@@ -21,7 +23,8 @@ struct RecordStoreConstraintTests {
         }
 
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            count = try decoder.decode()
+            var map = try decoder.decodeMap()
+            count = try map.decode(forKey: "count")
         }
     }
 
@@ -37,7 +40,9 @@ struct RecordStoreConstraintTests {
         }
 
         func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(count)
+            encoder.encodeMap { map in
+                map.encode(count, forKey: "count")
+            }
         }
 
         init(count: Int) {
@@ -45,7 +50,8 @@ struct RecordStoreConstraintTests {
         }
 
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            count = try decoder.decode()
+            var map = try decoder.decodeMap()
+            count = try map.decode(forKey: "count")
         }
     }
 
@@ -132,7 +138,8 @@ struct RecordStoreConstraintTests {
 
     @Test("Decoding a refined value whose bytes run out throws what reading the value throws")
     func refinedDecodingTruncated() {
-        var sut = BinaryDecoder([0, 1])
+        // An unsigned integer's 8-byte head, cut after two of its bytes.
+        var sut = BinaryDecoder([0x1B, 0, 1])
 
         #expect(throws: BinaryDecodingError.endOfData) {
             _ = try sut.decode(Refined<Int, Positive>.self)

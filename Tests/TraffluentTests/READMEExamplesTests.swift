@@ -295,11 +295,14 @@ struct READMEExamplesTests {
 
 extension READMEExamplesTests.SignedUp: BinaryCodable {
     func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(plan)
+        encoder.encodeMap { map in
+            map.encode(plan, forKey: "plan")
+        }
     }
 
     init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        plan = try decoder.decode()
+        var map = try decoder.decodeMap()
+        plan = try map.decode(forKey: "plan")
     }
 }
 

@@ -5,8 +5,8 @@ import SwiftSyntaxMacros
 
 /// `@Event`: an extension of the struct it is attached to that conforms it to `Event` and
 /// `BinaryCodable`, with its `name`, `consentCategory`, `schema` and, when a property declares
-/// constraints with `@Constrained`, its `constraintViolation()`, and its encoding field by field
-/// in declaration order.
+/// constraints with `@Constrained`, its `constraintViolation()`, and its encoding: a map of its
+/// stored properties, each under its name.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
@@ -82,15 +82,20 @@ public struct EventMacro: ExtensionMacro {
         return "\(access)func constraintViolation() -> Events.ConstraintViolation? {\n" + checks.map { $0 + "\n" }.joined() + "return nil\n}"
     }
 
+    /// `encode(to:)`, writing a map with each property under its name, in declaration order.
     private static func encode(_ properties: [StoredProperty], access: String) -> String {
-        let lines = properties.map { "    encoder.encode(self.\($0.identifier))" }
-        return "\(access)func encode(to encoder: inout Persistence.BinaryEncoder) {\n" + lines.map { $0 + "\n" }.joined() + "}"
+        let lines = properties.map { "        map.encode(self.\($0.identifier), forKey: \"\($0.name)\")\n" }.joined()
+        let body = properties.isEmpty ? "    encoder.encodeMap { _ in\n    }\n" : "    encoder.encodeMap { map in\n\(lines)    }\n"
+        return "\(access)func encode(to encoder: inout Persistence.BinaryEncoder) {\n\(body)}"
     }
 
+    /// `init(from:)`, reading each property by its name, in declaration order, which finds each
+    /// at once while the declaration hasn't changed. An optional property missing from the map, as
+    /// one added since it was written is, reads as `nil`: `decode(forKey:)`'s optional overload.
     private static func decode(_ properties: [StoredProperty], access: String) -> String {
-        let lines = properties.map { "    self.\($0.identifier) = try decoder.decode()" }
-        return "\(access)init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {\n"
-            + lines.map { $0 + "\n" }.joined() + "}"
+        let lines = properties.map { "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\")\n" }.joined()
+        let body = properties.isEmpty ? "    _ = try decoder.decodeMap()\n" : "    var map = try decoder.decodeMap()\n\(lines)"
+        return "\(access)init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {\n\(body)}"
     }
 
     /// One function per property whose label is the property's name, and a body that calls each:

@@ -37,21 +37,24 @@ struct EventMacroPropertyTests {
         }
 
         func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(total)
-            encoder.encode(currency)
-            encoder.encode(coupon)
-            encoder.encode(items)
-            encoder.encode(express)
-            encoder.encode(discount)
+            encoder.encodeMap { map in
+                map.encode(total, forKey: "total")
+                map.encode(currency, forKey: "currency")
+                map.encode(coupon, forKey: "coupon")
+                map.encode(items, forKey: "items")
+                map.encode(express, forKey: "express")
+                map.encode(discount, forKey: "discount")
+            }
         }
 
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            total = try decoder.decode()
-            currency = try decoder.decode()
-            coupon = try decoder.decode()
-            items = try decoder.decode()
-            express = try decoder.decode()
-            discount = try decoder.decode()
+            var map = try decoder.decodeMap()
+            total = try map.decode(forKey: "total")
+            currency = try map.decode(forKey: "currency")
+            coupon = try map.decode(forKey: "coupon")
+            items = try map.decode(forKey: "items")
+            express = try map.decode(forKey: "express")
+            discount = try map.decode(forKey: "discount")
         }
     }
 

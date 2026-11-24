@@ -7,7 +7,7 @@ import TraffluentTestSupport
 
 @Suite("Sessions: the events and the timeout's checks")
 struct SessionEventsTests {
-    @Test("A start encodes as no bytes, and decodes from none")
+    @Test("A start encodes as an empty map, and decodes from one")
     func startedRoundTrip() throws {
         let expected = SessionStarted()
         var encoder = BinaryEncoder()
@@ -16,12 +16,12 @@ struct SessionEventsTests {
 
         let actual = try SessionStarted(from: &decoder)
 
-        #expect(encoder.bytes.isEmpty)
+        #expect(encoder.bytes == [0xA0])
         #expect(actual == expected)
         #expect(decoder.isAtEnd)
     }
 
-    @Test("An end encodes its duration's seconds, then its attoseconds, and decodes back", arguments: [
+    @Test("An end encodes as a map of its duration's seconds, then its attoseconds, and decodes back", arguments: [
         Duration.zero,
         .seconds(90),
         .milliseconds(1_500),
@@ -31,8 +31,10 @@ struct SessionEventsTests {
     func endedRoundTrip(duration: Duration) throws {
         let expected = SessionEnded(duration: duration)
         var reference = BinaryEncoder()
-        reference.encode(duration.components.seconds)
-        reference.encode(duration.components.attoseconds)
+        reference.encodeMap { map in
+            map.encode(duration.components.seconds, forKey: "seconds")
+            map.encode(duration.components.attoseconds, forKey: "attoseconds")
+        }
         var encoder = BinaryEncoder()
         expected.encode(to: &encoder)
         var decoder = BinaryDecoder(encoder.bytes)
@@ -44,13 +46,15 @@ struct SessionEventsTests {
         #expect(decoder.isAtEnd)
     }
 
-    @Test("Bytes holding seconds but no attoseconds don't decode as an end")
+    @Test("A map holding seconds but no attoseconds doesn't decode as an end")
     func endedTruncated() {
         var encoder = BinaryEncoder()
-        encoder.encode(Int64(90))
+        encoder.encodeMap { map in
+            map.encode(Int64(90), forKey: "seconds")
+        }
         var decoder = BinaryDecoder(encoder.bytes)
 
-        #expect(throws: BinaryDecodingError.self) {
+        #expect(throws: BinaryDecodingError.keyNotFound) {
             try SessionEnded(from: &decoder)
         }
     }

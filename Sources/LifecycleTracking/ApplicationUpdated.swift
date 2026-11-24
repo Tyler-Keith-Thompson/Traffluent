@@ -35,20 +35,24 @@ public struct ApplicationUpdated: Event, BinaryCodable, Hashable {
         self.version = version
     }
 
-    /// Writes the previous version, then the new one, to `encoder`.
+    /// Writes a map of the previous version (`previousVersion`) and the new one (`version`) to
+    /// `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(previousVersion)
-        encoder.encode(version)
+        encoder.encodeMap { map in
+            map.encode(previousVersion, forKey: "previousVersion")
+            map.encode(version, forKey: "version")
+        }
     }
 
-    /// Reads the previous version, then the new one, from `decoder`.
+    /// Reads the previous version and the new one from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold two versions.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with both versions.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        previousVersion = try decoder.decode()
-        version = try decoder.decode()
+        var map = try decoder.decodeMap()
+        previousVersion = try map.decode(forKey: "previousVersion")
+        version = try map.decode(forKey: "version")
     }
 }

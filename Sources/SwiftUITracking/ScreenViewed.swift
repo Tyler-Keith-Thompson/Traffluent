@@ -27,19 +27,22 @@ public struct ScreenViewed: Event, BinaryCodable, Hashable {
         self.screen = screen
     }
 
-    /// Writes the screen's name to `encoder`.
+    /// Writes a map of the screen's name (`screen`) to `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(screen)
+        encoder.encodeMap { map in
+            map.encode(screen, forKey: "screen")
+        }
     }
 
     /// Reads the screen's name from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a name.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with a name.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        screen = try decoder.decode()
+        var map = try decoder.decodeMap()
+        screen = try map.decode(forKey: "screen")
     }
 }
 #endif

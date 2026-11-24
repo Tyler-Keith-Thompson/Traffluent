@@ -38,20 +38,23 @@ public struct ControlActivated: Event, BinaryCodable, Hashable {
         self.kind = kind
     }
 
-    /// Writes the control's name, then its kind, to `encoder`.
+    /// Writes a map of the control's name (`control`) and its kind (`kind`) to `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(control)
-        encoder.encode(kind)
+        encoder.encodeMap { map in
+            map.encode(control, forKey: "control")
+            map.encode(kind, forKey: "kind")
+        }
     }
 
-    /// Reads the control's name, then its kind, from `decoder`.
+    /// Reads the control's name and its kind from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a name and a kind.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with a name and a kind.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        control = try decoder.decode()
-        kind = try decoder.decode()
+        var map = try decoder.decodeMap()
+        control = try map.decode(forKey: "control")
+        kind = try map.decode(forKey: "kind")
     }
 }

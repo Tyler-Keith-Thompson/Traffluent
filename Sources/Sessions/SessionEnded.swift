@@ -30,21 +30,25 @@ public struct SessionEnded: Event, BinaryCodable, Hashable {
         self.duration = duration
     }
 
-    /// Writes the duration's whole seconds, then its attoseconds, to `encoder`.
+    /// Writes a map of the duration's whole seconds (`seconds`) and its attoseconds
+    /// (`attoseconds`) to `encoder`.
     ///
     /// - Parameter encoder: Where the bytes go.
     public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encode(duration.components.seconds)
-        encoder.encode(duration.components.attoseconds)
+        encoder.encodeMap { map in
+            map.encode(duration.components.seconds, forKey: "seconds")
+            map.encode(duration.components.attoseconds, forKey: "attoseconds")
+        }
     }
 
-    /// Reads the duration's whole seconds, then its attoseconds, from `decoder`.
+    /// Reads the duration's whole seconds and its attoseconds from `decoder`.
     ///
     /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold two `Int64`s.
+    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map of two `Int64`s.
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        let seconds: Int64 = try decoder.decode()
-        let attoseconds: Int64 = try decoder.decode()
+        var map = try decoder.decodeMap()
+        let seconds: Int64 = try map.decode(forKey: "seconds")
+        let attoseconds: Int64 = try map.decode(forKey: "attoseconds")
         duration = Duration(secondsComponent: seconds, attosecondsComponent: attoseconds)
     }
 }

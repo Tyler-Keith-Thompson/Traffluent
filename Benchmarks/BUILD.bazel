@@ -75,6 +75,7 @@ simulated_benchmark(
         "//Sources/Persistence",
         "//Sources/Events",
         "//Sources/Trackers",
+        "//Sources/Checksums",
     ],
     manifests = MANIFESTS,
     library_directories = LIBRARY_DIRECTORIES,

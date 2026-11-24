@@ -56,6 +56,7 @@ let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
     .package(url: "https://github.com/swiftlang/swift-syntax", from: "604.0.0"),
     .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
+    .package(url: "https://github.com/valpackett/SwiftCBOR", from: "0.6.0"),
 ]
 
 let targets: [Target] = [
@@ -98,7 +99,7 @@ let targets: [Target] = [
     .target(name: "TraffluentTestSupport", path: "Tests/TraffluentTestSupport", exclude: bazelFiles),
 
     .testTarget(name: "EventsTests", dependencies: ["Events", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
-    .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "EventMacrosTests", dependencies: ["EventMacros", "Events", "Persistence", "Trackers", "Destinations", .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SwiftCBOR", package: "swiftcbor"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlansTests", dependencies: ["TrackingPlans", "EventMacros", "Events", .product(name: "JSONSchema", package: "swift-json-schema"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlanTestingTests", dependencies: ["TrackingPlanTesting", "TrackingPlans", "Events"], exclude: bazelFiles),
     .testTarget(name: "TrackerTestingTests", dependencies: ["TrackerTesting", "Trackers", "Events", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
@@ -116,7 +117,7 @@ let targets: [Target] = [
     .testTarget(name: "SessionsTests", dependencies: ["Sessions", "Events", "Persistence", "Trackers", "LifecycleTracking", .product(name: "Clocks", package: "swift-clocks"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SystemPackage", package: "swift-system"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "StandardContextTests", dependencies: ["StandardContext", "Events", "Persistence", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SystemPackage", package: "swift-system"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
-    .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SwiftCBOR", package: "swiftcbor"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", "TrackerTesting", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
 ]
 

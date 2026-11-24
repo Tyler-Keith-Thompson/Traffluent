@@ -24,6 +24,7 @@ swift_library(
         "//Sources/Trackers",
         "//Sources/Destinations",
         "@swiftpkg_swift_property_based//:PropertyBased",
+        "@swiftpkg_swiftcbor//:SwiftCBOR",
         "//Tests/TraffluentTestSupport",
     ],
 )

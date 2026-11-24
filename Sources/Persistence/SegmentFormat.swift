@@ -4,22 +4,24 @@ import Events
 /// The bytes of a segment file.
 ///
 /// A segment starts with an 8-byte header: the magic number `TRFL` (`54 52 46 4C`), the format
-/// version as a little-endian `UInt16` (1), and two reserved zero bytes. Frames follow, each a
+/// version as a little-endian `UInt16` (2), and two reserved zero bytes. Frames follow, each a
 /// little-endian `UInt32` payload length, the payload's CRC-32 as a little-endian `UInt32`, and the
 /// payload. A payload's first byte is its kind:
 ///
-/// - 0, a record: its bytes in ``RecordEncoding``. Records are numbered from 0 in the order they
-///   appear.
+/// - 0, a record: its bytes in ``RecordEncoding``, a CBOR map. Records are numbered from 0 in the
+///   order they appear.
 /// - 1, a delivery mark: the numbers, as little-endian `UInt32`s, of records in this segment a
 ///   delivery was about to hand to destinations.
 ///
 /// A segment whose header names a later version is one a newer release of the app wrote, read
-/// back after a rollback: it is left alone for that release to read again.
+/// back after a rollback: it is left alone for that release to read again. One whose header names
+/// an earlier version holds records in a form this release can't read: recovery deletes it and
+/// reports its bytes as a corruption.
 enum SegmentFormat {
     /// The header every segment of this version starts with.
-    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 1, 0, 0, 0]
+    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
     /// The format version `header` names.
-    static let version: UInt16 = 1
+    static let version: UInt16 = 2
     /// The bytes before each frame's payload: its length and checksum.
     static let frameHeaderByteCount = 8
 
@@ -106,7 +108,7 @@ enum SegmentFormat {
     static func deliveryMarkFrame(of indices: [UInt32]) -> [UInt8] {
         var encoder = frameEncoder(of: .deliveryMark)
         for index in indices {
-            encoder.encode(index)
+            encoder.writeLittleEndian(index)
         }
         return sealed(encoder)
     }

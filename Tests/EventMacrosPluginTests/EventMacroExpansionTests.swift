@@ -9,7 +9,7 @@ import Testing
 
 @Suite("@Event expansions")
 struct EventMacroExpansionTests {
-    @Test("A struct gets Event, BinaryCodable, a schema, a requirement per property and its encoding in declaration order")
+    @Test("A struct gets Event, BinaryCodable, a schema, a requirement per property and its encoding, a map of each property under its name, in declaration order")
     func structure() {
         assertMacroExpansion(
             """
@@ -45,13 +45,16 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.plan)
-                        encoder.encode(self.seats)
+                        encoder.encodeMap { map in
+                            map.encode(self.plan, forKey: "plan")
+                            map.encode(self.seats, forKey: "seats")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.plan = try decoder.decode()
-                        self.seats = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.plan = try map.decode(forKey: "plan")
+                        self.seats = try map.decode(forKey: "seats")
                     }
                 }
                 """,
@@ -97,11 +100,14 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.campaign)
+                        encoder.encodeMap { map in
+                            map.encode(self.campaign, forKey: "campaign")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.campaign = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.campaign = try map.decode(forKey: "campaign")
                     }
                 }
                 """#,
@@ -128,9 +134,12 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """,
@@ -165,9 +174,12 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """##,
@@ -203,9 +215,12 @@ struct EventMacroExpansionTests {
                     }
 
                     public func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     public init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
 
@@ -219,9 +234,12 @@ struct EventMacroExpansionTests {
                     }
 
                     package func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     package init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """,
@@ -298,17 +316,20 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.assigned)
-                        encoder.encode(self.first)
-                        encoder.encode(self.second)
-                        encoder.encode(self.observed)
+                        encoder.encodeMap { map in
+                            map.encode(self.assigned, forKey: "assigned")
+                            map.encode(self.first, forKey: "first")
+                            map.encode(self.second, forKey: "second")
+                            map.encode(self.observed, forKey: "observed")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.assigned = try decoder.decode()
-                        self.first = try decoder.decode()
-                        self.second = try decoder.decode()
-                        self.observed = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.assigned = try map.decode(forKey: "assigned")
+                        self.first = try map.decode(forKey: "first")
+                        self.second = try map.decode(forKey: "second")
+                        self.observed = try map.decode(forKey: "observed")
                     }
                 }
                 """,
@@ -395,25 +416,28 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.a)
-                        encoder.encode(self.b)
-                        encoder.encode(self.c)
-                        encoder.encode(self.d)
-                        encoder.encode(self.e)
-                        encoder.encode(self.f)
-                        encoder.encode(self.g)
-                        encoder.encode(self.h)
+                        encoder.encodeMap { map in
+                            map.encode(self.a, forKey: "a")
+                            map.encode(self.b, forKey: "b")
+                            map.encode(self.c, forKey: "c")
+                            map.encode(self.d, forKey: "d")
+                            map.encode(self.e, forKey: "e")
+                            map.encode(self.f, forKey: "f")
+                            map.encode(self.g, forKey: "g")
+                            map.encode(self.h, forKey: "h")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.a = try decoder.decode()
-                        self.b = try decoder.decode()
-                        self.c = try decoder.decode()
-                        self.d = try decoder.decode()
-                        self.e = try decoder.decode()
-                        self.f = try decoder.decode()
-                        self.g = try decoder.decode()
-                        self.h = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.a = try map.decode(forKey: "a")
+                        self.b = try map.decode(forKey: "b")
+                        self.c = try map.decode(forKey: "c")
+                        self.d = try map.decode(forKey: "d")
+                        self.e = try map.decode(forKey: "e")
+                        self.f = try map.decode(forKey: "f")
+                        self.g = try map.decode(forKey: "g")
+                        self.h = try map.decode(forKey: "h")
                     }
                 }
                 """,
@@ -458,13 +482,16 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encode(self.`default`)
-                        encoder.encode(self.`var`)
+                        encoder.encodeMap { map in
+                            map.encode(self.`default`, forKey: "default")
+                            map.encode(self.`var`, forKey: "var")
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        self.`default` = try decoder.decode()
-                        self.`var` = try decoder.decode()
+                        var map = try decoder.decodeMap()
+                        self.`default` = try map.decode(forKey: "default")
+                        self.`var` = try map.decode(forKey: "var")
                     }
                 }
                 """,
@@ -491,9 +518,12 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """,
@@ -520,9 +550,12 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """,
@@ -553,9 +586,12 @@ struct EventMacroExpansionTests {
                     }
 
                     func encode(to encoder: inout Persistence.BinaryEncoder) {
+                        encoder.encodeMap { _ in
+                        }
                     }
 
                     init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
+                        _ = try decoder.decodeMap()
                     }
                 }
                 """,
