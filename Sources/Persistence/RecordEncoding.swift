@@ -27,7 +27,13 @@ package enum RecordEncoding {
             map.encode(record.timestamp, forKey: "timestamp")
             map.encode(registration.name, forKey: "name")
             map.encode(registration.version, forKey: "version")
-            map.encode(record.sourceLocation.map(StoredSourceLocation.init(location:)), forKey: "sourceLocation")
+            if let location = record.sourceLocation {
+                // The map itself, with no copy of the location: a map's head is neither `null`
+                // nor an optional's wrapper, so these are the bytes the optional would write.
+                map.encode(forKey: "sourceLocation") { StoredSourceLocation.encode(location, to: &$0) }
+            } else {
+                map.encode(StoredSourceLocation?.none, forKey: "sourceLocation")
+            }
             map.encode(forKey: "event") { registration.encode(record.event, &$0) }
         }
     }
@@ -41,7 +47,7 @@ package enum RecordEncoding {
     package static func bytes(of record: EventRecord, registration: EventRegistry.Registration) -> [UInt8] {
         var encoder = BinaryEncoder(writingSensitiveValues: true)
         encode(record, registration: registration, to: &encoder)
-        return encoder.bytes
+        return encoder.takeBytes()
     }
 
     /// What reading a record's bytes found: the record, or a record of a registered event type
@@ -95,6 +101,11 @@ private struct StoredSourceLocation: BinaryCodable {
     }
 
     func encode(to encoder: inout BinaryEncoder) {
+        Self.encode(location, to: &encoder)
+    }
+
+    /// Writes `location` as a stored call site.
+    static func encode(_ location: SourceLocation, to encoder: inout BinaryEncoder) {
         encoder.encodeMap { map in
             map.encode(location.fileID, forKey: "fileID")
             map.encode(location.file == location.fileID ? nil : location.file, forKey: "file")

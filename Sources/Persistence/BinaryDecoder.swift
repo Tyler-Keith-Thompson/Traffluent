@@ -150,7 +150,11 @@ public struct BinaryDecoder: Sendable {
     /// bytes each, so a corrupt count can't make a reader allocate more than the input holds.
     @inlinable
     package mutating func readCount(of majorType: BinaryMajorType, elementSize: Int = 1) throws(BinaryDecodingError) -> Int {
-        try count(readArgument(of: majorType), elementSize: elementSize)
+        // The argument is read first, then checked against the bytes left after the head:
+        // `count(readArgument(...))` would copy the decoder, a retain and a release, to call
+        // `count` on it.
+        let argument = try readArgument(of: majorType)
+        return try Self.count(argument, elementSize: elementSize, bytesLeft: remainingCount)
     }
 
     /// Moves past the next `itemCount` data items, whatever they hold.
@@ -282,8 +286,15 @@ public struct BinaryDecoder: Sendable {
     /// corrupt count can't make a reader allocate, or skip, more than the input holds.
     @inlinable
     package func count(_ argument: UInt64, elementSize: Int) throws(BinaryDecodingError) -> Int {
+        try Self.count(argument, elementSize: elementSize, bytesLeft: remainingCount)
+    }
+
+    /// `argument` as a count of elements of at least `elementSize` bytes each, checked against
+    /// `bytesLeft`.
+    @inlinable
+    static func count(_ argument: UInt64, elementSize: Int, bytesLeft: Int) throws(BinaryDecodingError) -> Int {
         // `Int(exactly:)`: on a 32-bit platform a count past `Int.max` can't be a valid count.
-        guard let count = Int(exactly: argument), count <= remainingCount / elementSize else { throw .endOfData }
+        guard let count = Int(exactly: argument), count <= bytesLeft / elementSize else { throw .endOfData }
         return count
     }
 }

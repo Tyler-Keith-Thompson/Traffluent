@@ -1,5 +1,6 @@
 internal import Checksums
 import Events
+import SystemPackage
 
 /// The bytes of a segment file.
 ///
@@ -97,39 +98,61 @@ enum SegmentFormat {
         return .segment(contents)
     }
 
-    /// The frame of `record`, whose event `registration` encodes.
-    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration) -> [UInt8] {
-        var encoder = frameEncoder(of: .record)
+    /// A frame's bytes, at the start of a buffer that may hold more past them.
+    struct Frame {
+        /// The frame's bytes, then whatever the buffer held past them.
+        let buffer: [UInt8]
+        /// How many bytes of `buffer` the frame takes.
+        let byteCount: Int
+
+        /// Writes the frame's bytes to `descriptor`.
+        func write(to descriptor: FileDescriptor) throws(Errno) {
+            try buffer.withUnsafeBytes { bytes in
+                Result { () throws(Errno) in try descriptor.writeAll(UnsafeRawBufferPointer(rebasing: bytes[..<byteCount])) }
+            }.get()
+        }
+    }
+
+    /// The frame of `record`, whose event `registration` encodes, written over `buffer`: one
+    /// kept from an earlier frame, so a record's frame needs no allocation of its own.
+    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration, reusing buffer: consuming [UInt8]) -> Frame {
+        var encoder = frameEncoder(of: .record, reusing: buffer)
         RecordEncoding.encode(record, registration: registration, to: &encoder)
-        return sealed(encoder)
+        seal(&encoder)
+        return Frame(buffer: encoder.buffer, byteCount: encoder.byteCount)
     }
 
     /// The frame of a delivery mark naming records `indices`.
     static func deliveryMarkFrame(of indices: [UInt32]) -> [UInt8] {
-        var encoder = frameEncoder(of: .deliveryMark)
+        var encoder = frameEncoder(of: .deliveryMark, reusing: [])
         for index in indices {
             encoder.writeLittleEndian(index)
         }
-        return sealed(encoder)
+        seal(&encoder)
+        return encoder.takeBytes()
     }
 
-    /// An encoder holding room for a frame's length and checksum, then `kind`'s byte.
-    private static func frameEncoder(of kind: Kind) -> BinaryEncoder {
-        BinaryEncoder(prefix: [0, 0, 0, 0, 0, 0, 0, 0, kind.rawValue])
+    /// An encoder writing over `buffer`, holding room for a frame's length and checksum, then
+    /// `kind`'s byte.
+    private static func frameEncoder(of kind: Kind, reusing buffer: consuming [UInt8]) -> BinaryEncoder {
+        var encoder = BinaryEncoder(reusing: buffer)
+        encoder.writeLittleEndian(UInt64(0))
+        encoder.write(kind.rawValue)
+        return encoder
     }
 
-    /// The frame `encoder` holds, with its length and checksum filled in.
-    private static func sealed(_ encoder: BinaryEncoder) -> [UInt8] {
-        var encoder = encoder
-        let payload = frameHeaderByteCount..<encoder.bytes.count
-        // A payload over UInt32.max bytes would need a single event of 4 GiB.
-        guard let length = UInt32(exactly: payload.count) else {
-            preconditionFailure("A record's frame holds at most \(UInt32.max) bytes, not \(payload.count)")
+    /// Fills in the length and checksum of the frame `encoder` holds.
+    private static func seal(_ encoder: inout BinaryEncoder) {
+        encoder.withWrittenBytes { frame in
+            let payloadCount = frame.count - frameHeaderByteCount
+            // A payload over UInt32.max bytes would need a single event of 4 GiB.
+            guard let length = UInt32(exactly: payloadCount) else {
+                preconditionFailure("A record's frame holds at most \(UInt32.max) bytes, not \(payloadCount)")
+            }
+            let checksum = CRC32.checksum(of: UnsafeRawBufferPointer(rebasing: frame[frameHeaderByteCount...]))
+            frame.storeBytes(of: length.littleEndian, toByteOffset: 0, as: UInt32.self)
+            frame.storeBytes(of: checksum.littleEndian, toByteOffset: 4, as: UInt32.self)
         }
-        let checksum = encoder.bytes.crc32(of: payload)
-        encoder.overwriteLittleEndian(length, at: 0)
-        encoder.overwriteLittleEndian(checksum, at: 4)
-        return encoder.bytes
     }
 }
 

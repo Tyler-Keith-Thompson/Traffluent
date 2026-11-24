@@ -53,6 +53,17 @@ extension FileDescriptor {
         guard fsync(rawValue) == 0 else { throw Errno(rawValue: errno) }
     }
 
+    /// Writes every byte of `bytes`, retrying after an interruption.
+    ///
+    /// Rather than swift-system's `writeAll`, which is generic over its sequence and isn't
+    /// specialized across the module boundary: a write per record pays for that.
+    func writeAll(_ bytes: UnsafeRawBufferPointer) throws(Errno) {
+        var written = 0
+        while written < bytes.count {
+            written += try withErrno { try write(UnsafeRawBufferPointer(rebasing: bytes[written...])) }
+        }
+    }
+
     /// Every byte of the file, from its start.
     func readAll() throws(Errno) -> [UInt8] {
         try withErrno {

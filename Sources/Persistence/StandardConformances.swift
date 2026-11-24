@@ -111,10 +111,12 @@ extension String: BinaryCodable {
     /// Writes the string as a CBOR text string: its UTF-8 byte count, then its UTF-8 bytes.
     @inlinable
     public func encode(to encoder: inout BinaryEncoder) {
-        var string = self
-        string.withUTF8 { utf8 in
-            encoder.writeHead(.textString, count: utf8.count)
-            encoder.write(contentsOf: utf8)
+        // Read in place when the string is contiguous UTF-8, as a native one is: `withUTF8` is
+        // mutating, so it would copy the string, a retain and a release per string written.
+        let written: Void? = utf8.withContiguousStorageIfAvailable { encoder.writeText($0) }
+        if written == nil {
+            var string = self
+            string.withUTF8 { encoder.writeText($0) }
         }
     }
 
@@ -125,8 +127,24 @@ extension String: BinaryCodable {
     @inlinable
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
         let utf8 = try decoder.read(decoder.readCount(of: .textString))
-        guard let string = String(validating: utf8, as: UTF8.self) else { throw .invalidValue }
+        guard let string = utf8.withUnsafeBufferPointer(String.init(validatingUTF8Bytes:)) else { throw .invalidValue }
         self = string
+    }
+}
+
+extension String {
+    /// The string `utf8` holds, or `nil` when it isn't valid UTF-8.
+    @inlinable
+    init?(validatingUTF8Bytes utf8: UnsafeBufferPointer<UInt8>) {
+        // ASCII, which keys and most values are, is valid UTF-8 as it is, so decoding it repairs
+        // nothing; `String(validating:as:)` is generic over its input, and unspecialized it
+        // costs several times as much, in type metadata lookups, as the string's bytes do.
+        if utf8.allSatisfy({ $0 < 0x80 }) {
+            self = String(decoding: utf8, as: UTF8.self)
+        } else {
+            guard let string = String(validating: utf8, as: UTF8.self) else { return nil }
+            self = string
+        }
     }
 }
 
@@ -174,10 +192,10 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
         case .some(let value):
             // Checked on the bytes written rather than on the type, which can't see an optional
             // that a wrapper such as Sensitive or Refined forwards to.
-            let start = encoder.buffer.count
+            let start = encoder.byteCount
             encoder.encode(value)
-            if start < encoder.buffer.count,
-               encoder.buffer[start] == BinarySimpleValue.null || encoder.buffer[start] == Self.wrapperHead {
+            if start < encoder.byteCount,
+               encoder.storage[start] == BinarySimpleValue.null || encoder.storage[start] == Self.wrapperHead {
                 encoder.insert(Self.wrapperHead, at: start)
             }
         }

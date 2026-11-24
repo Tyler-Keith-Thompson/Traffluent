@@ -43,6 +43,8 @@ final class SegmentLog: Acknowledger {
         /// The numbers of segments taken out of the log whose files couldn't be deleted: their
         /// records come back on the next launch, so they must not be delivered unmarked.
         var undeleted: Set<UInt64> = []
+        /// The buffer the last record's frame was written in, for the next one to write over.
+        var spareFrameBuffer: [UInt8] = []
     }
 
     /// What `append` did with a record's frame.
@@ -86,6 +88,10 @@ final class SegmentLog: Acknowledger {
     private let dropReporter: AsyncStream<DropReport>.Continuation
 
     private static let logger = Logger(label: "Persistence.SegmentStore")
+
+    /// The largest frame buffer kept for the next record's frame: one an unusually large event
+    /// grew isn't held on to.
+    private static let spareFrameBufferLimit = 16 * 1024
 
     /// A segment file's name: its number in 20 decimal digits, so names sort as numbers do.
     static func fileName(of number: UInt64) -> String {
@@ -134,9 +140,22 @@ final class SegmentLog: Acknowledger {
     /// persisted, it can't fit in the bound, or the write fails; a failed write is reported.
     func append(_ record: EventRecord) -> EventRecord {
         guard let registration = registry.registration(of: type(of: record.event)) else { return record }
-        let frame = SegmentFormat.recordFrame(of: record, registration: registration)
+        // Encoded outside the lock, over the buffer the last frame used, which goes back once the
+        // frame is written: an allocation per record costs more than taking the lock once more.
+        // An append running alongside finds no buffer and allocates one.
+        let spare = state.withLock { state in
+            var spare: [UInt8] = []
+            swap(&spare, &state.spareFrameBuffer)
+            return spare
+        }
+        let frame = SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare)
         let appending: Appending = state.withLock { state in
-            switch makeRoom(for: frame.count, in: &state) {
+            defer {
+                if frame.buffer.count <= Self.spareFrameBufferLimit {
+                    state.spareFrameBuffer = frame.buffer
+                }
+            }
+            switch makeRoom(for: frame.byteCount, in: &state) {
             case .ready: break
             case .tooLarge: return .tooLarge
             case .failed(let error): return .failed(error)
@@ -144,7 +163,7 @@ final class SegmentLog: Acknowledger {
             }
             let active = state.segments.count - 1
             do throws(Errno) {
-                try withErrno { try state.segments[active].file.descriptor.writeAll(frame) }
+                try frame.write(to: state.segments[active].file.descriptor)
             } catch {
                 // Cut off whatever part of the frame reached the file, and start the next record
                 // in a new segment; if the cut fails too, recovery truncates the torn frame.
@@ -152,21 +171,15 @@ final class SegmentLog: Acknowledger {
                 state.hasActive = false
                 return .failed(error)
             }
-            let index = UInt64(state.segments[active].timestamps.count)
-            state.segments[active].byteCount += frame.count
-            state.segments[active].timestamps.append(record.timestamp)
-            state.segments[active].acknowledged.append(false)
-            state.segments[active].pendingCount += 1
-            state.segments[active].needsSynchronization = true
-            state.byteCount += frame.count
-            return .written(state.segments[active].number << 32 | index)
+            state.byteCount += frame.byteCount
+            return .written(state.segments[active].addRecord(byteCount: frame.byteCount, timestamp: record.timestamp))
         }
         let position: UInt64
         switch appending {
         case .written(let written):
             position = written
         case .tooLarge:
-            Self.logger.notice("Kept a \(registration.name) record in memory only: its \(frame.count) bytes are more than a log bounded to \(byteBound) bytes can hold")
+            Self.logger.notice("Kept a \(registration.name) record in memory only: its \(frame.byteCount) bytes are more than a log bounded to \(byteBound) bytes can hold")
             return record
         case .failed(let error):
             Self.logger.error("Kept a \(registration.name) record in memory only: writing it to \(directory) failed with \(error)")
@@ -492,5 +505,22 @@ final class SegmentLog: Acknowledger {
             records.append(segmentRecords)
         }
         return (state, records)
+    }
+}
+
+extension SegmentLog.Segment {
+    /// Counts a record of `byteCount` bytes, tracked at `timestamp`, just written to the file,
+    /// returning its position.
+    ///
+    /// One mutation of the segment, so the array of segments it is in is checked for a unique
+    /// reference once rather than once per field.
+    fileprivate mutating func addRecord(byteCount frameByteCount: Int, timestamp: Date) -> UInt64 {
+        let index = UInt64(timestamps.count)
+        byteCount += frameByteCount
+        timestamps.append(timestamp)
+        acknowledged.append(false)
+        pendingCount += 1
+        needsSynchronization = true
+        return number << 32 | index
     }
 }

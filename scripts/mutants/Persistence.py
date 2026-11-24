@@ -24,6 +24,15 @@
 # - The directory's fsync after a new segment (pending.directory, synchronizeDirectory): only a
 #   power cut on Linux could observe the entry it makes durable.
 # - The fsync shim's own failure path: fsync on an open regular file doesn't fail in a test.
+# - The frame buffer an append takes and gives back (spareFrameBuffer), and the limit on the one
+#   kept: without them each frame allocates a buffer of its own, which only counting allocations
+#   could observe.
+# - BinaryEncoder.makeRoom's doubling, and write(byteCount:)'s check growing a byte early: the
+#   bytes written are the same, only how often the storage grows differs.
+# - String(validatingUTF8Bytes:)'s ASCII check answering false: every string then takes the
+#   generic validation, which reads ASCII the same.
+# - String.encode's copy for a string that isn't contiguous UTF-8: only a lazily bridged NSString
+#   is, on Apple platforms, which no test makes.
 
 TESTS = ["PersistenceTests"]
 
@@ -59,16 +68,16 @@ MUTANTS = [
     # The record's identifier, written first and given back on recovery.
     Mutant("idnotwritten", N, 'map.encode(record.id, forKey: "id")', "", mode="stmt"),
     Mutant("idnotrestored", N, "return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))", "return .record(EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location))", mode="stmt"),
-    Mutant("lengthnotwritten", F, "encoder.overwriteLittleEndian(length, at: 0)", "", mode="stmt"),
-    Mutant("checksumnotwritten", F, "encoder.overwriteLittleEndian(checksum, at: 4)", "", mode="stmt"),
+    Mutant("lengthnotwritten", F, "frame.storeBytes(of: length.littleEndian, toByteOffset: 0, as: UInt32.self)", "", mode="stmt"),
+    Mutant("checksumnotwritten", F, "frame.storeBytes(of: checksum.littleEndian, toByteOffset: 4, as: UInt32.self)", "", mode="stmt"),
     Mutant("markoffbyone", F, "encoder.writeLittleEndian(index)", "encoder.writeLittleEndian(index + 1)", mode="stmt"),
     # Appending.
-    Mutant("notwritten", L, "try withErrno { try state.segments[active].file.descriptor.writeAll(frame) }", "", mode="stmt"),
+    Mutant("notwritten", L, "try frame.write(to: state.segments[active].file.descriptor)", "", mode="stmt"),
     Mutant("nottagged", L, "tagged.deliveryTag = DeliveryTag(acknowledger: self, position: position)", "", mode="stmt"),
-    Mutant("positionwithoutindex", L, "return .written(state.segments[active].number << 32 | index)", "return .written(state.segments[active].number << 32)", mode="stmt"),
-    Mutant("notpending", L, "state.segments[active].pendingCount += 1", "", mode="stmt"),
-    Mutant("lognotcounted", L, "state.byteCount += frame.count", "", mode="stmt", nth=0),
-    Mutant("segmentnotcounted", L, "state.segments[active].byteCount += frame.count", "", mode="stmt"),
+    Mutant("positionwithoutindex", L, "return number << 32 | index", "return number << 32", mode="stmt"),
+    Mutant("notpending", L, "        pendingCount += 1", "", mode="stmt"),
+    Mutant("lognotcounted", L, "state.byteCount += frame.byteCount", "", mode="stmt"),
+    Mutant("segmentnotcounted", L, "        byteCount += frameByteCount", "", mode="stmt"),
     Mutant("rollsearly", L, "active.byteCount + frameByteCount > segmentByteCount", "active.byteCount + frameByteCount >= segmentByteCount"),
     Mutant("boundoffbyone", L, "state.byteCount + frameByteCount + (state.hasActive ? 0 : SegmentFormat.header.count) > byteBound", "state.byteCount + frameByteCount + (state.hasActive ? 0 : SegmentFormat.header.count) >= byteBound"),
     # After boundoffbyone, its condition holds two copies; the second is the original's.
@@ -95,7 +104,7 @@ MUTANTS = [
     Mutant("undeleteddelivered", L, "withheld.formUnion(indices.map { number << 32 | UInt64($0) })", "", mode="stmt", nth=0),
     Mutant("unmarkeddelivered", L, "withheld.formUnion(indices.map { number << 32 | UInt64($0) })", "", mode="stmt", nth=1),
     Mutant("marknotwritten", L, "try withErrno { try state.segments[segment].file.descriptor.writeAll(frame) }", "", mode="stmt"),
-    Mutant("marknotcounted", L, "state.byteCount += frame.count", "", mode="stmt", nth=1),
+    Mutant("marknotcounted", L, "state.byteCount += frame.count", "", mode="stmt"),
     Mutant("acknowledgementignored", L, "state.segments[segment].acknowledged[index] = true", "", mode="stmt"),
     Mutant("pendingnotdecremented", L, "state.segments[segment].pendingCount -= 1", "", mode="stmt"),
     Mutant("acknowledgedtwice", L, "guard !state.segments[segment].acknowledged[index] else { continue }", "", mode="stmt"),
@@ -127,7 +136,7 @@ MUTANTS = [
     Mutant("repeatedtypetraps", R, "byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil", "byName[registration.name] == nil"),
     Mutant("notfoundbyname", R, "byName[registration.name] = registration", "", mode="stmt"),
     # The binary encoding.
-    Mutant("headwidth", E, "buffer.append(initial | 25)", "buffer.append(initial | 26)", mode="stmt"),
+    Mutant("headwidth", E, "initial | 25", "initial | 26"),
     Mutant("truebyte", C, "self ? BinarySimpleValue.true : BinarySimpleValue.false", "self ? BinarySimpleValue.false : BinarySimpleValue.true"),
     Mutant("nullbyte", C, "encoder.write(BinarySimpleValue.null)", "encoder.write(BinarySimpleValue.undefined)", mode="stmt"),
     Mutant("arraycount", C, "encoder.writeHead(.array, count: count)", "encoder.writeHead(.array, count: count + 1)", mode="stmt"),
@@ -140,7 +149,7 @@ MUTANTS = [
     Mutant("keybytesnotcompared", D, "key[index] != buffer[cursor + index]", "false"),
     Mutant("keynotwritten", KE, "encoder.writeKey(key)", "", mode="stmt", nth=0),
     Mutant("entrynotcounted", KE, "count += 1", "", mode="stmt", nth=0),
-    Mutant("mapcountnotpatched", E, "buffer[start] |= UInt8(map.count)", "", mode="stmt"),
+    Mutant("mapcountnotpatched", E, "storage[start] |= UInt8(map.count)", "", mode="stmt"),
     Mutant("mapheadnotwidened", E, "map.count < 24", "map.count <= 24"),
     Mutant("outofplacenotsearched", K, "return try search(key)", "return false", mode="stmt"),
     Mutant("missnotrestored", K, "decoder.position = position", "", mode="stmt", nth=1),
@@ -158,8 +167,8 @@ MUTANTS = [
     # A missing optional reads nil; a value of another type throws, so its record is dropped.
     Mutant("missingoptionalthrows", K, "guard try find(key) else { return nil }", "guard try find(key) else { throw .keyNotFound }", mode="stmt", nth=0),
     Mutant("nullnotnil", C, "self = .none", "self = .some(try decoder.decode())", mode="stmt"),
-    Mutant("nestednotwrapped", C, "encoder.buffer[start] == BinarySimpleValue.null", "false"),
-    Mutant("arraynotwrapped", C, "encoder.buffer[start] == Self.wrapperHead", "false"),
+    Mutant("nestednotwrapped", C, "encoder.storage[start] == BinarySimpleValue.null", "false"),
+    Mutant("arraynotwrapped", C, "encoder.storage[start] == Self.wrapperHead", "false"),
     Mutant("typenotchecked", D, "guard head.majorType == majorType else { throw .typeMismatch }", "", mode="stmt"),
     Mutant("mismatchreadaszero", C, "throw .typeMismatch", "self = Self.zero", mode="stmt", nth=0),
     Mutant("unsignedtakesnegative", C, "Self.isSigned", "true"),
@@ -226,4 +235,21 @@ MUTANTS = [
     Mutant("mismatchversionorderreversed", V, "storedVersion < other.storedVersion", "storedVersion > other.storedVersion"),
     Mutant("mismatchcurrentisstored", V, "key.currentVersion", "key.storedVersion"),
     Mutant("defaultalways", K, "        guard try find(key) else { return defaultValue }", "        return defaultValue", mode="stmt"),
+    # The encoder's storage (TRAF-45): bytes written into room kept past them, which grows by
+    # copying them, and is cut off where the bytes end.
+    Mutant("roomnotcopied", E, "base.copyMemory(from: old.baseAddress.unsafelyUnwrapped, byteCount: written)", "", mode="stmt"),
+    Mutant("writtennotcounted", E, "byteCount += count", "", mode="stmt"),
+    Mutant("widennotcounted", E, "byteCount += head.byteCount - 1", "", mode="stmt"),
+    Mutant("insertnotcounted", E, "        byteCount += 1", "", mode="stmt"),
+    Mutant("bytesuntrimmed", E, "byteCount == storage.count ? storage : Array(storage[..<byteCount])", "storage"),
+    Mutant("takenuntrimmed", E, "bytes.removeLast(bytes.count - byteCount)", "", mode="stmt"),
+    Mutant("sealedwithroom", E, "UnsafeMutableRawBufferPointer(rebasing: $0[..<count])", "$0"),
+    Mutant("shorttextlimit", E, "utf8.count < 24", "utf8.count <= 24"),
+    Mutant("shorttexthead", E, "BinaryMajorType.textString.initialByte | UInt8(utf8.count)", "BinaryMajorType.byteString.initialByte | UInt8(utf8.count)"),
+    Mutant("textwrittentwice", C, "written == nil", "true"),
+    Mutant("asciiassumed", C, "utf8.allSatisfy({ $0 < 0x80 })", "true"),
+    Mutant("nonasciirejected", C, "            guard let string = String(validating: utf8, as: UTF8.self) else { return nil }\n            self = string", "            return nil", mode="stmt"),
+    Mutant("absentlocationnotwritten", N, 'map.encode(StoredSourceLocation?.none, forKey: "sourceLocation")', "", mode="stmt"),
+    Mutant("framewrittenwithroom", F, "UnsafeRawBufferPointer(rebasing: bytes[..<byteCount])", "bytes"),
+    Mutant("partialwriteaccepted", "FileSystem.swift", "        while written < bytes.count {\n            written += try withErrno { try write(UnsafeRawBufferPointer(rebasing: bytes[written...])) }\n        }", "        written += try withErrno { try write(UnsafeRawBufferPointer(rebasing: bytes[written...])) }", mode="stmt"),
 ]

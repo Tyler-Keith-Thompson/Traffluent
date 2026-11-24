@@ -3,7 +3,8 @@ import Events
 /// The event types a store persists, found by type when appending and by name when recovering.
 package struct EventRegistry: Sendable {
     /// How one event type is written and read back.
-    package struct Registration: Sendable {
+    // A class, so finding one copies a reference rather than its name and both closures.
+    package final class Registration: Sendable {
         /// The type's `Event.name`, which each of its records on disk carries.
         package let name: String
         /// The type's `Event.schemaVersion`, which each of its records on disk carries.
@@ -12,6 +13,18 @@ package struct EventRegistry: Sendable {
         package let encode: @Sendable (any Event, inout BinaryEncoder) -> Void
         /// Reads an event of this type.
         package let decode: @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
+
+        init(
+            name: String,
+            version: Int,
+            encode: @escaping @Sendable (any Event, inout BinaryEncoder) -> Void,
+            decode: @escaping @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
+        ) {
+            self.name = name
+            self.version = version
+            self.encode = encode
+            self.decode = decode
+        }
     }
 
     private let byType: [ObjectIdentifier: Registration]
