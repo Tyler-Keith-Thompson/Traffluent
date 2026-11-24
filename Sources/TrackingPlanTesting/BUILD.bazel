@@ -11,7 +11,7 @@ swift_library(
     deps = [
         "//Sources/TrackingPlans",
     ],
-    # Imports Testing, which is on the developer search paths (TESTING_MODULES in scripts/modules.py).
+    # Imports Testing, found on the developer search paths (TESTING_MODULES in scripts/modules.py).
     always_include_developer_search_paths = True,
     visibility = ["//visibility:public"],
 )
@@ -24,6 +24,7 @@ docc_archive(
     deps = [
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
     ],
+    always_include_developer_search_paths = True,
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )

@@ -34,6 +34,18 @@ swift_library(
         "@platforms//os:macos": [
             "@swiftpkg_grdb.swift//:GRDB",
         ],
+        "@platforms//os:ios": [
+            "@swiftpkg_grdb.swift//:GRDB",
+        ],
+        "@platforms//os:tvos": [
+            "@swiftpkg_grdb.swift//:GRDB",
+        ],
+        "@platforms//os:watchos": [
+            "@swiftpkg_grdb.swift//:GRDB",
+        ],
+        "@platforms//os:visionos": [
+            "@swiftpkg_grdb.swift//:GRDB",
+        ],
         "//conditions:default": [],
     }),
 )

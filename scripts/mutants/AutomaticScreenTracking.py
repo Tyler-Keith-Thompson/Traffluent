@@ -9,12 +9,11 @@
 # (AutomaticScreenTrackingTests): the name reading, the discovery the platforms share, AppKit's
 # side.
 #
-# UIKIT_MUTANTS plant bugs only the iOS simulator's tests reach (AutomaticScreenTrackingUIKitTests,
-# in SIMULATOR_TESTS): UIKit's side, and what only UIKit hosting shows (presentations, a
-# NavigationStack's root, a destination named after its value). `just mutate` builds SwiftPM test
-# bundles on the Mac, where that code is left out or unreached, so these are planted one at a time
+# UIKIT_MUTANTS plant bugs only the iOS simulator's tests reach (AutomaticScreenTrackingTests'
+# simulator bundle, SIMULATOR_TESTS): UIKit's side, and what only UIKit hosting shows (presentations,
+# a NavigationStack's root, a destination named after its value). They were planted one at a time
 # in the tree, as `new` in place of `old`, and caught by a failing
-# `bazel test //Tests/AutomaticScreenTrackingUIKitTests`.
+# `bazel test //Tests/AutomaticScreenTrackingTests:AutomaticScreenTrackingTestsSimulator`.
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - `file:` swapped for `fileID:` in the call site: in the Swift 6 language mode `#file` is

@@ -17,8 +17,8 @@
 #   tracker to become noOp again (no tracker drops nothing), then real again while the view stays
 #   on screen, which no host does.
 #
-# Caught only in the simulator, so left out here (`just mutate` runs SwiftUITrackingTests, on the
-# Mac); plant it by hand and run `bazel test //Tests/UIKitTrackingTests`:
+# Caught only in the simulator, and planted by hand against
+# `bazel test //Tests/SwiftUITrackingTests:SwiftUITrackingTestsSimulator`, so left out here:
 # - OnAppearWithTracker's onDisappear not clearing `isWaitingForTracker = false`: a NavigationStack
 #   root covered by a push before the tracker arrives tracks when it does (coveredBeforeTracker in
 #   SwiftUIBridgeTests). On the Mac a view that disappears leaves the tree, its state with it.

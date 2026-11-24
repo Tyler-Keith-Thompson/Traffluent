@@ -7,9 +7,9 @@
 # plant bugs in the bridge between SwiftUI's environment and the trait, which only UIKit
 # platforms compile.
 #
-# UIKitTrackingTests runs in the iOS simulator (SIMULATOR_TESTS in scripts/modules.py), and
-# `just mutate` builds and runs SwiftPM test bundles on the Mac, where this module is empty, so
-# these mutants are run one at a time against `bazel test //Tests/UIKitTrackingTests` instead.
+# UIKitTracking's tests are in SwiftUITrackingTests, under `#if canImport(UIKit)`. On the Mac this
+# module is empty, so every mutant passes the Mac half and `just mutate` runs it in the target's
+# simulator bundle (SIMULATOR_TESTS in scripts/modules.py), where it is caught.
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - `file:` swapped for `fileID:` in the call site: in the Swift 6 language mode `#file` is
@@ -17,7 +17,7 @@
 # - `[weak self]` made a strong capture: the control and its action then keep each other alive,
 #   a leak no test observes through what is tracked.
 
-TESTS = ["UIKitTrackingTests"]
+TESTS = ["SwiftUITrackingTests"]
 
 T = "TrackerTrait.swift"
 C = "UIControl+Track.swift"

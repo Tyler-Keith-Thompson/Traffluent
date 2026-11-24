@@ -1,4 +1,4 @@
-// The published package's privacy manifests (PRIVACY_MANIFEST in scripts/modules.py): SwiftPM
+// The published package's privacy manifests (RESOURCES in scripts/modules.py): SwiftPM
 // copies each module's PrivacyInfo.xcprivacy into the module's resource bundle. This target depends
 // on the umbrella, so SwiftPM builds every module's bundle beside its test bundle. Bazel's bundling
 // is checked by //Tests/PrivacyManifests, so this runs under SwiftPM alone (SWIFT_PACKAGE), and on

@@ -126,7 +126,8 @@ MUTANTS = [
     Mutant("examplesnotplanfiles", F, 'path.hasSuffix(".example.json")', 'false'),
     Mutant("rewritesunchanged", F, "fileManager.contents(atPath: url.path) != contents", "true"),
     # The check's statuses come before the ones below, whose replacements write `return 1`.
-    # checkalonewrites writes the plan into ./check of the directory the tests run in; delete it.
+    # checkalonewrites writes the plan into ./check of the directory the tests run in, the run's own
+# directory that scripts/mutate.py removes afterwards.
     Mutant("checkalonewrites", C, 'arguments[0] != "check"', "true"),
     Mutant("anytwochecks", C, 'arguments[0] == "check"', "true"),
     Mutant("checkchecksfirst", C, "check(against: arguments[1])", "check(against: arguments[0])"),

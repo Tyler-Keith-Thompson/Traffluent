@@ -31,6 +31,6 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# The Info.plist of a module's privacy manifest bundle (PRIVACY_MANIFEST in scripts/modules.py), the
-# keys SwiftPM writes into the bundle it builds for the same resource.
+# The Info.plist of a module's resource bundle on Apple platforms (RESOURCES in scripts/modules.py,
+# tools/resources.bzl): the keys SwiftPM writes into the bundle it builds for the same resources.
 exports_files(["ResourceBundleInfo.plist"])

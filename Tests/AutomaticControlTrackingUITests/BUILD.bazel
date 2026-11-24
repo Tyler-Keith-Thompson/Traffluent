@@ -56,6 +56,9 @@ ios_xctestrun_runner(
     name = "ipad_runner",
     device_type = "iPad Pro 13-inch (M4)",
     random = False,
+    # Used only as the UI test's runner, which only a Mac runs: since rules_apple 5 the runner needs
+    # the Mac tools toolchain, so `bazel test //...` on Linux would otherwise fail resolving it.
+    tags = ["manual"],
 )
 
 # `resources:simulator:1` runs one simulator test at a time (.bazelrc).

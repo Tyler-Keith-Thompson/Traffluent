@@ -95,11 +95,13 @@ APPLE_ONLY_PACKAGES = ["grdb.swift"]
 # them, where a test binary that ran no tests would fail. SwiftPM still builds them, empty, on Linux.
 APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests", "AutomaticScreenTrackingTests"]
 
-# Test targets that run in the iOS simulator (an ios_unit_test in the test host, tools/test_host)
-# though they depend on no iOS module: tests of a module every platform builds but whose code is
-# UIKit's alone, so the Mac has nothing to run. Like the other simulator tests, Package.swift
-# leaves them out; Bazel runs them on macOS alone.
-SIMULATOR_TESTS = ["UIKitTrackingTests", "AutomaticScreenTrackingUIKitTests"]
+# Test targets that also run in the iOS simulator, by name: tests of a module every platform builds
+# that holds code for UIKit alone (`#if canImport(UIKit)`). Each stays in Package.swift and keeps
+# its swift_test on the Mac (and Linux), and gains `<name>Simulator`, an ios_unit_test of the same
+# test library hosted by tools/test_host, which Bazel runs on macOS alone. A target that depends on
+# an iOS module or a Bazel label runs in the simulator alone already and isn't listed. Needs the
+# test host and .bazelrc's simulator settings, which the app type ships.
+SIMULATOR_TESTS = ["SwiftUITrackingTests", "AutomaticScreenTrackingTests"]
 
 # The product whose macro generates mocks. A module that depends on it is compiled with the
 # MOCKING condition in debug builds only (SwiftPM's debug configuration, Bazel's
@@ -160,11 +162,39 @@ EXAMPLE_MODULES = []
 # import Swift Testing.
 NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting"]
 
-# Library modules that import Swift Testing, test helpers an adopter adds to a test target. Bazel
-# finds Testing (and XCTest) only on a test target's search paths, so these get the developer
-# search paths too (rules_swift's `always_include_developer_search_paths`), rather than
-# `testonly`, which the docs targets that depend on them would then have to be as well.
+# Library modules that import Swift Testing, by name from MODULES: test helpers adopters add to
+# their test targets (a custom Trait, an assertion that records an Issue). Bazel finds Testing only
+# on the developer search paths, which rules_swift gives testonly targets alone, so these get them
+# too (`always_include_developer_search_paths`), as does their symbol graph extraction for the docs.
+# Not `testonly`: their docs and anything shipped that depends on them would have to be as well.
+# A module that depends on one is one too, and the umbrella leaves them out (NON_UMBRELLA_MODULES),
+# so `import Traffluent` never needs Testing.
 TESTING_MODULES = ["TrackingPlanTesting"]
+
+# Modules' resources, by name from MODULES: a list of (rule, path) per module, the path relative to
+# Sources/<name> (a file or a directory) and the rule SwiftPM's: "process" flattens the files into
+# the bundle's root (keeping a localization's `.lproj`), and processes them on Apple platforms as
+# Xcode does; "copy" keeps the entry whole, by its last path component. Package.swift gets
+# `resources: [.process(path), .copy(path)]`, and Bazel the same `<PROJECT>_<name>.bundle` and a
+# `Bundle.module` that finds it (tools/resources.bzl): in an app's or a test bundle's resources on
+# Apple platforms, in the runfiles of `bazel test` and `bazel run` on macOS and Linux. So the module
+# reads them through `Bundle.module` under either build system. Apple's privacy manifest is
+# ("copy", "PrivacyInfo.xcprivacy"), at the bundle's root where Apple reads it: a module holding one
+# must list it. Firmware modules have none: Embedded Swift has no Foundation and no bundles.
+# {"Greetings": [("process", "Data/greetings.json"), ("copy", "PrivacyInfo.xcprivacy")]}
+# Traffluent's: Apple's privacy manifest, in each module that calls a required-reason API or collects
+# data (Traffluent.docc's PrivacyManifests article records why each one does). Tests/PrivacyManifests
+# checks that a Bazel-built bundle holds every one.
+RESOURCES = {
+    "SwiftUITracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "UIKitTracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "AppKitTracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "AutomaticScreenTracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "AutomaticControlTracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "LifecycleTracking": [("copy", "PrivacyInfo.xcprivacy")],
+    "Sessions": [("copy", "PrivacyInfo.xcprivacy")],
+    "StandardContext": [("copy", "PrivacyInfo.xcprivacy")],
+}
 
 # Compiler plugins holding macros: (name, group, description, dependencies), whose dependencies
 # are packages' products only (swift-syntax's). A module lists one among its dependencies to offer its
@@ -219,11 +249,9 @@ TEST_TARGETS = [
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("HTTPDestinationsTests", ["HTTPDestinations", "Destinations", "Events", "Trackers", "afluent/Afluent", "swift-http-types/HTTPTypes", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("TrackersTests", ["Trackers", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees", TEST_SUPPORT]),
-    ("SwiftUITrackingTests", ["SwiftUITracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
-    ("UIKitTrackingTests", ["UIKitTracking", "SwiftUITracking", "Events", "Trackers"]),
+    ("SwiftUITrackingTests", ["SwiftUITracking", "UIKitTracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
-    ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "SwiftUITracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("AutomaticScreenTrackingUIKitTests", ["AutomaticScreenTracking", "SwiftUITracking", "UIKitTracking", "Events", "Trackers"]),
+    ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("AutomaticControlTrackingTests", ["AutomaticControlTracking", "Events", "Persistence", "swift-property-based/PropertyBased"]),
     ("LifecycleTrackingTests", ["LifecycleTracking", "Events", "Persistence", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased"]),
     ("SessionsTests", ["Sessions", "Events", "Persistence", "Trackers", "LifecycleTracking", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
@@ -236,15 +264,6 @@ TEST_TARGETS = [
 # The modules the test-support target depends on (fixtures are usually written against the
 # vocabulary module). Empty is fine.
 TEST_SUPPORT_DEPENDENCIES = []
-
-# Apple's privacy manifest, which a module ships when it calls a required-reason API or collects data
-# (Traffluent.docc's PrivacyManifests article records why each one does). A module holding this file
-# in Sources/<name>/ gets it as a resource in both build systems, in a bundle SwiftPM and Bazel name
-# alike, `<PROJECT>_<name>.bundle`: Package.swift copies it (`resources: [.copy(...)]`), and Bazel
-# gives the swift_library an apple_resource_bundle as `data`, which rules_apple's application and
-# bundle rules copy into the app. Linux has no app bundles, so Bazel leaves it out there.
-# Tests/PrivacyManifests checks that a Bazel-built bundle holds every one.
-PRIVACY_MANIFEST = "PrivacyInfo.xcprivacy"
 
 # Bazel test sizes above the default "small" (60 s timeout), for suites whose solo run takes more
 # than about 15 s on a laptop or 30 s on a four-core CI runner, and so can pass 60 s when other
@@ -295,10 +314,11 @@ MACOS_MINIMUM = "15.0"
 # The Swift the project builds with. SWIFT is the floor: every manifest's swift-tools-version, CI's
 # swift:<SWIFT> and swift-bazel:<SWIFT>-<bazel> images, the Docker image's base and the minimum the
 # docs state. SWIFT_TOOLCHAIN is the swift.org release swiftly installs where Xcode's toolchain falls
-# short (fuzzing, WebAssembly, Embedded Swift), which the embedded type's images pin too. To raise
-# the floor, change both and run `just modules`: it writes them into the generated manifests and
-# replaces the previous ones in SWIFT_SITES. CI needs a swift-bazel image of the new version (the
-# project template's ci-image/build.sh publishes them).
+# short.
+# The fuzz targets build with it.
+# To raise the floor, change both and run `just modules`: it writes them into the generated
+# manifests and replaces the previous ones in SWIFT_SITES. CI needs a swift-bazel image of the new
+# version (the project template's ci-image/build.sh publishes them).
 SWIFT = "6.4"
 SWIFT_TOOLCHAIN = "6.4.3"
 
@@ -366,16 +386,6 @@ def replace_swift(root, old, new):
     return changed
 
 
-def privacy_manifest(name):
-    """Whether module `name` ships a privacy manifest (PRIVACY_MANIFEST in its directory)."""
-    return os.path.isfile(os.path.join(ROOT, "Sources", name, PRIVACY_MANIFEST))
-
-
-def privacy_manifest_modules():
-    """The modules Package.swift declares that ship a privacy manifest, by name."""
-    return [m[0] for m in package_modules() if privacy_manifest(m[0])]
-
-
 def performance_target(name):
     """The speed-reliant target split from test target `name`: FlowsTests -> FlowsPerformanceTests."""
     return name.removesuffix("Tests") + "PerformanceTests"
@@ -401,6 +411,34 @@ def duplicate_definitions():
     return sorted(name for name, count in counts.items() if count > 1)
 
 
+# Apple's privacy manifest, which a module that calls a required-reason API or collects data ships
+# at the root of its resource bundle (RESOURCES).
+PRIVACY_MANIFEST = "PrivacyInfo.xcprivacy"
+
+
+def check_resources(names):
+    """RESOURCES names modules by `names`, each entry a "process" or "copy" of a path that exists
+    under the module, none listed twice or inside another; and a module holding a privacy manifest
+    lists it."""
+    for name, entries in RESOURCES.items():
+        assert name in names, f"RESOURCES names unknown module {name}"
+        paths = [path for _, path in entries]
+        for rule, path in entries:
+            assert rule in ("process", "copy"), f"RESOURCES gives Sources/{name}/{path} the rule {rule!r}: use \"process\" or \"copy\""
+            assert path == os.path.normpath(path) and not os.path.isabs(path) and not path.startswith(".."), \
+                f"RESOURCES lists {path!r} for {name}: give a path inside Sources/{name}, without ./, ../ or a trailing /"
+            assert os.path.exists(os.path.join(ROOT, "Sources", name, path)), \
+                f"RESOURCES lists Sources/{name}/{path}, which doesn't exist"
+            assert paths.count(path) == 1, f"RESOURCES lists Sources/{name}/{path} more than once"
+            outer = [other for other in paths if path.startswith(other + "/")]
+            assert not outer, f"RESOURCES lists Sources/{name}/{path} inside Sources/{name}/{outer[0]}, which it lists too"
+    for name in names:
+        if os.path.isfile(os.path.join(ROOT, "Sources", name, PRIVACY_MANIFEST)):
+            assert PRIVACY_MANIFEST in [path for _, path in RESOURCES.get(name, [])], (
+                f"Sources/{name} holds a {PRIVACY_MANIFEST} that RESOURCES doesn't list, so it would ship in no bundle: "
+                f"add (\"copy\", \"{PRIVACY_MANIFEST}\") to RESOURCES[\"{name}\"]")
+
+
 def check():
     names = [m[0] for m in MODULES]
     # A plugin is a dependency like a module, but no list of modules below may name one.
@@ -410,7 +448,16 @@ def check():
         assert name in dict(TEST_TARGETS), f"APPLE_ONLY_TESTS names unknown test target {name}"
     for name in SIMULATOR_TESTS:
         assert name in dict(TEST_TARGETS), f"SIMULATOR_TESTS names unknown test target {name}"
-        assert name not in APPLE_ONLY_TESTS, f"{name} is a simulator test, which runs on macOS alone already"
+        assert not simulator_only(name), \
+            f"{name} depends on an iOS module or a Bazel label, so it runs in the simulator alone already: leave it out of SIMULATOR_TESTS"
+    if SIMULATOR_TESTS:
+        with open(os.path.join(ROOT, ".bazelrc")) as file:
+            settings = "--local_resources=simulator=" in file.read()
+        assert os.path.isfile(os.path.join(ROOT, "tools", "test_host", "BUILD.bazel")) and settings, (
+            "SIMULATOR_TESTS needs the iOS test host and simulator settings the app type ships: copy "
+            "tools/test_host and the simulator lines of .bazelrc (--ios_minimum_os, --ios_simulator_device, "
+            "--ios_simulator_version, --local_resources=simulator=1) from an app render of the project "
+            "template (bootstrap.sh --render-only --app <Name> <directory>)")
     packages = [p[0] for p in PACKAGES]
     for name, deps in [(m[0], m[3]) for m in MODULES + MACROS] + [(e[0], e[2]) for e in EXECUTABLES]:
         for d in deps:
@@ -452,10 +499,6 @@ def check():
         assert name in names, f"IOS_MODULES names unknown module {name}"
     for name in EXAMPLE_MODULES:
         assert name in names, f"EXAMPLE_MODULES names unknown module {name}"
-    for name in IOS_MODULES + EXAMPLE_MODULES + macro_names() + executables:
-        assert not privacy_manifest(name), f"{name} holds a {PRIVACY_MANIFEST}, which only library modules ship"
-    for name in TESTING_MODULES:
-        assert name in names, f"TESTING_MODULES names unknown module {name}"
     for name in NON_UMBRELLA_MODULES:
         assert name in names, f"NON_UMBRELLA_MODULES names unknown module {name}"
         assert name != PROJECT and umbrella(), f"NON_UMBRELLA_MODULES lists {name}, but the package has no umbrella to leave it out of"
@@ -469,6 +512,19 @@ def check():
         if name not in IOS_MODULES:
             for d in deps:
                 assert d not in IOS_MODULES, f"{name} depends on the iOS module {d}, so it must be in IOS_MODULES"
+    for name in TESTING_MODULES:
+        assert name in names, f"TESTING_MODULES names unknown module {name}"
+        assert name not in IOS_MODULES, f"{name} is an iOS module, which the app ships, so it can't import Testing"
+        assert not umbrella() or name in NON_UMBRELLA_MODULES + EXAMPLE_MODULES, \
+            f"{name} imports Testing, so the umbrella must leave it out: list it in NON_UMBRELLA_MODULES"
+    for name, _, _, deps in MODULES:
+        if name not in TESTING_MODULES:
+            for d in deps:
+                assert d not in TESTING_MODULES, f"{name} depends on {d}, which imports Testing, so it must be in TESTING_MODULES"
+    for name, _, deps in EXECUTABLES:
+        for d in deps:
+            assert d not in TESTING_MODULES, f"the executable {name} depends on {d}, which imports Testing, a test-only library"
+    check_resources(names)
     for name, deps in BENCHMARKS:
         for d in deps:
             assert d in names or (d == PROJECT and umbrella()), f"benchmark {name} imports unknown module {d}"
@@ -485,11 +541,22 @@ def is_macro(d):
     return d in macro_names()
 
 
-def simulator_test(name):
-    """Whether test target `name` runs in the iOS simulator: it is in SIMULATOR_TESTS, or depends on an
-    iOS module or a Bazel label."""
+def simulator_only(name):
+    """Whether test target `name` runs in the iOS simulator alone: it depends on an iOS module or a Bazel
+    label, so Package.swift leaves it out."""
     deps = dict(TEST_TARGETS)[name]
-    return name in SIMULATOR_TESTS or any(d in IOS_MODULES or d.startswith("//") for d in deps)
+    return any(d in IOS_MODULES or d.startswith("//") for d in deps)
+
+
+def simulator_test(name):
+    """Whether test target `name` runs in the iOS simulator: alone, or on the Mac too (SIMULATOR_TESTS)."""
+    return name in SIMULATOR_TESTS or simulator_only(name)
+
+
+def simulator_label(name):
+    """The ios_unit_test that runs simulator test target `name`: the package's own target, or
+    `<name>Simulator` beside the Mac tests for one in SIMULATOR_TESTS."""
+    return f"//Tests/{name}" + (f":{name}Simulator" if name in SIMULATOR_TESTS else "")
 
 
 def spm_dep(d):
@@ -532,8 +599,8 @@ def umbrella_modules():
 
 
 def package_tests():
-    """TEST_TARGETS that Package.swift declares: every one but the simulator tests."""
-    return [t for t in TEST_TARGETS if not simulator_test(t[0])]
+    """TEST_TARGETS that Package.swift declares: every one but those run in the simulator alone."""
+    return [t for t in TEST_TARGETS if not simulator_only(t[0])]
 
 
 def package_dependencies():
@@ -551,27 +618,36 @@ def apple_only(d):
     return "/" in d and d.split("/")[0] in APPLE_ONLY_PACKAGES
 
 
-def bazel_deps(deps, testing=False):
-    """A `deps` attribute, or nothing when there are none; Apple-only products sit in a macOS `select`.
+def bazel_deps(deps, testing=False, ios=False):
+    """A `deps` attribute, or nothing when there are none; Apple-only products sit in a macOS `select`,
+    but for a target only iOS builds (`ios`), which lists them with the rest.
     A compiler plugin (MACROS) goes in a `plugins` attribute instead, but for a test library
     (`testing`), which links the plugin's `<name>Library` in its own package (see MACROS)."""
     if testing:
-        return _bazel_deps([f":{d}Library" if is_macro(d) else d for d in deps])
+        return _bazel_deps([f":{d}Library" if is_macro(d) else d for d in deps], ios)
     plugins = "".join(f'        "{bazel_label(d)}",\n' for d in deps if is_macro(d))
     return _bazel_deps([d for d in deps if not is_macro(d)]) + (f"    plugins = [\n{plugins}    ],\n" if plugins else "")
 
 
-def _bazel_deps(deps):
+# The Apple operating systems Bazel's platforms name, for APPLE_ONLY_PACKAGES' select.
+APPLE_OSES = ["macos", "ios", "tvos", "watchos", "visionos"]
+
+
+def _bazel_deps(deps, ios=False):
     if not deps:
         return ""
-    listed = "".join(f'        "{bazel_label(d)}",\n' for d in deps if not apple_only(d))
+    listed = "".join(f'        "{bazel_label(d)}",\n' for d in deps if ios or not apple_only(d))
     text = f"    deps = [\n{listed}    ]"
-    apple = "".join(f'            "{bazel_label(d)}",\n' for d in deps if apple_only(d))
+    apple = "".join(f'            "{bazel_label(d)}",\n' for d in deps if not ios and apple_only(d))
     if apple:
+        # Every Apple OS, as Package.swift's applePlatforms: a module built for the simulator (an iOS
+        # module's dependency, a SIMULATOR_TESTS target) would otherwise compile out, without an
+        # error, the code it holds under `#if canImport` of these products.
+        keys = "".join(f'        "@platforms//os:{os_name}": [\n{apple}        ],\n' for os_name in APPLE_OSES)
         text += (
             " + select({\n"
             "        # Apple-only packages (APPLE_ONLY_PACKAGES in scripts/modules.py).\n"
-            f'        "@platforms//os:macos": [\n{apple}        ],\n'
+            f"{keys}"
             '        "//conditions:default": [],\n'
             "    })"
         )
@@ -597,6 +673,40 @@ def excluded(path):
 def swift_string(text):
     """`text` as a Swift string literal."""
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+
+def resources_arg(name):
+    """Module `name`'s `resources:` argument in Package.swift (RESOURCES), or nothing."""
+    entries = RESOURCES.get(name, [])
+    if not entries:
+        return ""
+    return ", resources: [" + ", ".join(f".{rule}({swift_string(path)})" for rule, path in entries) + "]"
+
+
+def resources_bazel(name):
+    """Module `name`'s resources in its BUILD.bazel (RESOURCES): the load, the swift_library's `srcs`
+    and `data`, and the module_resources call (tools/resources.bzl). Without resources, the plain
+    `srcs` and nothing else."""
+    entries = RESOURCES.get(name, [])
+    if not entries:
+        return "", '    srcs = glob(["**/*.swift"]),\n', "", ""
+    lists = "".join(
+        f"    {rule} = [\n" + "".join(f'        "{path}",\n' for r, path in entries if r == rule) + "    ],\n"
+        for rule in ("process", "copy") if any(r == rule for r, _ in entries)
+    )
+    return (
+        'load("//tools:resources.bzl", "module_resources", "module_resources_data")\n',
+        '    # `Bundle.module`, as SwiftPM generates it, for the resources below.\n'
+        '    srcs = glob(["**/*.swift"]) + [":ResourcesAccessor"],\n',
+        '    data = module_resources_data("Resources"),\n',
+        "\n# The module's resources (RESOURCES in scripts/modules.py), in the bundle SwiftPM builds for them.\n"
+        "module_resources(\n"
+        '    name = "Resources",\n'
+        f'    bundle_name = "{PROJECT}_{name}",\n'
+        f'    bundle_id = "{PROJECT.lower()}.{name}.resources",\n'
+        f"{lists}"
+        ")\n",
+    )
 
 
 def exclude_arg(path):
@@ -649,7 +759,7 @@ def package_swift():
             group = g
         ex = exclude_arg(f"Sources/{name}")
         settings = ', swiftSettings: [.define("MOCKING", .when(configuration: .debug))]' if MOCKING in deps else ""
-        resources = f', resources: [.copy("{PRIVACY_MANIFEST}")]' if privacy_manifest(name) else ""
+        resources = resources_arg(name)
         if deps:
             dl = ", ".join(spm_dep(d) for d in deps)
             lines.append(f'    .target(name: "{name}", dependencies: [{dl}]{ex}{resources}{settings}),')
@@ -734,90 +844,75 @@ def dependency_manifest():
 def build_bazel(name, description, deps, linked=()):
     """A module's BUILD.bazel. `linked` names modules its catalog links to without importing them:
     their archives join its docs' dependencies alone."""
+    resources_load, srcs_attr, data_attr, resources = resources_bazel(name)
     deps_attr = bazel_deps(deps)
     defines_attr = (
         "    # Mock<Protocol> types from @Mockable, in debug builds only (MOCKING in scripts/modules.py).\n"
         '    defines = select({"//tools:debug": ["MOCKING"], "//conditions:default": []}),\n'
     ) if MOCKING in deps else ""
     testing_attr = (
-        "    # Imports Testing, which is on the developer search paths (TESTING_MODULES in scripts/modules.py).\n"
+        "    # Imports Testing, found on the developer search paths (TESTING_MODULES in scripts/modules.py).\n"
         "    always_include_developer_search_paths = True,\n"
     ) if name in TESTING_MODULES else ""
     if name in IOS_MODULES:
         return (
             "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
+            f"{resources_load}"
             'load("//tools:swift_rules.bzl", "swift_library")\n\n'
             f"# {description}\n"
             "# iOS only (IOS_MODULES in scripts/modules.py): built for the simulator through the app and the\n"
             "# simulator tests, skipped by `bazel build //...` on the Mac.\n"
             "swift_library(\n"
             f'    name = "{name}",\n'
-            '    srcs = glob(["**/*.swift"]),\n'
+            f"{srcs_attr}"
+            f"{data_attr}"
             f'    module_name = "{name}",\n'
             f"{defines_attr}"
             f"{deps_attr}"
             '    target_compatible_with = ["@platforms//os:ios"],\n'
             '    visibility = ["//visibility:public"],\n'
             ")\n"
+            f"{resources}"
         )
     if name in EXAMPLE_MODULES:
         return (
             "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
+            f"{resources_load}"
             'load("//tools:swift_rules.bzl", "swift_library")\n\n'
             f"# {description}\n"
             "# An example (EXAMPLE_MODULES in scripts/modules.py): no product, umbrella import or docs.\n"
             "swift_library(\n"
             f'    name = "{name}",\n'
-            '    srcs = glob(["**/*.swift"]),\n'
+            f"{srcs_attr}"
+            f"{data_attr}"
             f'    module_name = "{name}",\n'
             f"{defines_attr}"
             f"{deps_attr}"
+            f"{testing_attr}"
             '    visibility = ["//visibility:public"],\n'
             ")\n"
+            f"{resources}"
         )
-    manifest = privacy_manifest(name)
-    manifest_load = 'load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")\n' if manifest else ""
-    manifest_attr = (
-        "    # The privacy manifest's bundle (PRIVACY_MANIFEST in scripts/modules.py), which the app's bundle\n"
-        "    # copies; Linux has no app bundles.\n"
-        "    data = select({\n"
-        '        "@platforms//os:linux": [],\n'
-        '        "//conditions:default": [":PrivacyManifest"],\n'
-        "    }),\n"
-    ) if manifest else ""
-    manifest_targets = (
-        "\n# Apple's privacy manifest, in a bundle named as SwiftPM names it (PRIVACY_MANIFEST in\n"
-        "# scripts/modules.py). `manual`: only an app or bundle that depends on the module builds it.\n"
-        "apple_resource_bundle(\n"
-        '    name = "PrivacyManifest",\n'
-        f'    bundle_id = "{PROJECT.lower()}.{name}.resources",\n'
-        f'    bundle_name = "{PROJECT}_{name}",\n'
-        '    infoplists = ["//tools:ResourceBundleInfo.plist"],\n'
-        f'    resources = ["{PRIVACY_MANIFEST}"],\n'
-        '    tags = ["manual"],\n'
-        ")\n\n"
-        "# Read by //Tests/PrivacyManifests, which compares it with what a bundle holds.\n"
-        f'exports_files(["{PRIVACY_MANIFEST}"])\n'
-    ) if manifest else ""
     doc_deps = "".join(f'        "{bazel_label(d)}:{d}Documentation",\n' for d in [*deps, *linked] if "/" not in d and not is_macro(d))
     doc_deps_attr = f"    deps = [\n{doc_deps}    ],\n" if doc_deps else ""
+    docs_testing_attr = "    always_include_developer_search_paths = True,\n" if name in TESTING_MODULES else ""
     return (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
-        f"{manifest_load}"
         'load("//tools:docc.bzl", "docc_archive")\n'
+        f"{resources_load}"
         'load("//tools:swift_rules.bzl", "swift_library")\n\n'
         f"# {description}\n"
         "swift_library(\n"
         f'    name = "{name}",\n'
-        '    srcs = glob(["**/*.swift"]),\n'
-        f"{manifest_attr}"
+        f"{srcs_attr}"
+        f"{data_attr}"
         f'    module_name = "{name}",\n'
         f"{defines_attr}"
         f"{deps_attr}"
         f"{testing_attr}"
         '    visibility = ["//visibility:public"],\n'
         ")\n"
-        f"{manifest_targets}"
+        f"{resources}"
         "\n"
         "# The module's DocC archive, merged into //:docs. `manual` keeps it out of `bazel build //...`.\n"
         "docc_archive(\n"
@@ -825,6 +920,7 @@ def build_bazel(name, description, deps, linked=()):
         f'    module = ":{name}",\n'
         '    catalog = glob(["*.docc/**"], allow_empty = True),\n'
         f"{doc_deps_attr}"
+        f"{docs_testing_attr}"
         '    tags = ["manual"],\n'
         '    visibility = ["//visibility:public"],\n'
         ")\n"
@@ -919,8 +1015,9 @@ def test_support_build_bazel():
     )
 
 
-def test_targets_bazel(name, deps, size, srcs, tags):
-    """One test module: its library, the swift_test that `bazel test` runs, and the Xcode bundle."""
+def test_targets_bazel(name, deps, size, srcs, tags, simulator=False):
+    """One test module: its library, the swift_test that `bazel test` runs, and the Xcode bundle; with
+    `simulator`, the ios_unit_test that runs the same library in the simulator too (SIMULATOR_TESTS)."""
     tags_attr = f"    tags = {tags},\n".replace("'", '"') if tags else ""
     # SnapshotTesting finds a reference beside the test file through #filePath, which Bazel makes
     # relative to the workspace, and a test runs from its runfiles: so the references go in them.
@@ -968,6 +1065,44 @@ def test_targets_bazel(name, deps, size, srcs, tags):
         '    visibility = ["//visibility:public"],\n'
         f'    deps = [":{name}Library"],\n'
         ")\n"
+    ) + (simulator_half_bazel(name, deps, srcs, tags) if simulator else "")
+
+
+def simulator_half_bazel(name, deps, srcs, tags):
+    """The same tests as test target `name`'s library, built for iOS and run in the simulator as well
+    (SIMULATOR_TESTS): a library of their own, without the Mac's `data`, which rules_apple would
+    flatten into the bundle as resources, and the ios_unit_test."""
+    tags_attr = f"    tags = {tags},\n".replace("'", '"') if tags else ""
+    return (
+        "\n# The same tests in the iOS simulator (SIMULATOR_TESTS in scripts/modules.py), where the code\n"
+        "# under `#if canImport(UIKit)` compiles. iOS only, so `bazel build //...` builds it through the\n"
+        "# bundle below alone.\n"
+        "swift_library(\n"
+        f'    name = "{name}SimulatorLibrary",\n'
+        "    testonly = True,\n"
+        "    alwayslink = True,\n"
+        f"    srcs = {srcs},\n"
+        f'    module_name = "{name}",\n'
+        f"{tags_attr}"
+        '    target_compatible_with = ["@platforms//os:ios"],\n'
+        f"{bazel_deps(deps, testing=True, ios=True)}"
+        ")\n\n"
+        "# Run inside the test host (tools/test_host), which gives windows a scene.\n"
+        f"# `{SIMULATOR_TEST_TAG}` runs one simulator test at a time (.bazelrc).\n"
+        "ios_unit_test(\n"
+        f'    name = "{name}Simulator",\n'
+        f'    size = "{TEST_SIZES.get(name, "medium")}",\n'
+        f'    minimum_os_version = "{IOS_MINIMUM}",\n'
+        "    tags = [\n" + "".join(f'        "{t}",\n' for t in tags + [SIMULATOR_TEST_TAG]) + "    ],\n"
+        "    # The simulator is the Mac's alone, so elsewhere `bazel test //...` skips the bundle.\n"
+        "    target_compatible_with = select({\n"
+        '        "@platforms//os:macos": [],\n'
+        '        "//conditions:default": ["@platforms//:incompatible"],\n'
+        "    }),\n"
+        '    test_host = "//tools/test_host",\n'
+        '    visibility = ["//visibility:public"],\n'
+        f'    deps = [":{name}SimulatorLibrary"],\n'
+        ")\n"
     )
 
 
@@ -979,7 +1114,7 @@ def simulator_test_build_bazel(name, deps, size):
         'load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")\n'
         'load("//tools:swift_rules.bzl", "swift_library")\n\n'
         "# The tests, run in the iOS simulator: the target depends on an iOS module (IOS_MODULES in\n"
-        f"# scripts/modules.py) or is in SIMULATOR_TESTS. Tagged `{RELEASE_EXCLUDED_TAG}`, like every target but the speed-reliant ones.\n"
+        f"# scripts/modules.py). Tagged `{RELEASE_EXCLUDED_TAG}`, like every target but the speed-reliant ones.\n"
         "swift_library(\n"
         f'    name = "{name}Library",\n'
         "    testonly = True,\n"
@@ -999,20 +1134,13 @@ def simulator_test_build_bazel(name, deps, size):
         f'    tags = ["{RELEASE_EXCLUDED_TAG}"],\n'
         ")\n\n"
         "# `bazel test` and the generated Xcode project both run this bundle in the simulator, inside the\n"
-        "# test host (tools/test_host), which gives windows a scene. The runner drives xcodebuild\n"
-        "# directly; the default one fails a run that holds only Swift Testing tests.\n"
+        "# test host (tools/test_host), which gives windows a scene.\n"
         f"# `{SIMULATOR_TEST_TAG}` runs one simulator test at a time (.bazelrc).\n"
         "ios_unit_test(\n"
         f'    name = "{name}",\n'
         f'    size = "{size}",\n'
         f'    minimum_os_version = "{IOS_MINIMUM}",\n'
         f'    tags = [\n        "{RELEASE_EXCLUDED_TAG}",\n        "{SIMULATOR_TEST_TAG}",\n    ],\n'
-        '    runner = "@rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",\n'
-        '    # The simulator is the Mac\'s alone, so elsewhere `bazel test //...` skips the bundle.\n'
-        '    target_compatible_with = select({\n'
-        '        "@platforms//os:macos": [],\n'
-        '        "//conditions:default": ["@platforms//:incompatible"],\n'
-        '    }),\n'
         '    test_host = "//tools/test_host",\n'
         '    visibility = ["//visibility:public"],\n'
         f'    deps = [":{name}Library"],\n'
@@ -1022,12 +1150,14 @@ def simulator_test_build_bazel(name, deps, size):
 
 def test_build_bazel(name, deps):
     size = TEST_SIZES.get(name, "small")
-    if simulator_test(name):
+    if simulator_only(name):
         # Booting a simulator takes much of a minute on its own.
         return simulator_test_build_bazel(name, deps, TEST_SIZES.get(name, "medium"))
+    simulator = name in SIMULATOR_TESTS
     header = (
         "# GENERATED by scripts/modules.py — edit the table there, then run `just modules`.\n\n"
-        'load("@rules_apple//apple:macos.bzl", "macos_unit_test")\n'
+        + ('load("@rules_apple//apple:ios.bzl", "ios_unit_test")\n' if simulator else "")
+        + 'load("@rules_apple//apple:macos.bzl", "macos_unit_test")\n'
         'load("//tools:swift_rules.bzl", "swift_library", "swift_test")\n\n'
     )
     excluded_note = (
@@ -1037,60 +1167,15 @@ def test_build_bazel(name, deps):
     header += "".join(macro_library_bazel(d) for d in deps if is_macro(d))
     if name not in PERFORMANCE_TESTS:
         return (header + "# The tests, built once and linked into two runners.\n# " + excluded_note
-                + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"])', [RELEASE_EXCLUDED_TAG]))
+                + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"])', [RELEASE_EXCLUDED_TAG], simulator))
     return (
         header
         + "# The tests, built once and linked into two runners; the speed-reliant ones, in Performance/, are\n"
         + f"# {performance_target(name)} below. " + excluded_note
-        + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"], exclude = ["Performance/**"])', [RELEASE_EXCLUDED_TAG])
+        + test_targets_bazel(name, deps, size, 'glob(["**/*.swift"], exclude = ["Performance/**"])', [RELEASE_EXCLUDED_TAG], simulator)
         + "\n# The speed-reliant tests (PERFORMANCE_TESTS in scripts/modules.py): debug and `--config=release`\n"
         + "# both run them.\n"
         + test_targets_bazel(performance_target(name), deps, PERFORMANCE_TEST_SIZE, 'glob(["Performance/**/*.swift"])', [])
-    )
-
-
-def privacy_manifests_build_bazel():
-    """Tests/PrivacyManifests: a Mac bundle linking every module that ships a privacy manifest, and
-    the test that finds each manifest in it, the same as its source."""
-    modules = privacy_manifest_modules()
-    deps = "".join(f'        "//Sources/{name}",\n' for name in modules)
-    manifests = "".join(f'        "//Sources/{name}:{PRIVACY_MANIFEST}",\n' for name in modules)
-    args = "".join(f'        "{PROJECT}_{name}",\n' for name in modules)
-    mac_only = (
-        "    target_compatible_with = select({\n"
-        '        "@platforms//os:macos": [],\n'
-        '        "//conditions:default": ["@platforms//:incompatible"],\n'
-        "    }),\n"
-    )
-    return (
-        "# GENERATED by scripts/modules.py (PRIVACY_MANIFEST) — add or remove a module's PrivacyInfo.xcprivacy,\n"
-        "# then run `just modules`.\n\n"
-        'load("@rules_apple//apple:macos.bzl", "macos_bundle")\n'
-        'load("//tools:python_test.bzl", "python_test")\n\n'
-        "# A loadable bundle linking every module that ships a privacy manifest, so rules_apple copies their\n"
-        "# manifest bundles into it as it would into an app.\n"
-        "macos_bundle(\n"
-        '    name = "PrivacyManifestsBundle",\n'
-        f'    bundle_id = "com.example.{PROJECT.lower()}.privacymanifests",\n'
-        '    infoplists = ["Info.plist"],\n'
-        f'    minimum_os_version = "{MACOS_MINIMUM}",\n'
-        "    # Built only as the test's data, which only a Mac runs: `bazel test //...` on Linux would\n"
-        "    # otherwise build it and find no Apple toolchain. Not `target_compatible_with`: the rule\n"
-        "    # builds itself for macOS, where no constraint tells the host machine apart.\n"
-        f'    tags = [\n        "{RELEASE_EXCLUDED_TAG}",\n        "manual",\n    ],\n'
-        f"    deps = [\n{deps}    ],\n"
-        ")\n\n"
-        "# Every module's manifest is in the bundle, in a bundle of the name SwiftPM gives it, the same as\n"
-        "# its source, and declares no tracking. The arguments are the manifest bundles' names.\n"
-        "python_test(\n"
-        '    name = "PrivacyManifests",\n'
-        '    size = "small",\n'
-        '    src = "privacy_manifests_test.py",\n'
-        f'    args = [\n{args}    ],\n'
-        f'    data = [\n        ":PrivacyManifestsBundle",\n{manifests}    ],\n'
-        f'    tags = ["{RELEASE_EXCLUDED_TAG}"],\n'
-        f"{mac_only}"
-        ")\n"
     )
 
 
@@ -1242,8 +1327,6 @@ def main():
     for name, _, description, deps in MACROS:
         write(os.path.join(ROOT, "Sources", name, "BUILD.bazel"), macro_build_bazel(name, description, deps))
     write(os.path.join(ROOT, "Tests", TEST_SUPPORT, "BUILD.bazel"), test_support_build_bazel())
-    if privacy_manifest_modules():
-        write(os.path.join(ROOT, "Tests", "PrivacyManifests", "BUILD.bazel"), privacy_manifests_build_bazel())
     write(os.path.join(ROOT, "tools", "executables.bzl"), executables_bzl())
     write(os.path.join(ROOT, "tools", "examples.bzl"), examples_bzl())
     write(os.path.join(ROOT, "tools", "macros.bzl"), macros_bzl())

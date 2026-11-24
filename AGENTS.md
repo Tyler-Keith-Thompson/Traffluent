@@ -28,7 +28,7 @@ Tests/TraffluentTestSupport/    Shared test fixtures (data only)
 Tests/CompileFailures/           Sources that must not compile, each checked for its errors
                                  (tools/compile_failure_test.bzl); Bazel only
 Tests/PrivacyManifests/          A Mac bundle of the modules with privacy manifests, checked for each
-                                 (generated); Bazel only
+                                 (kept by hand); Bazel only
 scripts/modules.py               The module graph
 scripts/mutants/<Module>.py      Planted bugs for `just mutate <Module>` (scripts/mutate.py)
 Fuzz/Sources/Fuzz<Module>/       A libFuzzer target per module, in the separate Fuzz/ package
@@ -36,7 +36,7 @@ tools/                           Bazel rule wrappers (warnings as errors, Swift 
                                  tools/bazel turns BuildBuddy on when the Keychain holds its key, and
                                  on macOS sweeps stale output bases once a day (tools/sweep-output-bases):
                                  a deleted workspace's, or one idle 7 days
-tools/test_host/                 The iOS app UIKitTrackingTests runs inside, in the simulator
+tools/test_host/                 The iOS app the SIMULATOR_TESTS targets run inside, in the simulator
 ```
 
 `Benchmarks/` is a separate SwiftPM package (ordo-one/benchmark), generated from `BENCHMARKS` in
@@ -63,6 +63,18 @@ in beside the project's own: keep one definition, holding the project's rows, an
 - Add a module: a row in `MODULES` (name, group, description, dependencies), then `just modules`.
 - Add a test target: a row in `TEST_TARGETS`. A target with a `Performance/` directory of Swift
   sources must be listed in `PERFORMANCE_TESTS`, and the reverse.
+- Run a test target in the iOS simulator as well (the tests of a module every platform builds that
+  holds code under `#if canImport(UIKit)`): its name in `SIMULATOR_TESTS`, then `just modules`. It
+  stays in Package.swift and keeps its run on the Mac and Linux, and gains
+  `//Tests/<Target>:<Target>Simulator`, an `ios_unit_test` of the same tests inside
+  `tools/test_host`, which `just test` runs on a Mac and Linux skips. Its UIKit tests sit under
+  `#if canImport(UIKit)`, and its exit tests under `#if !os(iOS)`, as iOS has none. At least one
+  test must run on the Mac, since Bazel's runner fails a run of none; a target whose Mac tests are
+  Apple's alone goes in `APPLE_ONLY_TESTS` too. A target that depends on an iOS module or a Bazel
+  label runs in the simulator alone already, so it isn't listed.
+  The app type ships the test host; any other copies `tools/test_host` and the simulator lines of
+  `.bazelrc` from an app render first (`just modules` refuses the table without them).
+  `just mutate` runs a spec's simulator targets through Bazel (`scripts/mutate.py`).
 - Add an executable: a row in `EXECUTABLES` (name, description, dependencies). It holds only
   `@main`; its code lives in a module, where tests reach it.
 - Add an example module (a demo app's views, a sample server's routes): a row in `MODULES` and its
@@ -74,6 +86,24 @@ in beside the project's own: keep one definition, holding the project's rows, an
   `just modules`. It keeps its library product and DocC archive; only the umbrella leaves it out.
   The umbrella catalog's topic list is hand-written: list it there under a heading of its own, not
   among the production modules.
+- A library module that imports Swift Testing (a helper adopters add to their test targets: a
+  custom `Trait`, an assertion that records an `Issue`): its name in `TESTING_MODULES` and
+  `NON_UMBRELLA_MODULES` too, then `just modules`. Bazel finds Testing only on the developer search
+  paths, which rules_swift gives testonly targets alone; the generator gives them to its
+  `swift_library` and its docs' symbol graph. A module that depends on it must be listed too, and no
+  executable may (`check()` enforces both).
+- Give a module resources (data files, Apple's privacy manifest): put them under `Sources/<Module>/`
+  and list each in `RESOURCES` (`{"<Module>": [("process", "Data/x.json"), ("copy", "Fixtures")]}`,
+  paths relative to the module, rules as SwiftPM's `.process` and `.copy`), then `just modules`.
+  Package.swift gets `resources:`, and Bazel the same `Traffluent_<Module>.bundle`
+  (`tools/resources.bzl`): nested in an app's or test bundle's resources on Apple platforms, in the
+  runfiles of `bazel test` and `bazel run` on macOS and Linux, found by a generated `Bundle.module`.
+  The module reads them through `Bundle.module` under either build system, and its tests read them
+  through the module. Bazel processes `process` files only inside Apple bundles (strings, asset
+  catalogs); elsewhere they are copied as they are, as SwiftPM does off Apple platforms. A module
+  that calls a required-reason API or collects data ships `PrivacyInfo.xcprivacy`, listed as
+  `("copy", "PrivacyInfo.xcprivacy")` so it sits at the bundle's root; `check()` refuses one left
+  out, a listed path that doesn't exist, and one inside another listed directory.
 - Add a macro: its compiler plugin is a row in `MACROS` (name, group, description, and only
   package products as dependencies: swift-syntax's, with `swift-syntax` in `PACKAGES`), its sources
   in `Sources/<Plugin>/` (an `@main` `CompilerPlugin` listing the macro types), then `just modules`
@@ -96,9 +126,6 @@ in beside the project's own: keep one definition, holding the project's rows, an
   thin, its logic in a module or an executable it builds and runs, and run it on the package
   (`swift package --allow-writing-to-package-directory <verb>`) after a change to it, as
   `just example-tracking-plan` does.
-- A library module that imports Swift Testing (a test helper adopters add to their test targets,
-  like `TrackingPlanTesting`) goes in `TESTING_MODULES` too: Bazel finds Testing only on the
-  developer search paths, which the generator then gives it.
 - Add an external package: a row in `PACKAGES`, its `swiftpkg_<identity>` repository in
   `MODULE.bazel`'s `use_repo`, then `just modules` and `just resolve`.
 - Generate mocks: uncomment the Mockable row in `PACKAGES`, add `mockable/Mockable` to the
@@ -112,16 +139,17 @@ in beside the project's own: keep one definition, holding the project's rows, an
   build on Linux, and the code that uses them sits under `#if canImport(...)`.
 - Raise the Swift floor (a dependency's manifest needs a newer Swift): set `SWIFT` (every
   manifest's tools version, CI's and the Docker image's Swift, the minimum the docs state) and
-  `SWIFT_TOOLCHAIN` (the swiftly release for fuzzing, WebAssembly and Embedded Swift) in
-  `scripts/modules.py`, then `just modules`. It writes them into the generated manifests and
+  `SWIFT_TOOLCHAIN` (the swift.org release swiftly installs where Xcode's toolchain falls short)
+  in `scripts/modules.py`, then `just modules`. It writes them into the generated manifests and
   replaces the previous ones in every other file that names them (`SWIFT_SITES`), from the record
   in `tools/swift_version.bzl`. Never edit a version in those files by hand. `just template-update`
   keeps the project's versions, and says when the template's have passed them.
+  The fuzz targets build with `SWIFT_TOOLCHAIN`.
   CI needs a `swift-bazel` image of the new version, published from the project template's
   `ci-image/build.sh`.
-- Ship a privacy manifest: put `PrivacyInfo.xcprivacy` in `Sources/<Module>/`, then `just modules`.
-  Package.swift copies it as the module's resource, and Bazel gives the module an
-  `apple_resource_bundle` as `data` (left out on Linux), both named `Traffluent_<Module>.bundle`;
+- Ship a privacy manifest: put `PrivacyInfo.xcprivacy` in `Sources/<Module>/`, list it in
+  `RESOURCES` as `("copy", "PrivacyInfo.xcprivacy")` (the bullet above), add the module to the three
+  lists in `Tests/PrivacyManifests/BUILD.bazel` (kept by hand), then `just modules`.
   `//Tests/PrivacyManifests` (Bazel) and `PrivacyManifestTests` in `Tests/TraffluentTests`
   (SwiftPM) check that each is bundled unchanged. Record what it declares, and why, in the
   umbrella catalog's PrivacyManifests article.
@@ -157,10 +185,10 @@ Every shell command gets a timeout. macOS has no `timeout`; use
   tagged `debug-only`, which `--config=release` filters out.
 - A test that bounds wall-clock time, or runs a large input under `.timeLimit`, belongs in
   `Tests/X/Performance/`.
-- `UIKitTrackingTests` runs in the iOS simulator (`SIMULATOR_TESTS` in `scripts/modules.py`; the
-  device and runtime are in `.bazelrc`), so `just test` boots one on the Mac; SwiftPM and Linux
-  leave it out. `just mutate` runs SwiftPM bundles only, so `scripts/mutants/UIKitTracking.py`'s
-  mutants are run one at a time against `bazel test //Tests/UIKitTrackingTests`.
+- `SwiftUITrackingTests` and `AutomaticScreenTrackingTests` also run in the iOS simulator, as
+  `//Tests/<Target>:<Target>Simulator` (`SIMULATOR_TESTS` in `scripts/modules.py`; the device and
+  runtime are in `.bazelrc`), so `just test` boots one on the Mac; SwiftPM and Linux run only the
+  Mac half. Their UIKit tests, under `#if canImport(UIKit)`, run in the simulator alone.
 - Release builds use their own output base (see the justfile). Don't create other output bases
   or copies of the repo, and shut down any extra Bazel server you start.
 - Run suites through Bazel, not `swift test --filter`.
@@ -220,7 +248,9 @@ have.
    - a property test against a naive reference (`swift-property-based`).
    - planted bugs in `scripts/mutants/<Module>.py` for the new code, then `just mutate <Module>`:
      every mutant caught, or a note in the spec on why a survivor is equivalent. A new module
-     gets a spec of its own, copied from `Greetings.py`.
+     gets a spec of its own, copied from `Greetings.py`. A simulator test target in the spec's
+     `TESTS` runs through Bazel, in a copy of the workspace, for the mutants the Mac tests let
+     through, so a mutant in code under `#if canImport(UIKit)` is caught there.
    - a fuzz target in `Fuzz/Sources/Fuzz<Module>` checking the new code against a model after
      every operation (see `Fuzz/README.md`), then `just fuzz Fuzz<Module>`. A crash becomes a
      test in the module's suite, then its file is deleted.

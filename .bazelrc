@@ -4,7 +4,7 @@ build --macos_minimum_os=15.0
 build --host_macos_minimum_os=15.0
 build --ios_minimum_os=18.0
 
-# The simulator UIKitTrackingTests runs in (SIMULATOR_TESTS in scripts/modules.py), one simulator
+# The simulator that SIMULATOR_TESTS' targets (scripts/modules.py) run in, one simulator
 # test at a time: each carries SIMULATOR_TEST_TAG and boots a simulator of its own. An execution
 # option, so it keeps the analysis cache.
 build --ios_simulator_device="iPhone 16 Pro"

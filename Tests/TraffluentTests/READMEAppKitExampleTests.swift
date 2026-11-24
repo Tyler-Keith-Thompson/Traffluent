@@ -1,5 +1,5 @@
 // The README's AppKit example, verbatim. It runs on the Mac; elsewhere AppKitTracking is empty and
-// this file builds nothing. The UIKit example runs in the simulator, in UIKitTrackingTests.
+// this file builds nothing. The UIKit example runs in the simulator, in SwiftUITrackingTests.
 #if os(macOS)
 import AppKit
 import Testing

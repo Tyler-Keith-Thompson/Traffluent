@@ -1,4 +1,4 @@
-"""Every privacy manifest reaches a Bazel-built bundle (PRIVACY_MANIFEST in scripts/modules.py).
+"""Every privacy manifest reaches a Bazel-built bundle (RESOURCES in scripts/modules.py).
 
 The arguments name the manifest bundles, `Traffluent_<Module>`; the data holds the Mac bundle that
 links those modules and each module's manifest at its workspace path. rules_apple writes the bundle

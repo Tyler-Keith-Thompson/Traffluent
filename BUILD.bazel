@@ -9,14 +9,10 @@ load("//tools:performance_tests.bzl", "PERFORMANCE_TEST_PACKAGES")
 load("//tools:swiftpm.bzl", "swiftpm_manifest_test")
 
 # Nothing here builds for iOS only (IOS_MODULES in scripts/modules.py, which writes tools/ios.bzl
-# for an app). UIKitTrackingTests and AutomaticScreenTrackingUIKitTests run in the simulator
-# (SIMULATOR_TESTS there).
+# for an app), and no tests run in the simulator.
 IOS_PACKAGES = []
 
-SIMULATOR_TEST_PACKAGES = [
-    "Tests/AutomaticScreenTrackingUIKitTests",
-    "Tests/UIKitTrackingTests",
-]
+SIMULATOR_TEST_PACKAGES = []
 
 APP_TARGETS = []
 
@@ -28,7 +24,7 @@ APP_TARGETS = []
 # so is CompileFailures, which holds no test module: its tests check sources that must not compile
 # (tools/compile_failure_test.bzl). So is AutomaticControlTrackingUITests, a hand-written UI test of
 # an app of its own, which Xcode would need a scheme of its own to run, and PrivacyManifests, whose
-# Python test reads a built bundle (PRIVACY_MANIFEST in scripts/modules.py).
+# Python test reads a built bundle (RESOURCES in scripts/modules.py).
 TEST_PACKAGES = sorted([
     package
     for package in subpackages(include = ["Tests/*"])
