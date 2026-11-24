@@ -162,6 +162,104 @@ extension SerializedSuites {
             #expect(actual == expected)
         }
 
+        @Test("A view a NavigationStack pushes tracks trackOnAppear's event once, through its window's tracker, not the scene's the window overrides")
+        func navigationStackDestinationInOverridingWindow() async throws {
+            let sceneTracker = Tracker()
+            let windowTracker = Tracker()
+            let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+            scene.traitOverrides.tracker = sceneTracker
+            defer { scene.traitOverrides.remove(TrackerTrait.self) }
+            let window = UIWindow(windowScene: scene)
+            window.traitOverrides.tracker = windowTracker
+            let navigation = Navigation()
+            let host = UIHostingController(rootView: OpenedStack(navigation: navigation))
+            window.rootViewController = host
+            window.isHidden = false
+            defer { window.isHidden = true }
+            // Turns of the main run loop until the stack's root is on screen.
+            repeat {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            } while host.children.first?.children.first?.viewIfLoaded?.window == nil
+            let expectedScene: [String] = []
+            let expectedWindow = [CartOpened.name]
+
+            navigation.path.append(1)
+            // Turns until the pushed view is on screen and its push has finished.
+            repeat {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            } while host.children.first?.children.count != 2 || host.children.first?.children.last?.viewIfLoaded?.window == nil || host.children.first?.transitionCoordinator != nil
+            await sceneTracker.finish()
+            await windowTracker.finish()
+
+            var actualScene: [String] = []
+            for await record in sceneTracker.records {
+                actualScene.append(type(of: record.event).name)
+            }
+            var actualWindow: [String] = []
+            for await record in windowTracker.records {
+                actualWindow.append(type(of: record.event).name)
+            }
+            #expect(actualScene == expectedScene)
+            #expect(actualWindow == expectedWindow)
+        }
+
+        @Test("A screen a NavigationStack pushes tracks ScreenViewed once, through its window's tracker, not the scene's the window overrides")
+        func navigationStackScreenInOverridingWindow() async throws {
+            let sceneTracker = Tracker()
+            let windowTracker = Tracker()
+            let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+            scene.traitOverrides.tracker = sceneTracker
+            defer { scene.traitOverrides.remove(TrackerTrait.self) }
+            let window = UIWindow(windowScene: scene)
+            window.traitOverrides.tracker = windowTracker
+            let navigation = Navigation()
+            let host = UIHostingController(rootView: ScreenStack(navigation: navigation))
+            window.rootViewController = host
+            window.isHidden = false
+            defer { window.isHidden = true }
+            // Turns of the main run loop until the stack's root is on screen.
+            repeat {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            } while host.children.first?.children.first?.viewIfLoaded?.window == nil
+            let expectedScene: [ScreenViewed] = []
+            let expectedWindow = [ScreenViewed(screen: "Checkout")]
+            let expectedScreens: [String?] = ["Checkout"]
+
+            navigation.path.append(1)
+            // Turns until the pushed view is on screen and its push has finished.
+            repeat {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            } while host.children.first?.children.count != 2 || host.children.first?.children.last?.viewIfLoaded?.window == nil || host.children.first?.transitionCoordinator != nil
+            await sceneTracker.finish()
+            await windowTracker.finish()
+
+            var actualScene: [ScreenViewed] = []
+            for await record in sceneTracker.records {
+                actualScene.append(try #require(record.event as? ScreenViewed))
+            }
+            var actualWindow: [ScreenViewed] = []
+            var actualScreens: [String?] = []
+            for await record in windowTracker.records {
+                actualWindow.append(try #require(record.event as? ScreenViewed))
+                actualScreens.append(record.context[ScreenKey.self])
+            }
+            #expect(actualScene == expectedScene)
+            #expect(actualWindow == expectedWindow)
+            #expect(actualScreens == expectedScreens)
+        }
+
         @Test("A SwiftUI view hosted in UIKit tracks through the tracker its view controller's traits hold")
         func swiftUIInUIKit() async throws {
             let tracker = Tracker()

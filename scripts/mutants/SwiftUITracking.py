@@ -12,16 +12,13 @@
 #   `newValue`: SwiftUI runs the action with the body built from the new value, so the two agree.
 # - A modifier's tracker read in its closure rather than captured in the body: the closure runs
 #   while the modifier is installed, so both read the same environment.
-# - OnAppearWithTracker's onChange left waiting after it tracks, or tracking without checking the
-#   new tracker isn't noOp: onChange runs only when isNoOp flips, so the next run would need the
-#   tracker to become noOp again (no tracker drops nothing), then real again while the view stays
-#   on screen, which no host does.
-#
-# Caught only in the simulator, and planted by hand against
-# `bazel test //Tests/SwiftUITrackingTests:SwiftUITrackingTestsSimulator`, so left out here:
-# - OnAppearWithTracker's onDisappear not clearing `isWaitingForTracker = false`: a NavigationStack
-#   root covered by a push before the tracker arrives tracks when it does (coveredBeforeTracker in
-#   SwiftUIBridgeTests). On the Mac a view that disappears leaves the tree, its state with it.
+# - OnAppearWithTracker's onChange tracking without checking that the content is ready: onChange
+#   runs when readiness flips, and a waiting view only ever flips to ready, after which it no
+#   longer waits.
+# - OnAppearWithTracker's onDisappear not clearing `isWaiting`: where UIKit hosts the view, a view
+#   that disappears leaves its window too (a NavigationStack root a push covers, a tab not
+#   selected), so it isn't ready until it is back, when it appears again; on the Mac it leaves the
+#   tree, its state with it. coveredBeforeTracker in SwiftUIBridgeTests pins the outcome.
 
 TESTS = ["SwiftUITrackingTests"]
 
@@ -33,6 +30,7 @@ H = "TrackChange.swift"
 S = "TrackScreen.swift"
 V = "ScreenViewed.swift"
 W = "OnAppearWithTracker.swift"
+R = "WindowState.swift"
 
 # The call site CallSite.track forwards, swapped whole, one field at a time.
 FORWARD = "track(event, file: callSite.file, fileID: callSite.fileID, function: callSite.function, line: callSite.line, column: callSite.column)"
@@ -73,11 +71,17 @@ MUTANTS = [
     # The second `screenTracker` is the environment's, the third the one ScreenViewed is tracked through.
     Mutant("screennotinenvironment", S, "screenTracker", "tracker", nth=1),
     Mutant("viewedwithoutscreen", S, "screenTracker", "tracker", nth=2),
-    # Waiting for a tracker.
-    Mutant("neverwaits", W, "isWaitingForTracker = true", "", mode="stmt"),
-    # The first `tracker.isNoOp` is onAppear's.
-    Mutant("noopnotawaited", W, "tracker.isNoOp", "false", nth=0),
-    Mutant("waitsforchangeanyway", W, "guard isWaitingForTracker, !tracker.isNoOp else { return }", "guard !tracker.isNoOp else { return }", mode="stmt"),
+    # Waiting for the window and a tracker.
+    Mutant("neverwaits", W, "isWaiting = true", "", mode="stmt"),
+    # The Mac's readiness (the second `!tracker.isNoOp`) before the UIKit one, whose mutants add
+    # copies of the text.
+    Mutant("noopnotawaited", W, "!tracker.isNoOp", "true", nth=1),
+    Mutant("windownotawaited", W, "windowState.isInWindow && !tracker.isNoOp", "!tracker.isNoOp"),
+    Mutant("noopnotawaitedinwindow", W, "windowState.isInWindow && !tracker.isNoOp", "windowState.isInWindow"),
+    Mutant("waitsforchangeanyway", W, "guard isWaiting, isReady(tracker) else { return }", "guard isReady(tracker) else { return }", mode="stmt"),
+    # The window state.
+    Mutant("movenotwritten", R, "state?.isInWindow = window != nil", "", mode="stmt"),
+    Mutant("windowinverted", R, "window != nil", "window == nil"),
     # ScreenViewed.
     Mutant("screennotencoded", V, 'map.encode(screen, forKey: "screen")', "", mode="stmt"),
     Mutant("schemaversion", V, "schemaVersion", "0"),
