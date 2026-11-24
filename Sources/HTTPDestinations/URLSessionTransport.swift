@@ -25,8 +25,8 @@ public struct URLSessionTransport: HTTPTransport {
     ///   - body: The request's body.
     /// - Returns: The response the server sent, of any status; its body is discarded.
     /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled, or
-    ///   ``HTTPTransportError/failed(reason:)`` with the session's error when no response
-    ///   arrived.
+    ///   ``HTTPTransportError/failed(reason:)`` with the session error's domain and code, never
+    ///   the request's URL, when no response arrived.
     public func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
         do {
             return try await session.upload(for: request, from: body).1
@@ -36,7 +36,18 @@ public struct URLSessionTransport: HTTPTransport {
             if Task.isCancelled || error is CancellationError {
                 throw .cancelled
             }
-            throw .failed(reason: String(describing: error))
+            throw .failed(reason: error.failureReason)
         }
+    }
+}
+
+extension Error {
+    /// The error's domain and code, such as `NSURLErrorDomain -1004`.
+    ///
+    /// Not its description: a `URLError`'s holds the request's URL, with any key or tenant in its
+    /// query or path, and `HTTPDestination` logs the reason. The code still says what failed.
+    fileprivate var failureReason: String {
+        let error = self as NSError
+        return "\(error.domain) \(error.code)"
     }
 }

@@ -48,16 +48,16 @@ MUTANTS = [
     Mutant("firstrecordindexed", D, "batch.first", "Optional(batch[0])", nth=1),
     Mutant("instrumentignored", D, "self.instrument = instrument", "self.instrument = InstrumentationSystem.instrument", mode="stmt"),
     Mutant("urlsessioninstrumentignored", S, """self.init(
-                endpoint: endpoint,
-                headerFields: headerFields,
-                instrument: instrument,
-                transport: URLSessionTransport(),
-                encoder: encoder)""", """self.init(
-                endpoint: endpoint,
-                headerFields: headerFields,
-                instrument: InstrumentationSystem.instrument,
-                transport: URLSessionTransport(),
-                encoder: encoder)""", mode="stmt"),
+            endpoint: endpoint,
+            headerFields: headerFields,
+            instrument: instrument,
+            transport: URLSessionTransport(),
+            encoder: encoder)""", """self.init(
+            endpoint: endpoint,
+            headerFields: headerFields,
+            instrument: InstrumentationSystem.instrument,
+            transport: URLSessionTransport(),
+            encoder: encoder)""", mode="stmt"),
     Mutant("invalidnametraps", I, """guard let name = HTTPField.Name(key) else {
             return
         }
@@ -65,6 +65,8 @@ MUTANTS = [
     Mutant("configuredfieldwins", I, "fields[name] = value", "fields[name] = fields[name] ?? value", mode="stmt"),
     Mutant("injectedappended", I, "fields[name] = value", "fields.append(HTTPField(name: name, value: value))", mode="stmt"),
     Mutant("cancelledasfailed", U, "throw .cancelled", "throw .failed(reason: \"cancelled\")", mode="stmt"),
-    Mutant("failedascancelled", U, "throw .failed(reason: String(describing: error))", "throw .cancelled", mode="stmt"),
+    Mutant("failedascancelled", U, "throw .failed(reason: error.failureReason)", "throw .cancelled", mode="stmt"),
+    Mutant("reasondescribed", U, "throw .failed(reason: error.failureReason)", "throw .failed(reason: String(describing: error))", mode="stmt"),
+    Mutant("reasonwithoutcode", U, '"\\(error.domain) \\(error.code)"', '"\\(error.domain)"'),
     Mutant("cancellationignored", U, "Task.isCancelled || error is CancellationError", "error is CancellationError"),
 ]
