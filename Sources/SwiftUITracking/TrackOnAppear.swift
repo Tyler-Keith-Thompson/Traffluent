@@ -13,7 +13,10 @@ extension View {
     ///
     /// It tracks once per appearance, as `onAppear(perform:)` runs: again when the view
     /// reappears, such as when a navigation stack pops back to it or a tab is selected again, and
-    /// not when SwiftUI only redraws it. The record's call site is where the modifier is applied.
+    /// not when SwiftUI only redraws it. A view that appears before a tracker reaches it, such as a
+    /// view a `NavigationStack` pushes in UIKit, whose traits gain their window's tracker only
+    /// after it appears, tracks once one does, while it is still on screen. The record's call
+    /// site is where the modifier is applied.
     ///
     /// - Parameters:
     ///   - event: The event to track on each appearance.
@@ -42,7 +45,7 @@ struct TrackOnAppear<Tracked: Event>: ViewModifier {
     @Environment(\.tracker) private var tracker
 
     func body(content: Content) -> some View {
-        content.onAppear { [tracker, event, callSite] in
+        content.onAppear(with: tracker) { [event, callSite] tracker in
             tracker.track(event, from: callSite)
         }
     }

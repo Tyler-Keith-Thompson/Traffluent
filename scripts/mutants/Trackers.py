@@ -53,6 +53,9 @@ COPY = "Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [
 WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)"
 
 MUTANTS = [
+    # isNoOp.
+    Mutant("isnoopalwaysfalse", T, "guard case .none = backing else { return false }", "return false", mode="stmt"),
+    Mutant("isnoopalwaystrue", T, "guard case .none = backing else { return false }", "return true", mode="stmt"),
     Mutant("currentignoresbinding", T, "bound ?? .noOp", ".noOp"),
     Mutant("syncunbound", W, "return try Tracker.$bound.withValue(tracker, operation: operation)", "return try operation()", mode="stmt"),
     Mutant("asyncunbound", W, "return try await Tracker.$bound.withValue(tracker, operation: operation)", "return try await operation()", mode="stmt"),

@@ -110,6 +110,111 @@ struct TrackOnAppearTests {
         #expect(actual == expected)
     }
 
+    @Observable
+    final class Arrival {
+        var tracker = Tracker.noOp
+    }
+
+    struct LateCart: View {
+        let model: Model
+        let arrival: Arrival
+
+        var body: some View {
+            Cart(model: model).tracker(arrival.tracker)
+        }
+    }
+
+    @Test("A view that appears before a tracker reaches it tracks its event once one does")
+    func trackerArrivesLater() async {
+        let tracker = Tracker()
+        let arrival = Arrival()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: LateCart(model: Model(), arrival: arrival))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        let expected = [CartOpened(items: 3)]
+
+        arrival.tracker = tracker
+        host.layoutSubtreeIfNeeded()
+        await tracker.finish()
+
+        var actual: [CartOpened] = []
+        for await record in tracker.records {
+            if let event = record.event as? CartOpened {
+                actual.append(event)
+            }
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("A view that disappears before a tracker reaches it tracks nothing once one does")
+    func trackerArrivesAfterDisappearing() async {
+        let tracker = Tracker()
+        let model = Model()
+        let arrival = Arrival()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: LateCart(model: model, arrival: arrival))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        model.isShown = false
+        host.layoutSubtreeIfNeeded()
+        let expected: [CartOpened] = []
+
+        arrival.tracker = tracker
+        host.layoutSubtreeIfNeeded()
+        await tracker.finish()
+
+        var actual: [CartOpened] = []
+        for await record in tracker.records {
+            if let event = record.event as? CartOpened {
+                actual.append(event)
+            }
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("A view that appeared with a tracker tracks nothing more when its tracker goes and another arrives")
+    func trackerReplaced() async {
+        let firstTracker = Tracker()
+        let secondTracker = Tracker()
+        let arrival = Arrival()
+        arrival.tracker = firstTracker
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: LateCart(model: Model(), arrival: arrival))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        let expectedFirst = [CartOpened(items: 3)]
+        let expectedSecond: [CartOpened] = []
+
+        arrival.tracker = .noOp
+        host.layoutSubtreeIfNeeded()
+        arrival.tracker = secondTracker
+        host.layoutSubtreeIfNeeded()
+        await firstTracker.finish()
+        await secondTracker.finish()
+
+        var actualFirst: [CartOpened] = []
+        for await record in firstTracker.records {
+            if let event = record.event as? CartOpened {
+                actualFirst.append(event)
+            }
+        }
+        var actualSecond: [CartOpened] = []
+        for await record in secondTracker.records {
+            if let event = record.event as? CartOpened {
+                actualSecond.append(event)
+            }
+        }
+        #expect(actualFirst == expectedFirst)
+        #expect(actualSecond == expectedSecond)
+    }
+
     @Test("The record's call site is where the modifier is applied")
     func callSite() async throws {
         let tracker = Tracker()

@@ -178,6 +178,21 @@ struct TrackerTests {
         #expect(actual == expected)
     }
 
+    @Test("The no-op tracker and its enriched copies drop every event; a tracker made with init and its enriched copies don't")
+    func isNoOp() {
+        let enricher = Enricher { _ in }
+        let expected = [true, true, false, false]
+
+        let actual = [
+            Tracker.noOp.isNoOp,
+            Tracker.noOp.enriched(by: enricher).isNoOp,
+            Tracker().isNoOp,
+            Tracker().enriched(by: enricher).isNoOp,
+        ]
+
+        #expect(actual == expected)
+    }
+
     @Test("Each record is stamped with the wall-clock time `now` gives when its event is tracked")
     func timestamps() async {
         let ticker = Ticker()

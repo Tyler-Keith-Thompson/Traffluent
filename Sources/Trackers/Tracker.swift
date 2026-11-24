@@ -290,6 +290,16 @@ public struct Tracker: Sendable {
         }
     }
 
+    /// Whether this tracker drops every event: ``noOp``, or a copy of it made by
+    /// ``enriched(by:)``.
+    ///
+    /// Package-wide, so a UI module whose views can appear before their tracker reaches them can
+    /// wait for it rather than track the appearance into nothing.
+    package var isNoOp: Bool {
+        guard case .none = backing else { return false }
+        return true
+    }
+
     /// Waits until the tracker's worker has handled every event tracked, and every consent
     /// decision made, before the call: each record is written to the store, if any, and
     /// published to ``records``, or held or dropped by the consent.

@@ -25,7 +25,10 @@ extension View {
     ///
     /// It tracks ``ScreenViewed`` once per appearance, as `onAppear(perform:)` runs: again when
     /// the view reappears, such as when a navigation stack pops back to it, and not when SwiftUI
-    /// only redraws it. The record's call site is where the modifier is applied.
+    /// only redraws it. A view that appears before a tracker reaches it, such as a view a
+    /// `NavigationStack` pushes in UIKit, whose traits gain their window's tracker only after it
+    /// appears, tracks once one does, while it is still on screen. The record's call site is
+    /// where the modifier is applied.
     ///
     /// - Parameters:
     ///   - screen: The screen's name.
@@ -63,7 +66,7 @@ struct TrackScreen: ViewModifier {
         })
         content
             .environment(\.tracker, screenTracker)
-            .onAppear { [screen, callSite] in
+            .onAppear(with: screenTracker) { [screen, callSite] screenTracker in
                 screenTracker.track(ScreenViewed(screen: screen), from: callSite)
             }
             .markedAsTrackedScreen()

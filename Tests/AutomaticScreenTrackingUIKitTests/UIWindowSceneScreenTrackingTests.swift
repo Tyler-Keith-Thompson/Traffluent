@@ -57,6 +57,18 @@ struct UIWindowSceneScreenTrackingTests {
         }
     }
 
+    struct CheckoutStackView: View {
+        @Bindable var navigation: Navigation
+
+        var body: some View {
+            NavigationStack(path: $navigation.path) {
+                Text("Home")
+                    .navigationDestination(for: Int.self) { DetailView(id: $0).trackScreen("Checkout") }
+                    .navigationDestination(for: Settings.self) { _ in SettingsView() }
+            }
+        }
+    }
+
     enum Route: Hashable {
         case detail(Int)
         case settings
@@ -467,24 +479,24 @@ let host = UIHostingController(rootView: StackView(navigation: navigation))
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
         window.traitOverrides.tracker = tracker
-        let navigation = UINavigationController(rootViewController: HomeViewController())
-        window.rootViewController = navigation
+        let navigation = Navigation()
+        let host = UIHostingController(rootView: CheckoutStackView(navigation: navigation))
+        window.rootViewController = host
         window.isHidden = false
         defer {
             scene.stopTrackingScreensAutomatically()
             window.isHidden = true
         }
         let expected = [
-            ScreenViewed(screen: "HomeViewController"),
+            ScreenViewed(screen: "CheckoutStackView"),
             ScreenViewed(screen: "Checkout"),
-            ScreenViewed(screen: "SettingsViewController"),
+            ScreenViewed(screen: "SettingsView"),
         ]
 
         scene.trackScreensAutomatically()
         var actual: [ScreenViewed] = []
         actual.append(try #require(await records.next()?.event as? ScreenViewed))
-        let checkout = UIHostingController(rootView: DetailView(id: 0).trackScreen("Checkout"))
-        navigation.pushViewController(checkout, animated: true)
+        navigation.path.append(0)
         actual.append(try #require(await records.next()?.event as? ScreenViewed))
         // Turns of the main run loop until the checkout screen is on screen, each past
         // discovery's, which would track it now if trackScreen didn't.
@@ -493,8 +505,8 @@ let host = UIHostingController(rootView: StackView(navigation: navigation))
                 let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
                 CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
             }
-        } while checkout.viewIfLoaded?.window == nil || navigation.transitionCoordinator != nil
-        navigation.pushViewController(SettingsViewController(), animated: true)
+        } while host.children.first?.children.last?.viewIfLoaded?.window == nil || host.children.first?.children.count != 2 || host.children.first?.transitionCoordinator != nil
+        navigation.path.append(Settings())
         actual.append(try #require(await records.next()?.event as? ScreenViewed))
 
         #expect(actual == expected)

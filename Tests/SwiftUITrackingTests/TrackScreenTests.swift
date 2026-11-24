@@ -180,6 +180,47 @@ struct TrackScreenTests {
         #expect(actual.sorted() == expected.sorted())
     }
 
+    @Observable
+    final class Arrival {
+        var tracker = Tracker.noOp
+    }
+
+    struct LateScreens: View {
+        let model: Model
+        let arrival: Arrival
+
+        var body: some View {
+            Screens(model: model).tracker(arrival.tracker)
+        }
+    }
+
+    @Test("A screen that appears before a tracker reaches it tracks ScreenViewed once one does, carrying its ScreenKey")
+    func trackerArrivesLater() async throws {
+        let tracker = Tracker()
+        let arrival = Arrival()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: LateScreens(model: Model(), arrival: arrival))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        let expectedEvents = [ScreenViewed(screen: "Checkout")]
+        let expectedScreens: [String?] = ["Checkout"]
+
+        arrival.tracker = tracker
+        host.layoutSubtreeIfNeeded()
+        await tracker.finish()
+
+        var actualEvents: [ScreenViewed] = []
+        var actualScreens: [String?] = []
+        for await record in tracker.records {
+            actualEvents.append(try #require(record.event as? ScreenViewed))
+            actualScreens.append(record.context[ScreenKey.self])
+        }
+        #expect(actualEvents == expectedEvents)
+        #expect(actualScreens == expectedScreens)
+    }
+
     @Test("The ScreenViewed record's call site is where the modifier is applied")
     func callSite() async throws {
         let tracker = Tracker()
