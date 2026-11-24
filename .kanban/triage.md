@@ -41,7 +41,9 @@ bad row in a dashboard.
   side. Where events end up belongs to the destination's vendor. The one exception, by the
   owner's decision on 2026-11-22 (TRAF-31): a self-hosted collector in a separate package, which
   ingests Traffluent batches, validates them against the tracking plan, dedupes redelivered
-  records, stores them and can forward them. Dashboards and query engines stay out.
+  records, stores them and can forward them. On 2026-11-23 the owner extended it: the collector
+  also ships analytics dashboards over what it stores, as a web UI and a mobile app. A
+  general-purpose query engine and a data warehouse stay out, and none of it lives in this repo.
 - N6. Crash reporting, performance tracing (APM) and general logging. Other tools do those jobs.
   A destination may forward to OpenTelemetry, but Traffluent is not a tracing SDK.
 - N7. Apple-only features that break other platforms. A feature that can't work off Apple must
