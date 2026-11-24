@@ -4,7 +4,7 @@
 //
 // Launch arguments set it up: `-tracking all` (every scene tracks controls automatically, the
 // default), `first` (only the first scene) or `none`; `-predicate default` (the default predicate),
-// `readme` (the Automatic Tracking article's example, which skips "debug-menu-button" and renames
+// `article` (the Automatic Tracking article's example, which skips "debug-menu-button" and renames
 // "checkout-button") or `every` (names a control without an identifier after its kind).
 import AutomaticControlTracking
 import SwiftUI
@@ -88,7 +88,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let enable = {
             if tracking == "all" || (tracking == "first" && number == 1) {
                 switch arguments.string(forKey: "predicate") {
-                case "readme":
+                case "article":
                     // The Automatic Tracking article's control activations example, verbatim from here.
                     windowScene.trackControlsAutomatically { control in
                         switch control.identifier {

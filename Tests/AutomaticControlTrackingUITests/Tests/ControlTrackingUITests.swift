@@ -152,10 +152,10 @@ struct ControlTrackingUITests {
         #expect(actual == expected)
     }
 
-    @Test("README example: the predicate renames a control and skips one, and a control without an identifier stays skipped")
-    func readmeExample() {
+    @Test("Article example: the predicate renames a control and skips one, and a control without an identifier stays skipped")
+    func articleExample() {
         let app = XCUIApplication()
-        app.launchArguments = ["-tracking", "all", "-predicate", "readme"]
+        app.launchArguments = ["-tracking", "all", "-predicate", "article"]
         app.launch()
         let expected = "1 Checkout UIButton ControlsViewController | 1 notifications-switch UISwitch ControlsViewController"
 

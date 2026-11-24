@@ -4,7 +4,10 @@
 
 load("@rules_apple//apple:ios.bzl", "ios_application", "ios_ui_test")
 load("@rules_apple//apple/testing/default_runner:ios_xctestrun_runner.bzl", "ios_xctestrun_runner")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("//tools:swift_rules.bzl", "swift_library")
+
+BUNDLE_ID = "com.example.traffluent.controltracking"
 
 swift_library(
     name = "ControlTrackingAppLibrary",
@@ -24,7 +27,7 @@ swift_library(
 ios_application(
     name = "ControlTrackingApp",
     testonly = True,
-    bundle_id = "com.example.traffluent.controltracking",
+    bundle_id = BUNDLE_ID,
     families = [
         "iphone",
         "ipad",
@@ -50,11 +53,34 @@ swift_library(
     target_compatible_with = ["@platforms//os:ios"],
 )
 
+# Removes the app from the simulator before each run. The runner reuses a booted simulator, and
+# installing over an earlier install keeps any file whose size and modification time match. Bazel
+# gives every file the same fixed time, and a small change to the app's code rarely changes its
+# binary's size (Mach-O segments are page-aligned), so without this the tests can run an earlier
+# build of the app.
+genrule(
+    name = "uninstall_app_script",
+    outs = ["uninstall_app.sh"],
+    cmd = """cat > $@ <<'EOF'
+#!/bin/bash
+# Fails only when simctl does; an app that isn't installed is already gone.
+xcrun simctl uninstall "$$SIMULATOR_UDID" %s
+EOF""" % BUNDLE_ID,
+    tags = ["manual"],
+)
+
+sh_binary(
+    name = "uninstall_app",
+    srcs = [":uninstall_app_script"],
+    tags = ["manual"],
+)
+
 # An iPad, where a second scene shows beside the first (an iPhone shows one scene at a time), in
 # order. The OS version is --ios_simulator_version's (.bazelrc).
 ios_xctestrun_runner(
     name = "ipad_runner",
     device_type = "iPad Pro 13-inch (M4)",
+    pre_action = ":uninstall_app",
     random = False,
     # Used only as the UI test's runner, which only a Mac runs: since rules_apple 5 the runner needs
     # the Mac tools toolchain, so `bazel test //...` on Linux would otherwise fail resolving it.
