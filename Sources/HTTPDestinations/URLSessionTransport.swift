@@ -24,12 +24,19 @@ public struct URLSessionTransport: HTTPTransport {
     ///   - request: The method, URL and header fields to send.
     ///   - body: The request's body.
     /// - Returns: The response the server sent, of any status; its body is discarded.
+    /// On Linux, cancelling the calling task returns at once and leaves the upload to finish on its
+    /// own, unread, as FoundationNetworking can't cancel one safely.
+    ///
     /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled, or
     ///   ``HTTPTransportError/failed(reason:)`` with the session error's domain and code, never
     ///   the request's URL, when no response arrived.
     public func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
         do {
-            return try await session.upload(for: request, from: body).1
+            #if canImport(FoundationNetworking)
+                return try await session.uploadWithoutCancelling(for: request, from: body)
+            #else
+                return try await session.upload(for: request, from: body).1
+            #endif
         } catch {
             // URLSession reports a cancelled task as URLError(.cancelled), not as a
             // CancellationError, so the task's own state decides.

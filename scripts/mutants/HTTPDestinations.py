@@ -11,6 +11,9 @@
 #   is logged, is pinned through `send(_:)`.
 # - Leaving out `|| error is CancellationError` in URLSessionTransport: a CancellationError comes
 #   only from a cancelled task, which `Task.isCancelled` already catches.
+# - Anything in URLSession+UploadWithoutCancelling.swift: it compiles only with FoundationNetworking
+#   (Linux), and mutation runs on the Mac, where the file is empty. URLSessionTransportTests pin it
+#   under `swift test` on Linux, cancelRacingRefusal among them.
 #
 # `injectedaftercontenttype` comes before the other mutants of those lines, which would otherwise
 # wrap them apart; its schema then holds their text twice, so they pick the original with `nth=1`.
