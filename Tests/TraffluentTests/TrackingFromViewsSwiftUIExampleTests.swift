@@ -1,5 +1,7 @@
-// The README's SwiftUI example, verbatim. Its views are hosted in an AppKit window, so it runs on
-// the Mac; elsewhere SwiftUITracking is empty and this file builds nothing.
+// The SwiftUI example of the "Tracking from SwiftUI, UIKit and AppKit" article
+// (Sources/Traffluent/Traffluent.docc/TrackingFromViews.md), verbatim. Its views are hosted in an
+// AppKit window, so it runs on the Mac; elsewhere SwiftUITracking is empty and this file builds
+// nothing.
 #if os(macOS)
 import AppKit
 import SwiftUI
@@ -7,8 +9,8 @@ import Testing
 import Traffluent
 
 @MainActor
-@Suite("README examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
-struct READMESwiftUIExampleTests {
+@Suite("Tracking from views examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
+struct TrackingFromViewsSwiftUIExampleTests {
     struct SignedUp: Event {
         var plan: String
     }

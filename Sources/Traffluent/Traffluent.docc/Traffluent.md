@@ -31,6 +31,23 @@ try await delivery.execute()
 
 ### Essentials
 
+- <doc:TrackingEvents>
+- <doc:ChoosingDestinations>
+- <doc:TrackingFromViews>
+- <doc:TestingWhatYouTrack>
+
+### Guides
+
+- <doc:AutomaticTracking>
+- <doc:SessionsAndStandardContext>
+- <doc:SamplingEvents>
+- <doc:ConsentGating>
+- <doc:PersistingRecords>
+- <doc:DefiningEvents>
+- <doc:TrackingPlanWorkflow>
+
+### Choosing what to record
+
 - <doc:WhatGoesWhere>
 - <doc:ChangingEvents>
 - <doc:IdentifyingPeople>

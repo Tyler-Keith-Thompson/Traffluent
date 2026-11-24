@@ -23,7 +23,8 @@ Sources/<Module>/                One directory per module, each with a generated
 Sources/Traffluent/             Umbrella module (@_exported imports) and the landing DocC catalog
 Plugins/<Plugin>/                SwiftPM command plugins (PLUGINS in scripts/modules.py); Bazel builds none
 Tests/<Module>Tests/             One test target per module; Performance/ holds speed-reliant tests
-Tests/TraffluentTests/          The README examples, verbatim, and SwiftPM's privacy manifest check
+Tests/TraffluentTests/          The README's and the umbrella catalog's examples, verbatim, one file
+                                 per article, and SwiftPM's privacy manifest check
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
 Tests/CompileFailures/           Sources that must not compile, each checked for its errors
                                  (tools/compile_failure_test.bzl); Bazel only
@@ -238,7 +239,7 @@ A feature is done when it has all of these. Copy what its sibling features in th
 have.
 
 1. **Code and docs.** The implementation, with doc comments per "Docs" below. A new module gets a
-   row in `scripts/modules.py`, then `just modules`, the README's module table and the umbrella
+   row in `scripts/modules.py`, then `just modules`, the README's module list and the umbrella
    DocC catalog's topic list (``` ``/Module`` ```: a link to another module needs the slash).
 2. **Tests** in `Tests/<Module>Tests`:
    - hand-worked cases;
@@ -254,8 +255,10 @@ have.
    - a fuzz target in `Fuzz/Sources/Fuzz<Module>` checking the new code against a model after
      every operation (see `Fuzz/README.md`), then `just fuzz Fuzz<Module>`. A crash becomes a
      test in the module's suite, then its file is deleted.
-3. **A README example**, if the feature changes how the package is introduced, copied verbatim
-   into `Tests/TraffluentTests`.
+3. **A guide**: the umbrella catalog's article on the feature's area (`Sources/Traffluent/
+   Traffluent.docc`), or a new one listed in `Traffluent.md`'s topics and the README's guides, with
+   its examples copied verbatim into `Tests/TraffluentTests/<Article>ExamplesTests.swift`. Change
+   the README's one example only if the feature changes how the package is introduced.
 4. **A benchmark** in `Benchmarks/Benchmarks/<Module>Benchmarks` (a row in `BENCHMARKS`, then
    `just modules`) where speed matters, starting with a `BASELINE` entry: the hand-written form the code must keep pace with. Measure in
    release, and add a ratio test in `Tests/<Module>Tests/Performance/` where siblings have one.
@@ -433,6 +436,14 @@ library with none of that can skip this section.
   and when it would become the right one. Doc comments describe the API; these record decisions. A
   comment that restates the code is deleted.
 - The README's examples are tests (`Tests/TraffluentTests`).
+- The README is the front page: what the project is, how to install or run it, one short example,
+  and links. Everything else (guides, every option, reference) goes in the DocC catalogs, which
+  the README links to. When a section grows past a screen, move it out rather than trim the
+  README's other sections to make room.
+- Run prose docs through the `humanizer` skill (`/humanizer`) before committing them: READMEs, DocC
+  articles, doc comments and this file. It removes the tells of generated text (inflated claims,
+  stock phrases, forced lists of three) without changing what the text says. Docs only: not code,
+  `//` comments, commit messages or backlog items.
 
 ### Git (*default*)
 

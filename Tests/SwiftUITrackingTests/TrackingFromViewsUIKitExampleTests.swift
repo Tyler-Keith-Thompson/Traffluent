@@ -1,5 +1,6 @@
-// The README's UIKit example, verbatim. TraffluentTests runs on the Mac and Linux, where UIKit
-// isn't, so it runs here, in the simulator.
+// The UIKit example of the "Tracking from SwiftUI, UIKit and AppKit" article (TrackingFromViews.md in
+// the umbrella catalog), verbatim. TraffluentTests runs on the Mac and Linux, where UIKit isn't, so
+// it runs here, in the simulator.
 #if canImport(UIKit) && !os(watchOS)
 import Events
 import Testing
@@ -9,8 +10,8 @@ import UIKitTracking
 
 extension SerializedSuites {
     @MainActor
-    @Suite("README examples: UIKit", .serialized, .timeLimit(.minutes(1)))
-    struct READMEUIKitExampleTests {
+    @Suite("Tracking from views examples: UIKit", .serialized, .timeLimit(.minutes(1)))
+    struct TrackingFromViewsUIKitExampleTests {
         struct SignedUp: Event {
             var plan: String
         }

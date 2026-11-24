@@ -1,13 +1,15 @@
-// The README's AppKit example, verbatim. It runs on the Mac; elsewhere AppKitTracking is empty and
-// this file builds nothing. The UIKit example runs in the simulator, in SwiftUITrackingTests.
+// The AppKit example of the "Tracking from SwiftUI, UIKit and AppKit" article
+// (Sources/Traffluent/Traffluent.docc/TrackingFromViews.md), verbatim. It runs on the Mac; elsewhere
+// AppKitTracking is empty and this file builds nothing. The UIKit example runs in the simulator, in
+// SwiftUITrackingTests.
 #if os(macOS)
 import AppKit
 import Testing
 import Traffluent
 
 @MainActor
-@Suite("README examples: AppKit", .serialized, .timeLimit(.minutes(1)))
-struct READMEAppKitExampleTests {
+@Suite("Tracking from views examples: AppKit", .serialized, .timeLimit(.minutes(1)))
+struct TrackingFromViewsAppKitExampleTests {
     struct SignedUp: Event {
         var plan: String
     }

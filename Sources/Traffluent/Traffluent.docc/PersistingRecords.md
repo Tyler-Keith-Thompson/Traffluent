@@ -1,0 +1,99 @@
+# Persisting Records
+
+Keep each record on disk until it is delivered, so a record the app tracked survives the process ending.
+
+## Overview
+
+Without a store, records live in memory only: whatever isn't delivered when the process exits is
+lost. Give the tracker a `SegmentStore` (module ``/Persistence``) and the tracker's worker writes
+each record to disk before publishing it. If this launch ends first, the record is delivered on the
+next one:
+
+```swift
+import Persistence
+
+extension SignedUp: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(plan, forKey: "plan")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        plan = try map.decode(forKey: "plan")
+    }
+}
+
+let store = try SegmentStore(events: [SignedUp.self])
+let tracker = Tracker(store: store)
+let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
+```
+
+A record is durable once it is written, not once `track` returns. A record tracked moments before
+the process is killed, which the worker hadn't reached yet, is lost. As the app moves to the
+background, call `await tracker.flush()`, then `store.synchronize()`, or let `trackLifecycle` do
+both (<doc:AutomaticTracking>).
+
+An event declared with `@Event` is `BinaryCodable` already, so a store keeps it with no conformance
+written by hand (<doc:DefiningEvents>).
+
+### What the store writes
+
+The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
+binary encoding: CBOR (RFC 8949), each event a map of its properties under their names, which any
+CBOR decoder can read. Any other event is kept in memory only: delivered in this run, never written.
+
+The log is a directory of append-only segment files: in Application Support on Apple platforms
+(excluded from backups), and in the XDG state directory on Linux, unless `directory:` says
+otherwise. Each segment starts with a magic number and format version. Each record, a CBOR map of
+its identifier, timestamp, event name and schema version, call site and event, is framed by its
+length and CRC-32. A segment is deleted once every record in it has been delivered, so a log with
+nothing left to send holds no files.
+
+### Bounds, drops and recovery
+
+The log never holds more than its byte bound, 5 MiB unless `byteBound:` says otherwise. When a
+record won't fit, the oldest segments are dropped, and each drop is reported on the store's
+`dropReports` with the number of records dropped and their timestamp range. So is a record whose
+write to disk fails, which is kept in memory only. Recovery cuts a segment at its first torn or
+corrupt record, keeps every record before it, and reports what it cut.
+
+A record whose delivery had started when the app ended comes back with `isRedelivered` set, so a
+destination can tell it may have been sent before. A record is never sent without that mark on disk
+first; one whose mark can't be written waits for a later launch. After a rollback, a segment
+written by a newer release, in a later format version, is left untouched. One in an earlier format
+version is deleted and reported as a corruption.
+
+The store makes the log durable against power loss too (`fsync`), once per batch. Call
+`store.synchronize()`, after `tracker.flush()`, as the app moves to the background or terminates. A
+recovered record's `ServiceContext` is not kept: the record comes back in the top-level context.
+
+### Changing an event's type
+
+An event's type can change while records of it are still on disk, because each property is found
+by its name: an app update reads the records the release before it left. A property removed since
+is skipped, an optional property added since reads as `nil`, one with a default value added since
+reads as its default, and properties can be reordered. Those changes keep the event's
+`schemaVersion`, which is 1 unless the event says otherwise.
+
+A change the earlier records can't be read through raises the version: a property's type changed,
+a required property added without a default, an optional property made required. A record stored
+at a different version from its type's current one is dropped without being read, and reported on
+`dropReports` with the event and both versions. A record without a version has none to compare and
+is read by name. A record that can't be read at the same version, after such a change made without
+a new version, is dropped and reported as undecodable. Neither is ever delivered with a made-up
+value, and records are never migrated from one version to another. <doc:ChangingEvents> lists each
+kind of change.
+
+### A GRDB database
+
+An app on Apple platforms that already keeps a GRDB database can keep its records there instead.
+`DatabaseStore(events:database:table:byteBound:)` (module ``/GRDBPersistence``, a product of its
+own that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a
+table name, creates the table with a migration of its own, and opens no second SQLite database.
+
+It makes the same promises as `SegmentStore`. The worker commits each record before publishing it.
+A batch is marked before it goes out, and its rows are deleted once it is delivered. The table is
+bounded by its records' encoded bytes, with the oldest dropped and reported, and records are
+encoded the same way.

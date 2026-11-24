@@ -1,6 +1,7 @@
-// The README's automatic screen views example, verbatim. TraffluentTests runs on the Mac and Linux,
-// where UIKit isn't, so it runs here, in the simulator. An extension of the suite the other tests
-// are in, so it runs serialized with them: they share the test host's one window scene.
+// The screen views example of the "Automatic Tracking" article (AutomaticTracking.md in the umbrella
+// catalog), verbatim. TraffluentTests runs on the Mac and Linux, where UIKit isn't, so it runs here,
+// in the simulator. An extension of the suite the other tests are in, so it runs serialized with
+// them: they share the test host's one window scene.
 #if canImport(UIKit) && !os(watchOS)
 import AutomaticScreenTracking
 import SwiftUI
@@ -19,8 +20,8 @@ extension UIWindowSceneScreenTrackingTests {
         }
     }
 
-    @Test("README example: automatic screen views")
-    func readmeExample() async throws {
+    @Test("Automatic tracking article example: screen views")
+    func articleExample() async throws {
         let tracker = Tracker()
         var records = tracker.records.makeAsyncIterator()
         let windowScene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
