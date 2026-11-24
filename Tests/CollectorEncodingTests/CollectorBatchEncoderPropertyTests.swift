@@ -52,4 +52,31 @@ struct CollectorBatchEncoderPropertyTests {
             }
         }
     }
+
+    @Event(name: "unlisted")
+    struct Unlisted {
+        var count: Int
+    }
+
+    @Test("Any mix of listed and unlisted records encodes as the listed ones alone, the unlisted skipped in order", .tags(.randomized))
+    func skipsUnlisted() async {
+        await propertyCheck(count: 300, input: Gen.bool().array(of: 0...16)) { listed in
+            let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
+            let batch = listed.enumerated().map { index, isListed in
+                let event: any Event = isListed
+                    ? Generated(text: "\(index)", count: index, ratio: 0, tags: [], coupon: nil)
+                    : Unlisted(count: index)
+                return EventRecord(event: event, timestamp: Date(timeIntervalSince1970: Double(index)), sourceLocation: nil)
+            }
+            // The naive reference: the listed records alone, encoded as a batch of their own.
+            let kept = zip(batch, listed).filter(\.1).map(\.0)
+            let expectedBody = kept.isEmpty && !batch.isEmpty ? nil : try? sut.encode(kept)
+            let expectedSkipped = zip(batch, listed).filter { !$0.1 }.map(\.0.id)
+
+            let actual = sut.batch(of: batch)
+
+            #expect(actual.body == expectedBody)
+            #expect(actual.skippedRecords.map(\.recordID) == expectedSkipped)
+        }
+    }
 }

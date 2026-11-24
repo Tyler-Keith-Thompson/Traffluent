@@ -8,6 +8,7 @@
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - `records.reserveCapacity(batch.count)` removed: capacity only.
+# - The logger.error line in encode(_:) removed: logs are for developers, and tests don't pin them.
 # - The byte-string and other-tag arms of `anyValue()`: no public BinaryCodable API writes them,
 #   so no test can reach them.
 
@@ -23,12 +24,15 @@ MUTANTS = [
     Mutant("freshid", B, "record.id.uuidString", "UUID().uuidString"),
     Mutant("neverredelivered", B, "record.isRedelivered", "false"),
     Mutant("textcontenttype", B, '"application/json"', '"text/plain"'),
-    Mutant("firstrecorddropped", B, """for record in batch {
-            records.append(try json(of: record))
-        }""", """for record in batch.dropFirst() {
-            records.append(try json(of: record))
-        }""", mode="stmt"),
-    Mutant("versionignored", B, "type(of: record.event).schemaVersion", "1"),
+    Mutant("firstrecorddropped", B, "records.append(try json(of: record))", "if record.id != batch.first?.id { records.append(try json(of: record)) }", mode="stmt"),
+    # Skipped records.
+    Mutant("skipnotreported", B, "skippedRecords.append(SkippedRecord(recordID: record.id, eventName: record.name, schemaVersion: type(of: record.event).schemaVersion, reason: error))", "", mode="stmt"),
+    Mutant("skipversionignored", B, "type(of: record.event).schemaVersion", "1", nth=0),
+    Mutant("allskippedsent", B, "!records.isEmpty || batch.isEmpty", "true"),
+    Mutant("emptybatchnobody", B, "!records.isEmpty || batch.isEmpty", "!records.isEmpty"),
+    Mutant("lastskipthrown", B, "throw encoded.skippedRecords[0].reason", "throw encoded.skippedRecords[encoded.skippedRecords.count - 1].reason", mode="stmt"),
+    # The second: json(of:)'s plan lookup, after batch(of:)'s skipped record.
+    Mutant("versionignored", B, "type(of: record.event).schemaVersion", "1", nth=1),
     Mutant("optionalignored", B, "property.isOptional ? type.map(WrittenType.optional) : type", "type"),
     Mutant("alwaysreveals", B, "BinaryEncoder(writingSensitiveValues: revealsSensitiveValues)", "BinaryEncoder(writingSensitiveValues: true)"),
     Mutant("neverreveals", B, "BinaryEncoder(writingSensitiveValues: revealsSensitiveValues)", "BinaryEncoder(writingSensitiveValues: false)"),

@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them.
+# CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them; a record it can't encode is left out as a SkippedRecord, not the batch.
 swift_library(
     name = "CollectorEncoding",
     srcs = glob(["**/*.swift"]),
@@ -17,6 +17,7 @@ swift_library(
         "//Sources/Sessions",
         "//Sources/StandardContext",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_log//:Logging",
     ],
     visibility = ["//visibility:public"],
 )

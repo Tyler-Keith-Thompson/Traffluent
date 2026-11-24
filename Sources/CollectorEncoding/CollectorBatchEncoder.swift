@@ -2,6 +2,7 @@ public import Events
 import Foundation
 public import HTTPDestinations
 public import Instrumentation
+import Logging
 import Persistence
 public import TrackingPlans
 
@@ -63,6 +64,12 @@ public import TrackingPlans
 /// | `trace` | The instrument's | An object of the fields the instrument injects for the record's context (`traceparent` and `tracestate` for a W3C Trace Context tracer), left out when it injects none |
 /// | `vendorIdentifier` | `VendorIdentifierKey` | The vendor identifier, a UUID string; left out when redacted |
 ///
+/// A record the encoder can't write is left out of the body, and the batch's other records are
+/// sent: one whose event and version `plan` doesn't describe, whose event isn't `BinaryCodable`,
+/// or that holds a value JSON can't (``CollectorEncodingError``). Each is logged at error level;
+/// ``batch(of:)`` returns them as ``SkippedRecord``s. When every record of a batch is left out,
+/// ``encode(_:)`` throws, so `HTTPDestination` sends nothing for it.
+///
 /// Other context values aren't written. The bytes are the same for the same records on every
 /// run and platform: no whitespace, object members in the order of their names' UTF-8 bytes, a
 /// whole number without a fraction and any other in the shortest form that reads back as the
@@ -72,6 +79,8 @@ public struct CollectorBatchEncoder: BatchEncoder {
     // record: every record of a batch is looked up in it.
     private let propertyTypes: [EventVersion: [String: WrittenType?]]
     private let instrument: any Instrument
+
+    private static let logger = Logger(label: "CollectorEncoding.CollectorBatchEncoder")
 
     /// An encoder of the events `plan` describes, writing each record's trace context as
     /// `instrument` injects it.
@@ -91,24 +100,49 @@ public struct CollectorBatchEncoder: BatchEncoder {
         self.instrument = instrument
     }
 
-    /// The request body for `batch`: its records in TraffluentCollector's ingest format.
+    /// The request body for `batch`: its records in TraffluentCollector's ingest format, but for
+    /// those it can't encode, which are logged at error level and left out.
     ///
     /// - Parameter batch: Records of tracked events, oldest first.
     /// - Returns: The body's JSON, of content type `application/json`.
-    /// - Throws: ``CollectorEncodingError/unknownEvent(name:version:)`` for a record whose event
-    ///   and version the plan doesn't describe, ``CollectorEncodingError/notBinaryCodable(name:)``
-    ///   for one whose event isn't `BinaryCodable`, and
-    ///   ``CollectorEncodingError/unrepresentableValue(event:property:)`` for a property JSON
-    ///   can't hold.
+    /// - Throws: The ``CollectorEncodingError`` of the first record when `batch` has records and
+    ///   none can be encoded, so `HTTPDestination` sends nothing for it.
     /// - Complexity: O(*n* log *n*) in the batch's size, for sorting each object's members.
     public func encode(_ batch: [EventRecord]) throws(CollectorEncodingError) -> EncodedBatch {
+        let encoded = self.batch(of: batch)
+        for skipped in encoded.skippedRecords {
+            Self.logger.error("Left a record of \(skipped.eventName) version \(skipped.schemaVersion) out of the batch: \(skipped.reason)")
+        }
+        guard let body = encoded.body else {
+            // `body` is nil only when the batch had records and every one was skipped, so the
+            // first skipped record exists.
+            throw encoded.skippedRecords[0].reason
+        }
+        return body
+    }
+
+    /// `batch` encoded as ``encode(_:)`` encodes it, with the records left out of the body.
+    ///
+    /// - Parameter batch: Records of tracked events, oldest first.
+    /// - Returns: The body of every record that could be encoded, `nil` when `batch` has records
+    ///   and none could, and each record left out, with why.
+    /// - Complexity: O(*n* log *n*) in the batch's size, for sorting each object's members.
+    public func batch(of batch: [EventRecord]) -> CollectorBatch {
         var records: [JSON] = []
         records.reserveCapacity(batch.count)
+        var skippedRecords: [SkippedRecord] = []
         for record in batch {
-            records.append(try json(of: record))
+            do {
+                records.append(try json(of: record))
+            } catch {
+                skippedRecords.append(SkippedRecord(recordID: record.id, eventName: record.name, schemaVersion: type(of: record.event).schemaVersion, reason: error))
+            }
+        }
+        guard !records.isEmpty || batch.isEmpty else {
+            return CollectorBatch(body: nil, skippedRecords: skippedRecords)
         }
         let body = JSON.object(["records": .array(records)]).minified
-        return EncodedBatch(body: Data(body.utf8), contentType: "application/json")
+        return CollectorBatch(body: EncodedBatch(body: Data(body.utf8), contentType: "application/json"), skippedRecords: skippedRecords)
     }
 
     private func json(of record: EventRecord) throws(CollectorEncodingError) -> JSON {
