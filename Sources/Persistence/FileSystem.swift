@@ -100,6 +100,15 @@ extension FilePath {
         guard result == 0 else { throw Errno(rawValue: errno) }
     }
 
+    /// Renames the file at this path to `destination`, replacing any file there in one step
+    /// (`rename`).
+    func rename(to destination: FilePath) throws(Errno) {
+        let result = withPlatformString { source in
+            destination.withPlatformString { renameFile(source, $0) }
+        }
+        guard result == 0 else { throw Errno(rawValue: errno) }
+    }
+
     /// Creates the directory at this path and any missing parents, with the store's protection
     /// on Apple platforms; does nothing to one that exists but apply that protection.
     func createDirectory() throws(Errno) {
@@ -135,6 +144,11 @@ extension FilePath {
             throw Errno(posixErrorIn: error)
         }
     }
+}
+
+/// The C library's `rename`, under a name `FilePath.rename(to:)` doesn't shadow.
+private func renameFile(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>) -> CInt {
+    rename(source, destination)
 }
 
 extension Errno {

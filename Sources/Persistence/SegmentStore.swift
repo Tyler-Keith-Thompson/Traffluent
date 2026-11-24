@@ -24,8 +24,12 @@ public import SystemPackage
 ///   A record's context is not kept: a recovered record is in the top-level `ServiceContext`,
 ///   as its span ended with the earlier run.
 /// - **Deleting.** A segment is deleted as a whole once every record in it is delivered, so a
-///   log whose records are all delivered holds no files. There is no compaction: a segment kept
-///   for one undelivered record keeps its delivered ones too.
+///   log whose records are all delivered holds no files. A segment kept for one undelivered
+///   record keeps its delivered ones too. Only recovery rewrites a segment: one still holding
+///   records after it drops some (``DropReport/undecodable(recordCount:)``,
+///   ``DropReport/versionMismatch(event:storedVersion:currentVersion:recordCount:)``) is
+///   rewritten without them, so each drop is reported once. Should the rewrite fail, the
+///   segment is kept as it was and the next launch reports those drops again.
 /// - **Bound.** The log never holds more than `byteBound` bytes. When a record wouldn't fit, the
 ///   oldest segments are deleted until it does, and each one deleted with records not yet
 ///   delivered yields a ``DropReport`` on ``dropReports``. A record too large for an empty log

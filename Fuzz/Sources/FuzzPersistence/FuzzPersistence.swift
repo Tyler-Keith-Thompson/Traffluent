@@ -5,7 +5,9 @@
 // CRC-32 and payload, up to the first that isn't intact) and must agree with recovery: the same
 // records, in order, each from a frame whose checksum holds, with the identifier its frame holds
 // and the redelivery marks the intact frames give, and the file cut to the intact prefix, or
-// deleted when nothing is left to deliver.
+// deleted when nothing is left to deliver. A segment with records it can't decode beside ones it
+// can is rewritten to the decodable frames, renumbered, then one mark of their new numbers; a
+// second store opened on it recovers the same records and reports nothing.
 // A segment whose header names a later version is left as it is, and nothing is read from it.
 // Record payloads are written here as the model's own CBOR (RFC 8949), not through the library's
 // encoder: a record with its keys in another order or with keys the store doesn't know must still
@@ -19,6 +21,7 @@ import Events
 import Foundation
 import FuzzSupport
 import Persistence
+import Synchronization
 
 struct Tapped: Event, Hashable {
     var number: Int
@@ -256,18 +259,73 @@ enum FuzzPersistence {
             check(record.event as? Tapped == expectation.record.event, "recovered \(record.event), model \(expectation.record.event)")
             check(record.id == expectation.record.id, "recovered identifier \(record.id), model \(expectation.record.id)")
             check(record.isRedelivered == expectation.isRedelivered, "redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
+        }
+        // Dropped records beside ones to deliver: the segment is rewritten without them.
+        let isRewritten = !expected.isEmpty && expected.count < model.records.count
+        for (offset, (record, expectation)) in zip(recovered, expected).enumerated() {
             let index = UInt32(truncatingIfNeeded: record.deliveryTag?.position ?? .max)
-            check(index == model.records[expectation.frame].index, "position \(index) for frame \(expectation.frame)")
+            let expectedIndex = isRewritten ? UInt32(offset) : model.records[expectation.frame].index
+            check(index == expectedIndex, "position \(index) for frame \(expectation.frame), model \(expectedIndex)")
         }
 
-        let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int
+        let contents = FileManager.default.contents(atPath: path)
         if model.isNewerVersion {
             check(recovered.isEmpty, "recovered \(recovered.count) records from a newer version's segment")
-            check(FileManager.default.contents(atPath: path) == Data(bytes), "a newer version's segment was changed")
+            check(contents == Data(bytes), "a newer version's segment was changed")
         } else if expected.isEmpty {
-            check(size == nil, "a segment with nothing to deliver was kept, \(size ?? 0) bytes")
+            check(contents == nil, "a segment with nothing to deliver was kept, \(contents?.count ?? 0) bytes")
+        } else if isRewritten {
+            let marks = expected.indices.filter { expected[$0].isRedelivered }.map { UInt32($0) }
+            let rewritten = header
+                + expected.flatMap { frame([0] + model.records[$0.frame].payload) }
+                + (marks.isEmpty ? [] : frame([1] + marks.flatMap(littleEndian)))
+            check(contents == Data(rewritten), "segment rewritten to \(contents?.count ?? -1) bytes, model \(rewritten.count)")
         } else {
-            check(size == model.validByteCount, "segment cut to \(size ?? -1) bytes, model \(model.validByteCount)")
+            check(contents?.count == model.validByteCount, "segment cut to \(contents?.count ?? -1) bytes, model \(model.validByteCount)")
         }
+        guard !model.isNewerVersion, !expected.isEmpty else { return }
+
+        // The next launch finds what this one left: the same records, numbered in order, and no
+        // drop to report.
+        let reports: AsyncStream<DropReport>
+        var again: [(event: Tapped?, id: UUID, isRedelivered: Bool, index: UInt32)] = []
+        do {
+            let next: SegmentStore
+            do {
+                next = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+            } catch {
+                check(false, "the second recovery threw \(error)")
+                return
+            }
+            reports = next.dropReports
+            again = next.takeRecoveredRecords().map { record in
+                (record.event as? Tapped, record.id, record.isRedelivered, UInt32(truncatingIfNeeded: record.deliveryTag?.position ?? .max))
+            }
+        }
+        check(again.count == expected.count, "the second recovery found \(again.count) records, model \(expected.count)")
+        for (offset, (record, expectation)) in zip(again, expected).enumerated() {
+            check(record.event == expectation.record.event, "the second recovery found \(String(describing: record.event)), model \(expectation.record.event)")
+            check(record.id == expectation.record.id, "the second recovery's identifier \(record.id), model \(expectation.record.id)")
+            check(record.isRedelivered == expectation.isRedelivered, "the second recovery's redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
+            check(record.index == UInt32(offset), "the second recovery's position \(record.index), model \(offset)")
+        }
+        check(FileManager.default.contents(atPath: path) == contents, "the second recovery changed the segment")
+        let actualReports = allReports(reports)
+        check(actualReports.isEmpty, "the second recovery reported \(actualReports)")
+    }
+
+    /// Every report `reports` yields, read until it finishes: its store is gone, so it has. The
+    /// fuzzer's callback can't await, so a task reads them while it waits.
+    static func allReports(_ reports: AsyncStream<DropReport>) -> [DropReport] {
+        let result = Mutex<[DropReport]>([])
+        let done = DispatchSemaphore(value: 0)
+        Task {
+            var all: [DropReport] = []
+            for await report in reports { all.append(report) }
+            result.withLock { [all] in $0 = all }
+            done.signal()
+        }
+        done.wait()
+        return result.withLock { $0 }
     }
 }

@@ -436,7 +436,17 @@ final class SegmentLog: Acknowledger {
         registry: EventRegistry,
         reports: inout [DropReport]
     ) throws(Errno) -> (state: State, records: [[Recovered]]) {
-        let numbers = try directory.directoryEntries().compactMap(number(inFileName:)).sorted()
+        let entries = try directory.directoryEntries()
+        // A rewrite a crash interrupted, before its rename: the segment it was made from is still
+        // there, and is rewritten again if it needs to be.
+        for name in entries where name.hasSuffix(rewritingSuffix) {
+            do throws(Errno) {
+                try directory.appending(name).removeFile()
+            } catch {
+                logger.error("Couldn't delete the interrupted rewrite \(directory.appending(name)): \(error)")
+            }
+        }
+        let numbers = entries.compactMap(number(inFileName:)).sorted()
         var state = State(segments: [], nextNumber: (numbers.last ?? 0) + 1, byteCount: 0, recovered: [])
         var records: [[Recovered]] = []
         for number in numbers {
@@ -467,6 +477,7 @@ final class SegmentLog: Acknowledger {
             }
             var segment = Segment(number: number, file: file, byteCount: contents.validByteCount, timestamps: [], acknowledged: [], pendingCount: 0, needsSynchronization: false)
             var segmentRecords: [Recovered] = []
+            var keptFrames: [SegmentFormat.RecordFrame] = []
             var undecodable = 0
             var mismatches = VersionMismatchCounts()
             for frame in contents.records {
@@ -478,6 +489,7 @@ final class SegmentLog: Acknowledger {
                         segment.acknowledged.append(false)
                         segment.pendingCount += 1
                         segmentRecords.append(Recovered(record: record, position: number << 32 | UInt64(frame.index)))
+                        keptFrames.append(frame)
                     case .versionMismatch(let event, let storedVersion, let currentVersion):
                         // Reported once for the segment below, as an undecodable record is.
                         mismatches.add(event: event, storedVersion: storedVersion, currentVersion: currentVersion)
@@ -500,11 +512,77 @@ final class SegmentLog: Acknowledger {
                 try path.removeFile()
                 continue
             }
+            if keptFrames.count < contents.records.count,
+                let rewritten = rewritten(segment, records: segmentRecords, frames: keptFrames, of: bytes, in: directory)
+            {
+                // Without its dropped records, so no later launch reports them again. Left as it
+                // was when the rewrite fails: they count as delivered, and are reported again.
+                (segment, segmentRecords) = rewritten
+            }
             state.segments.append(segment)
             state.byteCount += segment.byteCount
             records.append(segmentRecords)
         }
         return (state, records)
+    }
+
+    /// What a rewritten segment file's name ends with until it is renamed over the segment.
+    private static let rewritingSuffix = ".rewriting"
+
+    /// `segment`, rewritten to hold only its records `records`, whose frames in `bytes` are
+    /// `frames`, renumbered from 0; `nil`, leaving the file as it was, when the rewrite fails.
+    ///
+    /// The new file is written beside the segment, synchronized, and renamed over it, so a crash
+    /// leaves either the old file or the new one. Its delivery mark names the records recovered
+    /// as redelivered, so each comes back as it would have from the old file.
+    private static func rewritten(
+        _ segment: Segment,
+        records: [Recovered],
+        frames: [SegmentFormat.RecordFrame],
+        of bytes: [UInt8],
+        in directory: FilePath
+    ) -> (Segment, [Recovered])? {
+        // `UInt32(_:)` can't trap: there are fewer records than the segment's frames, which a
+        // segment holds fewer of than UInt32.max.
+        let marked = records.indices.filter { records[$0].record.isRedelivered }.map { UInt32($0) }
+        let compacted = SegmentFormat.compacted(bytes, keeping: frames, marking: marked)
+        let temporary = FilePath(segment.file.path.string + rewritingSuffix)
+        let file: SegmentFile
+        do throws(Errno) {
+            // Opened to append, as a recovered segment is, so this descriptor goes on to take the
+            // segment's delivery marks once the file is renamed: no reopening that could fail
+            // after the rename.
+            let descriptor = try withErrno {
+                try FileDescriptor.open(temporary, .readWrite, options: [.create, .truncate, .append], permissions: [.ownerReadWrite])
+            }
+            file = SegmentFile(path: segment.file.path, descriptor: descriptor)
+            try withErrno { try descriptor.writeAll(compacted) }
+            try descriptor.synchronize()
+            try temporary.rename(to: segment.file.path)
+        } catch {
+            try? temporary.removeFile()
+            logger.error("Kept the dropped records in \(segment.file.path), to be reported again on the next launch: rewriting it without them failed with \(error)")
+            return nil
+        }
+        do throws(Errno) {
+            try directory.synchronizeDirectory()
+        } catch {
+            // The rename is made; a power cut before it is durable only brings the old file back.
+            logger.error("Couldn't synchronize the directory \(directory): \(error)")
+        }
+        let rewritten = Segment(
+            number: segment.number,
+            file: file,
+            byteCount: compacted.count,
+            timestamps: records.map(\.record.timestamp),
+            acknowledged: Array(repeating: false, count: records.count),
+            pendingCount: records.count,
+            needsSynchronization: false
+        )
+        let renumbered = records.indices.map { index in
+            Recovered(record: records[index].record, position: segment.number << 32 | UInt64(index))
+        }
+        return (rewritten, renumbered)
     }
 }
 

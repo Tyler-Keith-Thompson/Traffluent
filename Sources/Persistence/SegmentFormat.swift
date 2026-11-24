@@ -132,6 +132,25 @@ enum SegmentFormat {
         return encoder.takeBytes()
     }
 
+    /// A segment holding only the record frames `frames` of the segment `bytes`, renumbered from
+    /// 0 in their order, then a delivery mark naming `marked`, their new numbers, when it isn't
+    /// empty.
+    ///
+    /// Each frame's bytes are copied as they are, so its checksum still holds.
+    ///
+    /// - Complexity: O(*n*), where *n* is the number of bytes the frames take.
+    static func compacted(_ bytes: [UInt8], keeping frames: [RecordFrame], marking marked: [UInt32]) -> [UInt8] {
+        var compacted = header
+        for frame in frames {
+            // The payload range starts after the kind byte, which follows the frame's header.
+            compacted += bytes[frame.payload.lowerBound - 1 - frameHeaderByteCount..<frame.payload.upperBound]
+        }
+        if !marked.isEmpty {
+            compacted += deliveryMarkFrame(of: marked)
+        }
+        return compacted
+    }
+
     /// An encoder writing over `buffer`, holding room for a frame's length and checksum, then
     /// `kind`'s byte.
     private static func frameEncoder(of kind: Kind, reusing buffer: consuming [UInt8]) -> BinaryEncoder {

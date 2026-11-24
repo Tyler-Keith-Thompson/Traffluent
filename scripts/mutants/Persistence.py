@@ -33,6 +33,9 @@
 #   generic validation, which reads ASCII the same.
 # - String.encode's copy for a string that isn't contiguous UTF-8: only a lazily bridged NSString
 #   is, on Apple platforms, which no test makes.
+# - The rewrite's failure path deleting its temporary file, and its synchronizations (the file's
+#   fsync, the directory's): a test can only make the temporary file's creation fail, which leaves
+#   nothing to delete, and only a power cut could observe either fsync.
 
 TESTS = ["PersistenceTests"]
 
@@ -252,4 +255,18 @@ MUTANTS = [
     Mutant("absentlocationnotwritten", N, 'map.encode(StoredSourceLocation?.none, forKey: "sourceLocation")', "", mode="stmt"),
     Mutant("framewrittenwithroom", F, "UnsafeRawBufferPointer(rebasing: bytes[..<byteCount])", "bytes"),
     Mutant("partialwriteaccepted", "FileSystem.swift", "        while written < bytes.count {\n            written += try withErrno { try write(UnsafeRawBufferPointer(rebasing: bytes[written...])) }\n        }", "        written += try withErrno { try write(UnsafeRawBufferPointer(rebasing: bytes[written...])) }", mode="stmt"),
+    # Recovery's rewrite of a segment it drops records from (TRAF-47).
+    Mutant("dropsnotrewritten", L, "keptFrames.count < contents.records.count", "keptFrames.count < 0"),
+    Mutant("rewritemarksdropped", L, "SegmentFormat.compacted(bytes, keeping: frames, marking: marked)", "SegmentFormat.compacted(bytes, keeping: frames, marking: [])"),
+    Mutant("rewritemarksinverted", L, "records[$0].record.isRedelivered", "!records[$0].record.isRedelivered"),
+    Mutant("compactedframestart", F, "frame.payload.lowerBound - 1 - frameHeaderByteCount", "frame.payload.lowerBound - frameHeaderByteCount"),
+    Mutant("compactednomark", F, "!marked.isEmpty", "marked.isEmpty"),
+    Mutant("rewritenotrenamed", L, "try temporary.rename(to: segment.file.path)", "", mode="stmt"),
+    Mutant("rewritekeepsolddescriptor", L, "file = SegmentFile(path: segment.file.path, descriptor: descriptor)", "file = segment.file", mode="stmt"),
+    Mutant("rewritebytecount", L, "compacted.count", "segment.byteCount"),
+    Mutant("rewriteoldpositions", L, "Recovered(record: records[index].record, position: segment.number << 32 | UInt64(index))", "records[index]"),
+    Mutant("rewriteacknowledged", L, "Array(repeating: false, count: records.count)", "Array(repeating: true, count: records.count)"),
+    Mutant("rewritetimestamps", L, "records.map(\\.record.timestamp)", "records.map { _ in Date.distantPast }"),
+    Mutant("interruptedrewritekept", L, "try directory.appending(name).removeFile()", "", mode="stmt"),
+    Mutant("renamenoop", "FileSystem.swift", "destination.withPlatformString { renameFile(source, $0) }", "0"),
 ]

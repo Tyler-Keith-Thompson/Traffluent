@@ -233,6 +233,45 @@ struct DatabaseStoreTests {
         #expect(sut.pendingRecordCount == 0)
     }
 
+    @Test("Rows dropped at recovery, undecodable or stored at another version, are reported on the first open only; the row left is recovered on both")
+    func droppedRowsReportedOnce() async throws {
+        let database = try DatabaseQueue()
+        let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
+        do {
+            let earlier = try DatabaseStore(events: [Tapped.self, Retired.self], database: database)
+            _ = earlier.append(EventRecord(event: Retired(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+            _ = earlier.append(EventRecord(event: Tapped(number: 2), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        }
+        let expectedFirstReports: [DropReport] = [
+            .undecodable(recordCount: 1),
+            .versionMismatch(event: "Tapped", storedVersion: 1, currentVersion: 2, recordCount: 1),
+        ]
+        let expectedSecondReports: [DropReport] = []
+        let expectedNumbers = [3]
+
+        var firstReports: AsyncStream<DropReport>.AsyncIterator
+        do {
+            let first = try DatabaseStore(events: [TappedVersion2.self], database: database)
+            firstReports = first.dropReports.makeAsyncIterator()
+            _ = first.append(EventRecord(event: TappedVersion2(number: 3), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
+        }
+        var actualFirstReports: [DropReport] = []
+        while let report = await firstReports.next() { actualFirstReports.append(report) }
+        var secondReports: AsyncStream<DropReport>.AsyncIterator
+        let actualNumbers: [Int]
+        do {
+            let sut = try DatabaseStore(events: [TappedVersion2.self], database: database)
+            secondReports = sut.dropReports.makeAsyncIterator()
+            actualNumbers = sut.takeRecoveredRecords().compactMap { ($0.event as? TappedVersion2)?.number }
+        }
+        var actualSecondReports: [DropReport] = []
+        while let report = await secondReports.next() { actualSecondReports.append(report) }
+
+        #expect(actualFirstReports == expectedFirstReports)
+        #expect(actualSecondReports == expectedSecondReports)
+        #expect(actualNumbers == expectedNumbers)
+    }
+
     @Test("Tracking inside one of the app's own writes neither waits for the write nor joins it: the worker commits the record after it")
     func trackInsideAppWrite() async throws {
         let database = try DatabaseQueue()
