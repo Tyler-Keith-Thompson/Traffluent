@@ -52,6 +52,11 @@ K = "KeyedBinaryDecoder.swift"
 KE = "KeyedBinaryEncoder.swift"
 
 MUTANTS = [
+    # Event types not in `events` (TRAF-62).
+    Mutant("unlistednotreported", L, "dropReporter.yield(.notPersisted(event: record.name))", "", mode="stmt"),
+    Mutant("unlistedreportedeachrecord", L, "unlistedTypes.insert(type(of: record.event))", "(unlistedTypes.insert(type(of: record.event)) || true)"),
+    Mutant("unlistedtypesalwaysnew", "UnlistedEventTypes.swift", "seen.withLock { $0.insert(ObjectIdentifier(type)).inserted }", "seen.withLock { _ in true }", mode="stmt"),
+
     # The format.
     Mutant("headermagic", F, "[0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4D, 2, 0, 0, 0]"),
     Mutant("headerversion", F, "[0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]", "[0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0]"),

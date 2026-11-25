@@ -20,7 +20,9 @@ public import SystemPackage
 ///   ``DropReport/writeFailed(recordCount:timestamps:)``.
 /// - **What is kept.** Only events of the types in `events`, which conform to ``BinaryCodable``.
 ///   Events of any other type are kept in memory only: they are delivered in this run like any
-///   other, are never written, and produce no drop report, but are lost if the app ends first.
+///   other, are never written, and are lost if the app ends first. The first record of each such
+///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out of `events` by
+///   mistake shows up.
 ///   A record's context is not kept: a recovered record is in the top-level `ServiceContext`,
 ///   as its span ended with the earlier run.
 /// - **Deleting.** A segment is deleted as a whole once every record in it is delivered, so a

@@ -25,6 +25,11 @@ public enum DropReport: Sendable, Hashable {
     /// change their bytes can't be read through. Reported once per segment, or per database, for
     /// each event and stored version, by the event's name and then the stored version.
     case versionMismatch(event: String, storedVersion: Int, currentVersion: Int, recordCount: Int)
+    /// A record of the event named `event` was kept in memory only because its type isn't one of
+    /// the store's `events`: its records are delivered in this run, but never written, so they are
+    /// lost if the app ends first. Reported once per type, on its first record, for as long as the
+    /// store lives; a type left out by mistake is added to `events`.
+    case notPersisted(event: String)
     /// Recovery found a torn or corrupt record, or a segment header it couldn't read, and
     /// discarded the `byteCount` bytes from there to the end of the segment.
     case corruption(byteCount: Int)

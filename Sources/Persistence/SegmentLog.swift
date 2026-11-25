@@ -86,6 +86,7 @@ final class SegmentLog: Acknowledger {
     private let state: Mutex<State>
     let dropReports: AsyncStream<DropReport>
     private let dropReporter: AsyncStream<DropReport>.Continuation
+    private let unlistedTypes = UnlistedEventTypes()
 
     private static let logger = Logger(label: "Persistence.SegmentStore")
 
@@ -139,7 +140,13 @@ final class SegmentLog: Acknowledger {
     /// Appends `record`'s frame, or returns `record` as it was when its event type isn't
     /// persisted, it can't fit in the bound, or the write fails; a failed write is reported.
     func append(_ record: EventRecord) -> EventRecord {
-        guard let registration = registry.registration(of: type(of: record.event)) else { return record }
+        guard let registration = registry.registration(of: type(of: record.event)) else {
+            if unlistedTypes.insert(type(of: record.event)) {
+                Self.logger.notice("Kept \(record.name) records in memory only: its type isn't one of the store's events")
+                dropReporter.yield(.notPersisted(event: record.name))
+            }
+            return record
+        }
         // Encoded outside the lock, over the buffer the last frame used, which goes back once the
         // frame is written: an allocation per record costs more than taking the lock once more.
         // An append running alongside finds no buffer and allocates one.

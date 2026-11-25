@@ -265,7 +265,7 @@ struct RecordStoreTests {
         #expect(next.takeRecoveredRecords().isEmpty)
     }
 
-    @Test("An event type not in the store's list produces no drop report", arguments: StoreKind.all)
+    @Test("An event type not in the store's list is reported as notPersisted, not as a drop of its records", arguments: StoreKind.all)
     func memoryOnlyNotReported(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -274,14 +274,17 @@ struct RecordStoreTests {
             _ = store.append(EventRecord(event: Tapped(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
         }.store
         var reports = sut.dropReports.makeAsyncIterator()
-        let expected = DropReport.sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 1)...Date(timeIntervalSince1970: 1))
+        let expected: [DropReport] = [
+            .notPersisted(event: "Untracked"),
+            .sizeBound(recordCount: 1, timestamps: Date(timeIntervalSince1970: 1)...Date(timeIntervalSince1970: 1)),
+        ]
 
         _ = sut.append(EventRecord(event: Untracked(number: 0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location))
         _ = sut.append(EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: location))
         _ = sut.append(EventRecord(event: Tapped(number: 2), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: location))
 
-        // The first report is the Tapped record the bound dropped: the untracked event made none.
-        let actual = await reports.next()
+        // The untracked event's type is reported, then the Tapped record the bound dropped.
+        let actual = [await reports.next(), await reports.next()]
         #expect(actual == expected)
     }
 

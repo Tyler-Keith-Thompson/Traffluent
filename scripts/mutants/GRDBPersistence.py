@@ -19,6 +19,10 @@ L = "DatabaseLog.swift"
 S = "DatabaseStore.swift"
 
 MUTANTS = [
+    # Event types not in `events` (TRAF-62).
+    Mutant("unlistednotreported", L, "dropReporter.yield(.notPersisted(event: record.name))", "", mode="stmt"),
+    Mutant("unlistedreportedeachrecord", L, "unlistedTypes.insert(type(of: record.event))", "(unlistedTypes.insert(type(of: record.event)) || true)"),
+
     # The table.
     Mutant("migrationsharedbytables", L, '"Traffluent.DatabaseStore.\\(table).v1"', '"Traffluent.DatabaseStore.v1"'),
     Mutant("newrowsmarked", L, "false", "true"),

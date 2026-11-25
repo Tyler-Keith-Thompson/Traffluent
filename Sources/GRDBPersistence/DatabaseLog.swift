@@ -53,6 +53,7 @@ final class DatabaseLog: Acknowledger {
     private let state: Mutex<State>
     let dropReports: AsyncStream<DropReport>
     private let dropReporter: AsyncStream<DropReport>.Continuation
+    private let unlistedTypes = UnlistedEventTypes()
 
     private static let logger = Logger(label: "GRDBPersistence.DatabaseStore")
 
@@ -112,7 +113,13 @@ final class DatabaseLog: Acknowledger {
     /// Inserts `record`, or returns it as it was when its event type isn't persisted, it can't
     /// fit in the bound, or the insert fails; a failed insert is reported.
     func append(_ record: EventRecord) -> EventRecord {
-        guard let registration = registry.registration(of: type(of: record.event)) else { return record }
+        guard let registration = registry.registration(of: type(of: record.event)) else {
+            if unlistedTypes.insert(type(of: record.event)) {
+                Self.logger.notice("Kept \(record.name) records in memory only: its type isn't one of the store's events")
+                dropReporter.yield(.notPersisted(event: record.name))
+            }
+            return record
+        }
         let payload = RecordEncoding.bytes(of: record, registration: registration)
         guard payload.count <= byteBound else {
             Self.logger.notice("Kept a \(registration.name) record in memory only: its \(payload.count) bytes are more than a table bounded to \(byteBound) bytes can hold")
