@@ -12,6 +12,7 @@ import Destinations
 import Events
 import Foundation
 import Persistence
+import Synchronization
 import Testing
 import Trackers
 
@@ -19,6 +20,16 @@ import Trackers
 struct RecordStoreWriteFailureExitTests {
     struct Tapped: Event, Equatable {
         var number: Int
+    }
+
+    /// Counts every batch it receives, an empty one included, which InMemoryDestination announces
+    /// but doesn't keep.
+    final class CountingDestination: Destination, Sendable {
+        let received = Mutex(0)
+
+        func receive(_ batch: [EventRecord]) async {
+            received.withLock { $0 += 1 }
+        }
     }
 
     @Test("A record whose write fails is kept in memory only and reported, and the records before it stay", arguments: StoreKind.all)
@@ -46,7 +57,7 @@ struct RecordStoreWriteFailureExitTests {
         #expect(next.takeRecoveredRecords().compactMap { ($0.event as? Tapped)?.number } == [1])
     }
 
-    @Test("A batch whose delivery mark can't be written is held back, never sent unmarked, and delivered on the next launch", arguments: StoreKind.all)
+    @Test("A batch whose delivery mark can't be written is held back, reaching no destination, not even empty, and delivered on the next launch", arguments: StoreKind.all)
     func markFails(kind: StoreKind) async throws {
         let path = StoreKind.temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -57,7 +68,7 @@ struct RecordStoreWriteFailureExitTests {
             let opened = try! kind.open(at: path, events: [Tapped.self])
             let store = opened.store
             let tracker = Tracker(store: store)
-            let destination = InMemoryDestination()
+            let destination = CountingDestination()
             tracker.track(Tapped(number: 1))
             tracker.track(Tapped(number: 2))
             await tracker.finish()
@@ -65,7 +76,7 @@ struct RecordStoreWriteFailureExitTests {
 
             try? await tracker.records.batch(strategy: .count(2)).deliver(to: destination).execute()
 
-            guard destination.batches.isEmpty, store.pendingRecordCount == 2 else {
+            guard destination.received.withLock({ $0 }) == 0, store.pendingRecordCount == 2 else {
                 exit(1)
             }
         }
