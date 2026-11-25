@@ -66,9 +66,8 @@ bad row in a dashboard.
 - A new external dependency in a core module needs a reason that Foundation and the owner's
   libraries don't cover. It must build on Linux, or be Apple-only (`APPLE_ONLY_PACKAGES`).
 - Persistence and retry changes need tests of crashes, relaunches and offline periods: an event
-  accepted once must be delivered or dropped on purpose, never lost silently or sent twice
-  unannounced Once
-  stored, that is; before the worker stores it, a crash may lose it (D5).
+  stored must be delivered or dropped on purpose, never lost silently or sent twice unannounced.
+  Before the worker stores it, a crash may lose it (D5).
 
 ## Belongs elsewhere
 - Template machinery (Bazel rules, the justfile, CI, `scripts/modules.py`'s generator, the
