@@ -15,6 +15,8 @@ TESTS = ["TrackersTests"]
 T = "Tracker.swift"
 W = "WithTracker.swift"
 S = "Subscription.swift"
+E = "Records.swift"
+L = "ReadLock.swift"
 C = "Consent.swift"
 G = "ConsentGate.swift"
 I = "Intake.swift"
@@ -39,6 +41,11 @@ O = "SamplingDropReport.swift"
 #   debug log of a rejection.
 # - Tracker.current's unbound drops warning at every call, or never: only the log's level differs,
 #   and tests don't pin logs.
+# - Dropping the warning a records iterator logs as it starts to wait for its turn: tests don't
+#   pin logs.
+# - Waiters taking the turn last in, first out (`removeLast()` for `removeFirst()` in ReadLock's
+#   release): not equivalent, but no test can queue two waiters in a known order without a hook
+#   saying a reader has started to wait, and the house rules add none for tests.
 #
 # Sampling mutants left out as equivalent:
 # - Dropping the group decision's cache of the latest group (`latest = Decided(...)`): every record
@@ -165,6 +172,22 @@ MUTANTS = [
     # Each read subscribes afresh, so what was tracked before it, or while a cancelled read waited,
     # is lost.
     Mutant("subscribedperread", S, "try? await subscription.next()", "try? await subject.makeSubscription().next()"),
+    # One reader at a time (TRAF-97). The turn granted while another reader holds it, so two
+    # reads wait on the subscription, which traps; or not granted again to the reader holding it,
+    # which then waits on itself.
+    Mutant("turnalwaysgranted", L, "guard owner == nil || owner == reader else { return false }", "", mode="stmt"),
+    Mutant("turnnotkept", L, "owner == nil || owner == reader", "owner == nil"),
+    # A release that resumes the first waiter without making it the owner, or never resumes it.
+    Mutant("turnnothandedon", L, "state.owner = next.reader", "", mode="stmt"),
+    Mutant("waiternotresumed", L, "next?.continuation.resume(returning: true)", "", mode="stmt"),
+    # A waiter cancelled while queued, or before it is queued, left waiting.
+    Mutant("cancelledwaiterleft", L, "waiter?.continuation.resume(returning: false)", "", mode="stmt"),
+    Mutant("cancelledbeforequeueing", L, "if Task.isCancelled { return false }", "", mode="stmt"),
+    # The turn kept by a released iterator, or by one whose iteration ended.
+    Mutant("releasedreaderkeepsturn", L, "lock.release(ObjectIdentifier(self))", "", mode="stmt", nth=0),
+    Mutant("endedreaderkeepsturn", E, "reader.release()", "", mode="stmt"),
+    # A cancelled wait taken as the turn, reading the subscription while another reader waits.
+    Mutant("cancelledwaitreads", E, "guard await reader.acquire() else { return nil }", "_ = await reader.acquire()", mode="stmt"),
     # The worker's validation, first, and its reports.
     Mutant("rejectedadmitted", K, "guard !rejects(record) else { continue }", "", mode="stmt"),
     Mutant("unvalidatedwithconsent", K, "record.event.constraintViolation()", "(membership == nil ? record.event.constraintViolation() : nil)"),

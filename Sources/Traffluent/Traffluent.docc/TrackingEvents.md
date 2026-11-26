@@ -55,7 +55,9 @@ its buffer is full, its oldest waiting batch is dropped and reported on the deli
 `bufferDropReporter`, if you pass one. Once the destination catches up, the delivery reads that
 batch's records back from the store and sends them to it (<doc:ChoosingDestinations>). A delivery
 that finished or failed can be executed again, as a retry. Cancelling one is permanent, as it is for every Afluent unit of work, so
-after a cancellation build a new delivery. It delivers every record the cancelled one hadn't read.
+after a cancellation build a new delivery. Starting it at once is safe, even while the cancelled
+one is still stopping: it waits for the cancelled one's turn to end, then delivers every record the
+cancelled one hadn't read.
 
 ### Tracking from anywhere
 
@@ -135,5 +137,6 @@ a delivery are held in memory without a bound. Records a delivery has read but n
 are lost to this run if the delivery is cancelled or fails. Without a store they are gone; with
 one they come back on the next launch (<doc:PersistingRecords>). A batch dropped from a
 destination's full buffer is reported; its stored records reach that destination later in the same
-run, and the rest are lost. One task reads a tracker's records at a time: a second reader while the
-first is waiting is a programming error, and stops the process.
+run, and the rest are lost. One task reads a tracker's records at a time: a second reader waits, with
+a warning in the log, until the first one's iteration ends or its iterator is released, then reads
+on from the next record. Restarting a delivery after a cancellation is safe.

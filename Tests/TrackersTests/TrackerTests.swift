@@ -121,18 +121,21 @@ struct TrackerTests {
         #expect(actual == expected)
     }
 
-    @Test("A read after an earlier read returned continues with the next record")
+    @Test("A read through a new iterator, once the earlier one is released, continues with the next record")
     func readAgain() async {
         let sut = Tracker()
         let expectedFirst = 1
         let expectedSecond = 2
         sut.track(Tapped(number: 1))
         sut.track(Tapped(number: 2))
+        // Each read's iterator is released as the function returns.
+        func read() async -> EventRecord? {
+            var records = sut.records.makeAsyncIterator()
+            return await records.next()
+        }
 
-        var first = sut.records.makeAsyncIterator()
-        let actualFirst = await first.next()
-        var second = sut.records.makeAsyncIterator()
-        let actualSecond = await second.next()
+        let actualFirst = await read()
+        let actualSecond = await read()
 
         #expect((actualFirst?.event as? Tapped)?.number == expectedFirst)
         #expect((actualSecond?.event as? Tapped)?.number == expectedSecond)

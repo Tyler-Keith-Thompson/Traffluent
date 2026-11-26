@@ -1,4 +1,5 @@
 public import Events
+import Logging
 
 extension Tracker {
     /// The records of the events a tracker tracks, in the order tracked: what a delivery reads.
@@ -17,12 +18,17 @@ extension Tracker {
     /// record it was waiting for, and every one after. A ``Tracker/noOp`` tracker's records are
     /// empty.
     ///
-    /// One task reads at a time, as with `AsyncStream`: calling `next()` while another task's
-    /// call is waiting traps. A reader that has been cancelled stops waiting as its cancellation
-    /// reaches it, so start a new delivery once the cancelled one's `execute()` has returned.
+    /// One task reads at a time. The first iterator to read holds the records until its iteration
+    /// ends or the iterator is released, as it is when its task ends. An iterator that reads
+    /// meanwhile waits its turn, logging a warning as it starts to, then reads on from the next
+    /// record; several wait in the order they came, and one whose task is cancelled while it
+    /// waits returns `nil`. So a delivery started right after a cancelled one has stopped, or
+    /// while it is stopping, delivers every record the cancelled one didn't read.
     public struct Records: AsyncSequence, Sendable {
         public typealias Element = EventRecord
         public typealias Failure = Never
+
+        private static let logger = Logger(label: "Trackers.Records")
 
         let subscription: Subscription?
 
@@ -32,13 +38,33 @@ extension Tracker {
             public typealias Failure = Never
 
             let subscription: Subscription?
+            private let reader: ReadLock.Reader?
+            private var hasWarned = false
+
+            init(subscription: Subscription?) {
+                self.subscription = subscription
+                reader = subscription.map { ReadLock.Reader(lock: $0.readLock) }
+            }
 
             /// The next record tracked, or `nil` once the tracker is finished or the reading task
-            /// is cancelled.
-            ///
-            /// - Precondition: No other task's `next()` is waiting.
+            /// is cancelled. Waits first while another iterator holds the records.
             public mutating func next() async -> EventRecord? {
-                await subscription?.next()
+                guard let subscription, let reader else { return nil }
+                if !reader.tryAcquire() {
+                    if !hasWarned {
+                        hasWarned = true
+                        // Once per iterator, not per call site: `next()` is the protocol's, so it
+                        // has no source location to key on.
+                        Records.logger.warning("Waiting to read a tracker's records: another reader holds them until its iteration ends or its iterator is released. One task reads a tracker's records at a time")
+                    }
+                    guard await reader.acquire() else { return nil }
+                }
+                guard let record = await subscription.next() else {
+                    // The end, or a cancelled read: either way the turn passes to the next reader.
+                    reader.release()
+                    return nil
+                }
+                return record
             }
         }
 
