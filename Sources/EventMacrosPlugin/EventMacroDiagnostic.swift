@@ -21,6 +21,7 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case boundOverflows(keyword: String, type: String)
     case boundRounds(keyword: String, type: String, rounded: String)
     case constrainedNotStoredProperty
+    case enumNotCodable(name: String)
 
     var message: String {
         switch self {
@@ -60,6 +61,8 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
             "@Constrained's \(keyword) is \(rounded) as a \(type); write that bound"
         case .constrainedNotStoredProperty:
             "@Constrained applies only to a stored instance property of an @Event struct"
+        case .enumNotCodable(let name):
+            "@Event writes enum \(name) as its raw value through Codable; add Codable to its inheritance clause"
         }
     }
 
@@ -83,6 +86,7 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .boundOverflows: "boundOverflows"
         case .boundRounds: "boundRounds"
         case .constrainedNotStoredProperty: "constrainedNotStoredProperty"
+        case .enumNotCodable: "enumNotCodable"
         }
         return MessageID(domain: "EventMacros", id: id)
     }

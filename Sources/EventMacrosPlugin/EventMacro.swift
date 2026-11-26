@@ -25,7 +25,18 @@ public struct EventMacro: ExtensionMacro {
         }
         let (arguments, argumentDiagnostics) = EventArguments.arguments(of: node)
         let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
-        let diagnostics = argumentDiagnostics + propertyDiagnostics
+        let enums = RawValueEnum.enums(in: structure.memberBlock.members)
+        let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
+        // Once per enum, however many properties hold it. An enum nested in the event must declare
+        // Codable in its inheritance clause: one that adds it in an extension is reported too, a
+        // deliberate limit, as the macro sees only the struct. An enum declared elsewhere is left
+        // to the requirement below, as is one whose clause lists a protocol the macro doesn't know.
+        let lacking = held.compactMap { $0?.lacksCodable == true ? $0?.name : nil }
+        let uncodable = Set(lacking).sorted()
+        let enumDiagnostics = uncodable.compactMap { name in
+            enums[name].map { Diagnostic(node: $0.inheritance, message: EventMacroDiagnostic.enumNotCodable(name: name)) }
+        }
+        let diagnostics = argumentDiagnostics + propertyDiagnostics + enumDiagnostics
         guard diagnostics.isEmpty else {
             diagnostics.forEach(context.diagnose)
             return []
@@ -42,7 +53,7 @@ public struct EventMacro: ExtensionMacro {
             arguments.name.map { "\(access)static var name: String {\n    \($0)\n}" },
             arguments.consent.map { "\(access)static var consentCategory: Events.ConsentCategory {\n    \($0)\n}" },
             arguments.version.map { "\(access)static var schemaVersion: Int {\n    \($0)\n}" },
-            schema(of: properties, access: access),
+            schema(of: Array(zip(properties, held)), access: access),
             constraintViolation(of: properties, access: access),
         ] + requirements(of: properties) + [
             codingKeys(of: properties),
@@ -55,10 +66,12 @@ public struct EventMacro: ExtensionMacro {
         return [DeclSyntax(stringLiteral: source).cast(ExtensionDeclSyntax.self)]
     }
 
-    private static func schema(of properties: [StoredProperty], access: String) -> String {
-        let entries = properties.map {
-            let defaultValue = $0.hasDefaultValue ? "hasDefaultValue: true, " : ""
-            return "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\($0.identifier)), keywords: \($0.keywords)),"
+    /// `schema`, each property with the enum declared in the struct it holds, if any.
+    private static func schema(of properties: [(StoredProperty, RawValueEnum?)], access: String) -> String {
+        let entries = properties.map { property, held in
+            let defaultValue = property.hasDefaultValue ? "hasDefaultValue: true, " : ""
+            let enumeration = enumeration(of: property, holding: held).map { ", enumeration: \($0)" } ?? ""
+            return "        Events.EventSchema.Property(name: \"\(property.name)\", typeName: \"\(property.typeName)\", isOptional: \(property.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\(property.identifier)), keywords: \(property.keywords)\(enumeration)),"
         }
         let list = entries.isEmpty ? "[]" : "[\n" + entries.joined(separator: "\n") + "\n    ]"
         return """
@@ -66,6 +79,22 @@ public struct EventMacro: ExtensionMacro {
                 Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: \(list))
             }
             """
+    }
+
+    /// A property's `enumeration:` argument: the cases of `held`, the raw-value enum declared in the
+    /// struct it holds, each written out; read at run time for any type but a standard scalar or a
+    /// date, which is no enum; `nil`, no argument, for those.
+    ///
+    /// The cases are written as `Self.<Enum>.<case>`, so the compiler gives each its raw value,
+    /// implicit ones included.
+    private static func enumeration(of property: StoredProperty, holding held: RawValueEnum?) -> String? {
+        if let held, let cases = held.cases {
+            // Each case as an implicit member in backticks: `Self.Kind.Type` and `Self.Kind.self`
+            // name the metatype and the type even in backticks, but `.`Type`` names the case.
+            return "Events.EventSchema.Enumeration(cases: [" + cases.map { ".`\($0)`" }.joined(separator: ", ") + "] as [Self.\(held.name)])"
+        }
+        guard !property.isStandardScalar, !property.isDate, property.dateArrayElement == nil else { return nil }
+        return "Events.EventSchema.Enumeration(of: \\Self.\(property.identifier))"
     }
 
     /// `constraintViolation()`, checking each property's declared constraints in declaration order,

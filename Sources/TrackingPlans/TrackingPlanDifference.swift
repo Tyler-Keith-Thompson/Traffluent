@@ -44,6 +44,11 @@
 /// ``sensitivePropertyMadeRequired(event:version:property:)``, since the payloads a redacting
 /// destination sent lack it.
 ///
+/// A raw-value enum's cases are its `enum` keyword, compared as a constraint: renaming or removing
+/// a case is ``constraintTightened(event:version:property:keyword:committed:current:)``, as a stored
+/// record of it no longer decodes, and adding one is
+/// ``constraintLoosened(event:version:property:keyword:committed:current:)``.
+///
 /// Raising an event's version is how its author marks a breaking change: the plan then holds a
 /// new document, and the committed version's properties aren't compared with the new one's.
 public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible {
@@ -72,8 +77,10 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     case defaultValueRemoved(event: String, version: Int, property: String)
     /// A property's constraint keyword is tighter: a lower bound (`minLength`, `minimum`,
     /// `minItems`) rose, an upper one (`maxLength`, `maximum`, `maxItems`) fell, or one was added,
-    /// or a `pattern` was added or changed. `committed` and `current` are its values as JSON, `nil`
-    /// where there is none; a property's patterns are one string, or an array of several.
+    /// or a `pattern` was added or changed, or an enum's raw values, its `enum`, lost one (a case
+    /// renamed or removed) or were listed where none were. `committed` and `current` are its values
+    /// as JSON, `nil` where there is none; a property's patterns are one string, or an array of
+    /// several, and its raw values an array.
     case constraintTightened(event: String, version: Int, property: String, keyword: String, committed: String?, current: String?)
     /// A file of the committed plan is missing, or isn't JSON of the shape a plan writes, so the
     /// events can't be compared with it: the index, `tracking-plan.json`, when there is no
@@ -100,7 +107,8 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// value.
     case sensitivityChanged(event: String, version: Int, property: String, isSensitive: Bool)
     /// A property's constraint keyword is looser: a lower bound fell, an upper one rose, or one
-    /// was removed, or a `pattern` was only removed. The values are as for
+    /// was removed, or a `pattern` was only removed, or an enum's raw values were only added to (a
+    /// case added) or are no longer listed. The values are as for
     /// ``constraintTightened(event:version:property:keyword:committed:current:)``.
     case constraintLoosened(event: String, version: Int, property: String, keyword: String, committed: String?, current: String?)
     /// A file of the committed plan isn't the bytes exporting the plan writes now, though its

@@ -55,3 +55,44 @@ swift_compile_failure_test(
     tags = ["debug-only"],
     deps = ["//Sources/EventMacros"],
 )
+
+# @Event on a struct holding a raw-value enum declared inside it that lists no Codable: the macro's
+# error, at the enum's inheritance clause.
+swift_compile_failure_test(
+    name = "EventEnumNotCodable",
+    size = "small",
+    src = "EventEnumNotCodable.swift",
+    expected_errors = [
+        "error: @Event writes enum Reason as its raw value through Codable; add Codable to its inheritance clause",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# A raw-value enum declared outside the event, which the macro can't see, that isn't Codable: the
+# requirement's error names the property.
+swift_compile_failure_test(
+    name = "EventOutsideEnumNotCodable",
+    size = "small",
+    src = "EventOutsideEnumNotCodable.swift",
+    expected_errors = [
+        "error: static method 'requireCodable(priority:)' requires that 'Priority' conform to 'Decodable'",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same enums, Codable, compile.
+swift_compile_failure_test(
+    name = "EventEnumControl",
+    size = "small",
+    src = "EventEnumControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)

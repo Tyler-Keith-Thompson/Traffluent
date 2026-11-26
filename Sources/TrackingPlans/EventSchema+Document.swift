@@ -61,9 +61,10 @@ extension EventSchema.Property {
     }
 
     /// The property's schema: its type's, with `null` allowed when it is optional, narrowed by its
-    /// keywords, and marked `x-traffluent-default` when it has a default value.
+    /// keywords, and marked `x-traffluent-default` when it has a default value. A raw-value enum's is
+    /// its raw value's type's, with an `enum` of its raw values when they are known.
     var schema: [String: JSON] {
-        var schema = WrittenType(parsing: typeName)?.schema(isNullable: isOptional) ?? ["x-traffluent-swift-type": .string(typeName)]
+        var schema = WrittenType(parsing: typeName)?.schema(isNullable: isOptional, enumeration: enumeration) ?? ["x-traffluent-swift-type": .string(typeName)]
         if hasDefaultValue {
             schema["x-traffluent-default"] = .boolean(true)
         }
@@ -112,32 +113,46 @@ extension Dictionary where Key == String, Value == JSON {
 }
 
 extension WrittenType {
-    /// The type's JSON Schema keywords, allowing `null` too when `isNullable` is set.
-    fileprivate func schema(isNullable: Bool) -> [String: JSON] {
+    /// The type's JSON Schema keywords, allowing `null` too when `isNullable` is set, with
+    /// `enumeration` the schema of the enum it names, inside any optional, `Sensitive` or array.
+    fileprivate func schema(isNullable: Bool, enumeration: EventSchema.Enumeration? = nil) -> [String: JSON] {
         if case .optional(let wrapped) = self {
-            return wrapped.schema(isNullable: true)
+            return wrapped.schema(isNullable: true, enumeration: enumeration)
         }
         if let arguments = names("Optional", in: ["Swift"]), arguments.count == 1 {
-            return arguments[0].schema(isNullable: true)
+            return arguments[0].schema(isNullable: true, enumeration: enumeration)
         }
         // A refined value's JSON is its value's; its rule's keywords come from the property's.
         if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 {
             return arguments[0].schema(isNullable: isNullable)
         }
         if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 {
-            return arguments[0].schema(isNullable: isNullable).merging(["x-traffluent-sensitive": .boolean(true)]) { $1 }
+            return arguments[0].schema(isNullable: isNullable, enumeration: enumeration).merging(["x-traffluent-sensitive": .boolean(true)]) { $1 }
         }
         if let element = arrayElement {
             // A redacted element of an array is null, so a sensitive one allows it.
-            return ["type": .type("array", isNullable: isNullable), "items": .object(element.schema(isNullable: element.isSensitive))]
+            return ["type": .type("array", isNullable: isNullable), "items": .object(element.schema(isNullable: element.isSensitive, enumeration: enumeration))]
         }
         for scalar in Scalar.all {
             if let arguments = names(scalar.name, in: scalar.modules), arguments.isEmpty {
                 return scalar.keywords.merging(["type": .type(scalar.type, isNullable: isNullable)]) { $1 }
             }
         }
+        if let enumeration, isNamed(enumeration.typeName) {
+            return enumeration.schema(isNullable: isNullable)
+        }
         // A type whose JSON shape the plan can't know: any value, null included, is allowed.
         return ["x-traffluent-swift-type": .string(source)]
+    }
+
+    /// Whether the type is named `name`, as Swift describes a type: without its module or
+    /// enclosing types (`Reason` for `CheckoutFailed.Reason`), with its generic arguments.
+    ///
+    /// A typealias, whose name is another, isn't: its JSON may be an array of the enum, say, which
+    /// the enumeration read at run time through the alias can't tell.
+    private func isNamed(_ name: String) -> Bool {
+        guard case .named(let components, let arguments) = self, let last = components.last else { return false }
+        return WrittenType.named([last], arguments).source == name
     }
 
     /// Whether the type is `Sensitive<T>`, which a destination may redact.
@@ -182,6 +197,25 @@ private struct Scalar: Sendable {
 
     private static func bounds(_ minimum: Int64, _ maximum: Int64) -> [String: JSON] {
         ["minimum": .integer(minimum), "maximum": .integer(maximum)]
+    }
+}
+
+extension EventSchema.Enumeration {
+    /// The enum's schema: its raw value's type's, allowing `null` too when `isNullable` is set, and
+    /// its raw values as `enum`, with `null` among them when it is allowed.
+    fileprivate func schema(isNullable: Bool) -> [String: JSON] {
+        // Always parses: the raw type is a standard String or integer type, which the plan maps.
+        var schema = WrittenType(parsing: rawTypeName)?.schema(isNullable: isNullable) ?? [:]
+        if let rawValues {
+            let values = rawValues.map { value -> JSON in
+                switch value {
+                case .string(let string): .string(string)
+                case .integer(let integer): .integer(integer)
+                }
+            }
+            schema["enum"] = .array(values + (isNullable ? [.null] : []))
+        }
+        return schema
     }
 }
 

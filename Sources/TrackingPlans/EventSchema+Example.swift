@@ -12,7 +12,8 @@ extension EventSchema {
 }
 
 extension Dictionary where Key == String, Value == JSON {
-    /// The fixed value a property of this schema takes in an example: for a string, its pattern's
+    /// The fixed value a property of this schema takes in an example: the first value of its
+    /// `enum`, an enum's first raw value, when it has one; otherwise, for a string, its pattern's
     /// example, or else `"example"`, cut to its `maxLength`, or `x` repeated to a `minLength` above
     /// 7, or the reference date or the nil UUID for one of format `date-time` or `uuid`; for a
     /// number or an
@@ -23,7 +24,12 @@ extension Dictionary where Key == String, Value == JSON {
     /// Read from the schema rather than the Swift type, so a value matches the keywords the
     /// document holds.
     fileprivate var example: JSON {
-        switch typeName {
+        // An enum's first raw value, which the type and bounds alone can't pick. The raw values come
+        // before the null an optional one allows, and there is always one.
+        if let value = self["enum"]?.array?.first {
+            return value
+        }
+        return switch typeName {
         case "string":
             switch self["format"] {
             case .string("date-time"): .string("2001-01-01T00:00:00Z")

@@ -9,17 +9,12 @@ import Traffluent
 struct WhatGoesWhereExamplesTests {
     @Event
     struct CheckoutFailed {
-        enum Reason: String {
+        enum Reason: String, Codable {
             case paymentDeclined
             case outOfStock
             case networkUnavailable
         }
-        @Constrained(.pattern("^(paymentDeclined|outOfStock|networkUnavailable)$", example: "paymentDeclined"))
-        var reason: String
-
-        init(reason: Reason) {
-            self.reason = reason.rawValue
-        }
+        var reason: Reason
     }
 
     @Event

@@ -462,10 +462,10 @@ struct EventMacroExpansionTests {
                             Events.EventSchema.Property(name: "b", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.b), keywords: Events.ValidationKeyword.keywords(of: \\Self.b)),
                             Events.EventSchema.Property(name: "c", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.c), keywords: Events.ValidationKeyword.keywords(of: \\Self.c)),
                             Events.EventSchema.Property(name: "d", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.d), keywords: Events.ValidationKeyword.keywords(of: \\Self.d)),
-                            Events.EventSchema.Property(name: "e", typeName: "[Int?]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.e), keywords: Events.ValidationKeyword.keywords(of: \\Self.e)),
-                            Events.EventSchema.Property(name: "f", typeName: "Mine.Optional<Int>", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.f), keywords: Events.ValidationKeyword.keywords(of: \\Self.f)),
-                            Events.EventSchema.Property(name: "g", typeName: "Int?", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.g), keywords: Events.ValidationKeyword.keywords(of: \\Self.g)),
-                            Events.EventSchema.Property(name: "h", typeName: "Array<Int>", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.h), keywords: Events.ValidationKeyword.keywords(of: \\Self.h)),
+                            Events.EventSchema.Property(name: "e", typeName: "[Int?]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.e), keywords: Events.ValidationKeyword.keywords(of: \\Self.e), enumeration: Events.EventSchema.Enumeration(of: \\Self.e)),
+                            Events.EventSchema.Property(name: "f", typeName: "Mine.Optional<Int>", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.f), keywords: Events.ValidationKeyword.keywords(of: \\Self.f), enumeration: Events.EventSchema.Enumeration(of: \\Self.f)),
+                            Events.EventSchema.Property(name: "g", typeName: "Int?", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.g), keywords: Events.ValidationKeyword.keywords(of: \\Self.g), enumeration: Events.EventSchema.Enumeration(of: \\Self.g)),
+                            Events.EventSchema.Property(name: "h", typeName: "Array<Int>", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.h), keywords: Events.ValidationKeyword.keywords(of: \\Self.h), enumeration: Events.EventSchema.Enumeration(of: \\Self.h)),
                         ])
                     }
 
@@ -778,7 +778,7 @@ struct EventMacroExpansionTests {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "label", typeName: "Swift.String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.label), keywords: Events.ValidationKeyword.keywords(of: \\Self.label)),
                             Events.EventSchema.Property(name: "count", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.count), keywords: Events.ValidationKeyword.keywords(of: \\Self.count)),
-                            Events.EventSchema.Property(name: "tags", typeName: "[String]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.tags), keywords: Events.ValidationKeyword.keywords(of: \\Self.tags)),
+                            Events.EventSchema.Property(name: "tags", typeName: "[String]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.tags), keywords: Events.ValidationKeyword.keywords(of: \\Self.tags), enumeration: Events.EventSchema.Enumeration(of: \\Self.tags)),
                         ])
                     }
 

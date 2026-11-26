@@ -15,6 +15,9 @@ struct StoredProperty {
     let hasDefaultValue: Bool
     /// The keywords `@Constrained` declares on it, in order.
     let constraints: [DeclaredConstraint]
+    /// The type as written inside every `Optional`, `Sensitive` and array around it: `Reason` for
+    /// `[Sensitive<Reason>?]`.
+    let leafTypeName: String
 
     /// The schema's keywords for it: its type's, which a `Refined` type's rule gives, then the
     /// declared ones.
@@ -114,7 +117,8 @@ struct StoredProperty {
                     // A `let` with one was skipped above, so this is a `var`'s.
                     hasDefaultValue: binding.initializer != nil,
                     // An attribute applies to every binding of its declaration: `var a, b: String`.
-                    constraints: constraints
+                    constraints: constraints,
+                    leafTypeName: type.leaf.trimmedDescription
                 ))
             }
         }
@@ -174,6 +178,25 @@ extension TypeSyntax {
             return member.genericArgumentClause?.onlyType
         }
         return nil
+    }
+
+    /// The type inside every optional, `Sensitive` and array around it, each written as a
+    /// shorthand, by its name or qualified by its module (`Swift.Array<T>`, `Events.Sensitive<T>`).
+    fileprivate var leaf: TypeSyntax {
+        if let wrapped = wrappedInOptional { return wrapped.leaf }
+        if let array = self.as(ArrayTypeSyntax.self) { return array.element.leaf }
+        let wrappers: [(name: String, modules: Set<String>)] = [("Array", ["Swift"]), ("Sensitive", ["Events", "Traffluent"])]
+        for wrapper in wrappers {
+            if let identifier = self.as(IdentifierTypeSyntax.self), identifier.name.text == wrapper.name, let only = identifier.genericArgumentClause?.onlyType {
+                return only.leaf
+            }
+            if let member = self.as(MemberTypeSyntax.self), member.name.text == wrapper.name, wrapper.modules.contains(member.baseType.trimmedDescription),
+                let only = member.genericArgumentClause?.onlyType
+            {
+                return only.leaf
+            }
+        }
+        return self
     }
 }
 

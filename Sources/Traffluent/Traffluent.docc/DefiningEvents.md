@@ -42,6 +42,42 @@ A stored property whose type isn't `Codable` is a compile error that names it:
 So are `@Event` on anything but a struct, and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
 
+### Enum properties
+
+A property can hold an enum whose raw value is a `String` or an integer type. Give the enum
+`Codable`, which writes each case as its raw value:
+
+```swift
+@Event(name: "checkout_failed")
+struct CheckoutFailed {
+    enum Reason: String, Codable {
+        case paymentDeclined
+        case outOfStock = "out_of_stock"
+    }
+    var reason: Reason
+}
+
+let tracker = Tracker()
+tracker.track(CheckoutFailed(reason: .outOfStock))  // stored as "out_of_stock"
+let rawValues = CheckoutFailed.schema.properties[0].enumeration?.rawValues
+// [.string("paymentDeclined"), .string("out_of_stock")]
+```
+
+The schema records the raw values in the property's `enumeration`, and the tracking plan exports
+them as a JSON Schema `enum`, so a collector rejects any other value (<doc:TrackingPlanWorkflow>).
+The macro lists the cases of an enum declared inside the event. Otherwise it reads them from
+`allCases`, so an enum declared elsewhere needs `CaseIterable` for the plan to check its values.
+The same goes for an enum inside the event with a case under `#if`, which the macro can't
+evaluate. Without `CaseIterable`, the plan accepts any value for the property. A typealias of the
+enum (`typealias Kind = Reason`) isn't matched either: the plan accepts any value for it, so
+declare the property with the enum's own name. An enum declared inside the event must list
+`Codable` in its inheritance clause. Adding the conformance in an extension doesn't count: the
+macro sees only the struct, so it reports the enum as missing `Codable`.
+
+A stored record whose raw value matches no case, such as one written before a case was renamed or
+removed, doesn't decode, and the store drops and reports it (`DropReport.undecodable`). The plan
+check reports such a change as breaking, so raise the event's version with it (<doc:ChangingEvents>).
+
 ### Constraining properties
 
 A property's type says what kind of value it holds; a constraint says which values of that kind

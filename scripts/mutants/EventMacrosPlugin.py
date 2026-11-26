@@ -24,8 +24,9 @@ P = "StoredProperty.swift"
 D = "EventMacroDiagnostic.swift"
 C = "DeclaredConstraint.swift"
 X = "ConstrainedMacro.swift"
+R = "RawValueEnum.swift"
 # A schema property's entry, as EventMacro.swift writes it.
-PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\($0.identifier)), keywords: \($0.keywords)),"'
+PROPERTY = r'"        Events.EventSchema.Property(name: \"\(property.name)\", typeName: \"\(property.typeName)\", isOptional: \(property.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\(property.identifier)), keywords: \(property.keywords)\(enumeration)),"'
 
 MUTANTS = [
     # EventMacro: the extension.
@@ -40,8 +41,8 @@ MUTANTS = [
     Mutant("versionfixed", M, "arguments.version", "Int?.some(1)"),
     # Two mutants of the property entry's literal: the first leaves the original once, in its
     # unmutated branch, for the second.
-    Mutant("schemanamebackticked", M, PROPERTY, PROPERTY.replace("$0.name", "$0.identifier")),
-    Mutant("schemanotoptional", M, PROPERTY, PROPERTY.replace(r"\($0.isOptional)", "false")),
+    Mutant("schemanamebackticked", M, PROPERTY, PROPERTY.replace("property.name", "property.identifier")),
+    Mutant("schemanotoptional", M, PROPERTY, PROPERTY.replace(r"\(property.isOptional)", "false")),
     Mutant("emptylistbracketed", M, '"[]"', '"[\\n    ]"'),
     # The coding (TRAF-83): CodingKeys, encode(to:) and init(from:) over Codable.
     # Left out: reversing the order of encode(to:)'s and init(from:)'s lines, whose closures span
@@ -71,7 +72,7 @@ MUTANTS = [
     Mutant("optionaldateelementsnotmapped", M, 'element.isOptional ? ".map { $0.map(\\(date)) }" : ".map(\\(date))"', '".map(\\(date))"'),
     Mutant("datearrayundetected", P, 'guard Self.dateNames.contains(name) else { return nil }', 'return nil', mode="stmt"),
     Mutant("optionaldateelementundetected", P, 'element.hasSuffix("?")', 'false'),
-    Mutant("datedecodedasdate", M, '!property.isDate', 'true'),
+    Mutant("datedecodedasdate", M, '!property.isDate', 'true', nth=1),
     Mutant("decodefunctionsdropped", M, 'decodeFunctions(of: properties)', '[String]()'),
     Mutant("scalarqualifiedmissed", P, 'typeName.hasPrefix("Swift.") ? String(typeName.dropFirst("Swift.".count)) : typeName', 'typeName'),
     Mutant("scalarsnone", P, '["String", "Bool", "Double", "Float", "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64"].contains(name)', 'false'),
@@ -154,5 +155,30 @@ MUTANTS = [
     # A property's default value (TRAF-18): marked in the schema, and read back when its key is
     # missing.
     Mutant("defaultvalueundetected", P, "binding.initializer != nil", "false", nth=1),
-    Mutant("defaultnotinschema", M, '$0.hasDefaultValue ? "hasDefaultValue: true, " : ""', '""'),
+    Mutant("defaultnotinschema", M, 'property.hasDefaultValue ? "hasDefaultValue: true, " : ""', '""'),
+    # Raw-value enums (TRAF-91): the enumeration each property's schema gets, and the error for an
+    # enum declared inside the event without Codable.
+    Mutant("enumcasesunread", M, "held.cases", "[String]?.none"),
+    Mutant("enumcasesunqualified", M, '"] as [Self.\\(held.name)])"', '"] as [\\(held.name)])"'),
+    Mutant("enumcasesunescaped", M, '".`\\($0)`"', '".\\($0)"'),
+    Mutant("enumdiagnosticrepeated", M, "Set(lacking).sorted()", "lacking"),
+    Mutant("enumerationforscalars", M, "!property.isStandardScalar", "true", nth=0),
+    Mutant("enumerationfordates", M, "!property.isDate", "true", nth=0),
+    Mutant("enumerationfordatearrays", M, "property.dateArrayElement == nil", "true"),
+    Mutant("enumnotdiagnosed", M, "$0?.lacksCodable == true", "false"),
+    Mutant("enumdiagnosedever", M, "$0?.lacksCodable == true", "$0 != nil"),
+    Mutant("enumrawtypeany", R, "rawTypeNames.contains(rawType.withoutSwiftModule)", "true"),
+    Mutant("enumswiftmodulekept", R, 'hasPrefix("Swift.") ? String(dropFirst("Swift.".count)) : self', "self"),
+    Mutant("enumifconfigread", R, "if member.decl.is(IfConfigDeclSyntax.self) { return nil }", "", mode="stmt"),
+    Mutant("enumfirstcaseonly", R, "declaration.elements.map(\\.name.text.withoutBackticks)", "declaration.elements.prefix(1).map(\\.name.text.withoutBackticks)"),
+    Mutant("enumbacktickskept", R, 'hasPrefix("`") && hasSuffix("`") && count > 1 ? String(dropFirst().dropLast()) : self', "self"),
+    Mutant("enumselfprefixdropped", R, '["", "Self.", "\\(structure)."]', '["", "\\(structure)."]'),
+    Mutant("enumstructureprefixdropped", R, '["", "Self.", "\\(structure)."]', '["", "Self."]'),
+    Mutant("enumcodablepairignored", R, '!names.isSuperset(of: ["Encodable", "Decodable"])', "true"),
+    Mutant("enumunknownlacks", R, "names.isSubset(of: unrelated)", "true"),
+    Mutant("leafoptionalkept", P, "if let wrapped = wrappedInOptional { return wrapped.leaf }", "", mode="stmt"),
+    Mutant("leafarraykept", P, "if let array = self.as(ArrayTypeSyntax.self) { return array.element.leaf }", "", mode="stmt"),
+    Mutant("leafqualifiedkept", P, "wrapper.modules.contains(member.baseType.trimmedDescription)", "false"),
+    Mutant("leafsensitivekept", P, '"Sensitive"', '"Mine"'),
+    Mutant("leafarraynamekept", P, '"Array"', '"Mine"'),
 ]

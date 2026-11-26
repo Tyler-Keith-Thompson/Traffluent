@@ -60,6 +60,7 @@ The umbrella guide on this area is
 - ``Event``
 - ``ConsentCategory``
 - ``EventSchema``
+- ``EventSchema/Enumeration``
 
 ### Property values
 

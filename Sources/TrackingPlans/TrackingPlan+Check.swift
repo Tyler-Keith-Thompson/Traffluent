@@ -281,9 +281,20 @@ private struct PropertyContract {
         }
         type["type"] = type["type"]?.withoutNull
         if let items = type["items"]?.object {
-            type["items"] = .object(Self.withoutRedactedNull(items))
+            type["items"] = .object(Self.withoutEnumeration(Self.withoutRedactedNull(items)))
         }
         self.type = .object(type)
+    }
+
+    /// An array's `items` schema, and theirs in turn, without an enum's `enum`, which
+    /// ``ConstraintContract`` compares, as it does the property's own.
+    private static func withoutEnumeration(_ items: [String: JSON]) -> [String: JSON] {
+        var items = items
+        items["enum"] = nil
+        if let nested = items["items"]?.object {
+            items["items"] = .object(withoutEnumeration(nested))
+        }
+        return items
     }
 
     /// An array's `items` schema without the `null` a `Sensitive` element allows, there for the
@@ -301,13 +312,13 @@ private struct PropertyContract {
     }
 }
 
-/// What a committed plan promises about one property's constraint keywords: its bounds and its
-/// patterns.
+/// What a committed plan promises about one property's constraint keywords: its bounds, its
+/// patterns and an enum's raw values.
 private struct ConstraintContract {
     /// The keywords a constraint writes, which ``PropertyContract/type`` leaves out: the bounds,
-    /// the patterns (the first as `pattern`, any other under `allOf`) and the first pattern's
-    /// `examples`, an annotation that constrains nothing.
-    static let keywords = ["minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", "allOf", "examples"]
+    /// the patterns (the first as `pattern`, any other under `allOf`), the first pattern's
+    /// `examples`, an annotation that constrains nothing, and an enum's `enum`.
+    static let keywords = ["minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", "allOf", "examples", "enum"]
 
     /// A bound, by its keyword's name, and whether it is a lower one.
     private static let bounds: [(keyword: String, isLower: Bool)] = [
@@ -316,8 +327,12 @@ private struct ConstraintContract {
 
     let values: [String: Double]
     let patterns: [String]
+    /// An enum's raw values, in the document's order, without the `null` an optional one allows:
+    /// the property's own, or its array's elements'. `nil` where the document lists none.
+    let enumeration: [JSON]?
 
     init(schema: [String: JSON]) {
+        enumeration = Self.enumeration(in: schema)?.filter { $0 != .null }
         var values: [String: Double] = [:]
         for (keyword, _) in Self.bounds {
             values[keyword] = schema[keyword]?.double
@@ -337,11 +352,12 @@ private struct ConstraintContract {
     }
 
     /// Each bound that moved, in the order of ``bounds``, then the patterns, when any was added or
-    /// removed.
+    /// removed, then an enum's raw values, when they changed.
     ///
     /// A lower bound that rose, an upper one that fell, or one added is tightened; the reverse is
     /// loosened. A pattern added is tightened, as one regular expression can't be shown to accept
-    /// all another does; a pattern only removed is loosened.
+    /// all another does; a pattern only removed is loosened. Then the raw values, as
+    /// ``enumerationChange(to:)`` compares them.
     func differences(to current: ConstraintContract) -> [Change] {
         var changes: [Change] = []
         for (keyword, isLower) in Self.bounds {
@@ -360,7 +376,29 @@ private struct ConstraintContract {
         if !added.isEmpty || !removed.isEmpty {
             changes.append(Change(keyword: "pattern", committed: Self.text(patterns), current: Self.text(current.patterns), isTightened: !added.isEmpty))
         }
+        if let change = enumerationChange(to: current.enumeration) {
+            changes.append(change)
+        }
         return changes
+    }
+
+    /// How the raw values changed, compared as sets, or `nil` when they didn't: tightened when one
+    /// the committed plan accepts is gone, as a renamed or removed case's is, or when there were
+    /// none listed before; loosened when values were only added, or the list is gone.
+    private func enumerationChange(to current: [JSON]?) -> Change? {
+        let before = enumeration.map(Set.init)
+        let after = current.map(Set.init)
+        guard before != after else { return nil }
+        // With one side unlisted: listing raw values where there were none tightens, and no longer
+        // listing them loosens.
+        let isTightened = if let before, let after { !before.isSubset(of: after) } else { before == nil }
+        return Change(keyword: "enum", committed: enumeration.map { JSON.array($0).compact }, current: current.map { JSON.array($0).compact }, isTightened: isTightened)
+    }
+
+    /// The `enum` of `schema`, or of the `items` of an array, at any depth.
+    private static func enumeration(in schema: [String: JSON]) -> [JSON]? {
+        if let values = schema["enum"]?.array { return values }
+        return schema["items"]?.object.flatMap(enumeration(in:))
     }
 
     private static func text(_ bound: Double) -> String {

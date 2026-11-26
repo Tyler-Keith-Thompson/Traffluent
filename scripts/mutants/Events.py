@@ -132,4 +132,20 @@ MUTANTS = [
     Mutant("contextaddsrecords", "Enricher.swift", "addsRecords = false", "addsRecords = true", mode="stmt"),
     # After contextaddsrecords', the text holds two copies; the second is the original's.
     Mutant("recordsaddnone", "Enricher.swift", "addsRecords = true", "addsRecords = false", nth=1, mode="stmt"),
+    # EventSchema.Enumeration (TRAF-91): a raw-value enum's raw values, given or read at run time.
+    Mutant("enumanyrawtype", "EventSchema+Enumeration.swift", "Enumeration.mapsRawValue(of: Case.self)", "true"),
+    Mutant("enumtypenamefixed", "EventSchema+Enumeration.swift", "typeName = String(describing: Case.self)", 'typeName = "Case"', mode="stmt"),
+    Mutant("enumrawtypenamefixed", "EventSchema+Enumeration.swift", "rawTypeName = String(describing: Case.RawValue.self)", 'rawTypeName = "String"', mode="stmt"),
+    Mutant("enumnocasesempty", "EventSchema+Enumeration.swift", "values.isEmpty || converted.contains(nil)", "converted.contains(nil)"),
+    Mutant("enumoverflowignored", "EventSchema+Enumeration.swift", "values.isEmpty || converted.contains(nil)", "values.isEmpty"),
+    Mutant("enumrepeated", "EventSchema+Enumeration.swift", "converted.compactMap { $0 }.filter { seen.insert($0).inserted }", "converted.compactMap { $0 }"),
+    Mutant("enumwrapperignored", "EventSchema+Enumeration.swift", "if let wrapper = type as? any EnumerationWrapper.Type {\n                return enumeration(of: wrapper.wrappedType)\n            }", "", mode="stmt"),
+    Mutant("enumcasesignored", "EventSchema+Enumeration.swift", "if let iterable = type as? any (RawRepresentable & CaseIterable).Type {\n                return listing(iterable)\n            }", "", mode="stmt"),
+    Mutant("enumoptionalopaque", "EnumerationWrapper.swift", "Wrapped.self", "Int.self"),
+    Mutant("enumsensitiveopaque", "EnumerationWrapper.swift", "Value.self", "Int.self"),
+    Mutant("enumarrayopaque", "EnumerationWrapper.swift", "Element.self", "Int.self"),
+    Mutant("enumunknownlisted", "EventSchema+Enumeration.swift", "$0.rawValues == nil ? nil : $0", "$0"),
+    Mutant("enumstringlost", "EventSchema+Enumeration.swift", "self = .string(string)", 'self = .string("")', mode="stmt"),
+    Mutant("enumintegerlost", "EventSchema+Enumeration.swift", "self = .integer(exact)", "self = .integer(0)", mode="stmt"),
+    Mutant("schemaenumerationdropped", S, "self.enumeration = enumeration", "self.enumeration = nil", mode="stmt"),
 ]

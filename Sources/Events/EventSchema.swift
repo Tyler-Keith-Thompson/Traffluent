@@ -15,7 +15,8 @@
 /// ```
 public struct EventSchema: Sendable, Hashable {
     /// One stored property of an event: its name, its type as written, whether it is optional,
-    /// whether it has a default value and the keywords its value satisfies.
+    /// whether it has a default value, the keywords its value satisfies and, for a raw-value enum,
+    /// its raw values.
     public struct Property: Sendable, Hashable {
         /// The property's name.
         public var name: String
@@ -34,9 +35,15 @@ public struct EventSchema: Sendable, Hashable {
         /// ``keywords`` can't state it and no value of the type can be made. A tracking plan
         /// refuses such a property rather than export it as unconstrained.
         public var hasInvalidConstraint: Bool
+        /// The raw values the property is written as, when its type is a raw-value enum, also
+        /// through `Optional`, `Sensitive` and arrays; `nil` for any other type, and for an enum
+        /// whose cases `@Event` can't know: one declared outside the event that isn't
+        /// `CaseIterable`.
+        public var enumeration: Enumeration?
 
         /// The property `name` of type `typeName`, optional when `isOptional` is set, with a
-        /// default value when `hasDefaultValue` is set, whose value satisfies `keywords`.
+        /// default value when `hasDefaultValue` is set, whose value satisfies `keywords` and, for a
+        /// raw-value enum, is one of `enumeration`'s raw values.
         ///
         /// - Parameters:
         ///   - name: The property's name.
@@ -47,13 +54,16 @@ public struct EventSchema: Sendable, Hashable {
         ///   - hasInvalidConstraint: Whether the type's rule has a constraint that throws as it is
         ///     built; `false` by default.
         ///   - keywords: The keywords the property's value satisfies; none by default.
-        public init(name: String, typeName: String, isOptional: Bool, hasDefaultValue: Bool = false, hasInvalidConstraint: Bool = false, keywords: [ValidationKeyword] = []) {
+        ///   - enumeration: The raw values the property is written as, when its type is a
+        ///     raw-value enum; `nil` by default.
+        public init(name: String, typeName: String, isOptional: Bool, hasDefaultValue: Bool = false, hasInvalidConstraint: Bool = false, keywords: [ValidationKeyword] = [], enumeration: Enumeration? = nil) {
             self.name = name
             self.typeName = typeName
             self.isOptional = isOptional
             self.hasDefaultValue = hasDefaultValue
             self.hasInvalidConstraint = hasInvalidConstraint
             self.keywords = keywords
+            self.enumeration = enumeration
         }
     }
 

@@ -24,7 +24,12 @@
 /// - `static var schema`: an ``/Events/EventSchema`` with the event's name, version and each stored
 ///   property's name, type as written, optionality, whether it has a default value and validation
 ///   keywords (its ``/Events/Refined`` type's rule's, then those ``Constrained(_:)`` declares), in
-///   declaration order.
+///   declaration order. A property of a raw-value enum gets its
+///   ``/Events/EventSchema/Enumeration``, the cases' raw values. The macro lists them when the
+///   enum is declared inside the struct, and reads them from `allCases` for one declared elsewhere
+///   or with a case under `#if`. An enum declared elsewhere needs `CaseIterable` for a tracking
+///   plan to check its values; without it, and for a typealias of an enum, the plan accepts any
+///   value.
 /// - `constraintViolation()`, when a property declares constraints with ``Constrained(_:)``: the
 ///   first property, in declaration order, whose value breaks one, which a tracker rejects.
 /// - `CodingKeys`, `encode(to:)`, `init(from:)` and the private functions it reads some types
@@ -46,9 +51,13 @@
 ///
 /// A stored property whose type isn't `Codable` is a compile error naming it:
 /// `static method 'requireCodable(bad:)' requires that 'Foo' conform to 'Decodable'` for a
-/// property `bad` of type `Foo`. Applying the macro to anything but a struct, a property with no
-/// type annotation, a `lazy` property, a destructuring pattern, a name that isn't a non-empty string
-/// literal and a version that isn't a positive integer literal are compile errors too.
+/// property `bad` of type `Foo`. A raw-value enum is `Codable`, written as its raw value, once it
+/// declares the conformance (`enum Reason: String, Codable`). One declared inside the struct must
+/// list it in its inheritance clause, even when an extension adds it, since the macro sees only
+/// the struct; without it, the error is the macro's own, at that clause. Applying the macro to
+/// anything but a struct, a property with no type annotation, a `lazy` property, a destructuring
+/// pattern, a name that isn't a non-empty string literal and a version that isn't a positive
+/// integer literal are compile errors too.
 ///
 /// ## Changing an event
 ///

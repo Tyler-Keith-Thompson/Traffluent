@@ -51,8 +51,12 @@ public import Events
 /// to `T`'s `type`. `Sensitive<T>` is `T`'s schema with `x-traffluent-sensitive: true`, which
 /// allows `null` too as an array's element, since a redacted element is `null`; and
 /// `Refined<T, Rule>` is `T`'s schema. Each may be qualified by its module (`Swift.Int`,
-/// `Foundation.Date`, `Events.Sensitive`). Any other type, whose JSON shape the plan can't know,
-/// accepts any value and records the type in `x-traffluent-swift-type`.
+/// `Foundation.Date`, `Events.Sensitive`). A raw-value enum whose raw value is a `String` or an
+/// integer type, and whose cases are known (its ``/Events/EventSchema/Property/enumeration``), is
+/// its raw value's schema with its raw values as `enum`, which holds `null` too when the property
+/// is optional. Any other type, whose JSON shape the plan can't know, accepts any value and
+/// records the type in `x-traffluent-swift-type`. That includes an enum declared outside the event
+/// that isn't `CaseIterable`, and a typealias of an enum.
 ///
 /// A property's ``/Events/ValidationKeyword``s (its `Refined` type's rule's and those declared
 /// with `@Constrained`) are added to its schema as the JSON Schema keywords they are: `minLength`,
@@ -68,7 +72,8 @@ public import Events
 /// example), one of `format` `date-time` is `"2001-01-01T00:00:00Z"` and one of `format` `uuid`
 /// the nil UUID; a `number` or an `integer` is 0, or the nearest value its bounds allow; a
 /// `boolean` is `false`; an `array` holds one example of its `items`, or as many as its
-/// `minItems` and `maxItems` allow; and a type the plan can't map is `null`.
+/// `minItems` and `maxItems` allow; an enum is its first raw value; and a type the plan can't map
+/// is `null`.
 ///
 /// The index, `tracking-plan.json`, lists every event under `events`, by name and then version,
 /// with its `name`, `version`, `consentCategory`, `schema`, its document's file name, and

@@ -122,7 +122,10 @@ optional and is now required`. A store that reads a record of such a change anyw
 
 The check treats a few more changes as breaking: a renamed or removed event; a default value
 removed from a required property, as a record stored before the property was added can't be read;
-and a tightened constraint (`@Constrained`), which rejects values an earlier release tracked.
+a tightened constraint (`@Constrained`), which rejects values an earlier release tracked; and an
+enum case renamed or removed, whose stored raw value no longer decodes. Adding an enum case is
+compatible. Turning a `String` property into an enum is a breaking change that needs a version
+bump.
 
 A change of meaning alone, such as a property that keeps its name and type but is measured in other
 units, raises the version too. Its records would still read, and raising the version keeps them

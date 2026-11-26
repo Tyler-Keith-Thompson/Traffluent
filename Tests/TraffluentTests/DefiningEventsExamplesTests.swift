@@ -25,6 +25,27 @@ struct DefiningEventsExamplesTests {
         #expect(CheckoutStarted.schema.version == 2)
     }
 
+    @Event(name: "checkout_failed")
+    struct CheckoutFailed {
+        enum Reason: String, Codable {
+            case paymentDeclined
+            case outOfStock = "out_of_stock"
+        }
+        var reason: Reason
+    }
+
+    @Test("Enum properties")
+    func enumProperties() async throws {
+        let tracker = Tracker()
+        tracker.track(CheckoutFailed(reason: .outOfStock))  // stored as "out_of_stock"
+        let rawValues = CheckoutFailed.schema.properties[0].enumeration?.rawValues
+        // [.string("paymentDeclined"), .string("out_of_stock")]
+        await tracker.finish()
+
+        let expected: [EventSchema.Enumeration.RawValue] = [.string("paymentDeclined"), .string("out_of_stock")]
+        #expect(rawValues == expected)
+    }
+
     enum CouponCode: Refinement {
         static var constraints: [Constraint<String>] {
             get throws(InvalidConstraint) { try [.pattern("^[A-Z0-9]{6}$", example: "SPRING")] }

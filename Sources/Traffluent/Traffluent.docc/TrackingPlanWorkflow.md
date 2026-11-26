@@ -124,7 +124,11 @@ the event's version and consent category (`x-traffluent-version`, `x-traffluent-
 A `Sensitive` property is marked `x-traffluent-sensitive` and is never required, since a
 destination that redacts it leaves it out; an array's `Sensitive` elements may be `null`, which is
 what a redacted element becomes. A property with a default value is marked `x-traffluent-default`
-and isn't required, since an earlier release's payload lacks it.
+and isn't required, since an earlier release's payload lacks it. A property of a raw-value enum is
+its raw value's type, with its cases' raw values as `enum`. That holds for an enum declared inside
+the event whose cases the macro can read, and for any other enum that is `CaseIterable`, such as
+one declared elsewhere or one with a case under `#if`. A property of an enum that isn't
+`CaseIterable`, or of a typealias of one, is a type the plan can't map, which accepts any value.
 
 A property removed at the same version stays in the document with the schema it had, marked
 `deprecated` and not required, so the payloads of releases that still send it validate: exporting
@@ -199,16 +203,20 @@ already released app sends may stop decoding or validating:
 - a default value removed;
 - a property that stops being `Sensitive` and has no default value and isn't optional, which makes
   it required;
-- a deprecated property declared again with another type, or as required.
+- a deprecated property declared again with another type, or as required;
+- an enum case renamed or removed, which changes the raw values a stored record may hold.
 
 Anything else leaves the committed plan out of date, which fails with its own message telling you to
 export it again: a new event, a new optional property or one with a default value, a removed
 property, a deprecated one declared again as it was, a changed consent category, a property that
-became `Sensitive`, or an optional or defaulted one that stopped being `Sensitive`.
+became `Sensitive`, an optional or defaulted one that stopped being `Sensitive`, or a new enum
+case.
 
 A constraint is compared keyword by keyword. Tightening one is breaking: a higher `minLength` or
-`minimum`, a lower `maxLength` or `maximum`, a new bound, a new or changed `pattern`. Loosening one
-only leaves the plan out of date. An integer type narrowed to one of fewer bits tightens its bounds
+`minimum`, a lower `maxLength` or `maximum`, a new bound, a new or changed `pattern`, an `enum`
+that lost a raw value, or a new `enum`, as when a `String` property becomes an enum. Loosening one
+only leaves the plan out of date. The `enum` is compared as a set, so reordering the cases
+changes nothing but the files. An integer type narrowed to one of fewer bits tightens its bounds
 the same way. Raising an event's version (`@Event(version: 3)`) is how a breaking change is made on
 purpose: exporting then writes the new version's document in place of the earlier one's.
 `--plan <directory>` checks a plan committed elsewhere, and `--product <name>` picks the

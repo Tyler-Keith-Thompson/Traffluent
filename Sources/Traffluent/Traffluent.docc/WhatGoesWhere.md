@@ -79,23 +79,18 @@ tracker.track(ErrorOccurred(message: error.localizedDescription))
 ```
 
 Track what the user experienced, with a reason the product team can count. Leave the error
-itself to logs and crash reporting. The event stores the reason's raw value, constrained to its
-cases, so the tracking plan lists them and the tracker rejects any other:
+itself to logs and crash reporting. The reason is an enum, which the event stores as its raw
+value and the tracking plan lists case by case:
 
 ```swift
 @Event
 struct CheckoutFailed {
-    enum Reason: String {
+    enum Reason: String, Codable {
         case paymentDeclined
         case outOfStock
         case networkUnavailable
     }
-    @Constrained(.pattern("^(paymentDeclined|outOfStock|networkUnavailable)$", example: "paymentDeclined"))
-    var reason: String
-
-    init(reason: Reason) {
-        self.reason = reason.rawValue
-    }
+    var reason: Reason
 }
 
 tracker.track(CheckoutFailed(reason: .paymentDeclined))
