@@ -23,8 +23,10 @@ internal import Synchronization
 /// ```
 ///
 /// Copies share one stream of records. A binding reaches the work run inside `withTracker`, and
-/// the child tasks it starts, but not callbacks a framework runs on tasks of its own, such as a
-/// UI framework's button actions: pass those a tracker.
+/// the child tasks it starts, but not a detached task or callbacks a framework runs on tasks of
+/// its own, such as a UI framework's button actions: pass those a tracker, or make the app's
+/// tracker the process's default once, at launch, with ``bootstrap(_:)``, which ``current`` falls
+/// back to wherever no tracker is bound.
 ///
 /// ``track(_:file:fileID:function:line:column:)`` does nothing but accept the event, from any
 /// thread: it reads the clock, captures the call site and the task's `ServiceContext`, and queues
@@ -168,19 +170,57 @@ public struct Tracker: Sendable {
     /// empty.
     public static let noOp = Tracker(backing: .none, now: { Date.now })
 
-    /// The tracker bound to the current task by the nearest enclosing `withTracker`, or one that
-    /// drops every event, as ``noOp`` does, when none is.
+    /// The tracker bound to the current task by the nearest enclosing `withTracker`; with none
+    /// bound, the one ``bootstrap(_:)`` made the process's default; and with neither, one that
+    /// drops every event, as ``noOp`` does.
     ///
     /// A binding reaches the work inside `withTracker` and the child tasks it starts. A detached
     /// task (`Task.detached`) and a callback a framework runs on a task of its own get no
-    /// binding, so `Tracker.current` there drops what it tracks: hand those a tracker value
-    /// instead. The first event dropped at each call site is logged at warning level, and later
-    /// ones from that call site at debug level.
+    /// binding, so `Tracker.current` there is the bootstrapped tracker. Without one it drops what
+    /// it tracks: bootstrap the app's tracker at launch, or hand that code a tracker value. The
+    /// first event dropped at each call site is logged at warning level, and later ones from that
+    /// call site at debug level.
     public static var current: Tracker {
-        bound ?? .unbound
+        // The bootstrapped tracker is read only where nothing is bound, so code inside
+        // `withTracker` takes no lock.
+        bound ?? bootstrapped.withLock { $0 } ?? .unbound
+    }
+
+    /// Makes `tracker` the process's default: what ``current`` gives wherever no `withTracker`
+    /// binding reaches, such as a detached task or a framework's callback.
+    ///
+    /// Call it once, as the app starts (in a SwiftUI `App`'s `init()`, say), before anything
+    /// tracks through ``current``. A `withTracker` binding still wins inside its scope. The default
+    /// can be set only once and never replaced or cleared, so code that reads ``current`` from
+    /// another thread never sees it change. The process holds the tracker from then on, so it
+    /// doesn't finish when the app's own copies are released; ``finish()`` still ends it.
+    ///
+    /// ```swift
+    /// let tracker = Tracker()
+    /// try Tracker.bootstrap(tracker)
+    /// Task.detached {
+    ///     Tracker.current.track(SignedUp(plan: "pro"))  // tracked by tracker
+    /// }
+    /// ```
+    ///
+    /// - Parameter tracker: The tracker ``current`` falls back to.
+    /// - Throws: ``TrackerAlreadyBootstrapped`` when a tracker has been bootstrapped already; the
+    ///   first one stays the default.
+    public static func bootstrap(_ tracker: Tracker) throws(TrackerAlreadyBootstrapped) {
+        try bootstrapped.withLock { (bootstrapped: inout Tracker?) throws(TrackerAlreadyBootstrapped) in
+            guard bootstrapped == nil else { throw TrackerAlreadyBootstrapped() }
+            bootstrapped = tracker
+        }
     }
 
     @TaskLocal static var bound: Tracker?
+
+    // The process's default tracker, set once by `bootstrap` and never cleared (charter N2's one
+    // exception, as swift-log's `LoggingSystem.bootstrap`). A Mutex rather than an Atomic: a
+    // `Tracker` is a struct of class references and a closure, which no `Atomic` can hold, and
+    // `AtomicLazyReference` would need it boxed in a class of its own, an allocation and an
+    // indirection to save an uncontended lock that `current` takes only where nothing is bound.
+    private static let bootstrapped = Mutex<Tracker?>(nil)
 
     /// What ``current`` gives with no tracker bound: a no-op tracker whose drops warn.
     private static let unbound = Tracker(backing: .unbound, now: { Date.now })
@@ -270,9 +310,9 @@ public struct Tracker: Sendable {
     /// ``samplingDropReports`` if one leaves it out, then gates the record by its consent,
     /// writes it to its store and publishes it to ``records``. An event tracked after
     /// ``finish()`` is dropped and logged at debug level. A ``noOp`` tracker drops the event and
-    /// logs it at debug level. So does ``current`` with no tracker bound, except that the first
-    /// event it drops at each call site is logged at warning level, so a missing `withTracker`
-    /// shows up in the logs rather than passing silently.
+    /// logs it at debug level. So does ``current`` with no tracker bound or bootstrapped, except
+    /// that the first event it drops at each call site is logged at warning level, so a missing
+    /// `withTracker` shows up in the logs rather than passing silently.
     ///
     /// - Parameters:
     ///   - event: The event to track.
@@ -316,15 +356,15 @@ public struct Tracker: Sendable {
             let callSite = UnboundCallSite(fileID: fileID, line: line, column: column)
             let isFirst = Self.warnedUnboundCallSites.withLock { $0.insert(callSite).inserted }
             if isFirst {
-                Self.logger.warning("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound to this task. withTracker doesn't reach a detached task or a framework's callback; pass it a tracker")
+                Self.logger.warning("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound to this task and none is bootstrapped. withTracker doesn't reach a detached task or a framework's callback; pass it a tracker, or bootstrap the app's with Tracker.bootstrap")
             } else {
                 Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound")
             }
         }
     }
 
-    /// Whether this tracker drops every event: ``noOp``, ``current`` with no tracker bound, or a
-    /// copy of either made by ``enriched(by:)``.
+    /// Whether this tracker drops every event: ``noOp``, ``current`` with no tracker bound or
+    /// bootstrapped, or a copy of either made by ``enriched(by:)``.
     ///
     /// Package-wide, so a UI module whose views can appear before their tracker reaches them can
     /// wait for it rather than track the appearance into nothing.

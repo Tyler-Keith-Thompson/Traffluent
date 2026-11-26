@@ -6,11 +6,13 @@ import StoreAnalytics
 import StoreViews
 import SwiftUI
 import SwiftUITracking
+import Trackers
 
 /// The store app, one source for every Apple platform, and its composition root.
 ///
-/// As it launches, it restores the shopper's consent, builds the analytics, turns on lifecycle
-/// tracking and starts the delivery, which runs for the life of the app. It logs every drop
+/// As it launches, it restores the shopper's consent, builds the analytics, makes their tracker
+/// the process's default (`Tracker.bootstrap`), turns on lifecycle tracking and starts the
+/// delivery, which runs for the life of the app. It logs every drop
 /// report. Then it sets the tracker in the environment at the root of the views, and, where
 /// UIKit has window scenes, as the scene's trait, turning on automatic screen and control
 /// tracking there.
@@ -30,6 +32,15 @@ struct StoreApp: App {
         let directory = SegmentStore.defaultDirectory
         preferences = ConsentPreferences(file: URL(fileURLWithPath: directory.appending("consent.json").string))
         analytics = StoreAnalytics(collector: Self.collector, consent: preferences.consent, directory: directory)
+        // The process's default, so `Tracker.current` in code no binding or view reaches, such as
+        // a detached task, tracks through the store's tracker. Here rather than in StoreAnalytics,
+        // whose tests build one each and must not set the process's default. Nothing bootstraps
+        // before this init, so it throws only if something else in the process did.
+        do {
+            try Tracker.bootstrap(analytics.tracker)
+        } catch {
+            Self.logger.error("Another tracker is the process's default already: \(String(describing: error), privacy: .public)")
+        }
         // On a first launch, ApplicationInstalled and ApplicationOpened are tracked before the
         // shopper answers the consent prompt, so they are held in memory only, and lost if the
         // shopper quits before answering.

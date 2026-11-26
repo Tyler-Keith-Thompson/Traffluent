@@ -56,6 +56,9 @@ O = "SamplingDropReport.swift"
 # The call site track captures. An expression rather than the statement: a mutated `let` would be
 # scoped to its branch.
 LOCATION = "SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)"
+# What Tracker.current resolves to, swapped whole: the binding, then the bootstrapped default,
+# then the unbound no-op.
+CURRENT = "bound ?? bootstrapped.withLock { $0 } ?? .unbound"
 # The enriched copy enriched(by:) returns, swapped whole as LOCATION is.
 COPY = "Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [enricher])"
 WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)"
@@ -64,9 +67,18 @@ MUTANTS = [
     # isNoOp.
     Mutant("isnoopalwaysfalse", T, "return true", "return false", mode="stmt"),
     Mutant("isnoopalwaystrue", T, "if case .intake = backing { return false }", "", mode="stmt"),
-    Mutant("currentignoresbinding", T, "bound ?? .unbound", ".unbound"),
-    # Tracker.current with nothing bound: a tracker that records into nothing (TRAF-81).
-    Mutant("unboundrecords", T, "bound ?? .unbound", "bound ?? Tracker()"),
+    Mutant("currentignoresbinding", T, CURRENT, "bootstrapped.withLock { $0 } ?? .unbound"),
+    # Tracker.current with nothing bound or bootstrapped: a tracker that records into nothing
+    # (TRAF-81).
+    Mutant("unboundrecords", T, CURRENT, "bound ?? bootstrapped.withLock { $0 } ?? Tracker()"),
+    # The bootstrapped default (TRAF-81), whose tests are exit tests: never read, or read ahead
+    # of the binding.
+    Mutant("currentignoresbootstrap", T, CURRENT, "bound ?? .unbound"),
+    Mutant("bootstrapoverbinding", T, CURRENT, "bootstrapped.withLock { $0 } ?? bound ?? .unbound"),
+    # bootstrap: never stores, replaces the first tracker, or keeps it without throwing.
+    Mutant("bootstrapstoresnothing", T, "bootstrapped = tracker", "", mode="stmt"),
+    Mutant("bootstrapreplaces", T, "guard bootstrapped == nil else { throw TrackerAlreadyBootstrapped() }", "", mode="stmt"),
+    Mutant("bootstrapsilent", T, "throw TrackerAlreadyBootstrapped()", "return", mode="stmt"),
     # The binding, nothing rather than the tracker: the sync spelling's, then the async one's,
     # after the first leaves one copy of the original.
     Mutant("syncunbound", W, "Optional(tracker)", "nil", nth=0),

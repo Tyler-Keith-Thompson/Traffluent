@@ -14,11 +14,12 @@ the ``Consent``, writes the record to the tracker's store if it has one, and pub
 records.
 
 Build one tracker where the app starts. Pass it down, or bind it to a task with
-``withTracker(_:_:)-7fax9`` and read it anywhere inside with ``Tracker/current``. With nothing
-bound, as in a detached task, it drops every event like ``Tracker/noOp`` and logs a warning for
-the first one at each call site, so hand such a task a tracker value. ``Tracker/enriched(by:)``
-gives a copy that adds to the context of the events tracked through it alone, for code a
-task-local context doesn't reach. To enrich only what one destination receives, apply
+``withTracker(_:_:)-7fax9`` and read it anywhere inside with ``Tracker/current``. Where no
+binding reaches, as in a detached task, ``Tracker/current`` is the tracker
+``Tracker/bootstrap(_:)`` made the process's default, once, at launch. With neither, it drops
+every event like ``Tracker/noOp`` and logs a warning for the first one at each call site.
+``Tracker/enriched(by:)`` gives a copy that adds to the context of the events tracked through it
+alone, for code a task-local context doesn't reach. To enrich only what one destination receives, apply
 `enriched(by:)` to that destination instead (module `Destinations`).
 
 The tracker reports every event it drops: one that breaks a declared constraint on
@@ -58,6 +59,7 @@ The umbrella guide on this area is
 - ``Tracker``
 - ``withTracker(_:_:)-7fax9``
 - ``withTracker(_:_:)-24yuc``
+- ``TrackerAlreadyBootstrapped``
 
 ### Sampling
 

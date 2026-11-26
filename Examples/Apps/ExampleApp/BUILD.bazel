@@ -20,6 +20,7 @@ swift_library(
         "//Sources/LifecycleTracking",
         "//Sources/Persistence",
         "//Sources/SwiftUITracking",
+        "//Sources/Trackers",
     ],
 )
 

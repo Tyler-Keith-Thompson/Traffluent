@@ -104,9 +104,20 @@ withTracker(tracker) {
 }
 ```
 
+Code that no binding reaches, such as a detached task, finds the tracker through
+`Tracker.current` only once it is the process's default. Make it the default once, as the app
+starts, in your `App`'s `init()`:
+
+```swift
+try Tracker.bootstrap(tracker)
+```
+
+A second call throws `TrackerAlreadyBootstrapped` and leaves the first tracker in place, and a
+`withTracker` binding still wins inside its scope.
+
 The binding doesn't reach callbacks that a framework runs itself, such as a SwiftUI button's
-action. Views read the tracker from the environment instead, so set it at the root of the views,
-in your `App`'s body:
+action, and views don't read `Tracker.current`. They read the tracker from the environment
+instead, so set it at the root of the views, in your `App`'s body:
 
 ```swift
 WindowGroup {

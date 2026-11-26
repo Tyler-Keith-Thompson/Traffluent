@@ -75,13 +75,29 @@ try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  /
 
 The binding reaches child tasks, and a nested `withTracker` replaces it for its own scope. It
 doesn't reach a detached task, or callbacks a framework runs on tasks of its own, such as SwiftUI
-button actions. There `Tracker.current` has no tracker, so it drops each event, logging the first
-one from each call site at warning level and the rest at debug level. Pass that work the tracker
-itself:
+button actions. For those, make the app's tracker the process's default with `Tracker.bootstrap`,
+once, as the app starts (in your `App`'s `init()`, say). `Tracker.current` then gives it wherever
+no binding reaches:
+
+```swift
+let tracker = Tracker()
+try Tracker.bootstrap(tracker)
+let upload = Task.detached {
+    Tracker.current.track(SignedUp(plan: "pro"))  // tracked by tracker
+}
+```
+
+The default can be set once and is never replaced or cleared: a second `bootstrap` throws
+`TrackerAlreadyBootstrapped` and the first tracker stays. A `withTracker` binding still wins inside
+its scope, so a test, or one part of the app, can track through a tracker of its own.
+
+With neither a binding nor a bootstrapped tracker, `Tracker.current` drops each event. It logs the
+first one from each call site at warning level and the rest at debug level. Code handed the
+tracker itself needs neither:
 
 ```swift
 let upload = Task.detached { [tracker] in
-    tracker.track(SignedUp(plan: "pro"))  // Tracker.current here would drop it
+    tracker.track(SignedUp(plan: "pro"))
 }
 ```
 

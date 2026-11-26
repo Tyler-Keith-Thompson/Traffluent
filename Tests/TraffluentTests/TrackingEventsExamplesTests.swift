@@ -46,7 +46,7 @@ struct TrackingEventsExamplesTests {
     func trackingFromADetachedTask() async throws {
         let tracker = Tracker()
         let upload = Task.detached { [tracker] in
-            tracker.track(SignedUp(plan: "pro"))  // Tracker.current here would drop it
+            tracker.track(SignedUp(plan: "pro"))
         }
         await upload.value
         await tracker.finish()

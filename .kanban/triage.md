@@ -23,7 +23,8 @@ bad row in a dashboard.
   that need no hand-written call sites. Opt in, and each kind can be turned off (D8).
 - Support on Apple platforms and Linux (not WebAssembly: D6). Platform-only behaviour (UIKit or
   SwiftUI hooks, background tasks) goes behind `#if canImport` so the rest still builds.
-- Swift 6 strict concurrency from the start: no singletons and no global mutable state.
+- Swift 6 strict concurrency from the start: no singletons and no global mutable state, but for
+  the one settable-once default tracker N2 allows.
 - Tooling to define or generate typed events from a schema, if the owner settles that it belongs
   here (see Open questions).
 - Benchmarks, fuzzing and mutation tests of the pipeline, per AGENTS.md.
@@ -32,7 +33,15 @@ bad row in a dashboard.
 - N1. Stringly typed or `[String: Any]` event APIs as the main way to track. That is the problem
   the project exists to fix. Untyped values may appear only inside a destination's encoding.
 - N2. Global singletons or shared mutable instances (`Analytics.shared`). Callers create and own
-  the instances they need.
+  the instances they need. The owner amended N2 on 2026-11-26 (TRAF-81): "Bootstrap fallback:
+  amend N2 to allow one settable-once default tracker". So `Tracker.bootstrap(_:)`, after
+  swift-log's `LoggingSystem.bootstrap`, may make one tracker the process's default, which
+  `Tracker.current` gives wherever no `withTracker` binding reaches (a detached task, a
+  framework's callback). It is set once, never replaced or cleared: a second call throws
+  `TrackerAlreadyBootstrapped` and changes nothing. The app still creates and owns that tracker,
+  and the binding still wins inside its scope. Nothing else is shared that way: an item asking
+  for another process-wide instance, a resettable default or a `TrackingSystem` type is still
+  turned down.
 - N3. Vendor lock-in in the core. No core module may import or depend on a vendor SDK, and no core
   type may be named after a vendor. Vendor code lives only in its destination module.
 - N4. Wrapping every vendor in this repo. Destinations beyond D1 belong in their own packages,
