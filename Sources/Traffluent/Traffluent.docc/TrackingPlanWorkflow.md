@@ -221,11 +221,12 @@ from the base branch, `swift run AppTrackingPlan check <directory>`. Pass the jo
 0 or 2, since 2 means the base plan is only out of date, and fail it on any other status. 1 means
 a breaking difference, 64 that the arguments are wrong, 65 that the events' schemas can't make a
 tracking plan (two events of one name, say, or a constraint no schema can state), and 73 that the
-executable can't write the plan. In a shell step:
+executable can't write the plan. In a shell step, written to work under `bash -e`, which
+GitHub Actions runs steps with:
 
 ```sh
-swift run AppTrackingPlan check "$BASE_PLAN"
-status=$?
+status=0
+swift run AppTrackingPlan check "$BASE_PLAN" || status=$?
 [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
 ```
 
