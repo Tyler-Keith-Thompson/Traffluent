@@ -65,7 +65,7 @@ delivery batches the records and hands each batch to its destinations when `exec
 - [Consent Gating](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/consentgating): holding, delivering and dropping events by consent category
 - [Persisting Records](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/persistingrecords): the on-disk log, its bounds and recovery, and GRDB
 - [Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents): `@Event` and constrained properties
-- [Exporting and Checking a Tracking Plan](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow): the JSON Schema of your events, and a check that fails when they drift
+- [Exporting and Checking a Tracking Plan](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow): a committed JSON Schema of every event, which the people who read your data can review in pull requests, and a check that names the changes that would break data from released apps
 - [Logging, Tracing, Metrics and Analytics](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/whatgoeswhere): which facts go to which signal
 - [Changing an Event](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/changingevents): which changes need a new version
 - [Identifying People](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/identifyingpeople): identifiers that outlive a session

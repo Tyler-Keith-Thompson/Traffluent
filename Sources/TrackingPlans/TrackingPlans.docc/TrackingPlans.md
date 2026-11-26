@@ -1,8 +1,16 @@
 # ``TrackingPlans``
 
-Export the JSON Schema of every event an app tracks as a tracking plan, and check the events against the plan committed before them.
+Export every event an app tracks as JSON Schema that people and services outside the app can read, and check each change against the plan committed before it.
 
 ## Overview
+
+A tracking plan is the contract between an app and whoever reads its events: dashboards, a
+warehouse, a collector, another platform's client. Each event's document gives its version,
+consent category, properties and their JSON types, which ones every payload holds, and which are
+`Sensitive`, in a form that needs no Swift to read. Committed beside the events, it puts every
+change to them in the pull request as a JSON diff. Its check says which changes break what has
+already shipped: payloads from installed app versions that a validating collector would reject,
+and stored records the app could no longer decode.
 
 A ``TrackingPlan`` turns events' schemas into files: an index, `tracking-plan.json`, and for each
 event a JSON Schema (draft 2020-12) document and an example payload. The files are values, so the
