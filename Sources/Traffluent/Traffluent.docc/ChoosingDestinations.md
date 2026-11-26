@@ -26,9 +26,32 @@ answered with 2xx. The waits start at 1 second and double up to 60 seconds; pass
 `ExponentialBackoff` as `backoff:` for others, and a test clock as `clock:` in tests. The
 destination takes the next batch only once this one arrives, so a tracker's store keeps its records
 until then, and a batch still being retried when the app ends is sent again on the next launch.
-Other destinations aren't held up. Meanwhile the delivery's later batches wait in this
-destination's buffer of `batchBufferLimit` batches, which drops its oldest when full; a store keeps
-the records of a dropped batch for the next launch.
+Other destinations aren't held up.
+
+Meanwhile the delivery's later batches wait in this destination's buffer of `batchBufferLimit`
+batches, which drops its oldest when full. With a store, the records of a dropped batch aren't
+lost: once the destination has caught up, the delivery reads them back from the store and sends
+them to that destination alone, in the same run. They keep their context (session, screen, sample
+rate and trace), which the delivery holds on to while the events wait in the store. A destination
+so far behind that more than ten buffers' worth of its batches are dropped gets the oldest of them
+on the next launch instead. Without a store, a dropped batch's records are gone, so give the
+tracker a store if the app may be offline for long (<doc:PersistingRecords>). To hear about each
+drop, pass the delivery a `bufferDropReporter`:
+
+```swift
+let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+let delivery = tracker.records.batch().deliver(to: collector, bufferDropReporter: bufferDropReporter)
+let watching = Task {
+    for await drop in bufferDrops where drop.storedRecordCount < drop.recordCount {
+        print("Lost \(drop.recordCount - drop.storedRecordCount) events tracked from \(drop.timestamps.lowerBound)")
+    }
+}
+```
+
+A report names the destination by its place in `deliver(to:)`'s list, counting from 0. It also
+gives how many records the batch held, when they were tracked, and how many of them a store keeps
+to send again. The delivery logs each drop too, and never finishes the reporter, so one reporter
+can serve every delivery that replaces the last.
 
 Some batches won't succeed if sent again, so they are dropped: one the endpoint answers with any
 other status, one whose request the transport can never send (a malformed URL, a scheme it doesn't

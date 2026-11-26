@@ -32,6 +32,12 @@ public import SystemPackage
 ///   ``DropReport/versionMismatch(event:storedVersion:currentVersion:recordCount:)``) is
 ///   rewritten without them, so each drop is reported once. Should the rewrite fail, the
 ///   segment is kept as it was and the next launch reports those drops again.
+/// - **Reading back.** When a destination's full buffer drops a batch on its way through a
+///   delivery, the delivery reads that batch's records back from the log once the destination
+///   has caught up, reading each segment they are in once, and hands them to it in this run,
+///   each in the context it was tracked in, which the delivery keeps. A record the bound dropped
+///   before the read finished isn't read back, and one that can't be read or decoded is logged
+///   and waits for a later launch.
 /// - **Bound.** The log never holds more than `byteBound` bytes. When a record wouldn't fit, the
 ///   oldest segments are deleted until it does, and each one deleted with records not yet
 ///   delivered yields a ``DropReport`` on ``dropReports``. A record too large for an empty log

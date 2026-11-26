@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Destination: where batches of event records are delivered; ConsoleDestination, which prints them; InMemoryDestination, which keeps the newest records it receives; and deliver(to:), which hands each batch of a sequence to every destination.
+# Destination: where batches of event records are delivered; ConsoleDestination, which prints them; InMemoryDestination, which keeps the newest records it receives; and deliver(to:), which hands each batch of a sequence to every destination, reporting each batch a destination's full buffer drops as a BufferDropReport and handing it the records a store keeps again once it catches up.
 swift_library(
     name = "Destinations",
     srcs = glob(["**/*.swift"]),
@@ -12,6 +12,8 @@ swift_library(
         "//Sources/Events",
         "@swiftpkg_afluent//:Afluent",
         "@swiftpkg_swift_collections//:DequeModule",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_log//:Logging",
     ],
     visibility = ["//visibility:public"],
 )

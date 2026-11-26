@@ -25,7 +25,10 @@ public struct DeliveryTag: Sendable {
 /// A delivery calls ``willDeliver(_:)`` with a batch's positions in the store before it hands the
 /// batch, less the records the store says to hold back, to any destination, and
 /// ``acknowledge(_:)`` once every destination has received it. A batch that is never
-/// acknowledged (the delivery was cancelled, or the app ended first) stays in the store.
+/// acknowledged (the delivery was cancelled, or the app ended first) stays in the store. When a
+/// destination's full buffer drops a batch, the delivery reads its records back with
+/// ``records(at:)`` once that destination has caught up, hands them to it, and acknowledges only
+/// the records every destination received.
 ///
 /// The requirement on classes lets a delivery tell the stores of a batch's records apart by
 /// identity.
@@ -46,4 +49,41 @@ public protocol Acknowledger: AnyObject, Sendable {
     ///
     /// - Parameter positions: The positions of a batch's records in this store, in batch order.
     func acknowledge(_ positions: [UInt64])
+
+    /// The records this store still keeps at `positions`, read back for a destination whose
+    /// delivery buffer dropped them before it received them.
+    ///
+    /// A delivery calls it once that destination has caught up, hands it the records returned,
+    /// and counts its receipt towards ``acknowledge(_:)`` for those records alone. A position the
+    /// store no longer keeps (its bound dropped the record, which it reports) gives no record, and
+    /// neither does any position when the store can't read records back, as with the default
+    /// implementation. The delivery never acknowledges a record it couldn't hand to every
+    /// destination, so a store that still keeps one delivers it on a later launch, with
+    /// ``EventRecord/isRedelivered`` set.
+    ///
+    /// A store of your own should implement it. Without it, the default returns no records, so a
+    /// batch a full buffer dropped isn't sent again in this run: the destination whose buffer
+    /// dropped it never gets it in this run, every destination gets it again on the next launch,
+    /// marked redelivered, and the store holds it until then, toward its bound.
+    ///
+    /// The delivery gives each record returned the ``EventRecord/isRedelivered``, the
+    /// sensitive-value visibility and the `ServiceContext` the record had when the buffer dropped
+    /// it, so a store needn't keep them. A record tagged with another store is ignored.
+    ///
+    /// - Parameter positions: The positions of records in this store a delivery handed to
+    ///   destinations.
+    /// - Returns: The records kept at those positions, each tagged with its ``DeliveryTag``
+    ///   naming this store, in any order.
+    func records(at positions: [UInt64]) -> [EventRecord]
+}
+
+extension Acknowledger {
+    /// No records: a store that can't read its records back keeps those of a batch a
+    /// destination's full buffer dropped for a later launch to deliver.
+    ///
+    /// - Parameter positions: The positions of the records asked for.
+    /// - Returns: An empty array.
+    public func records(at positions: [UInt64]) -> [EventRecord] {
+        []
+    }
 }

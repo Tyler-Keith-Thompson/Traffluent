@@ -73,4 +73,8 @@ MUTANTS = [
     Mutant("mismatchonlynotdeleted", L, "!undecodable.isEmpty || !mismatched.isEmpty", "!undecodable.isEmpty"),
     Mutant("mismatchnotcounted", L, "mismatches.add(event: event, storedVersion: storedVersion, currentVersion: currentVersion)", "", mode="stmt"),
     Mutant("mismatchnotreported", L, "reports += mismatches.reports", "", mode="stmt"),
+    # Reading rows back for a destination whose full buffer dropped them (TRAF-66).
+    Mutant("readbackwrongposition", L, "DeliveryTag(acknowledger: self, position: position)", "DeliveryTag(acknowledger: self, position: position + 1)"),
+    Mutant("readbacknothing", L, "records.append(record)", "", mode="stmt"),
+    Mutant("readbackwrongrow", L, '"SELECT payload FROM \\(table.quotedDatabaseIdentifier) WHERE position = ?"', '"SELECT payload FROM \\(table.quotedDatabaseIdentifier) WHERE position = ? + 1"'),
 ]

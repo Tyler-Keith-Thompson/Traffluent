@@ -23,6 +23,11 @@
 #   search then finds it. Only the work done differs.
 # - The directory's fsync after a new segment (pending.directory, synchronizeDirectory): only a
 #   power cut on Linux could observe the entry it makes durable.
+# - SegmentLog.records(at:)'s filter after the read, which leaves out a segment the bound deleted
+#   while it was being read: only an append racing the read between the two locks could observe
+#   it, which no test can arrange. A segment deleted before the read is left out by the first
+#   lock (readbacknothing's tests). ENOENT's debug log rather than the error one, and the decode
+#   failures' logs, are logs alone, which tests don't pin.
 # - The fsync shim's own failure path: fsync on an open regular file doesn't fail in a test.
 # - The frame buffer an append takes and gives back (spareFrameBuffer), and the limit on the one
 #   kept: without them each frame allocates a buffer of its own, which only counting allocations
@@ -183,13 +188,33 @@ MUTANTS = [
     Mutant("readunchecked", D, "guard count <= remainingCount else { throw .endOfData }", "", mode="stmt", nth=0),
     Mutant("endbeforeend", D, "position == bytes.endIndex", "position >= bytes.endIndex - 1"),
     # Delivery's acknowledgement, in Destinations.
-    Mutant("neveracknowledged", "Deliver.swift", "delivery.acknowledgement?.received()", "", mode="stmt", module="Destinations"),
-    Mutant("acknowledgedwhencancelled", "Deliver.swift", "guard !Task.isCancelled else { return }", "", mode="stmt", module="Destinations"),
+    Mutant("neveracknowledged", "DestinationBuffer.swift", "delivery.acknowledgement?.received()", "", mode="stmt", module="Destinations"),
+    # The first is the delivery loop's; the second, after the loop, is noted as equivalent.
+    Mutant("acknowledgedwhencancelled", "DestinationBuffer.swift", "guard !Task.isCancelled else { return }", "", mode="stmt", module="Destinations", nth=0),
     Mutant("nowilldeliver", "Deliver.swift", "store.acknowledger.willDeliver(store.positions)", "Set<UInt64>()", module="Destinations"),
     Mutant("withheldsent", "Deliver.swift", "return !held.contains(tag.position)", "return true", mode="stmt", module="Destinations"),
     Mutant("emptybatchsent", "Deliver.swift", "guard !delivered.isEmpty else { return nil }", "", mode="stmt", module="Destinations"),
-    Mutant("firstdestinationacknowledges", "Deliver.swift", "remaining = Mutex(destinationCount)", "remaining = Mutex(1)", mode="stmt", module="Destinations"),
+    Mutant("firstdestinationacknowledges", "Deliver.swift", "State(remaining: destinationCount, stores: stores)", "State(remaining: 1, stores: stores)", module="Destinations"),
     Mutant("nodestinationswait", "Deliver.swift", "destinationCount == 0", "destinationCount == -1", module="Destinations"),
+    # A batch a full destination buffer dropped, read back from the store once that destination
+    # has caught up (TRAF-66).
+    Mutant("droppednotkept", "DestinationBuffer.swift", "state.dropped.append(dropped)", "", mode="stmt", module="Destinations"),
+    Mutant("waitingnotcounted", "DestinationBuffer.swift", "state.waitingCount += 1", "", mode="stmt", module="Destinations"),
+    Mutant("readbackbeforecaughtup", "DestinationBuffer.swift", "guard state.waitingCount == 0 else { return nil }", "", mode="stmt", module="Destinations"),
+    Mutant("readbacknotredelivered", "DestinationBuffer.swift", "guard await redeliverWhileCaughtUp() else { return }", "", mode="stmt", module="Destinations"),
+    # The second, after the receive; the first, before the read, is noted as equivalent.
+    Mutant("readbackacknowledgedwhencancelled", "DestinationBuffer.swift", "guard !Task.isCancelled else { return false }", "", mode="stmt", module="Destinations", nth=1),
+    Mutant("readbacknotredeliveredmark", "DestinationBuffer.swift", "record.isRedelivered = stored.isRedelivered", "", mode="stmt", module="Destinations"),
+    Mutant("readbackredacted", "DestinationBuffer.swift", "record.revealsSensitiveValues = stored.revealsSensitiveValues", "", mode="stmt", module="Destinations"),
+    Mutant("readbackdropnotuncounted", "DestinationBuffer.swift", "state.waitingCount -= 1", "", mode="stmt", module="Destinations"),
+    Mutant("readbacktakennotuncounted", "DestinationBuffer.swift", "state.withLock { $0.waitingCount -= 1 }", "", mode="stmt", module="Destinations"),
+    Mutant("readbackrepeated", "DestinationBuffer.swift", "state.dropped.popFirst()", "state.dropped.first", module="Destinations"),
+    # The second is received(keeping:)'s, a read-back batch's receipt.
+    Mutant("readbackreceiptuncounted", "Deliver.swift", "state.remaining -= 1", "", mode="stmt", module="Destinations", nth=1),
+    Mutant("readbackreceiptnotcounted", "DestinationBuffer.swift", "dropped.acknowledgement.received(keeping: read.kept)", "", mode="stmt", module="Destinations"),
+    # Reading a segment's records back.
+    Mutant("readbackwrongposition", L, "segment.number << 32 | UInt64(frame.index)", "segment.number << 32 | UInt64(frame.index + 1)"),
+    Mutant("readbacknothing", L, "records.append(record)", "", mode="stmt"),
     # Write-through, in Trackers.
     Mutant("storeignored", "RecordSink.swift", "subscription.send(store.append(record))", "subscription.send(record)", mode="stmt", module="Trackers"),
     # The worker's recovered records.

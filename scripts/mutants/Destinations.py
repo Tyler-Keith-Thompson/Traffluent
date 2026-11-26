@@ -12,11 +12,21 @@
 #   differ only while the device sleeps, which no test can arrange.
 # - Delivering to no destination at all: the same observable bug as nodelivery below, which
 #   drops every destination's receive.
+# - The read-back after the delivery loop ends (`_ = await redeliverWhileCaughtUp()` and its
+#   cancellation check): every drop is counted in the same lock as its yield, so the loop's last
+#   pass has already read every dropped batch back; it is there in case that ever changes.
+# - The cancellation check before each read-back: without it a cancelled delivery reads one more
+#   batch and hands it to a destination whose receive returns at once, and the check after the
+#   receive still leaves it unacknowledged. Only the extra read and receive differ, and a test
+#   can't cancel exactly between two read-backs.
+# - A store returning records at positions nobody asked for: ReadBack looks each batch's records
+#   up by position, so the extra ones are never sent.
 
 TESTS = ["DestinationsTests"]
 
 C = "ConsoleDestination.swift"
 D = "Deliver.swift"
+U = "DestinationBuffer.swift"
 B = "Batch.swift"
 M = "InMemoryDestination.swift"
 
@@ -26,10 +36,28 @@ MUTANTS = [
     # The parameter's default; a comment in the body names 100 again.
     Mutant("defaultbufferlimit", D, "100", "99", nth=0),
     Mutant("bufferlimitzeroallowed", D, "batchBufferLimit >= 1", "batchBufferLimit >= 0"),
-    Mutant("bufferonemore", D, ".bufferingNewest(batchBufferLimit)", ".bufferingNewest(batchBufferLimit + 1)"),
+    Mutant("bufferonemore", U, ".bufferingNewest(limit)", ".bufferingNewest(limit + 1)"),
     Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(delivery) }", "buffers.first?.yield(delivery)", mode="stmt"),
-    Mutant("nodelivery", D, "await destination.receive(delivery.batch)", "", mode="stmt"),
+    Mutant("nodelivery", U, "await destination.receive(delivery.batch)", "", mode="stmt"),
     Mutant("buffersneverfinish", D, "for buffer in buffers { buffer.finish() }", "", mode="stmt"),
+    # A full buffer's drop: reported with its destination, records and timestamps (TRAF-66).
+    Mutant("dropnotreported", U, "reporter?.yield(report)", "", mode="stmt"),
+    Mutant("dropindexfixed", U, "self.index = index", "self.index = 0", mode="stmt"),
+    # The first is the stored records' count; the second is the report's.
+    Mutant("droprecordcountone", U, "dropped.batch.count", "1", nth=1),
+    Mutant("dropearliestislatest", U, "timestamps.min()!", "timestamps.max()!"),
+    # After dropearliestislatest's, the text holds two copies; the second is the original's.
+    Mutant("droplatestisearliest", U, "timestamps.max()!", "timestamps.min()!", nth=1),
+    Mutant("dropstorednotcounted", U, "dropped.batch.count { $0.deliveryTag != nil }", "0"),
+    # A dropped batch's stored records: never acknowledged unless read back and received.
+    Mutant("dropcountsasreceived", U, "state.dropped.append(dropped)", "dropped.acknowledgement.received()", mode="stmt"),
+    Mutant("readbacknotnarrowed", D, "state.stores[index].positions.removeAll { !keptInStore.contains($0) }", "", mode="stmt"),
+    Mutant("emptyreadbacksent", U, "!read.records.isEmpty", "true"),
+    Mutant("readbackcontextlost", U, "record.context = stored.context", "", mode="stmt"),
+    Mutant("readbackotherstore", U, "$0.acknowledger === store.acknowledger ? ($0.position, record) : nil", "($0.position, record)"),
+    Mutant("droppeduncapped", U, "state.dropped.count > droppedLimit", "false"),
+    Mutant("droppedcaplater", U, "state.dropped.count > droppedLimit", "state.dropped.count > droppedLimit + 1"),
+    Mutant("droppedcapone", U, "limit <= Int.max / 10 ? limit * 10 : Int.max", "limit"),
     # The doc comment spells the default strategy out first, so the code's copy is the second.
     Mutant("defaulttimeonotherclock", B, ".time(interval: .seconds(30), clock: clock)", ".time(interval: .seconds(30), clock: ContinuousClock())", nth=1),
     Mutant("defaultcount", B, ".count(20)", ".count(19)", nth=1),

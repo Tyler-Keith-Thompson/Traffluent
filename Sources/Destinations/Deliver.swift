@@ -15,20 +15,29 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
     ///
     /// Each destination receives its batches in order, one at a time, from a buffer of its own,
     /// so a slow destination delays only itself. When a batch arrives while a destination's
-    /// buffer already holds `batchBufferLimit` batches, the oldest waiting batch is dropped.
-    /// Once the sequence ends, the work completes after every destination has received its last
-    /// batch.
+    /// buffer already holds `batchBufferLimit` batches, the oldest waiting batch is dropped,
+    /// logged and reported on `bufferDropReporter` as a ``BufferDropReport``. Its records kept in
+    /// memory only are lost. Those a store keeps are not: once that destination has received
+    /// every batch waiting in its buffer, the delivery reads them back from the store and hands
+    /// them to that destination alone, one dropped batch at a time, oldest first. Read back, a
+    /// record is as it was dropped: its `EventRecord.id`, `EventRecord.isRedelivered`, sensitive
+    /// values and context, which the delivery keeps meanwhile. The delivery keeps track of at
+    /// most ten times `batchBufferLimit` dropped batches per destination; past that it forgets
+    /// the oldest, whose records stay in the store for the next launch, and logs it. Once the
+    /// sequence ends, the work completes after every destination has received its last batch,
+    /// the ones read back included.
     ///
     /// Records a store keeps (those with an `EventRecord.deliveryTag`) are reported to it:
     /// before a batch goes to any destination, and again once every destination's `receive`
     /// has returned for it without being cancelled, when the store may forget them. A record
     /// the store couldn't mark as being delivered is left out of the batch, and a batch left
-    /// with no records isn't sent.
+    /// with no records isn't sent. A record that some destination never received, because the
+    /// store no longer kept it or couldn't read it back when the delivery asked, is never
+    /// acknowledged, so a store that still keeps it delivers it on the next launch.
     ///
     /// Records the delivery has read but not delivered are lost to this run when it is cancelled
-    /// or fails, and so are batches a destination's full buffer dropped. Without a store they are
-    /// gone; a store never had them acknowledged, so it delivers them on the next launch (unless
-    /// its bound drops them first, which it reports).
+    /// or fails. Without a store they are gone; a store never had them acknowledged, so it
+    /// delivers them on the next launch (unless its bound drops them first, which it reports).
     ///
     /// Nothing runs until the work is executed, and each execution reads the sequence again, so
     /// a delivery that finished or failed can be executed again (a retry). Cancelling it drops
@@ -39,36 +48,29 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
     /// - Parameters:
     ///   - destinations: Where each batch goes.
     ///   - batchBufferLimit: How many batches each destination may have waiting while it is
-    ///     still receiving an earlier one.
+    ///     still receiving an earlier one. A tenth of how many dropped batches it keeps track of
+    ///     to read back.
+    ///   - bufferDropReporter: Where a report of each batch a destination's full buffer drops is
+    ///     yielded, as it is dropped; none by default. The delivery never finishes it, so one
+    ///     reporter can serve the deliveries that replace one another.
     /// - Returns: A unit of work that completes once the last batch is delivered, and throws what
     ///   the sequence throws, or `CancellationError` when cancelled.
     /// - Precondition: `batchBufferLimit` is at least 1.
     public func deliver(
         to destinations: any Destination...,
-        batchBufferLimit: Int = 100
+        batchBufferLimit: Int = 100,
+        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation? = nil
     ) -> some AsynchronousUnitOfWork<Void> {
         precondition(batchBufferLimit >= 1, "A destination's batch buffer must hold at least 1 batch, not \(batchBufferLimit)")
         return DeferredTask { [self] in
             try await withThrowingDiscardingTaskGroup { group in
-                // Dropping the oldest batch when a destination falls behind keeps memory bounded
-                // and favours recent events, which the destination is likelier still to need; a
-                // slow or stuck destination loses its backlog rather than holding up the others.
                 // The bound is the caller's, 100 batches by default: at 20 events a batch, 2,000
-                // events. AsyncStream, rather than an Afluent subject or `share()`, because those
-                // buffer each subscriber without a bound and have no drop-oldest policy.
-                let buffers = destinations.map { destination in
-                    let (deliveries, buffer) = AsyncStream.makeStream(
-                        of: Delivery.self, bufferingPolicy: .bufferingNewest(batchBufferLimit))
-                    group.addTask {
-                        for await delivery in deliveries {
-                            await destination.receive(delivery.batch)
-                            // A receive that returned because the delivery was cancelled may not
-                            // have delivered the batch, so its store keeps the records.
-                            guard !Task.isCancelled else { return }
-                            delivery.acknowledgement?.received()
-                        }
-                    }
-                    return buffer
+                // events. DestinationBuffer says why the oldest is the one dropped.
+                let buffers = destinations.enumerated().map { index, destination in
+                    DestinationBuffer(destination: destination, index: index, limit: batchBufferLimit, reporter: bufferDropReporter)
+                }
+                for buffer in buffers {
+                    group.addTask { await buffer.run() }
                 }
                 defer {
                     for buffer in buffers { buffer.finish() }
@@ -83,7 +85,7 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
 }
 
 /// A batch on its way to one destination, with the acknowledgement it counts towards.
-private struct Delivery: Sendable {
+struct Delivery: Sendable {
     let batch: [EventRecord]
     let acknowledgement: BatchAcknowledgement?
 
@@ -111,33 +113,43 @@ private struct Delivery: Sendable {
 }
 
 /// One batch's acknowledgement to the stores that keep its records: sent once every destination
-/// has received the batch.
-private final class BatchAcknowledgement: Sendable {
+/// has received the batch, for the records every destination received.
+final class BatchAcknowledgement: Sendable {
     /// The positions of a batch's records in one store.
     struct Positions: Sendable {
         let acknowledger: any Acknowledger
         var positions: [UInt64]
     }
 
-    private let stores: [Positions]
+    private struct State {
+        /// How many destinations have yet to receive the batch.
+        var remaining: Int
+        /// The positions to acknowledge, by store: the batch's, less those a destination that
+        /// had them read back didn't receive.
+        var stores: [Positions]
+    }
+
     // A Mutex rather than an actor: each destination's task counts down once, synchronously, as
     // its receive returns, and nothing waits while holding it.
-    private let remaining: Mutex<Int>
+    private let state: Mutex<State>
 
     /// The acknowledgement of `batch` from `destinationCount` destinations, or `nil` when no
     /// store keeps any of its records.
     init?(of batch: [EventRecord], destinationCount: Int) {
         let stores = Self.positionsByStore(in: batch)
         guard !stores.isEmpty else { return nil }
-        self.stores = stores
-        remaining = Mutex(destinationCount)
+        state = Mutex(State(remaining: destinationCount, stores: stores))
     }
 
     /// The positions of `batch`'s records, grouped by the store that keeps them, in batch order.
     static func positionsByStore(in batch: [EventRecord]) -> [Positions] {
+        positionsByStore(of: batch.compactMap(\.deliveryTag))
+    }
+
+    /// The positions `tags` name, grouped by store, in the order of `tags`.
+    static func positionsByStore(of tags: [DeliveryTag]) -> [Positions] {
         var stores: [Positions] = []
-        for record in batch {
-            guard let tag = record.deliveryTag else { continue }
+        for tag in tags {
             if let index = stores.firstIndex(where: { $0.acknowledger === tag.acknowledger }) {
                 stores[index].positions.append(tag.position)
             } else {
@@ -147,20 +159,41 @@ private final class BatchAcknowledgement: Sendable {
         return stores
     }
 
-    /// Counts one destination's receipt, acknowledging the batch after the last.
+    /// Counts one destination's receipt of the whole batch, acknowledging it after the last.
     func received() {
-        let isLast = remaining.withLock { remaining in
-            remaining -= 1
-            return remaining == 0
+        let finished: [Positions]? = state.withLock { state in
+            state.remaining -= 1
+            return state.remaining == 0 ? state.stores : nil
         }
-        if isLast {
-            acknowledge()
+        if let finished {
+            Self.acknowledge(finished)
+        }
+    }
+
+    /// Counts the receipt of a destination that received only the records at `kept`, by the
+    /// identity of their store, out of those read back for it; the others are never acknowledged.
+    func received(keeping kept: [ObjectIdentifier: Set<UInt64>]) {
+        let finished: [Positions]? = state.withLock { state in
+            for index in state.stores.indices {
+                let keptInStore = kept[ObjectIdentifier(state.stores[index].acknowledger)] ?? []
+                state.stores[index].positions.removeAll { !keptInStore.contains($0) }
+            }
+            state.remaining -= 1
+            return state.remaining == 0 ? state.stores : nil
+        }
+        if let finished {
+            Self.acknowledge(finished)
         }
     }
 
     /// Tells each store every destination has received its records.
     func acknowledge() {
-        for store in stores {
+        Self.acknowledge(state.withLock { $0.stores })
+    }
+
+    /// Tells each of `stores` every destination has received the records at its positions.
+    private static func acknowledge(_ stores: [Positions]) {
+        for store in stores where !store.positions.isEmpty {
             store.acknowledger.acknowledge(store.positions)
         }
     }

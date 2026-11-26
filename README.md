@@ -74,7 +74,7 @@ delivery batches the records and hands each batch to its destinations when `exec
 
 - [`Events`](https://tyler-keith-thompson.github.io/Traffluent/documentation/events): `Event`, `Sensitive`, `Refined`, `EventSchema` and `EventRecord`
 - [`Trackers`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackers): `Tracker`, `Enricher`, `Consent` and `Sampler`
-- [`Destinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/destinations): `Destination`, `ConsoleDestination`, `InMemoryDestination`, `batch()` and `deliver(to:)`
+- [`Destinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/destinations): `Destination`, `ConsoleDestination`, `InMemoryDestination`, `batch()`, `deliver(to:)` and `BufferDropReport`
 - [`LoggingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/loggingdestinations): `LoggerDestination`, which writes events to a swift-log `Logger`
 - [`TracingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/tracingdestinations): `SpanEventDestination`, which adds events to the active span
 - [`HTTPDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/httpdestinations): `HTTPDestination`, which posts each batch to an HTTP endpoint and retries it until it arrives

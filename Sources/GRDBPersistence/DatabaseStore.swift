@@ -39,6 +39,11 @@ public import Persistence
 ///   its span ended with the earlier run.
 /// - **Deleting.** A record's row is deleted once every destination has received it, so a
 ///   table whose records are all delivered is empty.
+/// - **Reading back.** When a destination's full buffer drops a batch on its way through a
+///   delivery, the delivery reads that batch's rows back, in one read, once the destination has
+///   caught up, and hands their records to it in this run, each in the context it was tracked in,
+///   which the delivery keeps. A row the bound deleted in the meantime isn't read back, and one
+///   that can't be decoded is logged and waits for a later launch.
 /// - **Bound.** The table never holds more than `byteBound` bytes of encoded records (each
 ///   row's payload; SQLite's own pages and indexes come on top). When a record wouldn't fit, the
 ///   oldest rows are deleted until it does, in the same transaction as the insert, and each

@@ -50,8 +50,10 @@ let delivery = tracker.records
 wall-clock source records are stamped with, the system's unless you pass another; tests pass a test
 clock and fixed dates. Each destination receives its batches in order from a buffer of its own,
 `batchBufferLimit` batches deep (100 by default), so a slow destination holds up only itself. When
-its buffer is full, its oldest waiting batch is dropped. A delivery that finished or failed can be
-executed again, as a retry. Cancelling one is permanent, as it is for every Afluent unit of work, so
+its buffer is full, its oldest waiting batch is dropped and reported on the delivery's
+`bufferDropReporter`, if you pass one. Once the destination catches up, the delivery reads that
+batch's records back from the store and sends them to it (<doc:ChoosingDestinations>). A delivery
+that finished or failed can be executed again, as a retry. Cancelling one is permanent, as it is for every Afluent unit of work, so
 after a cancellation build a new delivery. It delivers every record the cancelled one hadn't read.
 
 ### Tracking from anywhere
@@ -104,7 +106,8 @@ tracker's records, and the worker runs the copy's enricher before the tracker's 
 worker has reached it. `await tracker.flush()` waits until the worker has reached everything
 tracked so far; `await tracker.finish()` does the same, then ends the records. Records waiting for
 a delivery are held in memory without a bound. Records a delivery has read but not yet delivered
-are lost to this run if the delivery is cancelled or fails, and so are batches dropped from a
-destination's full buffer. Without a store they are gone; with one they come back on the next
-launch (<doc:PersistingRecords>). One task reads a tracker's records at a time: a second reader at
-the same time traps.
+are lost to this run if the delivery is cancelled or fails. Without a store they are gone; with
+one they come back on the next launch (<doc:PersistingRecords>). A batch dropped from a
+destination's full buffer is reported; its stored records reach that destination later in the same
+run, and the rest are lost. One task reads a tracker's records at a time: a second reader at the
+same time traps.

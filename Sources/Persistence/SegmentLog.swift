@@ -357,6 +357,59 @@ final class SegmentLog: Acknowledger {
         }
     }
 
+    /// The records at `positions` still in the log, read back from their segments, one read of
+    /// each segment.
+    ///
+    /// A record whose segment was deleted before the read finished (delivered, or dropped by the
+    /// bound, which reported it) has none. Neither do those of a segment that can't be read, nor
+    /// a record that can't be decoded; both are logged.
+    func records(at positions: [UInt64]) -> [EventRecord] {
+        let segments: [(file: FilePath, number: UInt64, indices: Set<UInt32>)] = state.withLock { state in
+            Self.indicesBySegment(positions).compactMap { number, indices in
+                guard let segment = state.segments.first(where: { $0.number == number }) else { return nil }
+                return (segment.file.path, number, Set(indices))
+            }
+        }
+        var records: [EventRecord] = []
+        // Read outside the lock, from a descriptor of its own: appends go on meanwhile, past the
+        // frames read here, and an append's torn frame at the end only ends the reading early.
+        for segment in segments {
+            let bytes: [UInt8]
+            do throws(Errno) {
+                let descriptor = try withErrno { try FileDescriptor.open(segment.file, .readOnly) }
+                defer { try? descriptor.close() }
+                bytes = try descriptor.readAll()
+            } catch .noSuchFileOrDirectory {
+                // Deleted since its path was taken: its records are no longer kept.
+                Self.logger.debug("Read no records back from \(segment.file): it was deleted")
+                continue
+            } catch {
+                Self.logger.error("Couldn't read records in \(segment.file) back for a destination whose buffer dropped them, so they wait for a later launch: \(error)")
+                continue
+            }
+            guard case .segment(let contents) = SegmentFormat.read(bytes) else { continue }
+            for frame in contents.records where segment.indices.contains(frame.index) {
+                let reading: RecordEncoding.Reading
+                do throws(BinaryDecodingError) {
+                    reading = try RecordEncoding.record(from: bytes[frame.payload], registry: registry)
+                } catch {
+                    Self.logger.error("Couldn't read a record in \(segment.file) back, so it waits for a later launch: decoding it failed with \(error)")
+                    continue
+                }
+                guard case .record(var record) = reading else {
+                    Self.logger.notice("Read a record in \(segment.file) back at another version of its event than this release's, so it waits for a later launch")
+                    continue
+                }
+                record.deliveryTag = DeliveryTag(acknowledger: self, position: segment.number << 32 | UInt64(frame.index))
+                records.append(record)
+            }
+        }
+        // A segment the bound deleted while it was read was reported dropped: leave its records
+        // out, so none is both reported dropped and delivered.
+        let kept = state.withLock { state in Set(state.segments.map(\.number)) }
+        return records.filter { record in record.deliveryTag.map { kept.contains($0.position >> 32) } ?? false }
+    }
+
     /// `positions` as record numbers grouped by segment, segments in order of first appearance.
     private static func indicesBySegment(_ positions: [UInt64]) -> [(UInt64, [UInt32])] {
         var groups: [(UInt64, [UInt32])] = []

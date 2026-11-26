@@ -231,6 +231,41 @@ final class DatabaseLog: Acknowledger {
         }
     }
 
+    /// The records at `positions` whose rows are still in the table, read back in one read.
+    ///
+    /// A record whose row was deleted (delivered, or dropped by the bound, which reported it) has
+    /// none, and neither does any when the read fails, which is logged.
+    func records(at positions: [UInt64]) -> [EventRecord] {
+        do {
+            // Reentrant, as the writes are, so a read made inside one of the app's own accesses
+            // doesn't trap.
+            return try writer.unsafeReentrantRead { db in
+                let statement = try db.cachedStatement(sql: "SELECT payload FROM \(table.quotedDatabaseIdentifier) WHERE position = ?")
+                var records: [EventRecord] = []
+                for position in positions {
+                    guard let payload = try Data.fetchOne(statement, arguments: [Int64(truncatingIfNeeded: position)]) else { continue }
+                    let reading: RecordEncoding.Reading
+                    do throws(BinaryDecodingError) {
+                        reading = try RecordEncoding.record(from: Array(payload)[...], registry: registry)
+                    } catch {
+                        Self.logger.error("Couldn't read a record in \(table) back, so it waits for a later launch: decoding it failed with \(error)")
+                        continue
+                    }
+                    guard case .record(var record) = reading else {
+                        Self.logger.notice("Read a record in \(table) back at another version of its event than this release's, so it waits for a later launch")
+                        continue
+                    }
+                    record.deliveryTag = DeliveryTag(acknowledger: self, position: position)
+                    records.append(record)
+                }
+                return records
+            }
+        } catch {
+            Self.logger.error("Couldn't read \(positions.count) records in \(table) back for a destination whose buffer dropped them, so they wait for a later launch: \(error)")
+            return []
+        }
+    }
+
     // MARK: Synchronizing
 
     /// Checkpoints the database, which in WAL mode flushes its log to storage first.

@@ -51,9 +51,11 @@ import Logging
 /// ``receive(_:)`` returns without logging or reporting it.
 ///
 /// While a batch is retried, the delivery's later batches wait in this destination's buffer,
-/// which drops its oldest batch when full (`deliver(to:batchBufferLimit:)`): offline for long
-/// enough, the batches dropped there are lost to this run. A store never had them acknowledged,
-/// so it delivers them on the next launch; without a store they are gone.
+/// which drops its oldest batch when full and reports it
+/// (`deliver(to:batchBufferLimit:bufferDropReporter:)`). With a store, a dropped batch's records
+/// aren't lost: once this destination has caught up, the delivery reads them back from the store
+/// and hands them to it again, in the same run, so they are sent once the endpoint answers.
+/// Without a store, the records of a dropped batch are lost.
 ///
 /// ```swift
 /// let collector = HTTPDestination(

@@ -3,6 +3,7 @@ import Clocks
 import Destinations
 import Events
 import Foundation
+import Instrumentation
 import Synchronization
 import Testing
 import Trackers
@@ -43,9 +44,11 @@ struct DeliverTests {
         let entered = SingleValueSubject<Void>()
         let gate = SingleValueSubject<Void>()
         let batches = Mutex<[[Int]]>([])
+        let records = Mutex<[EventRecord]>([])
 
         func receive(_ batch: [EventRecord]) async {
             batches.withLock { $0.append(batch.compactMap { ($0.event as? Tapped)?.number }) }
+            records.withLock { $0 += batch }
             guard (try? entered.send()) != nil else { return }
             try? await gate.execute()
         }
@@ -365,6 +368,242 @@ struct DeliverTests {
         try await running.value
 
         #expect(stuck.batches.withLock { $0 } == expected)
+    }
+
+    @Test("A batch a destination's full buffer drops is reported with the destination, its record count and its timestamps, and its records kept in memory only are lost")
+    func dropReported() async throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        func record(_ number: Int, at seconds: TimeInterval) -> EventRecord {
+            EventRecord(event: Tapped(number: number), timestamp: start + seconds, sourceLocation: nil)
+        }
+        let recorder = InMemoryDestination()
+        let stuck = Stuck()
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        let sut = batches.deliver(to: recorder, stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let expected = BufferDropReport(destinationIndex: 1, recordCount: 2, timestamps: start + 2 ... start + 3, storedRecordCount: 0)
+        let expectedReceived = [[1], [4]]
+        let running = Task { try await sut.execute() }
+        var deliveries = recorder.deliveries.makeAsyncIterator()
+        input.yield([record(1, at: 1)])
+        _ = await deliveries.next()
+        try await stuck.entered.execute()
+        // Out of order, so the report's range is the earliest to the latest, not first to last.
+        input.yield([record(3, at: 3), record(2, at: 2)])
+        // The other destination has taken this batch, so it has room for the next and drops none.
+        _ = await deliveries.next()
+        input.yield([record(4, at: 4)])
+        var received = reports.makeAsyncIterator()
+
+        let actual = await received.next()
+        try stuck.gate.send()
+        input.finish()
+        try await running.value
+        reporter.finish()
+        let actualAfter = await received.next()
+
+        let actualReceived = stuck.batches.withLock { $0 }
+        #expect(actual == expected)
+        #expect(actualAfter == nil)
+        #expect(actualReceived == expectedReceived)
+    }
+
+    @Test("A store that can't read its records back never has a dropped batch's records acknowledged, and is still told of the others")
+    func storeWithoutReadBack() async throws {
+        /// A store that keeps records only by position, and records what it is told.
+        final class Ledger: Acknowledger {
+            let acknowledged = Mutex<[UInt64]>([])
+
+            func willDeliver(_ positions: [UInt64]) -> Set<UInt64> {
+                []
+            }
+
+            func acknowledge(_ positions: [UInt64]) {
+                acknowledged.withLock { $0 += positions }
+            }
+        }
+        let ledger = Ledger()
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        func record(_ number: Int) -> EventRecord {
+            EventRecord(event: Tapped(number: number), timestamp: timestamp, sourceLocation: nil, deliveryTag: DeliveryTag(acknowledger: ledger, position: UInt64(number)))
+        }
+        let stuck = Stuck()
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let expectedReport = BufferDropReport(destinationIndex: 0, recordCount: 1, timestamps: timestamp ... timestamp, storedRecordCount: 1)
+        let expectedReceived = [[1], [3]]
+        let expectedAcknowledged: [UInt64] = [1, 3]
+        let running = Task { try await sut.execute() }
+        input.yield([record(1)])
+        try await stuck.entered.execute()
+        input.yield([record(2)])
+        input.yield([record(3)])
+        var received = reports.makeAsyncIterator()
+
+        let actualReport = await received.next()
+        try stuck.gate.send()
+        input.finish()
+        try await running.value
+
+        let actualReceived = stuck.batches.withLock { $0 }
+        let actualAcknowledged = ledger.acknowledged.withLock { $0 }
+        #expect(actualReport == expectedReport)
+        #expect(actualReceived == expectedReceived)
+        #expect(actualAcknowledged == expectedAcknowledged)
+    }
+
+    /// A store keeping records in memory by position, which reads them back without their
+    /// context, as a store on disk does, and records what it is told.
+    final class Shelf: Acknowledger {
+        let kept = Mutex<[UInt64: EventRecord]>([:])
+        let acknowledged = Mutex<[UInt64]>([])
+
+        /// `event`, tracked at `timestamp` in `context`, kept at `position`.
+        func record(_ event: Tapped, at position: UInt64, timestamp: Date, context: ServiceContext = .topLevel) -> EventRecord {
+            let record = EventRecord(event: event, timestamp: timestamp, sourceLocation: nil, context: context, deliveryTag: DeliveryTag(acknowledger: self, position: position))
+            kept.withLock { $0[position] = record }
+            return record
+        }
+
+        func willDeliver(_ positions: [UInt64]) -> Set<UInt64> {
+            []
+        }
+
+        func acknowledge(_ positions: [UInt64]) {
+            acknowledged.withLock { $0 += positions }
+        }
+
+        func records(at positions: [UInt64]) -> [EventRecord] {
+            kept.withLock { kept in
+                positions.compactMap { kept[$0] }.map { record in
+                    var stripped = record
+                    stripped.context = .topLevel
+                    return stripped
+                }
+            }
+        }
+    }
+
+    enum ScreenKey: ServiceContextKey {
+        typealias Value = String
+    }
+
+    @Test("A record a full buffer dropped is sent again with the context it was tracked in")
+    func readBackKeepsContext() async throws {
+        let shelf = Shelf()
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        var checkout = ServiceContext.topLevel
+        checkout[ScreenKey.self] = "Checkout"
+        let stuck = Stuck()
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let expectedReceived = [[1], [3], [2]]
+        let expectedScreen: String? = "Checkout"
+        let running = Task { try await sut.execute() }
+        var received = reports.makeAsyncIterator()
+        input.yield([shelf.record(Tapped(number: 1), at: 1, timestamp: timestamp)])
+        try await stuck.entered.execute()
+        input.yield([shelf.record(Tapped(number: 2), at: 2, timestamp: timestamp, context: checkout)])
+        input.yield([shelf.record(Tapped(number: 3), at: 3, timestamp: timestamp)])
+        _ = await received.next()
+
+        try stuck.gate.send()
+        input.finish()
+        try await running.value
+
+        let actualReceived = stuck.batches.withLock { $0 }
+        let actualScreen = stuck.records.withLock { $0.last?.context[ScreenKey.self] }
+        #expect(actualReceived == expectedReceived)
+        #expect(actualScreen == expectedScreen)
+    }
+
+    @Test("A record a store reads back tagged with another store is neither sent nor counted as received")
+    func readBackOtherStoreIgnored() async throws {
+        /// A store that answers a read with another store's records at the same positions.
+        final class Impostor: Acknowledger {
+            let other: Shelf
+            let acknowledged = Mutex<[UInt64]>([])
+
+            init(other: Shelf) {
+                self.other = other
+            }
+
+            func willDeliver(_ positions: [UInt64]) -> Set<UInt64> {
+                []
+            }
+
+            func acknowledge(_ positions: [UInt64]) {
+                acknowledged.withLock { $0 += positions }
+            }
+
+            func records(at positions: [UInt64]) -> [EventRecord] {
+                other.records(at: positions)
+            }
+        }
+        let other = Shelf()
+        let impostor = Impostor(other: other)
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        func record(_ number: Int) -> EventRecord {
+            EventRecord(event: Tapped(number: number), timestamp: timestamp, sourceLocation: nil, deliveryTag: DeliveryTag(acknowledger: impostor, position: UInt64(number)))
+        }
+        _ = other.record(Tapped(number: 2), at: 2, timestamp: timestamp)
+        let stuck = Stuck()
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let expectedReceived = [[1], [3]]
+        let expectedAcknowledged: [UInt64] = [1, 3]
+        let running = Task { try await sut.execute() }
+        var received = reports.makeAsyncIterator()
+        input.yield([record(1)])
+        try await stuck.entered.execute()
+        input.yield([record(2)])
+        input.yield([record(3)])
+        _ = await received.next()
+
+        try stuck.gate.send()
+        input.finish()
+        try await running.value
+
+        let actualReceived = stuck.batches.withLock { $0 }
+        let actualAcknowledged = impostor.acknowledged.withLock { $0 }
+        #expect(actualReceived == expectedReceived)
+        #expect(actualAcknowledged == expectedAcknowledged)
+    }
+
+    @Test("A destination more than ten buffers behind has the oldest of its dropped batches left in the store, unacknowledged, and the rest read back")
+    func droppedBatchesBounded() async throws {
+        let shelf = Shelf()
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let stuck = Stuck()
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        // 1 is received, 2 to 12 dropped in turn, 13 waits; 10 dropped batches are kept.
+        let dropCount = 11
+        let expectedReceived = [[1], [13]] + (3 ... 12).map { [$0] }
+        let expectedAcknowledged: [UInt64] = [1] + Array(3 ... 13)
+        let running = Task { try await sut.execute() }
+        var received = reports.makeAsyncIterator()
+        input.yield([shelf.record(Tapped(number: 1), at: 1, timestamp: timestamp)])
+        try await stuck.entered.execute()
+        for number in 2 ... 13 {
+            input.yield([shelf.record(Tapped(number: number), at: UInt64(number), timestamp: timestamp)])
+        }
+        for _ in 0 ..< dropCount {
+            _ = await received.next()
+        }
+
+        try stuck.gate.send()
+        input.finish()
+        try await running.value
+
+        let actualReceived = stuck.batches.withLock { $0 }
+        let actualAcknowledged = shelf.acknowledged.withLock { $0 }.sorted()
+        #expect(actualReceived == expectedReceived)
+        #expect(actualAcknowledged == expectedAcknowledged)
     }
 
     @Test("A strategy's error ends the delivery with that error")

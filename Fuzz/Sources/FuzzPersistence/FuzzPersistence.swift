@@ -268,6 +268,19 @@ enum FuzzPersistence {
             check(index == expectedIndex, "position \(index) for frame \(expectation.frame), model \(expectedIndex)")
         }
 
+        // Read back by position, as a delivery does for a batch a full buffer dropped, each
+        // recovered record comes back as recovery gave it, and a position never written gives none.
+        if let acknowledger = recovered.first?.deliveryTag?.acknowledger {
+            let positions = recovered.compactMap { $0.deliveryTag?.position }
+            let readBack = acknowledger.records(at: positions.reversed() + [UInt64.max])
+            check(readBack.count == recovered.count, "read back \(readBack.count) records, recovered \(recovered.count)")
+            for record in recovered {
+                let match = readBack.first { $0.deliveryTag?.position == record.deliveryTag?.position }
+                check(match?.event as? Tapped == record.event as? Tapped, "read back \(String(describing: match?.event)), recovered \(record.event)")
+                check(match?.id == record.id, "read back identifier \(String(describing: match?.id)), recovered \(record.id)")
+            }
+        }
+
         let contents = FileManager.default.contents(atPath: path)
         if model.isNewerVersion {
             check(recovered.isEmpty, "recovered \(recovered.count) records from a newer version's segment")

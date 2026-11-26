@@ -2,10 +2,13 @@ public import Events
 
 /// Where a delivery sends events: a plain sink that records the batches it receives.
 ///
-/// `deliver(to:batchBufferLimit:)` gives each destination its batches in the order the events
-/// were tracked, one at a time: the next batch comes once ``receive(_:)`` returns. Batches that
-/// arrive meanwhile wait in a buffer of the destination's own, which drops its oldest batch when
-/// full, so a destination that falls behind loses batches rather than holding up the others.
+/// `deliver(to:batchBufferLimit:bufferDropReporter:)` gives each destination its batches in the
+/// order the events were tracked, one at a time: the next batch comes once ``receive(_:)``
+/// returns. Batches that arrive meanwhile wait in a buffer of the destination's own, which drops
+/// its oldest batch when full, so a destination that falls behind doesn't hold up the others.
+/// The delivery reports each batch dropped. Once the destination has caught up, it gets the
+/// dropped batch's records that a store keeps, read back from the store, after the newer batches
+/// it received meanwhile; those kept in memory only are lost.
 ///
 /// ``receive(_:)`` should return as soon as the batch is somewhere it won't be lost, and honour
 /// cancellation: a delivery waits for it before it completes, and cancels it when the delivery is
