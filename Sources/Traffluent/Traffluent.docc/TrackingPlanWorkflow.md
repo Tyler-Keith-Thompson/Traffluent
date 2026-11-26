@@ -217,11 +217,17 @@ executable, as it does for export.
 The check compares the events with the plan in the same tree, and exporting writes whatever the
 events say. So once a breaking change has been exported, the check passes, and the change reaches
 review as a diff of the plan. To have CI fail it as breaking, run the executable against the plan
-from the base branch, `swift run AppTrackingPlan check <directory>`, and fail the job on exit
-status 1 alone: 1 means a breaking difference, and 2 means the plan is only out of date. The
-executable exits 64 when its arguments are wrong, 65 when its events' schemas can't make a tracking
-plan (two events of one name, say, or a constraint no schema can state), and 73 when it can't
-write the plan.
+from the base branch, `swift run AppTrackingPlan check <directory>`. Pass the job on exit status
+0 or 2, since 2 means the base plan is only out of date, and fail it on any other status. 1 means
+a breaking difference, 64 that the arguments are wrong, 65 that the events' schemas can't make a
+tracking plan (two events of one name, say, or a constraint no schema can state), and 73 that the
+executable can't write the plan. In a shell step:
+
+```sh
+swift run AppTrackingPlan check "$BASE_PLAN"
+status=$?
+[ "$status" -eq 0 ] || [ "$status" -eq 2 ]
+```
 
 ### Checking from a test
 
