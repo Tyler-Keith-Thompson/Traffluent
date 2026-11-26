@@ -48,9 +48,12 @@ spm:
 spm-test *args="":
     {{SWIFT}} test {{args}}
 
+# No ARCHS= here: it would apply to the host-side macro plugins too, which then never build for
+# the Mac. generic/platform=watchOS with ONLY_ACTIVE_ARCH=NO builds the standard device
+# architectures, arm64_32 among them.
 [doc('Build the library (not its tests) for watchOS arm64_32, a 32-bit Int, into .build/watchos')]
 build-arm64_32:
-    cd {{PROJECT_ROOT}} && xcodebuild build -scheme Traffluent-Package -destination generic/platform=watchOS -derivedDataPath .build/watchos -skipPackagePluginValidation -skipMacroValidation ARCHS=arm64_32 ONLY_ACTIVE_ARCH=NO -quiet
+    cd {{PROJECT_ROOT}} && xcodebuild build -scheme Traffluent-Package -destination generic/platform=watchOS -derivedDataPath .build/watchos -skipPackagePluginValidation -skipMacroValidation ONLY_ACTIVE_ARCH=NO -quiet
 
 [doc('Verify both build systems agree — run before pushing')]
 verify: test spm-test
