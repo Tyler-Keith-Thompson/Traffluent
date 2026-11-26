@@ -1,6 +1,5 @@
 import Destinations
 import Events
-import ExampleEvents
 import ExampleServer
 import Hummingbird
 import HummingbirdTesting

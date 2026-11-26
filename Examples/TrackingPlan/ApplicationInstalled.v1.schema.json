@@ -1,0 +1,17 @@
+{
+  "$id": "ApplicationInstalled.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "ApplicationInstalled",
+  "type": "object",
+  "x-traffluent-consent-category": "analytics",
+  "x-traffluent-version": 1
+}

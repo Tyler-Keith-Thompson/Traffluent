@@ -2,6 +2,69 @@
   "events": [
     {
       "consentCategory": "analytics",
+      "example": "ApplicationBackgrounded.v1.example.json",
+      "name": "ApplicationBackgrounded",
+      "schema": "ApplicationBackgrounded.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ApplicationInstalled.v1.example.json",
+      "name": "ApplicationInstalled",
+      "schema": "ApplicationInstalled.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ApplicationOpened.v1.example.json",
+      "name": "ApplicationOpened",
+      "schema": "ApplicationOpened.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ApplicationTerminated.v1.example.json",
+      "name": "ApplicationTerminated",
+      "schema": "ApplicationTerminated.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ApplicationUpdated.v1.example.json",
+      "name": "ApplicationUpdated",
+      "schema": "ApplicationUpdated.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ControlActivated.v1.example.json",
+      "name": "ControlActivated",
+      "schema": "ControlActivated.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "ScreenViewed.v1.example.json",
+      "name": "ScreenViewed",
+      "schema": "ScreenViewed.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "SessionEnded.v1.example.json",
+      "name": "SessionEnded",
+      "schema": "SessionEnded.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "SessionStarted.v1.example.json",
+      "name": "SessionStarted",
+      "schema": "SessionStarted.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
       "example": "checkout_started.v2.example.json",
       "name": "checkout_started",
       "schema": "checkout_started.v2.schema.json",
@@ -12,6 +75,20 @@
       "example": "order_completed.v1.example.json",
       "name": "order_completed",
       "schema": "order_completed.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "analytics",
+      "example": "product_added_to_cart.v1.example.json",
+      "name": "product_added_to_cart",
+      "schema": "product_added_to_cart.v1.schema.json",
+      "version": 1
+    },
+    {
+      "consentCategory": "advertising",
+      "example": "promotion_tapped.v1.example.json",
+      "name": "promotion_tapped",
+      "schema": "promotion_tapped.v1.schema.json",
       "version": 1
     },
     {

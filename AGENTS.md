@@ -50,8 +50,9 @@ swift.org toolchain through swiftly (`swiftly install 6.4.3`); see `Fuzz/README.
 the published package never depends on what the examples use. Its `Package.swift` and its few
 `BUILD.bazel` files are hand-written, not generated: SwiftPM builds and tests it
 (`just examples-test`), and Bazel builds only the Apple apps (`Examples/Apps/ExampleApp`: iPhone and
-iPad, Mac, visionOS, watchOS), every target `manual`, so `just test` never builds them, on a Mac
-or on Linux. The root BUILD.bazel lists them in `APP_TARGETS`, so `just generate` gives each an
+iPad, Mac, visionOS, watchOS) and the checkout's iOS simulator test
+(`Examples/Tests/StoreViewsSimulatorTests`, `just example-ios-test`), every target `manual`, so
+`just test` never builds them, on a Mac or on Linux. The root BUILD.bazel lists them in `APP_TARGETS`, so `just generate` gives each an
 Xcode scheme. rules_apple has no Mac Catalyst rule: `Examples/scripts/catalyst_app.py` builds the
 same app source for it (`just example-catalyst`). The examples use Hummingbird and ViewInspector.
 See `Examples/README.md`.

@@ -1,0 +1,27 @@
+{
+  "$id": "product_added_to_cart.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "productID": {
+      "examples": [
+        "canvas-tote"
+      ],
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "type": "string"
+    },
+    "quantity": {
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "productID",
+    "quantity"
+  ],
+  "title": "product_added_to_cart",
+  "type": "object",
+  "x-traffluent-consent-category": "analytics",
+  "x-traffluent-version": 1
+}

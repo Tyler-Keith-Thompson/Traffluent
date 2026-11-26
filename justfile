@@ -89,7 +89,7 @@ fuzz-repro target input:
 EXAMPLES := PROJECT_ROOT / "Examples"
 
 [doc('Build every example app, then run the examples’ tests')]
-examples: example-ios example-mac example-catalyst example-visionos example-watchos example-linux example-server examples-test
+examples: example-ios example-ios-test example-mac example-catalyst example-visionos example-watchos example-linux example-server examples-test
 
 [doc('Run the examples’ tests (SwiftPM, in Examples/)')]
 examples-test *args="":
@@ -106,6 +106,10 @@ example-tracking-plan:
 [doc('Build the iPhone and iPad example, one universal app, for the simulator')]
 example-ios:
     {{BAZEL}} build //Examples/Apps/ExampleApp:iOSExample
+
+[doc('Run the store example’s checkout tracking tests in the iOS simulator, inside tools/test_host')]
+example-ios-test:
+    {{BAZEL}} test //Examples/Tests/StoreViewsSimulatorTests --test_output=errors
 
 [doc('Build the Mac example')]
 example-mac:

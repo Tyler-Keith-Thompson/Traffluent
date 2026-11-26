@@ -3,7 +3,7 @@ public import Foundation
 
 /// An order was placed.
 @Event(name: "order_completed")
-public struct OrderCompleted {
+public struct OrderCompleted: Equatable {
     /// The order's identifier.
     public var orderID: UUID
     /// What the order cost.

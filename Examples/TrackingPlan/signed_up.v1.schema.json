@@ -4,7 +4,10 @@
   "additionalProperties": false,
   "properties": {
     "email": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "x-traffluent-sensitive": true
     },
     "plan": {
@@ -18,8 +21,7 @@
     }
   },
   "required": [
-    "plan",
-    "email"
+    "plan"
   ],
   "title": "signed_up",
   "type": "object",

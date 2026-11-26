@@ -5,8 +5,9 @@ public import EventMacros
 public struct SignedUp {
     /// The plan signed up for.
     public var plan: String
-    /// The new account's email address.
-    public var email: Sensitive<String>
+    /// The new account's email address, as a sensitive value. Optional, so a record a destination
+    /// redacted still matches the tracking plan.
+    public var email: Sensitive<String>?
     /// Who referred them, if anyone.
     public var referrer: String?
 

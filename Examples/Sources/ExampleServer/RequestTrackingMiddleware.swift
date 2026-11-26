@@ -1,8 +1,7 @@
 public import Hummingbird
-import ExampleEvents
 import Trackers
 
-/// Middleware tracking ``ExampleEvents/RequestServed`` through `Tracker.current` for every
+/// Middleware tracking ``RequestServed`` through `Tracker.current` for every
 /// response the routes after it give, failures included.
 ///
 /// Bind the tracker around the running server with `withTracker`: request handlers run in its

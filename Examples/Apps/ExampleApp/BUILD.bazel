@@ -4,8 +4,8 @@ load("@rules_apple//apple:visionos.bzl", "visionos_application")
 load("@rules_apple//apple:watchos.bzl", "watchos_application")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# The Apple example app: a library holding the composition root, built for each platform by an
-# application rule below. Every target is `manual`, so `bazel build //...` and `just test` never
+# The Apple example app, a small store: a library holding the composition root, built for each
+# platform by an application rule below. Every target is `manual`, so `bazel build //...` and `just test` never
 # build the apps, on a Mac or on Linux; the `just example-*` recipes name them, and the root
 # BUILD.bazel gives each a scheme in the Xcode project. Mac Catalyst has no rules_apple
 # rule (AGENTS.md, Examples).
@@ -15,11 +15,11 @@ swift_library(
     module_name = "ExampleApp",
     tags = ["manual"],
     deps = [
-        "//Sources/Destinations",
-        "//Examples/Sources/ExampleEvents",
-        "//Examples/Sources/ExampleViews",
+        "//Examples/Sources/StoreAnalytics",
+        "//Examples/Sources/StoreViews",
+        "//Sources/LifecycleTracking",
+        "//Sources/Persistence",
         "//Sources/SwiftUITracking",
-        "//Sources/Trackers",
     ],
 )
 

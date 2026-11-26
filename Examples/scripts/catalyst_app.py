@@ -27,7 +27,7 @@ SOURCES = os.path.join(ROOT, "Apps", "ExampleApp")
 TRIPLE = "arm64-apple-ios18.0-macabi"
 # The modules the app imports, which between them reach every other it needs. The app links the
 # object of every module SwiftPM builds for them, their dependencies' included.
-TOP_MODULES = ["ExampleViews", "Destinations"]
+TOP_MODULES = ["StoreViews", "StoreAnalytics"]
 SWIFT = ["env", "-u", "TOOLCHAINS", "xcrun", "--toolchain", "default"]
 
 
