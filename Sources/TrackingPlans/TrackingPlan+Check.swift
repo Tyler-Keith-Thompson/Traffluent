@@ -9,7 +9,10 @@ extension TrackingPlan {
     /// lists is matched with this plan's event of the same name and version, and their properties,
     /// optionality, default values, types, sensitivity and consent categories compared. A property
     /// the committed document marks `deprecated` is one the event no longer declares: its absence
-    /// is no difference, and declaring it again is compared with the schema it had. Only when that
+    /// is no difference, and declaring it again is compared with the schema it had. An earlier
+    /// version the committed index lists beside a later one of the same event, and this plan
+    /// doesn't list, is one ``write(to:)`` keeps as it is: it is compared by its bytes alone, and
+    /// an earlier version never committed is no difference, as no export can recreate it. Only when that
     /// finds no difference are the bytes compared, each file that differs, is missing or is no
     /// longer part of the plan reported as ``TrackingPlanDifference/fileOutOfDate(path:)``, so a
     /// match means the committed plan is exactly what ``files(carryingForward:)`` of it holds. Files of `committed` that a plan doesn't
@@ -49,7 +52,19 @@ extension TrackingPlan {
         }
         var differences: [TrackingPlanDifference] = []
         var committedEvents: [EventContract] = []
-        for path in entries {
+        let listed = Set(schemas.map { EventContract.Key(name: $0.name, version: $0.version) })
+        var newest: [String: Int] = [:]
+        for case let (name?, version?) in entries.map({ ($0.name, $0.version) }) {
+            newest[name] = max(newest[name] ?? version, version)
+        }
+        // An earlier version the committed plan keeps beside a later one is the record of what
+        // installed releases send, kept as it is: only its bytes are compared. One this plan lists
+        // itself is compared like any other.
+        let compared = entries.filter { entry in
+            guard let name = entry.name, let version = entry.version, let later = newest[name] else { return true }
+            return version >= later || listed.contains(EventContract.Key(name: name, version: version))
+        }
+        for path in compared.map(\.path) {
             guard let event = committedFiles[path].flatMap(JSON.init(parsing:)).flatMap(EventContract.init(document:)) else {
                 differences.append(.unreadableFile(path: path))
                 continue
@@ -62,12 +77,17 @@ extension TrackingPlan {
 }
 
 extension JSON {
-    /// The document file names an index lists, in its order, or `nil` when the value isn't an
-    /// index.
-    fileprivate var indexedDocuments: [String]? {
+    /// The documents an index lists, in its order, or `nil` when the value isn't an index.
+    fileprivate var indexedDocuments: [IndexedDocument]? {
         guard let events = object?["events"]?.array else { return nil }
-        let paths = events.compactMap { $0.object?["schema"]?.string }
-        return paths.count == events.count ? paths : nil
+        let documents = events.compactMap { event in
+            event.object.flatMap { entry in
+                entry["schema"]?.string.map { path in
+                    IndexedDocument(path: path, name: entry["name"]?.string, version: entry["version"]?.integer.flatMap { Int(exactly: $0) })
+                }
+            }
+        }
+        return documents.count == events.count ? documents : nil
     }
 
     /// A `type` keyword's value without the `null` it lists: the one name left, or an array of
@@ -77,6 +97,14 @@ extension JSON {
         let named = names.filter { $0 != .string("null") }
         return named.count == 1 ? named[0] : .array(named)
     }
+}
+
+/// One event an index lists: its document's file name, and the event's name and version, which an
+/// index that isn't one a plan wrote may lack.
+private struct IndexedDocument {
+    let path: String
+    let name: String?
+    let version: Int?
 }
 
 /// What a committed plan promises about one event: what a payload of it must and may hold.

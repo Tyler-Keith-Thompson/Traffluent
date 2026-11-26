@@ -14,6 +14,12 @@ extension EventSchema {
     }
 
     private var fileStem: String {
+        "\(EventSchema.encodedFileName(of: name)).v\(version)"
+    }
+
+    /// An event's name as its files' names begin: every byte but ASCII letters, digits, `_` and
+    /// `-` percent-encoded, so no name holds the `.` that ends it.
+    static func encodedFileName(of name: String) -> String {
         var encoded = ""
         for byte in name.utf8 {
             if byte.isUnreserved {
@@ -23,7 +29,7 @@ extension EventSchema {
                 encoded += "%" + (hex.count == 1 ? "0" : "") + hex
             }
         }
-        return "\(encoded).v\(version)"
+        return encoded
     }
 
     /// The event's JSON Schema document, as ``TrackingPlan`` describes it, keeping each property

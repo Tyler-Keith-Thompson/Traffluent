@@ -181,6 +181,8 @@ swift package --allow-writing-to-package-directory export-tracking-plan
 The `export-tracking-plan` plugin runs the package's one executable target that depends on
 ``/TrackingPlans``. `--product <name>` picks one of several, and `--output <directory>` writes
 elsewhere in the package. Writing again deletes the documents of events the plan no longer lists.
+After an event's version is raised, it keeps the earlier version's document and example as they
+are and lists them in the index, so a collector still accepts payloads from releases at that version.
 [`Examples/TrackingPlan`](https://github.com/Tyler-Keith-Thompson/Traffluent/tree/main/Examples/TrackingPlan)
 is the plan `StoreTrackingPlan` writes.
 
@@ -218,7 +220,7 @@ that lost a raw value, or a new `enum`, as when a `String` property becomes an e
 only leaves the plan out of date. The `enum` is compared as a set, so reordering the cases
 changes nothing but the files. An integer type narrowed to one of fewer bits tightens its bounds
 the same way. Raising an event's version (`@Event(version: 3)`) is how a breaking change is made on
-purpose: exporting then writes the new version's document in place of the earlier one's.
+purpose: exporting then writes the new version's document beside the earlier one's.
 `--plan <directory>` checks a plan committed elsewhere, and `--product <name>` picks the
 executable, as it does for export.
 

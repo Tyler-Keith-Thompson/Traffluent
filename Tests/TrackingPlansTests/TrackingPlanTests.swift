@@ -314,6 +314,16 @@ struct TrackingPlanTests {
         #expect(actual == expected)
     }
 
+    @Test("A plan's schemas of one event are ordered by version, the lower first")
+    func schemasByVersion() throws {
+        let expected = [1, 2, 10]
+        let sut = try TrackingPlan(schemas: [2, 10, 1].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
+
+        let actual = sut.schemas.map(\.version)
+
+        #expect(actual == expected)
+    }
+
     @Test("Schemas are ordered by their names' UTF-8 bytes, so uppercase comes before lowercase")
     func byteOrder() throws {
         let expected = ["Zulu", "apple", "zebra", "é"]

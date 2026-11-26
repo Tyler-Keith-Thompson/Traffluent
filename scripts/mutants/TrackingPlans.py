@@ -33,6 +33,7 @@ E = "EventSchema+Example.swift"
 K = "TrackingPlan+Check.swift"
 R = "TrackingPlanCheck.swift"
 X = "TrackingPlanDifference.swift"
+V = "TrackingPlan+EarlierVersion.swift"
 
 MUTANTS = [
     # TrackingPlan: the rules, the order and the index.
@@ -41,8 +42,9 @@ MUTANTS = [
     Mutant("duplicateeventallowed", T, "fileNames.insert(schema.fileName.lowercased()).inserted", "true"),
     Mutant("casesensitive", T, "schema.fileName.lowercased()", "schema.fileName"),
     Mutant("unsorted", T, "schemas.sorted(by: EventSchema.precedesInPlan)", "schemas"),
-    Mutant("versionsreversed", T, "first.version < second.version", "first.version > second.version"),
-    Mutant("namesreversed", T, "first.name.utf8.lexicographicallyPrecedes(second.name.utf8)", "second.name.utf8.lexicographicallyPrecedes(first.name.utf8)"),
+    # nth=1: PlanEntry's index order comes first in the file, then the schemas'.
+    Mutant("versionsreversed", T, "first.version < second.version", "first.version > second.version", nth=1),
+    Mutant("namesreversed", T, "first.name.utf8.lexicographicallyPrecedes(second.name.utf8)", "second.name.utf8.lexicographicallyPrecedes(first.name.utf8)", nth=1),
     Mutant("noindex", T, "[File(path: TrackingPlan.indexFileName, json: index)]", "[]"),
     Mutant("indexrenamed", T, '"tracking-plan.json"', '"index.json"', nth=1),
     Mutant("indexversionfixed", T, ".integer(Int64(version))", ".integer(1)"),
@@ -70,7 +72,7 @@ MUTANTS = [
     Mutant("everybyteunreserved", D, "byte.isUnreserved", "true"),
     Mutant("hexnotpadded", D, '(hex.count == 1 ? "0" : "")', '""'),
     Mutant("hexlowercase", D, "String(byte, radix: 16, uppercase: true)", "String(byte, radix: 16, uppercase: false)"),
-    Mutant("noversioninfilename", D, '"\\(encoded).v\\(version)"', '"\\(encoded)"'),
+    Mutant("noversioninfilename", D, '"\\(EventSchema.encodedFileName(of: name)).v\\(version)"', '"\\(EventSchema.encodedFileName(of: name))"'),
     Mutant("examplefilename", D, '"\\(fileStem).example.json"', '"\\(fileStem).sample.json"'),
     Mutant("idisname", D, ".string(fileName)", ".string(name)"),
     Mutant("titlerenamed", D, '"title"', '"name"'),
@@ -185,7 +187,7 @@ MUTANTS = [
     Mutant("bytesfirst", K, "differences.isEmpty", "true"),
     Mutant("bytesignored", K, "committedFiles[$0] != currentFiles[$0]", "false"),
     Mutant("otherfilescompared", K, "committed.filter { TrackingPlan.isPlanFile($0.path) }", "committed"),
-    Mutant("indexentryunchecked", K, "paths.count == events.count ? paths : nil", "paths"),
+    Mutant("indexentryunchecked", K, "documents.count == events.count ? documents : nil", "documents"),
     Mutant("unreadablenamedindex", K, ".unreadableFile(path: path)", ".unreadableFile(path: TrackingPlan.indexFileName)"),
     Mutant("versionfromboolean", K, 'members["x-traffluent-version"]?.integer', 'members["x-traffluent-version"]?.integer ?? 2'),
     Mutant("requiredunchecked", K, "required.count == requiredNames.count", "true"),
@@ -301,4 +303,28 @@ MUTANTS = [
     Mutant("enumunlistedtightens", K, "before == nil", "true"),
     Mutant("enumitemsunread", K, 'schema["items"]?.object.flatMap(enumeration(in:))', "[JSON]?.none"),
     Mutant("enumchangedropped", K, "if let change = enumerationChange(to: current.enumeration) {\n            changes.append(change)\n        }", "", mode="stmt"),
+    # Earlier versions (TRAF-93): kept by writing, listed in the index, compared by bytes alone.
+    Mutant("earlierversionsdropped", T, "earlierVersions(in: committedDocuments)", "earlierVersions(in: [:])"),
+    Mutant("earlierindexorderreversed", T, "first.version < second.version", "first.version > second.version", nth=0),
+    Mutant("earlierindexnamesreversed", T, "first.name.utf8.lexicographicallyPrecedes(second.name.utf8)", "second.name.utf8.lexicographicallyPrecedes(first.name.utf8)", nth=0),
+    Mutant("earlierunlisted", T, "entries.compactMap(\\.indexEntry)", "current.compactMap(\\.indexEntry)"),
+    Mutant("earliertitleunchecked", V, 'members["title"]?.string == name', "true"),
+    Mutant("earlierversionunchecked", V, 'members["x-traffluent-version"]?.integer == Int64(version)', "true"),
+    Mutant("earliercategoryfixed", V, ".string(consentCategory)", '.string("analytics")'),
+    Mutant("earlierexampleunlisted", V, 'entry["example"] = example.map { .string($0.path) }', "", mode="stmt"),
+    Mutant("earlierexampledropped", V, "example.map { [$0] } ?? []", "[]"),
+    Mutant("earlierexampleunread", V, "committed[examplePath].map { File(path: examplePath, contents: $0) }", "File?.none"),
+    Mutant("laterversionkept", V, "version < newest", "true"),
+    Mutant("listedversionkept", V, "!versions.contains(version)", "true"),
+    Mutant("versionsnotgrouped", V, "versionsByName.last?.name == schema.name", "false"),
+    Mutant("otherprefixkept", V, "path.hasPrefix(stem)", "true"),
+    Mutant("othersuffixkept", V, "path.hasSuffix(suffix)", "true"),
+    Mutant("paddedversionkept", V, "String($0) == digits ? $0 : nil", "$0"),
+    Mutant("earliercompared", K, "version >= later || listed.contains(EventContract.Key(name: name, version: version))", "true"),
+    Mutant("listedearlierskipped", K, "listed.contains(EventContract.Key(name: name, version: version))", "false"),
+    Mutant("newestskipped", K, "version >= later", "version > later"),
+    Mutant("newestunread", K, "newest[name]", "Int?.none", nth=2),
+    Mutant("indexnameunread", K, 'entry["name"]?.string', "String?.none"),
+    Mutant("indexversionunread", K, 'entry["version"]?.integer.flatMap { Int(exactly: $0) }', "Int?.none"),
+    Mutant("newestislast", K, "max(newest[name] ?? version, version)", "version"),
 ]

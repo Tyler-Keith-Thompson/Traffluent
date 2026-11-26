@@ -24,7 +24,8 @@ made-up value.
 The tracking plan (``/TrackingPlans``) exports each event's version, and its check compares the
 events with the committed plan: a breaking change at the version the plan has fails it, with a line
 naming the event, the property and the change. With the version raised, the check reports only the
-raise, and exporting the plan again writes the new version's document beside the index.
+raise. Exporting the plan again writes the new version's document and keeps the earlier
+version's unchanged, so validators still accept payloads from releases that send it.
 
 ## Compatible changes
 

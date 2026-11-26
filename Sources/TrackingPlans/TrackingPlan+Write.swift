@@ -2,12 +2,18 @@ public import Foundation
 
 extension TrackingPlan {
     /// Writes the plan's files into `directory`, creating it if needed, and deletes the
-    /// `.schema.json` and `.example.json` files there that the plan doesn't hold, the documents and
-    /// examples of events it no longer has.
+    /// `.schema.json` and `.example.json` files there that the plan doesn't hold.
     ///
     /// The files are ``files(carryingForward:)`` of the plan already in `directory`, so each
     /// event's document keeps, marked deprecated, the properties its version had there and no
-    /// longer declares.
+    /// longer declares. The documents and examples there of an event's earlier versions, below
+    /// the newest the plan lists, are kept unchanged and listed in the index, since releases
+    /// still installed send those versions.
+    ///
+    /// What is deleted: every version's files of an event the plan no longer lists, the files of
+    /// a version above the newest it lists (a version lowered, or a file from another branch,
+    /// which no release of this plan sends), and an earlier version's example without its
+    /// document.
     ///
     /// A file whose bytes are already the plan's is left as it is, so its modification date moves
     /// only when its contents do. Other files in the directory are left alone.

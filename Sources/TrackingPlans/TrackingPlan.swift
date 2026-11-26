@@ -79,6 +79,11 @@ public import Events
 /// with its `name`, `version`, `consentCategory`, `schema`, its document's file name, and
 /// `example`, its example's.
 ///
+/// An event's earlier versions stay in the plan once exported. ``write(to:)`` keeps the documents
+/// and examples a directory holds of an event at a version below the plan's, as they are, and the
+/// index lists them, since releases still installed send that version and a record doesn't say
+/// which version it is.
+///
 /// ``check(againstDirectory:)`` compares a plan with the one committed in a directory, reporting
 /// each ``TrackingPlanDifference``.
 public struct TrackingPlan: Sendable, Hashable {
@@ -120,30 +125,58 @@ public struct TrackingPlan: Sendable, Hashable {
 
     /// The plan's files, as ``files`` lists them, with each event's document keeping the
     /// properties its document in `committed`, at the same name and version, has that the event
-    /// no longer declares: each with its schema there, marked `deprecated: true`.
+    /// no longer declares: each with its schema there, marked `deprecated: true`. The documents in
+    /// `committed` of an event's earlier versions, below the newest the plan lists, are kept too,
+    /// with their examples, byte for byte, and listed in the index.
     ///
     /// ``write(to:)`` writes these, carrying forward the plan already in its directory, so a
-    /// property once in a version's document stays in it: payloads of the releases that sent it,
-    /// and records they stored, still hold it.
+    /// property once in a version's document stays in it, and a version once exported stays in
+    /// the plan after the event's version is raised: payloads of the releases that sent them, and
+    /// records they stored, still hold them.
     ///
-    /// - Parameter committed: The files of a plan exported before; any that isn't a document of
-    ///   one of the plan's events, or isn't JSON, is ignored.
-    /// - Returns: The index, then each event's document and its example, in the order of
-    ///   ``schemas``.
-    /// - Complexity: O(*n* log *n*) in the size of the two plans.
+    /// - Parameter committed: The files of a plan exported before. Any that isn't a document or
+    ///   example of one of the plan's events, at a version it lists or an earlier one, is ignored,
+    ///   and so is an earlier version's example without its document. An earlier version's
+    ///   document that isn't one of that event and version is kept but left out of the index.
+    /// - Returns: The index, then each event's documents and examples, by the UTF-8 bytes of its
+    ///   name, then by version.
+    /// - Complexity: O(*n* log *n*) in the size of the two plans, and O(*e* × *f*) for *e* events
+    ///   and *f* committed files.
     public func files(carryingForward committed: [File]) -> [File] {
         let committedDocuments = Dictionary(committed.map { ($0.path, $0.contents) }) { first, _ in first }
-        return [File(path: TrackingPlan.indexFileName, json: index)] + schemas.flatMap { schema in
+        let current = schemas.map { schema in
             let document = schema.document(keepingRemovedFrom: committedDocuments[schema.fileName].flatMap(JSON.init(parsing:)))
-            return [File(path: schema.fileName, json: document), File(path: schema.exampleFileName, json: schema.example)]
+            return PlanEntry(
+                name: schema.name,
+                version: schema.version,
+                indexEntry: schema.indexEntry,
+                files: [File(path: schema.fileName, json: document), File(path: schema.exampleFileName, json: schema.example)]
+            )
         }
+        let earlier = earlierVersions(in: committedDocuments).map { version in
+            PlanEntry(name: version.name, version: version.version, indexEntry: version.indexEntry, files: version.files)
+        }
+        // No two entries are equal under the order: an earlier version is one the plan doesn't list.
+        let entries = (current + earlier).sorted(by: PlanEntry.precedes)
+        let index = JSON.object(["events": .array(entries.compactMap(\.indexEntry))])
+        return [File(path: TrackingPlan.indexFileName, json: index)] + entries.flatMap(\.files)
     }
 
     /// The name of the plan's index file.
     static let indexFileName = "tracking-plan.json"
+}
 
-    private var index: JSON {
-        .object(["events": .array(schemas.map(\.indexEntry))])
+/// One version of an event in a plan's files: its entry in the index, and its document and
+/// example.
+private struct PlanEntry {
+    let name: String
+    let version: Int
+    let indexEntry: JSON?
+    let files: [TrackingPlan.File]
+
+    /// The index's order: by the UTF-8 bytes of the names, then by version.
+    static func precedes(_ first: PlanEntry, _ second: PlanEntry) -> Bool {
+        first.name == second.name ? first.version < second.version : first.name.utf8.lexicographicallyPrecedes(second.name.utf8)
     }
 }
 
@@ -175,7 +208,7 @@ extension ValidationKeyword {
 }
 
 extension EventSchema {
-    fileprivate var indexEntry: JSON {
+    fileprivate var indexEntry: JSON? {
         .object([
             "name": .string(name),
             "version": .integer(Int64(version)),

@@ -175,9 +175,9 @@ struct TrackingPlanDeprecationTests {
     func raisedVersionNotCarried() throws {
         let committed = try TrackingPlan(schemas: [Released.schema]).files
         let sut = try TrackingPlan(schemas: [RemovedVersion2.schema])
-        let expected = sut.files
+        let expected = Array(sut.files.dropFirst())
 
-        let actual = sut.files(carryingForward: committed)
+        let actual = sut.files(carryingForward: committed).filter { $0.path.hasPrefix("checkout_started.v2.") }
 
         #expect(actual == expected)
     }

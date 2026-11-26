@@ -231,13 +231,12 @@ struct TrackingPlanCheckTests {
         #expect(actual == expected)
     }
 
-    @Test("A version raised past several committed ones supersedes each with the next current version")
+    @Test("A version raised past several committed ones is a raise from the newest, and the earlier committed versions, which writing keeps, are no difference")
     func versionsRaised() throws {
-        let committed = try TrackingPlan(schemas: [1, 2].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
+        let committed = try TrackingPlan(schemas: [1, 2, 3].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
         let sut = try TrackingPlan(schemas: [2, 4, 5].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
         let expected = TrackingPlanCheck.outOfDate([
-            .versionRaised(event: "searched", committed: 1, current: 2),
-            .eventAdded(event: "searched", version: 4),
+            .versionRaised(event: "searched", committed: 3, current: 4),
             .eventAdded(event: "searched", version: 5),
         ])
 
