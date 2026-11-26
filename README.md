@@ -55,6 +55,11 @@ delivery batches the records and hands each batch to its destinations when `exec
 
 ## Guides
 
+New to Traffluent? [Getting Started](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/gettingstarted)
+walks from an empty app to events delivered to a server and tested, with the code of the store app
+in [`Examples/`](Examples).
+
+- [Getting Started](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/gettingstarted): declaring events, building the tracker, delivering to a server, watching drops and testing, step by step
 - [Tracking Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingevents): trackers, batching, enrichers and what a delivery guarantees
 - [Choosing Destinations](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations): logs, traces, a server, memory, and redacting what a destination sees
 - [Tracking from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews): the tracker in the environment, a trait or the responder chain

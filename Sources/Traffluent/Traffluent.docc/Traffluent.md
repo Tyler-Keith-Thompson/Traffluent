@@ -32,6 +32,7 @@ try await delivery.execute()
 
 ### Essentials
 
+- <doc:GettingStarted>
 - <doc:TrackingEvents>
 - <doc:ChoosingDestinations>
 - <doc:TrackingFromViews>
