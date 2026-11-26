@@ -24,5 +24,8 @@ Each call has a tracker of its own, so tests running at the same time never see 
 events. The body may be sync or async, and may return a value, read as `tracked.value`.
 `tracked.names` lists every event's name and `tracked.records` every record.
 
-Code that is handed its tracker rather than reading `Tracker.current`, such as a SwiftUI view given
-one with `tracker(_:)`, takes the one the body is given: `withRecordingTracker { tracker in … }`.
+Most code needs nothing more: it tracks through `Tracker.current`, which falls back to the tracker
+the app bootstrapped, and the test's binding wins over that one. Pass a tracker instead where the
+code reads one set for a single view tree. A tracker given to a SwiftUI view with `tracker(_:)`, such as a preview's,
+reaches the view's environment but not code that reads `Tracker.current`. Such a test takes the
+tracker the body is given and sets it on the view: `withRecordingTracker { tracker in … }`.

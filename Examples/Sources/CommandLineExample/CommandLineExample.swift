@@ -37,14 +37,18 @@ struct CommandLineExample {
         let lifecycle = tracker.trackLifecycle(version: "1.0.0", versionStore: InMemoryVersionStore())
         let delivery = Task { try await analytics.deliver() }
 
+        // The cart and the account track through `Tracker.current`, which the shopping trip binds
+        // to the store's tracker: a program this short needs no process-wide default.
         var cart = Cart()
-        for product in Product.catalog.prefix(1) {
-            try cart.add(product, quantity: 2, trackingWith: tracker)
+        try withTracker(tracker) {
+            for product in Product.catalog.prefix(1) {
+                try cart.add(product, quantity: 2)
+            }
+            cart.apply(.springSale)
+            cart.startCheckout()
+            _ = cart.placeOrder(expressShipping: true)
+            _ = Account.signUp(email: "shopper@example.com", plan: .plus)
         }
-        cart.apply(.springSale, trackingWith: tracker)
-        cart.startCheckout(trackingWith: tracker)
-        _ = cart.placeOrder(expressShipping: true, trackingWith: tracker)
-        _ = Account.signUp(email: "shopper@example.com", plan: .plus, trackingWith: tracker)
 
         // Tracks the termination, then ends the records, so the delivery sends the last batch
         // and returns.

@@ -9,8 +9,8 @@
         let orderPlaced: () -> Void
 
         func makeUIViewController(context: Context) -> CheckoutViewController {
-            CheckoutViewController(totalInCents: cart.totalInCents) { [cart = $cart, orderPlaced] expressShipping, tracker in
-                _ = cart.wrappedValue.placeOrder(expressShipping: expressShipping, trackingWith: tracker)
+            CheckoutViewController(totalInCents: cart.totalInCents) { [cart = $cart, orderPlaced] expressShipping in
+                _ = cart.wrappedValue.placeOrder(expressShipping: expressShipping)
                 orderPlaced()
             }
         }

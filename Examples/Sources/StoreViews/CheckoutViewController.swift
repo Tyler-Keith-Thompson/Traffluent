@@ -8,17 +8,18 @@
     ///
     /// It tracks nothing itself but the order. The window scene tracks its screen view as it
     /// appears, and each of its controls as a touch activates it, named after its accessibility
-    /// identifier (`trackWindowSceneAutomatically(_:)`). The order goes through the tracker its
-    /// traits hold, which SwiftUI's environment sets, as the button is tapped.
+    /// identifier (`trackWindowSceneAutomatically(_:)`). The order is placed with the tracker its
+    /// traits hold, which SwiftUI's environment sets, bound as `Tracker.current`, as the button is
+    /// tapped.
     final class CheckoutViewController: UIViewController {
         private let totalInCents: Int
-        private let placeOrder: @MainActor (_ expressShipping: Bool, _ tracker: Tracker) -> Void
+        private let placeOrder: @MainActor (_ expressShipping: Bool) -> Void
         private let expressShipping = UISwitch()
         private let placeOrderButton = UIButton(configuration: .borderedProminent())
 
         /// A checkout of a cart costing `totalInCents`, which calls `placeOrder` with the
-        /// express shipping choice and the tracker to track the order through.
-        init(totalInCents: Int, placeOrder: @escaping @MainActor (_ expressShipping: Bool, _ tracker: Tracker) -> Void) {
+        /// express shipping choice, with the tracker its traits hold bound as `Tracker.current`.
+        init(totalInCents: Int, placeOrder: @escaping @MainActor (_ expressShipping: Bool) -> Void) {
             self.totalInCents = totalInCents
             self.placeOrder = placeOrder
             super.init(nibName: nil, bundle: nil)
@@ -53,7 +54,9 @@
         }
 
         private func placeOrderTapped() {
-            placeOrder(expressShipping.isOn, view.traitCollection.tracker)
+            // The traits' tracker carries the checkout's screen name, which the app's bootstrapped
+            // tracker doesn't.
+            withTracker(view.traitCollection.tracker) { placeOrder(expressShipping.isOn) }
         }
     }
 #endif

@@ -11,7 +11,9 @@
     ///
     /// Every view below reads the tracker from the environment, which the app sets around this
     /// one with `tracker(_:)`. Each tab's screen is placed with `trackScreen(_:)`, which tracks
-    /// `ScreenViewed` as it appears and stamps the events tracked inside it with its name.
+    /// `ScreenViewed` as it appears and stamps the events tracked inside it with its name. The
+    /// cart and the account track through `Tracker.current`, so a view binds its environment's
+    /// tracker around each change with `withTracker`, and the event carries the screen's name.
     public struct StoreView: View {
         private let preferences: ConsentPreferences
         @State private var cart = Cart()

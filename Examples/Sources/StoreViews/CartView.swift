@@ -29,7 +29,9 @@
                         PriceText(cents: cart.totalInCents)
                     }
                     Button("Check Out") {
-                        cart.startCheckout(trackingWith: tracker)
+                        // Bound so the event carries this screen's name, which the app's
+                        // bootstrapped tracker doesn't.
+                        withTracker(tracker) { cart.startCheckout() }
                         checksOut = true
                     }
                 }

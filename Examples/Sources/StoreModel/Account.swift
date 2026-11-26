@@ -1,6 +1,6 @@
 import Events
 import StoreEvents
-public import Trackers
+import Trackers
 
 /// A shopper's store account.
 public struct Account: Hashable, Sendable {
@@ -27,7 +27,8 @@ public struct Account: Hashable, Sendable {
         self.plan = plan
     }
 
-    /// Signs a shopper up for `plan` with `email`, and tracks `SignedUp` through `tracker`.
+    /// Signs a shopper up for `plan` with `email`, and tracks `SignedUp` through
+    /// `Tracker.current`.
     ///
     /// The email address goes in the event as a `Sensitive` value: a destination reads it only
     /// through the record, and one given `redactingSensitiveValues()` never does.
@@ -35,10 +36,9 @@ public struct Account: Hashable, Sendable {
     /// - Parameters:
     ///   - email: The shopper's email address.
     ///   - plan: The plan they chose.
-    ///   - tracker: What the event is tracked through.
     /// - Returns: The new account.
-    public static func signUp(email: String, plan: Plan, trackingWith tracker: Tracker) -> Account {
-        tracker.track(SignedUp(plan: plan.rawValue, email: Sensitive(email), referrer: nil))
+    public static func signUp(email: String, plan: Plan) -> Account {
+        Tracker.current.track(SignedUp(plan: plan.rawValue, email: Sensitive(email), referrer: nil))
         return Account(email: email, plan: plan)
     }
 }

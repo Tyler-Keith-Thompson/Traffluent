@@ -12,8 +12,8 @@ struct AccountTests {
         let expectedEmail = "shopper@example.com"
         let expectedDescription = "<redacted>"
 
-        let tracked = await withRecordingTracker { tracker in
-            Account.signUp(email: "shopper@example.com", plan: .plus, trackingWith: tracker)
+        let tracked = await withRecordingTracker {
+            Account.signUp(email: "shopper@example.com", plan: .plus)
         }
 
         let event = try #require(tracked.events(of: SignedUp.self).first)

@@ -13,8 +13,8 @@ struct CartTests {
         var sut = Cart()
         let expected = [ProductAddedToCart(productID: "canvas-tote", quantity: 2)]
 
-        let tracked = try await withRecordingTracker { tracker in
-            try sut.add(tote, quantity: 2, trackingWith: tracker)
+        let tracked = try await withRecordingTracker {
+            try sut.add(tote, quantity: 2)
         }
 
         let actual = tracked.events(of: ProductAddedToCart.self)
@@ -32,9 +32,9 @@ struct CartTests {
             ProductAddedToCart(productID: "enamel-mug", quantity: 2),
         ]
 
-        let tracked = try await withRecordingTracker { tracker in
-            try sut.add(mug, trackingWith: tracker)
-            try sut.add(mug, quantity: 2, trackingWith: tracker)
+        let tracked = try await withRecordingTracker {
+            try sut.add(mug)
+            try sut.add(mug, quantity: 2)
         }
 
         #expect(sut.lines == expectedLines)
@@ -48,9 +48,9 @@ struct CartTests {
         let expectedError: QuantityOutOfRange? = QuantityOutOfRange()
         let expectedNames: [String] = []
 
-        let tracked = await withRecordingTracker { tracker -> QuantityOutOfRange? in
+        let tracked = await withRecordingTracker { () -> QuantityOutOfRange? in
             do throws(QuantityOutOfRange) {
-                try sut.add(mug, quantity: quantity, trackingWith: tracker)
+                try sut.add(mug, quantity: quantity)
                 return nil
             } catch {
                 return error
@@ -71,9 +71,9 @@ struct CartTests {
             ProductAddedToCart(productID: "enamel-mug", quantity: 10),
         ]
 
-        let tracked = try await withRecordingTracker { tracker in
-            try sut.add(mug, quantity: 1, trackingWith: tracker)
-            try sut.add(mug, quantity: 10, trackingWith: tracker)
+        let tracked = try await withRecordingTracker {
+            try sut.add(mug, quantity: 1)
+            try sut.add(mug, quantity: 10)
         }
 
         #expect(tracked.events(of: ProductAddedToCart.self) == expected)
@@ -86,8 +86,8 @@ struct CartTests {
         var sut = Cart()
         let expected = Int.max
 
-        _ = try await withRecordingTracker { tracker in
-            try sut.add(priceless, quantity: 3, trackingWith: tracker)
+        _ = try await withRecordingTracker {
+            try sut.add(priceless, quantity: 3)
         }
 
         #expect(sut.totalInCents == expected)
@@ -98,9 +98,9 @@ struct CartTests {
         var sut = Cart()
         let expected = Product.catalog.map(\.id)
 
-        let tracked = try await withRecordingTracker { tracker in
+        let tracked = try await withRecordingTracker {
             for product in Product.catalog {
-                try sut.add(product, trackingWith: tracker)
+                try sut.add(product)
             }
         }
 
@@ -112,8 +112,8 @@ struct CartTests {
     func remove() async throws {
         let mug = Product(id: "enamel-mug", name: "Enamel Mug", priceInCents: 1_800)
         var sut = Cart()
-        _ = try await withRecordingTracker { tracker in
-            try sut.add(mug, trackingWith: tracker)
+        _ = try await withRecordingTracker {
+            try sut.add(mug)
         }
         let expected: [String] = []
 
@@ -134,9 +134,9 @@ struct CartTests {
         // 10% of 1,299 cents is 129.9, rounded down to 129.
         let expectedTotal = 1_170
 
-        let tracked = try await withRecordingTracker { tracker in
-            try sut.add(notebook, trackingWith: tracker)
-            sut.apply(promotion, trackingWith: tracker)
+        let tracked = try await withRecordingTracker {
+            try sut.add(notebook)
+            sut.apply(promotion)
         }
 
         #expect(tracked.events(of: PromotionTapped.self) == expectedEvents)

@@ -104,9 +104,9 @@ withTracker(tracker) {
 }
 ```
 
-Code that no binding reaches, such as a detached task, finds the tracker through
-`Tracker.current` only once it is the process's default. Make it the default once, as the app
-starts, in your `App`'s `init()`:
+Code that no binding reaches, such as a detached task or a SwiftUI button's action, finds the
+tracker through `Tracker.current` only once it is the process's default. Make it the default once,
+as the app starts, in your `App`'s `init()`:
 
 ```swift
 try Tracker.bootstrap(tracker)
@@ -115,9 +115,8 @@ try Tracker.bootstrap(tracker)
 A second call throws `TrackerAlreadyBootstrapped` and leaves the first tracker in place, and a
 `withTracker` binding still wins inside its scope.
 
-The binding doesn't reach callbacks that a framework runs itself, such as a SwiftUI button's
-action, and views don't read `Tracker.current`. They read the tracker from the environment
-instead, so set it at the root of the views, in your `App`'s body:
+Views don't read `Tracker.current`. They read the tracker from the environment, where each screen
+adds its name to it, so set it at the root of the views, in your `App`'s body:
 
 ```swift
 WindowGroup {
@@ -131,7 +130,7 @@ background (<doc:AutomaticTracking>). See <doc:TrackingEvents> and <doc:Tracking
 
 ### Track from code and from views
 
-Code that changes something worth tracking takes the tracker it tracks through. The store's cart
+Code that changes something worth tracking tracks through `Tracker.current`. The store's cart
 tracks `ProductAddedToCart` as a product goes in, and throws before tracking anything when the
 quantity is out of range:
 
@@ -159,17 +158,19 @@ struct Cart {
 
     static let quantities = 1...10
 
-    mutating func add(_ product: Product, quantity: Int = 1, trackingWith tracker: Tracker) throws(QuantityOutOfRange) {
+    mutating func add(_ product: Product, quantity: Int = 1) throws(QuantityOutOfRange) {
         guard Self.quantities.contains(quantity) else { throw QuantityOutOfRange() }
         lines.append(Line(product: product, quantity: quantity))
-        tracker.track(ProductAddedToCart(productID: product.id, quantity: quantity))
+        Tracker.current.track(ProductAddedToCart(productID: product.id, quantity: quantity))
     }
 }
 ```
 
-A view reads the tracker from the environment and hands it to the cart. `trackScreen(_:)`, applied
-where a screen's view is placed, tracks `ScreenViewed` each time it appears and stamps the events
-tracked inside it with the screen's name:
+`trackScreen(_:)`, applied where a screen's view is placed, tracks `ScreenViewed` each time it
+appears and stamps the events tracked inside it with the screen's name. `Tracker.current` works in
+a button's action too, because the app bootstrapped its tracker, but that tracker doesn't know
+which screen the button is on. So the view binds the environment's tracker around the cart's
+change with `withTracker`, and the event carries the screen's name:
 
 ```swift
 struct StoreView: View {
@@ -196,7 +197,7 @@ struct ProductView: View {
     var body: some View {
         Button("Add to Cart") {
             // The default quantity, 1, is in range, so the cart never refuses it.
-            try? cart.add(product, trackingWith: tracker)
+            try? withTracker(tracker) { try cart.add(product) }
         }
         .navigationTitle(product.name)
     }
@@ -285,8 +286,9 @@ changes in CI.
 
 ### Test what the code tracks
 
-`withRecordingTracker` runs a test's body with a fresh tracker and returns what it tracked, so
-tests running at the same time never see each other's events:
+`withRecordingTracker` binds a fresh tracker for the test's body, which `Tracker.current` in the
+cart reaches in place of the app's, and returns what it tracked, so tests running at the same time
+never see each other's events:
 
 ```swift
 import Testing
@@ -299,9 +301,7 @@ func add() async throws {
     let expectedEvents = [ProductAddedToCart(productID: "canvas-tote", quantity: 2)]
     let expectedLines = [Cart.Line(product: tote, quantity: 2)]
 
-    let tracked = try await withRecordingTracker { tracker in
-        try sut.add(tote, quantity: 2, trackingWith: tracker)
-    }
+    let tracked = try await withRecordingTracker { try sut.add(tote, quantity: 2) }
 
     #expect(tracked.events(of: ProductAddedToCart.self) == expectedEvents)
     #expect(sut.lines == expectedLines)

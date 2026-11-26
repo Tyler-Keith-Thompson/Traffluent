@@ -50,10 +50,10 @@ struct GettingStartedExamplesTests {
 
         static let quantities = 1...10
 
-        mutating func add(_ product: Product, quantity: Int = 1, trackingWith tracker: Tracker) throws(QuantityOutOfRange) {
+        mutating func add(_ product: Product, quantity: Int = 1) throws(QuantityOutOfRange) {
             guard Self.quantities.contains(quantity) else { throw QuantityOutOfRange() }
             lines.append(Line(product: product, quantity: quantity))
-            tracker.track(ProductAddedToCart(productID: product.id, quantity: quantity))
+            Tracker.current.track(ProductAddedToCart(productID: product.id, quantity: quantity))
         }
     }
 
@@ -176,9 +176,9 @@ struct GettingStartedExamplesTests {
         let expectedError: QuantityOutOfRange? = QuantityOutOfRange()
         let expectedNames: [String] = []
 
-        let tracked = await withRecordingTracker { tracker -> QuantityOutOfRange? in
+        let tracked = await withRecordingTracker { () -> QuantityOutOfRange? in
             do throws(QuantityOutOfRange) {
-                try sut.add(mug, quantity: 11, trackingWith: tracker)
+                try sut.add(mug, quantity: 11)
                 return nil
             } catch {
                 return error
@@ -197,9 +197,7 @@ struct GettingStartedExamplesTests {
         let expectedEvents = [ProductAddedToCart(productID: "canvas-tote", quantity: 2)]
         let expectedLines = [Cart.Line(product: tote, quantity: 2)]
 
-        let tracked = try await withRecordingTracker { tracker in
-            try sut.add(tote, quantity: 2, trackingWith: tracker)
-        }
+        let tracked = try await withRecordingTracker { try sut.add(tote, quantity: 2) }
 
         #expect(tracked.events(of: ProductAddedToCart.self) == expectedEvents)
         #expect(sut.lines == expectedLines)
@@ -238,7 +236,7 @@ extension GettingStartedExamplesTests {
             var body: some View {
                 Button("Add to Cart") {
                     // The default quantity, 1, is in range, so the cart never refuses it.
-                    try? cart.add(product, trackingWith: tracker)
+                    try? withTracker(tracker) { try cart.add(product) }
                 }
                 .navigationTitle(product.name)
             }

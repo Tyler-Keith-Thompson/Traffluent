@@ -18,7 +18,7 @@
     @MainActor
     @Suite("Store views", .serialized, .timeLimit(.minutes(1)))
     struct StoreViewsTests {
-        @Test("Tapping Add to Cart tracks ProductAddedToCart through the environment's tracker, with the chosen quantity")
+        @Test("Tapping Add to Cart tracks ProductAddedToCart through the environment's tracker, bound around the cart's change, with the chosen quantity")
         func addToCart() async throws {
             let tote = Product(id: "canvas-tote", name: "Canvas Tote", priceInCents: 2_400)
             let expected = [ProductAddedToCart(productID: "canvas-tote", quantity: 1)]
@@ -29,6 +29,20 @@
             }
 
             #expect(tracked.events(of: ProductAddedToCart.self) == expected)
+        }
+
+        @Test("Add to Cart on the product screen tracks ProductAddedToCart with the screen's name, which the environment's tracker carries")
+        func addToCartScreen() async throws {
+            let tote = Product(id: "canvas-tote", name: "Canvas Tote", priceInCents: 2_400)
+            let expected: [String?] = ["Product"]
+
+            let tracked = try await withRecordingTracker { tracker in
+                let sut = ProductView(product: tote, cart: .constant(Cart())).trackScreen("Product").tracker(tracker)
+                try sut.inspect().find(button: "Add to Cart").tap()
+            }
+
+            let actual = tracked.records.filter { $0.event is ProductAddedToCart }.map { $0.context[ScreenKey.self] }
+            #expect(actual == expected)
         }
 
         @Test("Tapping the promotion's banner tracks PromotionTapped")
@@ -47,8 +61,8 @@
         func placeOrder() async throws {
             let tote = Product(id: "canvas-tote", name: "Canvas Tote", priceInCents: 2_400)
             var cart = Cart()
-            _ = try await withRecordingTracker { tracker in
-                try cart.add(tote, trackingWith: tracker)
+            _ = try await withRecordingTracker {
+                try cart.add(tote)
             }
             var orderPlaced = false
             let expectedItems = [["canvas-tote"]]

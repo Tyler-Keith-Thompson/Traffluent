@@ -28,7 +28,9 @@
                             }
                         }
                         Button("Sign Up") {
-                            account = .signUp(email: email, plan: plan, trackingWith: tracker)
+                            // Bound so the event carries this screen's name, which the app's
+                            // bootstrapped tracker doesn't.
+                            account = withTracker(tracker) { .signUp(email: email, plan: plan) }
                         }
                         .disabled(email.isEmpty)
                     }

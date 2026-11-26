@@ -19,8 +19,9 @@
                 Stepper("Quantity: \(quantity)", value: $quantity, in: Cart.quantities)
                 Button("Add to Cart") {
                     // The stepper keeps the quantity in the cart's range, so the cart never
-                    // refuses it.
-                    try? cart.add(product, quantity: quantity, trackingWith: tracker)
+                    // refuses it. The environment's tracker carries this screen's name, which the
+                    // app's bootstrapped tracker, `Tracker.current` here otherwise, doesn't.
+                    try? withTracker(tracker) { try cart.add(product, quantity: quantity) }
                 }
             }
             .navigationTitle(product.name)

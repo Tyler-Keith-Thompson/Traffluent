@@ -15,10 +15,11 @@ Read the app's code in this order, which is the order it builds up in:
    optional `Sensitive` value, so a record whose email a destination redacted still matches the
    plan. `PromotionTapped` is collected for `advertising`.
 2. `Sources/StoreModel` is the store itself: `Product`, `Promotion`, `Cart`, `Order` and
-   `Account`. Each change that matters to analytics takes the tracker it tracks through
-   (`try cart.add(product, quantity: 2, trackingWith: tracker)`), so its tests read what it tracked
-   with `withRecordingTracker`. A quantity outside 1 through 10 throws `QuantityOutOfRange` before
-   anything is tracked.
+   `Account`. Each change that matters to analytics tracks through `Tracker.current`
+   (`try cart.add(product, quantity: 2)`): the app's tracker, which the app bootstraps, or the one
+   a test binds with `withRecordingTracker { try cart.add(product, quantity: 2) }` and reads what was
+   tracked from. A quantity outside 1 through 10 throws `QuantityOutOfRange` before anything is
+   tracked.
 3. `Sources/StoreAnalytics` builds the pipeline. `StoreAnalytics` keeps records in a `SegmentStore`,
    gates them with the shopper's `Consent`, adds sessions and standard context
    (`StoreAnalytics.enrichers`), and delivers batches to an `HTTPDestination` with
@@ -27,15 +28,19 @@ Read the app's code in this order, which is the order it builds up in:
    `ConsentPreferences` saves the shopper's decisions and restores them at launch.
    `TrackingPlan.store` lists every event the app tracks, the library's included.
 4. `Sources/StoreViews` holds the SwiftUI screens. Each reads the tracker from the environment and
-   is placed with `trackScreen(_:)`. `ConsentPrompt` grants or denies every category, and
-   `ConsentToggle` in the account screen does it one category at a time. The checkout is a UIKit
-   view controller where UIKit has window scenes, and
-   `trackWindowSceneAutomatically(_:)` turns on automatic screen and control tracking there. On the
-   Mac and the watch it is a SwiftUI view that tracks the same events with `trackOnTap(_:)` and
-   `trackChange(of:_:)`.
+   is placed with `trackScreen(_:)`. A tracker set for a view tree with `.tracker(_:)`, such as the
+   one `trackScreen(_:)` adds the screen's name to or a preview's, doesn't reach code that reads
+   `Tracker.current`, so a view binds it around each change to the cart or the account
+   (`withTracker(tracker) { cart.startCheckout() }`), and the event carries the screen's name.
+   `ConsentPrompt` grants or denies every category, and `ConsentToggle` in the account screen does
+   it one category at a time. The checkout is a UIKit view controller where UIKit has window
+   scenes, and `trackWindowSceneAutomatically(_:)` turns on automatic screen and control tracking
+   there. On the Mac and the watch it is a SwiftUI view that tracks the same events with
+   `trackOnTap(_:)` and `trackChange(of:_:)`.
 5. `Apps/ExampleApp/StoreApp.swift` is the composition root. It restores consent, builds
-   `StoreAnalytics`, keeps the `LifecycleObservation` from `trackLifecycle`, starts the delivery,
-   logs every drop, and sets the tracker at the root of the views.
+   `StoreAnalytics`, makes its tracker the process's default (`Tracker.bootstrap`), keeps the
+   `LifecycleObservation` from `trackLifecycle`, starts the delivery, logs every drop, and sets the
+   tracker at the root of the views.
 
 ## Running it
 

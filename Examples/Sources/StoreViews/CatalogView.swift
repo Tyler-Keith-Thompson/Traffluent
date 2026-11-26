@@ -13,7 +13,9 @@
             List {
                 Section {
                     Button(Promotion.springSale.title) {
-                        cart.apply(.springSale, trackingWith: tracker)
+                        // Bound so the event carries this screen's name, which the app's
+                        // bootstrapped tracker doesn't.
+                        withTracker(tracker) { cart.apply(.springSale) }
                     }
                     .disabled(cart.promotion == .springSale)
                 }

@@ -122,10 +122,12 @@ struct BatchIngestionTests {
                 backoff: try ExponentialBackoff(initialDelay: .milliseconds(1), maximumDelay: .milliseconds(1))
             )
             var cart = Cart()
-            try cart.add(tote, trackingWith: analytics.tracker)
-            cart.startCheckout(trackingWith: analytics.tracker)
-            _ = cart.placeOrder(expressShipping: false, trackingWith: analytics.tracker)
-            _ = Account.signUp(email: "shopper@example.com", plan: .basic, trackingWith: analytics.tracker)
+            try withTracker(analytics.tracker) {
+                try cart.add(tote)
+                cart.startCheckout()
+                _ = cart.placeOrder(expressShipping: false)
+                _ = Account.signUp(email: "shopper@example.com", plan: .basic)
+            }
             await analytics.tracker.finish()
             try await analytics.deliver()
         }

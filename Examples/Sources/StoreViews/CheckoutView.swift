@@ -27,7 +27,9 @@
                         ControlActivated(control: "express-shipping", kind: "Toggle")
                     }
                 Button("Place Order") {
-                    _ = cart.placeOrder(expressShipping: expressShipping, trackingWith: tracker)
+                    // Bound so the order carries this screen's name, which the app's
+                    // bootstrapped tracker doesn't.
+                    _ = withTracker(tracker) { cart.placeOrder(expressShipping: expressShipping) }
                     orderPlaced()
                 }
                 .trackOnTap(ControlActivated(control: "place-order", kind: "Button"))
