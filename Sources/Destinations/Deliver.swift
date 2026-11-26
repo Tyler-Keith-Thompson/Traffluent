@@ -76,6 +76,10 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
                     for buffer in buffers { buffer.finish() }
                 }
                 for try await batch in self {
+                    // A batching sequence ends a cancelled delivery by handing over what was
+                    // pending. Telling the store it is being delivered would mark records no
+                    // destination will get as redelivered on the next launch.
+                    if Task.isCancelled { break }
                     guard let delivery = Delivery(of: batch, destinationCount: buffers.count) else { continue }
                     for buffer in buffers { buffer.yield(delivery) }
                 }

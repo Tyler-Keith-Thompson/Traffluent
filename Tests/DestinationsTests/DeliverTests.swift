@@ -492,6 +492,72 @@ struct DeliverTests {
 
     /// A store keeping records in memory by position, which reads them back without their
     /// context, as a store on disk does, and records what it is told.
+    @Test("A batch handed over after the delivery was cancelled isn't marked as being delivered")
+    func batchAfterCancellation() async throws {
+        final class Marks: Acknowledger {
+            let marked = Mutex<[UInt64]>([])
+
+            func willDeliver(_ positions: [UInt64]) -> Set<UInt64> {
+                marked.withLock { $0 += positions }
+                return []
+            }
+
+            func acknowledge(_ positions: [UInt64]) {}
+        }
+        /// Yields `first`, then waits until it is cancelled (sending `waiting` first) and yields
+        /// `last`, as a batching sequence hands over what is pending when a cancelled delivery
+        /// ends its records.
+        struct LastBatchOnCancel: AsyncSequence, Sendable {
+            let first: [EventRecord]
+            let last: [EventRecord]
+            let waiting: SingleValueSubject<Void>
+
+            func makeAsyncIterator() -> Iterator {
+                Iterator(sequence: self)
+            }
+
+            struct Iterator: AsyncIteratorProtocol {
+                let sequence: LastBatchOnCancel
+                var step = 0
+
+                mutating func next() async throws -> [EventRecord]? {
+                    step += 1
+                    switch step {
+                    case 1:
+                        return sequence.first
+                    case 2:
+                        let cancelled = SingleValueSubject<Void>()
+                        try? sequence.waiting.send()
+                        await withTaskCancellationHandler {
+                            try? await cancelled.execute()
+                        } onCancel: {
+                            try? cancelled.send()
+                        }
+                        return sequence.last
+                    default:
+                        return nil
+                    }
+                }
+            }
+        }
+        let marks = Marks()
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        func record(_ number: Int) -> EventRecord {
+            EventRecord(event: Tapped(number: number), timestamp: timestamp, sourceLocation: nil, deliveryTag: DeliveryTag(acknowledger: marks, position: UInt64(number)))
+        }
+        let waiting = SingleValueSubject<Void>()
+        let sut = LastBatchOnCancel(first: [record(1)], last: [record(2)], waiting: waiting).deliver(to: InMemoryDestination())
+        let expectedMarked: [UInt64] = [1]
+        let delivery = Task { try await sut.execute() }
+        try await waiting.execute()
+
+        delivery.cancel()
+        _ = try? await delivery.value
+
+        let actualMarked = marks.marked.withLock { $0 }
+        #expect(actualMarked == expectedMarked)
+    }
+
     final class Shelf: Acknowledger {
         let kept = Mutex<[UInt64: EventRecord]>([:])
         let acknowledged = Mutex<[UInt64]>([])

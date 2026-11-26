@@ -31,6 +31,9 @@ B = "Batch.swift"
 M = "InMemoryDestination.swift"
 
 MUTANTS = [
+    # A batch handed over after cancellation (TRAF-71).
+    Mutant("batchaftercancelmarked", "Deliver.swift", "if Task.isCancelled { break }", "", mode="stmt"),
+
     Mutant("linewithoutname", C, '"\\(record.name) \\(record.event)"', '"\\(record.event)"'),
     Mutant("linewithoutspace", C, '"\\(record.name) \\(record.event)"', '"\\(record.name)\\(record.event)"'),
     # The parameter's default; a comment in the body names 100 again.
