@@ -65,7 +65,7 @@ off the device.
 
 The rest ship no manifest: ``/Events``, ``/Trackers``, ``/Persistence``, ``/GRDBPersistence``,
 ``/Checksums``, ``/Destinations``, ``/LoggingDestinations``, ``/TracingDestinations``,
-``/HTTPDestinations``, ``/CollectorEncoding``, ``/EventMacros``, ``/TrackingPlans`` and
+``/HTTPDestinations``, ``/CollectorEncoding``, ``/PostHogEncoding``, ``/PropertyJSON``, ``/EventMacros``, ``/TrackingPlans`` and
 ``/TrackingPlanTesting`` neither call a required-reason API nor make data of their own. They carry, store and send the events and
 context your app and the modules above make.
 

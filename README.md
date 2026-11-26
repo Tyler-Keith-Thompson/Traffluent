@@ -79,6 +79,8 @@ delivery batches the records and hands each batch to its destinations when `exec
 - [`TracingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/tracingdestinations): `SpanEventDestination`, which adds events to the active span
 - [`HTTPDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/httpdestinations): `HTTPDestination`, which posts each batch to an HTTP endpoint and retries it until it arrives
 - [`CollectorEncoding`](https://tyler-keith-thompson.github.io/Traffluent/documentation/collectorencoding): `CollectorBatchEncoder`, TraffluentCollector's ingest format
+- [`PostHogEncoding`](https://tyler-keith-thompson.github.io/Traffluent/documentation/posthogencoding): `PostHogBatchEncoder`, PostHog's batch capture API (not in `import Traffluent`)
+- [`PropertyJSON`](https://tyler-keith-thompson.github.io/Traffluent/documentation/propertyjson): an event's properties as JSON, the reading the two encoders share; no public API (not in `import Traffluent`)
 - [`SwiftUITracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/swiftuitracking): The environment's `tracker` and the `trackOnAppear`, `trackOnTap`, `trackChange` and `trackScreen` modifiers
 - [`UIKitTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/uikittracking): `TrackerTrait` and `UIControl.track(_:for:)`
 - [`AppKitTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/appkittracking): `TrackerProviding`, `NSView.tracker` and `NSControl.track(_:)`

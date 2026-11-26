@@ -70,6 +70,8 @@ try await delivery.execute()
 - ``/TracingDestinations``
 - ``/HTTPDestinations``
 - ``/CollectorEncoding``
+- ``/PostHogEncoding``
+- ``/PropertyJSON``
 - ``/Persistence``
 - ``/GRDBPersistence``
 - ``/EventMacros``

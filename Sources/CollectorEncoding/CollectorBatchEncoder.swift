@@ -3,7 +3,7 @@ import Foundation
 public import HTTPDestinations
 public import Instrumentation
 import Logging
-import Persistence
+import PropertyJSON
 public import TrackingPlans
 
 /// The ``/HTTPDestinations/BatchEncoder`` of TraffluentCollector's ingest format, so an
@@ -167,29 +167,24 @@ private struct EventVersion: Hashable {
     let version: Int
 }
 
-extension EventSchema {
-    /// Each property's type as written, optional when the property is; `nil` for a type the plan
-    /// can't parse, whose value is written as its encoding holds it.
-    fileprivate var propertyTypes: [String: WrittenType?] {
-        // Unique: TrackingPlan rejects a schema with two properties of one name.
-        Dictionary(uniqueKeysWithValues: properties.map { property in
-            let type = WrittenType(parsing: property.typeName)
-            return (property.name, property.isOptional ? type.map(WrittenType.optional) : type)
-        })
+extension EventRecord {
+    /// The event's properties as JSON, read from its `BinaryCodable` form through `types`, with
+    /// its sensitive values while the record reveals them.
+    fileprivate func properties(types: [String: WrittenType?]) throws(CollectorEncodingError) -> [String: JSON] {
+        do {
+            return try properties(types: types, writingSensitiveValues: revealsSensitiveValues)
+        } catch {
+            throw CollectorEncodingError(error)
+        }
     }
 }
 
-extension EventRecord {
-    /// The event's properties as JSON, read from its `BinaryCodable` form through `types`.
-    fileprivate func properties(types: [String: WrittenType?]) throws(CollectorEncodingError) -> [String: JSON] {
-        guard let event = event as? any BinaryCodable else {
-            throw .notBinaryCodable(name: name)
+extension CollectorEncodingError {
+    /// The reason the property reader gave, as this encoder's.
+    fileprivate init(_ error: PropertyReadingError) {
+        switch error {
+        case .notBinaryCodable(let name): self = .notBinaryCodable(name: name)
+        case .unrepresentableValue(let event, let property): self = .unrepresentableValue(event: event, property: property)
         }
-        // The store's encoder only for a record that reveals its sensitive values; otherwise each
-        // is written as `undefined`, which leaves it out.
-        var encoder = BinaryEncoder(writingSensitiveValues: revealsSensitiveValues)
-        encoder.encode(event)
-        var reader = PropertyReader(bytes: encoder.bytes)
-        return try reader.properties(types: types, event: name)
     }
 }

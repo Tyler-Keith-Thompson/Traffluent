@@ -134,7 +134,9 @@ MODULES = [
     ("LoggingDestinations", "Pipeline", "LoggerDestination: writes each event to a swift-log Logger, with its call site and context as metadata.", ["Events", "Destinations", "swift-log/Logging"]),
     ("TracingDestinations", "Pipeline", "SpanEventDestination: adds each event to the span that was active when it was tracked.", ["Events", "Destinations", "swift-distributed-tracing/Tracing"]),
     ("HTTPDestinations", "Pipeline", "HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields, retrying a send that gets no response or a transient status with ExponentialBackoff on a clock until it is delivered, and reporting a batch it drops for good on dropReports; URLSessionTransport, the default transport.", ["Events", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-http-types/HTTPTypesFoundation", "swift-log/Logging"]),
-    ("CollectorEncoding", "Pipeline", "CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them; a record it can't encode is left out as a SkippedRecord, not the batch.", ["Events", "Persistence", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
+    ("PropertyJSON", "Pipeline", "An event's stored properties as JSON, read from its @Event encoding through its schema in a TrackingPlan, with or without its Sensitive values: the property reading the JSON batch encoders share, package API only.", ["Events", "Persistence", "TrackingPlans"]),
+    ("CollectorEncoding", "Pipeline", "CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them; a record it can't encode is left out as a SkippedRecord, not the batch.", ["Events", "PropertyJSON", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
+    ("PostHogEncoding", "Pipeline", "PostHogBatchEncoder: the BatchEncoder of PostHog's batch capture API (POST /batch/), so an HTTPDestination sends to PostHog Cloud or a self-hosted PostHog: each record as an anonymous event whose distinct_id is its session's SessionKey, or the record's own id when it has no session, and no other identifier; its uuid the record's id; its properties read through its schema in a TrackingPlan, never a Sensitive value or a $-prefixed key; GeoIP enrichment turned off; the standard context as PostHog's own properties; a record it can't encode, or whose event name starts with $, is left out as a PostHogSkippedRecord, not the batch.", ["Events", "HTTPDestinations", "PropertyJSON", "TrackingPlans", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; Consent, which holds, delivers or drops each event by its ConsentCategory's status; and Samplers, which keep a seeded fraction of events, or of the groups a context key makes, stamping each kept record with its SampleRateKey.", ["Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees"]),
     # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
     ("TrackerTesting", "Pipeline", "withRecordingTracker(_:): runs a test's body with a fresh tracker bound to its task, then returns a TrackerRecording of every event tracked in it, in order, typed with events(of:).", ["Events", "Trackers"]),
@@ -177,8 +179,11 @@ EXAMPLE_MODULES = []
 # back end (an in-memory store for their tests). Each keeps its library product, its DocC archive
 # and its place in the docs; only the generated umbrella doesn't import it.
 # Traffluent's pull in a package the rest of the library doesn't need (GRDB, swift-syntax) or
-# import Swift Testing.
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting"]
+# import Swift Testing. PostHogEncoding is a vendor's wire format, which `import Traffluent` leaves
+# out so the umbrella stays vendor-neutral (N3); an app sending to PostHog adds it by name.
+# PropertyJSON has only package API, which an adopter can't call, so the umbrella has no reason to
+# import it.
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "EventMacros", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "PropertyJSON"]
 
 # Library modules that import Swift Testing, by name from MODULES: test helpers adopters add to
 # their test targets (a custom Trait, an assertion that records an Issue). Bazel finds Testing only
@@ -285,7 +290,9 @@ TEST_TARGETS = [
     ("StandardContextTests", ["StandardContext", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "TrackerTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
+    ("PropertyJSONTests", ["PropertyJSON", "EventMacros", "Events", "Persistence", "TrackingPlans"]),
+    ("PostHogEncodingTests", ["PostHogEncoding", "PropertyJSON", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "TrackerTesting", "PostHogEncoding", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the

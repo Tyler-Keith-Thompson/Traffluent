@@ -58,6 +58,8 @@ docc_archive(
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
         "//Sources/TrackingPlanTesting:TrackingPlanTestingDocumentation",
         "//Sources/TrackerTesting:TrackerTestingDocumentation",
+        "//Sources/PostHogEncoding:PostHogEncodingDocumentation",
+        "//Sources/PropertyJSON:PropertyJSONDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

@@ -80,6 +80,51 @@ library tracks, such as `SessionStarted`, that the plan doesn't list), when the 
 record at error level, and `batch(of:)` returns them as `SkippedRecord`s. A batch with no record
 the encoder can write sends nothing.
 
+### PostHog
+
+To send to PostHog, Cloud or self-hosted, give `HTTPDestination` a
+`PostHogBatchEncoder(projectToken:plan:)` (module ``/PostHogEncoding``, which `import Traffluent`
+leaves out) and your instance's `/batch/` URL. The project token goes in the body; it is public,
+like every PostHog client's, so no header is needed. The destination retries and reports drops as
+it does for any server, and a record sent again keeps its `uuid`.
+
+```swift
+let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+let postHog = HTTPDestination(
+    endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
+    instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields
+    encoder: PostHogBatchEncoder(projectToken: projectToken, plan: plan))
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: postHog)
+```
+
+Each event's `distinct_id` is the record's session (`Enricher.sessions()`), and nothing else
+identifies anyone. Events are sent as anonymous (`$process_person_profile: false`), and the vendor
+identifier, trace context and your own context keys aren't sent. `$session_id` isn't sent either:
+PostHog's sessions take only a UUIDv7, and a Traffluent session is a random UUID, so PostHog's
+session and web analytics don't group these events. PostHog counts a person per `distinct_id`, so
+its unique users are sessions. The encoder adds PostHog's own properties for the app, device,
+operating system, locale and network when the standard context enrichers set them. Event names are
+sent as they are.
+
+PostHog rejects a whole batch with 400 when one of its events has no `distinct_id`, so every event
+gets one. A record with no session, from a tracker without `.sessions()` or recovered by a store
+after a relaunch (recovered records keep no context), is sent under its own record identifier: an
+anonymous person of one event, linked to nothing.
+
+PostHog records the address each request comes from as `$ip`, unless the project discards client IP
+data, and its GeoIP transformation adds a location even when it does. The encoder sends
+`$geoip_disable: true` on every event, so PostHog adds no location; choose whether to keep `$ip` in
+the project's settings.
+
+A `Sensitive` value is never sent, whatever the record reveals, so a value meant for PostHog isn't
+`Sensitive`. Properties whose names PostHog reads as settings or identity (`$`-prefixed ones, which
+only a hand-written `BinaryCodable` conformance can write, and `distinct_id`) are left out and
+logged. Like the collector's encoder, it leaves out a record the plan doesn't describe, one that
+isn't `BinaryCodable` and one holding a value JSON can't, and also one whose event name starts with
+`$`, as PostHog keeps those names for its own events. It logs each at error level, and
+`batch(of:)` returns them as `PostHogSkippedRecord`s.
+
 ### Memory
 
 To read what was tracked inside the app, deliver to an `InMemoryDestination` as well (module

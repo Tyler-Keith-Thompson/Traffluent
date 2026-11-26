@@ -2,7 +2,12 @@
 // (Sources/Traffluent/Traffluent.docc/ChoosingDestinations.md), verbatim, so the article cannot
 // drift from the code.
 
+import EventMacros
+import Foundation
+import Instrumentation
+import PostHogEncoding
 import Testing
+import TrackingPlans
 import Traffluent
 
 @Suite("Choosing destinations examples", .timeLimit(.minutes(1)))
@@ -57,5 +62,34 @@ struct ChoosingDestinationsExamplesTests {
         #expect(email == "ada@example.com")
         #expect(redacted == nil)
         #expect(callSite == nil)
+    }
+}
+
+@Suite("Choosing destinations examples: PostHog", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsPostHogExamplesTests {
+    @Event(name: "signed_up")
+    struct SignedUp {
+        var plan: String
+    }
+
+    @Test("PostHog")
+    func postHog() async throws {
+        let postHogBatchURL = try #require(URL(string: "https://posthog.example.com/batch/"))
+        let projectToken = "phc_example"
+
+        let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+        let postHog = HTTPDestination(
+            endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
+            instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields
+            encoder: PostHogBatchEncoder(projectToken: projectToken, plan: plan))
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: postHog)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = [SignedUp.name, SessionStarted.name, SessionEnded.name].sorted()
+
+        #expect(plan.schemas.map(\.name).sorted() == expected)
     }
 }

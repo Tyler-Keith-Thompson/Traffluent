@@ -22,7 +22,9 @@ let products: [Product] = [
     .library(name: "LoggingDestinations", targets: ["LoggingDestinations"]),
     .library(name: "TracingDestinations", targets: ["TracingDestinations"]),
     .library(name: "HTTPDestinations", targets: ["HTTPDestinations"]),
+    .library(name: "PropertyJSON", targets: ["PropertyJSON"]),
     .library(name: "CollectorEncoding", targets: ["CollectorEncoding"]),
+    .library(name: "PostHogEncoding", targets: ["PostHogEncoding"]),
     .library(name: "Trackers", targets: ["Trackers"]),
     .library(name: "TrackerTesting", targets: ["TrackerTesting"]),
     .library(name: "SwiftUITracking", targets: ["SwiftUITracking"]),
@@ -67,7 +69,9 @@ let targets: [Target] = [
     .target(name: "LoggingDestinations", dependencies: ["Events", "Destinations", .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "TracingDestinations", dependencies: ["Events", "Destinations", .product(name: "Tracing", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .target(name: "HTTPDestinations", dependencies: ["Events", "Destinations", .product(name: "Afluent", package: "afluent"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "HTTPTypesFoundation", package: "swift-http-types"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
-    .target(name: "CollectorEncoding", dependencies: ["Events", "Persistence", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
+    .target(name: "PropertyJSON", dependencies: ["Events", "Persistence", "TrackingPlans"], exclude: bazelFiles),
+    .target(name: "CollectorEncoding", dependencies: ["Events", "PropertyJSON", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
+    .target(name: "PostHogEncoding", dependencies: ["Events", "HTTPDestinations", "PropertyJSON", "TrackingPlans", "Sessions", "StandardContext", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "Trackers", dependencies: ["Events", "Persistence", .product(name: "Afluent", package: "afluent"), .product(name: "DequeModule", package: "swift-collections"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log"), .product(name: "Generators", package: "swiftprng"), .product(name: "Sampling", package: "swiftprng"), .product(name: "SeedTrees", package: "swiftprng")], exclude: bazelFiles),
     .target(name: "TrackerTesting", dependencies: ["Events", "Trackers"], exclude: bazelFiles),
     // Instrumentation
@@ -121,7 +125,9 @@ let targets: [Target] = [
     .testTarget(name: "StandardContextTests", dependencies: ["StandardContext", "Events", "Persistence", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SystemPackage", package: "swift-system"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "ChecksumsTests", dependencies: ["Checksums", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "Checksums", "Events", "Trackers", "Destinations", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "SwiftCBOR", package: "swiftcbor"), "TraffluentTestSupport"], exclude: bazelFiles),
-    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", "TrackerTesting", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
+    .testTarget(name: "PropertyJSONTests", dependencies: ["PropertyJSON", "EventMacros", "Events", "Persistence", "TrackingPlans"], exclude: bazelFiles),
+    .testTarget(name: "PostHogEncodingTests", dependencies: ["PostHogEncoding", "PropertyJSON", "Destinations", "HTTPDestinations", .product(name: "HTTPTypes", package: "swift-http-types"), "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", .product(name: "Afluent", package: "afluent"), .product(name: "Clocks", package: "swift-clocks"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
+    .testTarget(name: "TraffluentTests", dependencies: ["Traffluent", "EventMacros", "TrackingPlans", "TrackerTesting", "PostHogEncoding", .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
 ]
 
 let package = Package(

@@ -1,6 +1,6 @@
 import Foundation
 import Persistence
-import TrackingPlans
+internal import TrackingPlans
 
 /// Reads an event's `BinaryCodable` bytes, a CBOR map of its properties, as JSON, guided by each
 /// property's type as its schema writes it.
@@ -26,9 +26,9 @@ struct PropertyReader {
     ///   - types: Each property's type as written; a missing or `nil` one is read for what the
     ///     bytes hold.
     ///   - event: The event's name, for the error.
-    /// - Throws: ``CollectorEncodingError/unrepresentableValue(event:property:)`` naming the
+    /// - Throws: ``PropertyReadingError/unrepresentableValue(event:property:)`` naming the
     ///   property whose bytes JSON can't hold, or the event's name for bytes that aren't a map.
-    mutating func properties(types: [String: WrittenType?], event: String) throws(CollectorEncodingError) -> [String: JSON] {
+    mutating func properties(types: [String: WrittenType?], event: String) throws(PropertyReadingError) -> [String: JSON] {
         let count: Int
         do {
             count = try decoder.readCount(of: .map, elementSize: 2)
@@ -84,7 +84,7 @@ struct PropertyReader {
         case .date:
             let seconds = try decoder.decode(Double.self)
             guard seconds.isFinite else { throw .invalidValue }
-            return .string(Date(timeIntervalSinceReferenceDate: seconds).collectorTimestamp)
+            return .string(Date(timeIntervalSinceReferenceDate: seconds).propertyTimestamp)
         case .other, nil:
             return try anyValue()
         }
