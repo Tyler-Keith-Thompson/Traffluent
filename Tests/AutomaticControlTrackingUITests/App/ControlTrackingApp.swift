@@ -7,6 +7,7 @@
 // `article` (the Automatic Tracking article's example, which skips "debug-menu-button" and renames
 // "checkout-button") or `every` (names a control without an identifier after its kind).
 import AutomaticControlTracking
+import Events
 import SwiftUI
 import SwiftUITracking
 import Trackers

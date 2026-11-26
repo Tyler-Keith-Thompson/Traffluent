@@ -1,6 +1,7 @@
 // Exit tests, in a file of their own: each runs its body in a child process, which iOS, tvOS,
 // watchOS and visionOS cannot start.
 
+import Events
 import Sessions
 import Testing
 import Trackers

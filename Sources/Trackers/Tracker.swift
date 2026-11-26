@@ -1,8 +1,9 @@
 public import Events
 public import Foundation
-import Instrumentation
+internal import Instrumentation
 import Logging
 public import Persistence
+internal import Synchronization
 
 /// What app code tracks events with: it records each event, with the time, the caller's source
 /// location and the task's context, as one of its ``records``.
@@ -50,10 +51,13 @@ public import Persistence
 /// while undecided and dropping it when denied; one given none delivers every event.
 public struct Tracker: Sendable {
     // An enum of what can back a tracker, so a no-op tracker is a case rather than an optional
-    // intake that every call checks.
+    // intake that every call checks. `unbound` drops like `none` but warns: it is what
+    // `Tracker.current` gives with nothing bound, where a drop means a binding that doesn't reach
+    // the task, while `noOp` is also a deliberate default (a SwiftUI preview's environment).
     enum Backing: Sendable {
         case intake(Intake)
         case none
+        case unbound
     }
 
     let backing: Backing
@@ -164,22 +168,39 @@ public struct Tracker: Sendable {
     /// empty.
     public static let noOp = Tracker(backing: .none, now: { Date.now })
 
-    /// The tracker bound to the current task by the nearest enclosing `withTracker`, or
-    /// ``noOp`` when none is.
+    /// The tracker bound to the current task by the nearest enclosing `withTracker`, or one that
+    /// drops every event, as ``noOp`` does, when none is.
+    ///
+    /// A binding reaches the work inside `withTracker` and the child tasks it starts. A detached
+    /// task (`Task.detached`) and a callback a framework runs on a task of its own get no
+    /// binding, so `Tracker.current` there drops what it tracks: hand those a tracker value
+    /// instead. The first event dropped at each call site is logged at warning level, and later
+    /// ones from that call site at debug level.
     public static var current: Tracker {
-        bound ?? .noOp
+        bound ?? .unbound
     }
 
     @TaskLocal static var bound: Tracker?
 
+    /// What ``current`` gives with no tracker bound: a no-op tracker whose drops warn.
+    private static let unbound = Tracker(backing: .unbound, now: { Date.now })
+
     private static let logger = Logger(label: "Trackers.Tracker")
+
+    // The call sites that have warned of an event tracked with no tracker bound, so a loop
+    // tracking through a missing binding warns once per call site rather than once per event:
+    // the warning is built and written on the tracking caller, and warning level is on by
+    // default. Per call site rather than once per process, so every missing binding shows up. A
+    // Mutex rather than an actor: `track` is synchronous and must not wait. It grows by one entry
+    // per call site, which the program's source bounds.
+    private static let warnedUnboundCallSites = Mutex<Set<UnboundCallSite>>([])
 
     /// The records of the events this tracker tracks, for a delivery to read.
     public var records: Records {
         switch backing {
         case .intake(let intake):
             Records(subscription: intake.subscription)
-        case .none:
+        case .none, .unbound:
             Records(subscription: nil)
         }
     }
@@ -193,7 +214,7 @@ public struct Tracker: Sendable {
         switch backing {
         case .intake(let intake):
             intake.store
-        case .none:
+        case .none, .unbound:
             nil
         }
     }
@@ -215,7 +236,7 @@ public struct Tracker: Sendable {
         switch backing {
         case .intake(let intake):
             intake.rejectionReports
-        case .none:
+        case .none, .unbound:
             AsyncStream { $0.finish() }
         }
     }
@@ -235,7 +256,7 @@ public struct Tracker: Sendable {
         switch backing {
         case .intake(let intake):
             intake.samplingDropReports
-        case .none:
+        case .none, .unbound:
             AsyncStream { $0.finish() }
         }
     }
@@ -249,8 +270,9 @@ public struct Tracker: Sendable {
     /// ``samplingDropReports`` if one leaves it out, then gates the record by its consent,
     /// writes it to its store and publishes it to ``records``. An event tracked after
     /// ``finish()`` is dropped and logged at debug level. A ``noOp`` tracker drops the event and
-    /// logs it at debug level, so a missing `withTracker` shows up in the logs rather than passing
-    /// silently.
+    /// logs it at debug level. So does ``current`` with no tracker bound, except that the first
+    /// event it drops at each call site is logged at warning level, so a missing `withTracker`
+    /// shows up in the logs rather than passing silently.
     ///
     /// - Parameters:
     ///   - event: The event to track.
@@ -286,17 +308,28 @@ public struct Tracker: Sendable {
         case .none:
             // As above: a drop path, logged on the caller at debug level, the message an
             // autoclosure built only when the level is enabled.
-            Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound")
+            Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): the tracker is Tracker.noOp")
+        case .unbound:
+            // A drop path too. The first drop at a call site warns, as it most likely means a
+            // `withTracker` that doesn't reach this task; the rest log at debug level, so a hot
+            // loop pays one lock and set lookup per event rather than a warning.
+            let callSite = UnboundCallSite(fileID: fileID, line: line, column: column)
+            let isFirst = Self.warnedUnboundCallSites.withLock { $0.insert(callSite).inserted }
+            if isFirst {
+                Self.logger.warning("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound to this task. withTracker doesn't reach a detached task or a framework's callback; pass it a tracker")
+            } else {
+                Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound")
+            }
         }
     }
 
-    /// Whether this tracker drops every event: ``noOp``, or a copy of it made by
-    /// ``enriched(by:)``.
+    /// Whether this tracker drops every event: ``noOp``, ``current`` with no tracker bound, or a
+    /// copy of either made by ``enriched(by:)``.
     ///
     /// Package-wide, so a UI module whose views can appear before their tracker reaches them can
     /// wait for it rather than track the appearance into nothing.
     package var isNoOp: Bool {
-        guard case .none = backing else { return false }
+        if case .intake = backing { return false }
         return true
     }
 
@@ -323,4 +356,12 @@ public struct Tracker: Sendable {
         guard case .intake(let intake) = backing else { return }
         await intake.finish()
     }
+}
+
+/// A place `track` was called from, for warning once per call site of tracking with no tracker
+/// bound.
+private struct UnboundCallSite: Hashable {
+    let fileID: String
+    let line: Int
+    let column: Int
 }

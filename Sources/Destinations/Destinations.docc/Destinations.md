@@ -18,9 +18,10 @@ every destination.
 
 What a destination receives is narrowed by modifiers: ``Destination/accepting(_:)`` for the
 consent categories it serves, ``Destination/redactingSensitiveValues()`` and
-``Destination/droppingCallSite()``. ``ConsoleDestination`` prints each event, and
-``InMemoryDestination`` keeps the newest records it receives for the app to read, in a debug view
-or a test.
+``Destination/droppingCallSite()``, and added to by ``Destination/enriched(by:)``, which runs an
+``/Events/Enricher`` on the records that destination alone receives. ``ConsoleDestination``
+prints each event, and ``InMemoryDestination`` keeps the newest records it receives for the app to
+read, in a debug view or a test.
 
 Logs, traces and servers have destinations in modules of their own, so an app links only the ones
 it uses: `LoggerDestination` in `LoggingDestinations`, `SpanEventDestination` in

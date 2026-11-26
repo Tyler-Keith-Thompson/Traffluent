@@ -25,6 +25,7 @@ swift_library(
         "//Sources/Trackers",
         "//Sources/Destinations",
         "@swiftpkg_afluent//:Afluent",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_system//:SystemPackage",
         "@swiftpkg_swift_property_based//:PropertyBased",
         "@swiftpkg_swiftcbor//:SwiftCBOR",

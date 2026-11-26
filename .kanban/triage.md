@@ -97,7 +97,16 @@ bad row in a dashboard.
   analytics).
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
-  turned down in favour of a pipeline stage.
+  turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):
+  "all your current enrichment, destinations, etc require the tracker to propagate correctly.
+  But a detached task will not get the tracker I set up at the app level. swift log solves this
+  by letting me control metadata both at the logger level, but also where I multiplex to. I
+  think you need to do the same with enrichment and such." So enrichment may also be applied at
+  the fan-out, as a destination modifier, `enriched(by:)`, which runs an `Enricher` on the
+  records one destination receives, the way `redactingSensitiveValues()` transforms them. The
+  destination itself stays a plain sink: the modifier wraps it, and an enricher written into a
+  destination's own `receive` is still turned down. Consent logic inside a destination is still
+  turned down too: consent is decided before the fan-out, and `accepting(_:)` only narrows it.
 - D3. Consent is both per purpose and per destination (TRAF-7, the owner's answer of
   2026-11-22). Each event type has a consent category (a purpose); each destination accepts a set
   of categories. Per category, consent is undecided, granted or denied. While it is undecided,

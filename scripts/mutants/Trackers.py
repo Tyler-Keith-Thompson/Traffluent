@@ -15,7 +15,6 @@ TESTS = ["TrackersTests"]
 T = "Tracker.swift"
 W = "WithTracker.swift"
 S = "Subscription.swift"
-N = "Enricher.swift"
 C = "Consent.swift"
 G = "ConsentGate.swift"
 I = "Intake.swift"
@@ -38,6 +37,8 @@ O = "SamplingDropReport.swift"
 #   racing a finish on another task, which no test can order without a hook in the intake.
 # - Dropping the log of an event tracked after finish: tests don't pin logs. Nor the worker's
 #   debug log of a rejection.
+# - Tracker.current's unbound drops warning at every call, or never: only the log's level differs,
+#   and tests don't pin logs.
 #
 # Sampling mutants left out as equivalent:
 # - Dropping the group decision's cache of the latest group (`latest = Decided(...)`): every record
@@ -54,9 +55,11 @@ WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), sto
 
 MUTANTS = [
     # isNoOp.
-    Mutant("isnoopalwaysfalse", T, "guard case .none = backing else { return false }", "return false", mode="stmt"),
-    Mutant("isnoopalwaystrue", T, "guard case .none = backing else { return false }", "return true", mode="stmt"),
-    Mutant("currentignoresbinding", T, "bound ?? .noOp", ".noOp"),
+    Mutant("isnoopalwaysfalse", T, "return true", "return false", mode="stmt"),
+    Mutant("isnoopalwaystrue", T, "if case .intake = backing { return false }", "", mode="stmt"),
+    Mutant("currentignoresbinding", T, "bound ?? .unbound", ".unbound"),
+    # Tracker.current with nothing bound: a tracker that records into nothing (TRAF-81).
+    Mutant("unboundrecords", T, "bound ?? .unbound", "bound ?? Tracker()"),
     Mutant("syncunbound", W, "return try Tracker.$bound.withValue(tracker, operation: operation)", "return try operation()", mode="stmt"),
     Mutant("asyncunbound", W, "return try await Tracker.$bound.withValue(tracker, operation: operation)", "return try await operation()", mode="stmt"),
     Mutant("defaultnow", T, "Date.now", "Date.distantPast", nth=0),
@@ -86,7 +89,6 @@ MUTANTS = [
     # The worker.
     Mutant("nosend", K, "records.forEach(sink.send)", "", mode="stmt"),
     Mutant("enrichersskipped", K, "scopedEnrichers.count + enrichers.count", "scopedEnrichers.count"),
-    Mutant("enricherinert", N, "enrich(&record.context)", "", mode="stmt"),
     # Tracker.enriched(by:): the copy's enrichers, carried with each record to the worker.
     Mutant("scopedskipped", K, "enrich(record, scopedEnrichers, from: 0, into: &enriched)", "enrich(record, scopedEnrichers, from: scopedEnrichers.count, into: &enriched)", mode="stmt"),
     # The last `scopedEnrichers`: the one track's entry carries.

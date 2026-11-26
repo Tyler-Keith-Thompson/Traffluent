@@ -64,6 +64,29 @@ struct ChoosingDestinationsExamplesTests {
         #expect(redacted == nil)
         #expect(callSite == nil)
     }
+
+    enum RegionKey: ServiceContextKey {
+        typealias Value = String
+    }
+
+    @Test("Context for one destination")
+    func contextForOneDestination() async throws {
+        let backend = InMemoryDestination()
+        let vendor = InMemoryDestination()
+        let tracker = Tracker()
+        let delivery = tracker.records.batch().deliver(
+            to: backend.enriched(by: Enricher { $0[RegionKey.self] = "eu-west" }),
+            vendor
+        )
+        tracker.track(SignedUp(plan: "pro"))
+        await tracker.finish()
+        try await delivery.execute()
+        let region = backend.records[0].context[RegionKey.self]       // "eu-west"
+        let vendorRegion = vendor.records[0].context[RegionKey.self]  // nil
+
+        #expect(region == "eu-west")
+        #expect(vendorRegion == nil)
+    }
 }
 
 @Suite("Choosing destinations examples: PostHog", .timeLimit(.minutes(1)))

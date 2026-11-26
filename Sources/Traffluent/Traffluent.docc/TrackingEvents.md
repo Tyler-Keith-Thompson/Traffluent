@@ -72,9 +72,18 @@ try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  /
 ```
 
 The binding reaches child tasks, and a nested `withTracker` replaces it for its own scope. It
-doesn't reach callbacks a framework runs on tasks of its own, such as SwiftUI button actions. Pass
-those a `Tracker`, or in SwiftUI read it from the environment (<doc:TrackingFromViews>). With no
-tracker bound, `Tracker.current` drops each event and logs it at debug level.
+doesn't reach a detached task, or callbacks a framework runs on tasks of its own, such as SwiftUI
+button actions. There `Tracker.current` has no tracker, so it drops each event, logging the first
+one from each call site at warning level and the rest at debug level. Pass that work the tracker
+itself:
+
+```swift
+let upload = Task.detached { [tracker] in
+    tracker.track(SignedUp(plan: "pro"))  // Tracker.current here would drop it
+}
+```
+
+In SwiftUI, read the tracker from the environment instead (<doc:TrackingFromViews>).
 
 ### Context and enrichers
 
@@ -100,6 +109,22 @@ tracker.track(SignedUp(plan: "pro"))  // its record's context[ExperimentKey.self
 Where a task-local context doesn't reach, `tracker.enriched(by:)` gives one part of an app a copy
 of the tracker whose events alone carry a value, such as a screen's name. The copy shares the
 tracker's records, and the worker runs the copy's enricher before the tracker's own.
+
+An enricher can also run where the records fan out to destinations: `enriched(by:)` on a
+destination adds its values to the records that destination alone receives, however they were
+tracked (<doc:ChoosingDestinations>).
+
+When several set the same key, the one that runs last wins. They run in this order:
+
+| Order | What sets the key |
+|---|---|
+| 1 | The caller's `ServiceContext`, captured by `track` |
+| 2 | The enrichers of a tracker copy, in the order `enriched(by:)` was applied |
+| 3 | The enrichers the tracker was built with, in order |
+| 4 | A destination's enrichers, from the `enriched(by:)` applied last to the one applied first |
+
+So a destination's enricher has the last word for that destination, and of several on one
+destination, the one applied first does.
 
 ### Delivery guarantees
 

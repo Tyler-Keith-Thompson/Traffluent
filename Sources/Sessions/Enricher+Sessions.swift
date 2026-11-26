@@ -1,5 +1,4 @@
-import Events
-public import Trackers
+public import Events
 
 extension Enricher {
     /// An enricher that puts every event in a session: it sets each record's ``SessionKey`` to its

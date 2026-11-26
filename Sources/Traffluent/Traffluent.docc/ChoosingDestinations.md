@@ -163,3 +163,45 @@ let callSite = vendor.records[0].sourceLocation       // nil
 ```
 
 `accepting(_:)` narrows a destination to the consent categories it serves (<doc:ConsentGating>).
+
+### Context for one destination
+
+An enricher given to the tracker runs on its worker, so every destination sees what it sets. To
+add a value that only one destination should receive, such as a deployment region your own backend
+reads, apply `enriched(by:)` to that destination:
+
+```swift
+import Instrumentation
+
+enum RegionKey: ServiceContextKey {
+    typealias Value = String
+}
+
+let backend = InMemoryDestination()
+let vendor = InMemoryDestination()
+let tracker = Tracker()
+let delivery = tracker.records.batch().deliver(
+    to: backend.enriched(by: Enricher { $0[RegionKey.self] = "eu-west" }),
+    vendor
+)
+tracker.track(SignedUp(plan: "pro"))
+await tracker.finish()
+try await delivery.execute()
+let region = backend.records[0].context[RegionKey.self]       // "eu-west"
+let vendorRegion = vendor.records[0].context[RegionKey.self]  // nil
+```
+
+The enricher runs as the delivery hands each batch to that destination, so it reaches every record
+the destination receives, however the event was tracked: through any copy of the tracker, from a
+detached task handed the tracker, or recovered by a store after a relaunch. That makes it the place
+for values about the destination or the delivery, such as a region or a deployment tag, and not for
+values about the event. A record recovered after a relaunch would get this run's app version, and
+the network connection at upload rather than when it was tracked, so keep the standard context
+enrichers and `.sessions()` on the tracker. Records an enricher adds before a record, as the
+sessions enricher adds `SessionStarted`, are left out at a destination, since they would skip the
+tracker's consent, samplers and store, and `enriched(by:)` logs a warning when given one.
+
+Combined with the other modifiers, the one applied last sees each record first. Under
+`redactingSensitiveValues()` a `Sensitive` value the enricher sets stays hidden in either order,
+and inside `accepting(_:)` the enricher runs only on the records accepted. For which enricher has
+the last word on a key, see "Context and enrichers" in <doc:TrackingEvents>.

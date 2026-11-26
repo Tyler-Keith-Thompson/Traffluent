@@ -113,4 +113,9 @@ MUTANTS = [
     # two mutants before it, __mutant(17) and __mutant(18), two more.
     Mutant("defaultschemaversiontwo", E, "1", "2", nth=5),
     Mutant("defaultvaluedropped", S, "            self.hasDefaultValue = hasDefaultValue", "            self.hasDefaultValue = false", mode="stmt"),
+    # Enricher (moved from Trackers' spec with the type).
+    Mutant("enricherinert", "Enricher.swift", "enrich(&record.context)", "", mode="stmt"),
+    Mutant("contextaddsrecords", "Enricher.swift", "addsRecords = false", "addsRecords = true", mode="stmt"),
+    # After contextaddsrecords', the text holds two copies; the second is the original's.
+    Mutant("recordsaddnone", "Enricher.swift", "addsRecords = true", "addsRecords = false", nth=1, mode="stmt"),
 ]

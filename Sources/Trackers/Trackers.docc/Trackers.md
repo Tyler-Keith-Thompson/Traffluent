@@ -7,15 +7,19 @@ The tracker app code tracks events with, and what it applies to each event befor
 A ``Tracker`` is a value. ``Tracker/track(_:file:fileID:function:line:column:)`` only queues the
 event, from any thread. A worker the tracker owns, never on the main actor, does the rest in the
 order events were tracked: it makes the event's `EventRecord`, checks its constraints, runs the
-``Enricher``s on the context it was tracked in, applies the ``Sampler``s and the ``Consent``,
-writes the record to the tracker's store if it has one, and publishes it to ``Tracker/records``.
+enrichers (``/Events/Enricher``) on the context it was tracked in, applies the ``Sampler``s and
+the ``Consent``, writes the record to the tracker's store if it has one, and publishes it to
+``Tracker/records``.
 ``Tracker/flush()`` waits for the worker to catch up; ``Tracker/finish()`` does too, then ends the
 records.
 
 Build one tracker where the app starts. Pass it down, or bind it to a task with
-``withTracker(_:_:)-7fax9`` and read it anywhere inside with ``Tracker/current``, which is
-``Tracker/noOp`` when nothing is bound. ``Tracker/enriched(by:)`` gives a copy that adds to the
-context of the events tracked through it alone, for code a task-local context doesn't reach.
+``withTracker(_:_:)-7fax9`` and read it anywhere inside with ``Tracker/current``. With nothing
+bound, as in a detached task, it drops every event like ``Tracker/noOp`` and logs a warning for
+the first one at each call site, so hand such a task a tracker value. ``Tracker/enriched(by:)``
+gives a copy that adds to the context of the events tracked through it alone, for code a
+task-local context doesn't reach. To enrich only what one destination receives, apply
+`enriched(by:)` to that destination instead (module `Destinations`).
 
 The tracker reports every event it drops: one that breaks a declared constraint on
 ``Tracker/rejectionReports``, one a sampler leaves out on ``Tracker/samplingDropReports``, and a
@@ -54,10 +58,6 @@ The umbrella guide on this area is
 - ``Tracker``
 - ``withTracker(_:_:)-7fax9``
 - ``withTracker(_:_:)-24yuc``
-
-### Enriching
-
-- ``Enricher``
 
 ### Sampling
 

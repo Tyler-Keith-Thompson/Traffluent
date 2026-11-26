@@ -7,6 +7,14 @@ Stamp every event with its session and with the app, device, system, locale and 
 Sessions and standard context are enrichers: nothing is added to an event until the app builds its
 tracker with them.
 
+Give these enrichers to the tracker. It runs them on its worker for every event, and every
+destination sees what they set. A destination's `enriched(by:)` is for values about that
+destination or the delivery, such as a region or a deployment tag, not about the event
+(<doc:ChoosingDestinations>). It runs when the batch is delivered, so a record a store recovered
+after a relaunch would get this run's app version and operating system, and the network at upload
+time. Keep `.sessions()` on the tracker too: at a destination, the `SessionStarted` and
+`SessionEnded` events it adds are left out.
+
 ### Sessions
 
 Every event can carry the session it was tracked in (module ``/Sessions``: every platform). Nothing

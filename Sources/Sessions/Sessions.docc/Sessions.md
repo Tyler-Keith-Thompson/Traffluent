@@ -43,8 +43,8 @@ covers sampling.
 
 ### Putting events in sessions
 
-- ``Trackers/Enricher/sessions(timeout:kinds:file:fileID:function:line:column:)``
-- ``Trackers/Enricher/sessions(checkedTimeout:kinds:file:fileID:function:line:column:)``
+- ``Events/Enricher/sessions(timeout:kinds:file:fileID:function:line:column:)``
+- ``Events/Enricher/sessions(checkedTimeout:kinds:file:fileID:function:line:column:)``
 - ``SessionEventKind``
 - ``NonPositiveSessionTimeout``
 

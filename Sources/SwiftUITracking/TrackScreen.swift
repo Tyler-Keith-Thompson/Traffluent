@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 public import SwiftUI
+import Events
 import Instrumentation
 import Trackers
 

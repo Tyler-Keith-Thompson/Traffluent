@@ -19,6 +19,7 @@
 #   batch and hands it to a destination whose receive returns at once, and the check after the
 #   receive still leaves it unacknowledged. Only the extra read and receive differ, and a test
 #   can't cancel exactly between two read-backs.
+# - Dropping enriched(by:)'s warning for an enricher that adds records: tests don't pin logs.
 # - A store returning records at positions nobody asked for: ReadBack looks each batch's records
 #   up by position, so the extra ones are never sent.
 
@@ -73,6 +74,8 @@ MUTANTS = [
     Mutant("untransformedsent", "TransformingDestination.swift", "await base.receive(transformed)", "await base.receive(batch)", mode="stmt"),
     Mutant("callsitekept", "DroppingCallSite.swift", "record.sourceLocation = nil", "", mode="stmt"),
     Mutant("notredacted", "RedactingSensitiveValues.swift", "record.revealsSensitiveValues = false", "", mode="stmt"),
+    Mutant("notenriched", "Enriched.swift", "_ = enricher(&record)", "", mode="stmt"),
+    Mutant("enrichedtwice", "Enriched.swift", "_ = enricher(&record)", "_ = enricher(&record); _ = enricher(&record)", mode="stmt"),
     # InMemoryDestination: what it keeps and announces.
     Mutant("notkept", M, "log.kept.withLock { $0.append(batch) }", "", mode="stmt"),
     Mutant("notannounced", M, "log.continuation.yield(batch)", "", mode="stmt"),

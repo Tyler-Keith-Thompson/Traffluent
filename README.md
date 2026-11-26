@@ -78,8 +78,8 @@ in [`Examples/`](Examples).
 
 ## Modules
 
-- [`Events`](https://tyler-keith-thompson.github.io/Traffluent/documentation/events): `Event`, `Sensitive`, `Refined`, `EventSchema` and `EventRecord`
-- [`Trackers`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackers): `Tracker`, `Enricher`, `Consent` and `Sampler`
+- [`Events`](https://tyler-keith-thompson.github.io/Traffluent/documentation/events): `Event`, `Sensitive`, `Refined`, `EventSchema`, `EventRecord` and `Enricher`
+- [`Trackers`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackers): `Tracker`, `Consent` and `Sampler`
 - [`Destinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/destinations): `Destination`, `ConsoleDestination`, `InMemoryDestination`, `batch()`, `deliver(to:)` and `BufferDropReport`
 - [`LoggingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/loggingdestinations): `LoggerDestination`, which writes events to a swift-log `Logger`
 - [`TracingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/tracingdestinations): `SpanEventDestination`, which adds events to the active span

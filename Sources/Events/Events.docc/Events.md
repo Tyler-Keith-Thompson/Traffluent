@@ -19,7 +19,8 @@ throws ``UnsatisfiedConstraint``.
 
 A tracker (module `Trackers`) makes an ``EventRecord`` of each event it tracks: the event, its own
 random identifier, when and where it was tracked, and the `ServiceContext` it was tracked in.
-Destinations receive batches of these records.
+Destinations receive batches of these records. An ``Enricher`` adds to a record's context: a
+tracker runs it on every record, or a destination's `enriched(by:)` on the records it receives.
 
 Declare an event with `@Event` (module `EventMacros`, part of `import Traffluent`). It derives
 the ``Event`` conformance from the struct's declaration and fills in its ``EventSchema``, and
@@ -71,6 +72,7 @@ The umbrella guide on this area is
 
 - ``EventRecord``
 - ``SourceLocation``
+- ``Enricher``
 
 ### Stores
 

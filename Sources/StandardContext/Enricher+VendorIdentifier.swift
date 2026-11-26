@@ -1,6 +1,5 @@
-import Events
 import Foundation
-public import Trackers
+public import Events
 
 extension Enricher {
     /// An enricher that sets every record's ``VendorIdentifierKey`` to the platform's identifier for

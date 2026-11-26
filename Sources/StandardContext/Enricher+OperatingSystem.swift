@@ -1,4 +1,4 @@
-public import Trackers
+public import Events
 
 extension Enricher {
     /// An enricher that sets every record's ``OperatingSystemKey`` to `operatingSystem`.

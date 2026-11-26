@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Event: the protocol typed analytics events conform to; Refined, a value its type keeps within a Refinement's Constraints; and EventRecord: a tracked event with its random identifier, timestamp, source location and context.
+# Event: the protocol typed analytics events conform to; Refined, a value its type keeps within a Refinement's Constraints; EventRecord: a tracked event with its random identifier, timestamp, source location and context; and Enricher, which adds to a record's context, run by a tracker or a destination.
 swift_library(
     name = "Events",
     srcs = glob(["**/*.swift"]),

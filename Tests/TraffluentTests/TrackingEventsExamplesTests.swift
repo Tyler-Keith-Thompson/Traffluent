@@ -42,6 +42,23 @@ struct TrackingEventsExamplesTests {
         try await tracker.records.batch().deliver(to: ConsoleDestination()).execute()  // prints: SignedUp SignedUp(plan: "pro")
     }
 
+    @Test("Tracking from a detached task")
+    func trackingFromADetachedTask() async throws {
+        let tracker = Tracker()
+        let upload = Task.detached { [tracker] in
+            tracker.track(SignedUp(plan: "pro"))  // Tracker.current here would drop it
+        }
+        await upload.value
+        await tracker.finish()
+        let expected = ["pro"]
+
+        var actual: [String] = []
+        for await record in tracker.records {
+            actual.append((record.event as? SignedUp)?.plan ?? "")
+        }
+        #expect(actual == expected)
+    }
+
     enum ExperimentKey: ServiceContextKey {
         typealias Value = String
     }

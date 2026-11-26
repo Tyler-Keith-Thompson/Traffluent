@@ -40,30 +40,30 @@ covers each value and the identifier for vendor in more detail.
 
 ### The app
 
-- ``Trackers/Enricher/application(_:)``
+- ``Events/Enricher/application(_:)``
 - ``ApplicationKey``
 
 ### The device
 
-- ``Trackers/Enricher/device(_:)``
+- ``Events/Enricher/device(_:)``
 - ``DeviceKey``
 
 ### The operating system
 
-- ``Trackers/Enricher/operatingSystem(_:)``
+- ``Events/Enricher/operatingSystem(_:)``
 - ``OperatingSystemKey``
 
 ### The locale
 
-- ``Trackers/Enricher/locale(_:)``
+- ``Events/Enricher/locale(_:)``
 - ``LocaleKey``
 
 ### The network connection
 
-- ``Trackers/Enricher/network()``
+- ``Events/Enricher/network()``
 - ``NetworkKey``
 
 ### The identifier for vendor
 
-- ``Trackers/Enricher/vendorIdentifier()``
+- ``Events/Enricher/vendorIdentifier()``
 - ``VendorIdentifierKey``

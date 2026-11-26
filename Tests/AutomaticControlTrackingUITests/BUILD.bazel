@@ -18,6 +18,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:ios"],
     deps = [
         "//Sources/AutomaticControlTracking",
+        "//Sources/Events",
         "//Sources/SwiftUITracking",
         "//Sources/Trackers",
         "//Sources/UIKitTracking",

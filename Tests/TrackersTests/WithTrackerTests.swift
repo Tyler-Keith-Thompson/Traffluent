@@ -61,6 +61,60 @@ struct WithTrackerTests {
         #expect(actual == expected)
     }
 
+    @Test("With no tracker bound, Tracker.current is a tracker that drops every event, as noOp is")
+    func unboundIsNoOp() {
+        let actual = Tracker.current
+
+        #expect(actual.isNoOp)
+        #expect(actual.enriched(by: Enricher { _ in }).isNoOp)
+        #expect(Tracker.noOp.isNoOp)
+        #expect(!Tracker().isNoOp)
+    }
+
+    @Test("A detached task gets no binding: what it tracks through Tracker.current is dropped, and the bound tracker records none of it")
+    func detachedTaskUnbound() async {
+        let tracker = Tracker()
+        let expected = [1, 3]
+
+        await withTracker(tracker) {
+            Tracker.current.track(Tapped(number: 1))
+            await Task.detached {
+                // The same call site twice, so a call site's repeated drops are dropped too.
+                for number in [2, 2] {
+                    Tracker.current.track(Tapped(number: number))
+                }
+            }.value
+            Tracker.current.track(Tapped(number: 3))
+        }
+        await tracker.finish()
+
+        var actual: [Int] = []
+        for await record in tracker.records {
+            actual.append((record.event as? Tapped)?.number ?? -1)
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("A detached task handed the tracker value tracks through it")
+    func detachedTaskHandedTracker() async {
+        let tracker = Tracker()
+        let expected = [1, 2]
+
+        await withTracker(tracker) {
+            await Task.detached { [tracker] in
+                tracker.track(Tapped(number: 1))
+            }.value
+            Tracker.current.track(Tapped(number: 2))
+        }
+        await tracker.finish()
+
+        var actual: [Int] = []
+        for await record in tracker.records {
+            actual.append((record.event as? Tapped)?.number ?? -1)
+        }
+        #expect(actual == expected)
+    }
+
     @Test("A child task inherits the bound tracker")
     func childTask() async {
         let tracker = Tracker()
