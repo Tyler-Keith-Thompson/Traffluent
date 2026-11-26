@@ -4,13 +4,14 @@ Track typed events with a tracker, then deliver them in batches to any number of
 
 ## Overview
 
-An event is a value that conforms to `Event`. A `Tracker` records each event you track, and a
-delivery hands the records to your destinations:
+An event is a value that conforms to `Event`, declared with `@Event`. A `Tracker` records each
+event you track, and a delivery hands the records to your destinations:
 
 ```swift
 import Traffluent
 
-struct SignedUp: Event {
+@Event
+struct SignedUp {
     var plan: String
 }
 

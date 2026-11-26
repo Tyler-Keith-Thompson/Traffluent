@@ -11,8 +11,8 @@ struct EventsModuleExamplesTests {
         static let constraints: [Constraint<String>] = [.minLength(1), .maxLength(32)]
     }
 
-    struct SignedUp: Event {
-        static let consentCategory = ConsentCategory.functional
+    @Event(consent: .functional)
+    struct SignedUp {
         var plan: Refined<String, PlanName>
         var email: Sensitive<String>
     }

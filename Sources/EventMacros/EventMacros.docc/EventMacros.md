@@ -11,11 +11,10 @@ name. `@Constrained` declares rules a plain `String`, number or array can't carr
 minimum length or a pattern; the macro checks each keyword as it expands, and a tracker rejects an
 event whose property breaks one.
 
-The module is a product of its own that `import Traffluent` leaves out, so only apps that use it
-build swift-syntax. It re-exports `Events` and `Persistence`, so a file that imports `EventMacros`
-alone can expand the macro. To write an event's conformances by hand, conform to `Event` and
-`BinaryCodable` from those modules without this one. To export the schemas as a JSON Schema
-tracking plan, pass them to `TrackingPlans`.
+`import Traffluent` includes this module. It re-exports `Events` and `Persistence`, so a file that
+imports `EventMacros` alone can expand the macro too. The `Event` and `BinaryCodable` protocols'
+documentation, in those modules, shows the conformances written by hand. To export the schemas as
+a JSON Schema tracking plan, pass them to `TrackingPlans`.
 
 ```swift
 import EventMacros

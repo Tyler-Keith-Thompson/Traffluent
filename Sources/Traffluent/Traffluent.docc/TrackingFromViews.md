@@ -17,8 +17,10 @@ empty elsewhere). Set it at the root of the views with `tracker(_:)`, read it in
 
 ```swift
 import SwiftUI
+import Traffluent
 
-struct PlanSelected: Event {
+@Event
+struct PlanSelected {
     var plan: String
 }
 
@@ -70,9 +72,11 @@ inherits it, as SwiftUI views inherit their environment. Read it in an action wi
 `traitCollection.tracker`, or let `track(_:for:)` track a control's events:
 
 ```swift
+import Traffluent
 import UIKit
 
-struct ShareTapped: Event {}
+@Event
+struct ShareTapped {}
 
 final class CheckoutViewController: UIViewController {
     let share = UIButton(configuration: .filled())

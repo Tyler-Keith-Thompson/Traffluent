@@ -19,3 +19,4 @@
 @_exported import StandardContext
 @_exported import Checksums
 @_exported import Persistence
+@_exported import EventMacros

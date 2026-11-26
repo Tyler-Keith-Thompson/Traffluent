@@ -23,11 +23,14 @@ two windows can track through two trackers. Until a tracker is set, the trait ho
 moment:
 
 ```swift
+import Traffluent
 import UIKit
 
-struct ShareTapped: Event {}
+@Event
+struct ShareTapped {}
 
-struct CheckoutStarted: Event {
+@Event
+struct CheckoutStarted {
     var cartSize: Int
 }
 

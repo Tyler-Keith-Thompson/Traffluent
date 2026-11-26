@@ -19,10 +19,13 @@ screen carries its name:
 
 ```swift
 import SwiftUI
+import Traffluent
 
-struct CartOpened: Event {}
+@Event
+struct CartOpened {}
 
-struct CheckoutStarted: Event {
+@Event
+struct CheckoutStarted {
     var cartSize: Int
 }
 

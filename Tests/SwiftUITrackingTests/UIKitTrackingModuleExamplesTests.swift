@@ -3,6 +3,7 @@
 // from the code. TraffluentTests runs on the Mac and Linux, where UIKit isn't, so it runs here, in
 // the simulator, serialized with the other suites that use the test host's window scene.
 #if canImport(UIKit) && !os(watchOS)
+import EventMacros
 import Events
 import Testing
 import Trackers
@@ -13,9 +14,11 @@ extension SerializedSuites {
     @MainActor
     @Suite("UIKitTracking module examples", .serialized, .timeLimit(.minutes(1)))
     struct UIKitTrackingModuleExamplesTests {
-        struct ShareTapped: Event {}
+        @Event
+        struct ShareTapped {}
 
-        struct CheckoutStarted: Event {
+        @Event
+        struct CheckoutStarted {
             var cartSize: Int
         }
 

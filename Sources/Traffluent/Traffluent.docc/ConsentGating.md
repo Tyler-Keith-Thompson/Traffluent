@@ -5,12 +5,12 @@ Deliver an event only once the user grants the purpose it is collected for.
 ## Overview
 
 Each event type names the purpose it is collected for, its `consentCategory`, which is `.analytics`
-unless the type says otherwise. Give the tracker a `Consent`, which the app updates as the user
+unless its `@Event(consent:)` says otherwise. Give the tracker a `Consent`, which the app updates as the user
 decides, and an event reaches a destination only once its category is granted:
 
 ```swift
-struct AdClicked: Event {
-    static let consentCategory = ConsentCategory.advertising
+@Event(consent: .advertising)
+struct AdClicked {
     var campaign: String
 }
 

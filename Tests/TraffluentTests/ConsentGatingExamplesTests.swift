@@ -7,12 +7,13 @@ import Traffluent
 
 @Suite("Consent gating examples", .timeLimit(.minutes(1)))
 struct ConsentGatingExamplesTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 
-    struct AdClicked: Event {
-        static let consentCategory = ConsentCategory.advertising
+    @Event(consent: .advertising)
+    struct AdClicked {
         var campaign: String
     }
 

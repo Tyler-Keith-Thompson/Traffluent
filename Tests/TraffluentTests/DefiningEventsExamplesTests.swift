@@ -2,7 +2,6 @@
 // (Sources/Traffluent/Traffluent.docc/DefiningEvents.md), verbatim, so the article cannot drift from
 // the code.
 
-import EventMacros
 import Testing
 import Traffluent
 

@@ -130,31 +130,8 @@ from being read as the new meaning.
 
 ## Hand-written events
 
-An event that writes its own conformances declares its version, and reads a property with a default
-value through `KeyedBinaryDecoder.decode(_:forKey:default:)`:
-
-```swift
-struct CheckoutStarted: Event {
-    static let schemaVersion = 2
-    var cartSize: Double
-    var currency: String = "USD"
-}
-
-extension CheckoutStarted: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(cartSize, forKey: "cartSize")
-            map.encode(currency, forKey: "currency")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        cartSize = try map.decode(forKey: "cartSize")
-        currency = try map.decode(forKey: "currency", default: "USD")
-    }
-}
-```
-
-Its `EventSchema` gives the same version (`version: schemaVersion`) and marks the property
-(`hasDefaultValue: true`), so the plan and its check see what the store does.
+`@Event` keeps the version, the encoding and the schema in step. An event that writes its own
+conformances instead (the `Event` and `BinaryCodable` protocols' documentation shows one) must do
+that itself: declare `schemaVersion`, read a property with a default value through
+`KeyedBinaryDecoder.decode(_:forKey:default:)`, and give its `EventSchema` the same version and
+`hasDefaultValue: true` for that property, so the plan and its check see what the store does.

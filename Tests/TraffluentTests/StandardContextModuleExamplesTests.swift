@@ -7,7 +7,8 @@ import Traffluent
 
 @Suite("StandardContext module examples", .timeLimit(.minutes(1)))
 struct StandardContextModuleExamplesTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 

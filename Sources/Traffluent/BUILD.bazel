@@ -26,6 +26,7 @@ swift_library(
         "//Sources/StandardContext",
         "//Sources/Checksums",
         "//Sources/Persistence",
+        "//Sources/EventMacros",
     ],
     visibility = ["//visibility:public"],
 )
@@ -53,8 +54,8 @@ docc_archive(
         "//Sources/StandardContext:StandardContextDocumentation",
         "//Sources/Checksums:ChecksumsDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
-        "//Sources/GRDBPersistence:GRDBPersistenceDocumentation",
         "//Sources/EventMacros:EventMacrosDocumentation",
+        "//Sources/GRDBPersistence:GRDBPersistenceDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
         "//Sources/TrackingPlanTesting:TrackingPlanTestingDocumentation",
         "//Sources/TrackerTesting:TrackerTestingDocumentation",

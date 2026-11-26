@@ -5,7 +5,8 @@ import Traffluent
 
 @Suite("README example", .timeLimit(.minutes(1)))
 struct READMEExamplesTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 

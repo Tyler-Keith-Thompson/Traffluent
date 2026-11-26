@@ -23,10 +23,13 @@ control sends its action, just before the action:
 
 ```swift
 import AppKit
+import Traffluent
 
-struct ShareTapped: Event {}
+@Event
+struct ShareTapped {}
 
-struct CheckoutStarted: Event {
+@Event
+struct CheckoutStarted {
     var cartSize: Int
 }
 

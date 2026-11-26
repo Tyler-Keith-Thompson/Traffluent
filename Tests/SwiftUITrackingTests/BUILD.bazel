@@ -21,6 +21,7 @@ swift_library(
     deps = [
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",
+        "//Sources/EventMacros",
         "//Sources/Events",
         "//Sources/Persistence",
         "//Sources/Trackers",
@@ -69,6 +70,7 @@ swift_library(
     deps = [
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",
+        "//Sources/EventMacros",
         "//Sources/Events",
         "//Sources/Persistence",
         "//Sources/Trackers",

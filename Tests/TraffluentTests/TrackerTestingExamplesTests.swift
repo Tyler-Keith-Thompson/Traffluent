@@ -6,7 +6,8 @@ import Traffluent
 
 @Suite("TrackerTesting examples", .timeLimit(.minutes(1)))
 struct TrackerTestingExamplesTests {
-    struct SignedUp: Event, Equatable {
+    @Event
+    struct SignedUp: Equatable {
         var plan: String
     }
 
@@ -46,7 +47,8 @@ import SwiftUI
 @MainActor
 @Suite("TrackerTesting examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
 struct TrackerTestingSwiftUIExampleTests {
-    struct CheckoutViewed: Event, Equatable {}
+    @Event
+    struct CheckoutViewed: Equatable {}
 
     struct CheckoutView: View {
         var body: some View {

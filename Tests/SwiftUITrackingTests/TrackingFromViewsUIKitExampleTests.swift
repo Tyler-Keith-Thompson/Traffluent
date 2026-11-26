@@ -2,6 +2,7 @@
 // the umbrella catalog), verbatim. TraffluentTests runs on the Mac and Linux, where UIKit isn't, so
 // it runs here, in the simulator.
 #if canImport(UIKit) && !os(watchOS)
+import EventMacros
 import Events
 import Testing
 import Trackers
@@ -12,11 +13,13 @@ extension SerializedSuites {
     @MainActor
     @Suite("Tracking from views examples: UIKit", .serialized, .timeLimit(.minutes(1)))
     struct TrackingFromViewsUIKitExampleTests {
-        struct SignedUp: Event {
+        @Event
+        struct SignedUp {
             var plan: String
         }
 
-        struct ShareTapped: Event {}
+        @Event
+        struct ShareTapped {}
 
         final class CheckoutViewController: UIViewController {
             let share = UIButton(configuration: .filled())

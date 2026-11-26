@@ -4,13 +4,13 @@ Derive an event's conformances and schema from its declaration with `@Event`, an
 
 ## Overview
 
-`@Event` (module ``/EventMacros``) makes a struct an event from its declaration. It is a product of
-its own that `import Traffluent` leaves out, so only apps that use it build swift-syntax. It adds
-the `Event` and `BinaryCodable` conformances, the event's name, consent category and schema version
-when you give them, and a `schema`, an `EventSchema` value that tooling reads:
+`@Event` (module ``/EventMacros``, part of `import Traffluent`) makes a struct an event from its
+declaration, and is how you declare one. It adds the `Event` and `BinaryCodable`
+conformances, the event's name, consent category and schema version when you give them, and a
+`schema`, an `EventSchema` value that tooling reads:
 
 ```swift
-import EventMacros
+import Traffluent
 
 @Event(name: "checkout_started", version: 2)
 struct CheckoutStarted {
@@ -25,9 +25,10 @@ let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", 
 
 The schema holds the name, the version, the consent category and each stored property's name, its
 type as written, its optionality and whether it has a default value, in declaration order. The
-encoding writes each of those properties under its name, as a hand-written conformance does
-(<doc:PersistingRecords>), and a `Sensitive` property keeps its redaction. A record stored before
-a property with a default value (`var currency: String = "USD"`) was added reads it as its default.
+encoding writes each of those properties under its name (<doc:PersistingRecords>), and a
+`Sensitive` property keeps its redaction. The `Event` and `BinaryCodable` protocols' documentation
+shows the same conformances written by hand. A record stored before a property with a default value
+(`var currency: String = "USD"`) was added reads it as its default.
 
 `version:` counts breaking changes only, and is 1 when left out; <doc:ChangingEvents> shows each
 kind of change. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`).

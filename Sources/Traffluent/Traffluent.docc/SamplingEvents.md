@@ -8,9 +8,10 @@ Sampling lives in module ``/Trackers``, and sampling by session uses ``/Sessions
 sampled until the app gives the tracker its samplers:
 
 ```swift
-import Sessions
+import Traffluent
 
-struct Scrolled: Event {
+@Event
+struct Scrolled {
     var offset: Int
 }
 

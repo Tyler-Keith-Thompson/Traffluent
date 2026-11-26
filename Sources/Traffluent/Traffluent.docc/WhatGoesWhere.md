@@ -71,23 +71,31 @@ The signals stay separate, but they can point at each other:
 ```swift
 // Bad: the message is unstable, localized and may hold private data,
 // and every distinct string becomes its own row in a dashboard.
-struct ErrorOccurred: Event {
+@Event
+struct ErrorOccurred {
     var message: String
 }
 tracker.track(ErrorOccurred(message: error.localizedDescription))
 ```
 
 Track what the user experienced, with a reason the product team can count. Leave the error
-itself to logs and crash reporting:
+itself to logs and crash reporting. The event stores the reason's raw value, constrained to its
+cases, so the tracking plan lists them and the tracker rejects any other:
 
 ```swift
-struct CheckoutFailed: Event {
-    enum Reason: Sendable {
+@Event
+struct CheckoutFailed {
+    enum Reason: String {
         case paymentDeclined
         case outOfStock
         case networkUnavailable
     }
-    var reason: Reason
+    @Constrained(.pattern("^(paymentDeclined|outOfStock|networkUnavailable)$", example: "paymentDeclined"))
+    var reason: String
+
+    init(reason: Reason) {
+        self.reason = reason.rawValue
+    }
 }
 
 tracker.track(CheckoutFailed(reason: .paymentDeclined))
@@ -104,7 +112,8 @@ logger.info("user tapped checkout with \(cart.count) items")
 Log for the developer, and track the step as a typed event:
 
 ```swift
-struct CheckoutStarted: Event {
+@Event
+struct CheckoutStarted {
     var itemCount: Int
 }
 
@@ -131,7 +140,8 @@ tracker.track(CheckoutFailed(reason: .networkUnavailable))
 ```swift
 // Bad: request-level detail is tracing's job. Analytics volume, cost
 // and consent scope balloon, and the product team gets noise.
-struct RequestCompleted: Event {
+@Event
+struct RequestCompleted {
     var path: String
     var status: Int
 }
@@ -141,7 +151,8 @@ tracker.track(RequestCompleted(path: "/cart", status: 200))
 Trace the request, and track the fact the product team cares about once:
 
 ```swift
-struct CartViewed: Event {
+@Event
+struct CartViewed {
     var itemCount: Int
 }
 

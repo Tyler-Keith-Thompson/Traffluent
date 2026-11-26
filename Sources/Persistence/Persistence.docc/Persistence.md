@@ -12,9 +12,9 @@ deleted once every record in it is delivered.
 
 A store keeps only the event types you list in `events`, which conform to ``BinaryCodable``:
 CBOR (RFC 8949), each event a map of its properties under their names, written with a
-``BinaryEncoder`` and read with a ``BinaryDecoder``. `@Event` (module `EventMacros`) writes the
-conformance for you; write it by hand for an event declared without the macro. Events of other
-types are delivered in this run but never written.
+``BinaryEncoder`` and read with a ``BinaryDecoder``. `@Event` (module `EventMacros`, part of
+`import Traffluent`) writes the conformance; ``BinaryCodable`` shows one written by hand. Events of
+other types are delivered in this run but never written.
 
 Each drop is reported on ``SegmentStore/dropReports`` as a ``DropReport``: the oldest segments
 deleted to stay under the bound, a write that failed, and records recovery couldn't read or found
@@ -26,22 +26,12 @@ An app on Apple platforms that already keeps a GRDB database can keep its record
 with `DatabaseStore` (module `GRDBPersistence`).
 
 ```swift
-import Persistence
-import Trackers
+import Traffluent
 
-extension SignedUp: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(plan, forKey: "plan")
-            map.encode(seats, forKey: "seats")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        plan = try map.decode(forKey: "plan")
-        seats = try map.decode(forKey: "seats", default: 1)
-    }
+@Event(name: "signed_up")
+struct SignedUp {
+    var plan: String
+    var seats: Int = 1
 }
 
 let store = try SegmentStore(events: [SignedUp.self], directory: directory, byteBound: 1024 * 1024)

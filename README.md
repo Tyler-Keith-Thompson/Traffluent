@@ -38,7 +38,8 @@ Then add a product to your target, either the umbrella or individual modules:
 ```swift
 import Traffluent
 
-struct SignedUp: Event {
+@Event
+struct SignedUp {
     var plan: String
 }
 
@@ -92,7 +93,7 @@ delivery batches the records and hands each batch to its destinations when `exec
 - [`Checksums`](https://tyler-keith-thompson.github.io/Traffluent/documentation/checksums): `CRC32`
 - [`Persistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/persistence): `RecordStore`, `SegmentStore` and `BinaryCodable`
 - [`GRDBPersistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/grdbpersistence): `DatabaseStore`, a store in the app's GRDB database (not in `import Traffluent`)
-- [`EventMacros`](https://tyler-keith-thompson.github.io/Traffluent/documentation/eventmacros): `@Event` and `@Constrained` (not in `import Traffluent`)
+- [`EventMacros`](https://tyler-keith-thompson.github.io/Traffluent/documentation/eventmacros): `@Event` and `@Constrained`
 - [`TrackingPlans`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackingplans): `TrackingPlan`, its check and `TrackingPlanCommand` (not in `import Traffluent`)
 - [`TrackingPlanTesting`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackingplantesting): `expectTrackingPlan(_:matches:)`, for test targets (not in `import Traffluent`)
 - [`TrackerTesting`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackertesting): `withRecordingTracker`, for test targets (not in `import Traffluent`)

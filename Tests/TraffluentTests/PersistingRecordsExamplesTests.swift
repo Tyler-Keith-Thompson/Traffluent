@@ -9,7 +9,8 @@ import Traffluent
 
 @Suite("Persisting records examples", .timeLimit(.minutes(1)))
 struct PersistingRecordsExamplesTests {
-    struct SignedUp: Event {
+    @Event(name: "signed_up")
+    struct SignedUp {
         var plan: String
     }
 
@@ -25,18 +26,5 @@ struct PersistingRecordsExamplesTests {
         tracker.track(SignedUp(plan: "pro"))
         await tracker.finish()
         try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
-    }
-}
-
-extension PersistingRecordsExamplesTests.SignedUp: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(plan, forKey: "plan")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        plan = try map.decode(forKey: "plan")
     }
 }

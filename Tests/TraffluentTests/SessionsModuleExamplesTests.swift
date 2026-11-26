@@ -6,7 +6,8 @@ import Traffluent
 
 @Suite("Sessions module examples", .timeLimit(.minutes(1)))
 struct SessionsModuleExamplesTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 

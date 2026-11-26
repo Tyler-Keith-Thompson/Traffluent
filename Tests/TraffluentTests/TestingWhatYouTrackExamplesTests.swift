@@ -9,7 +9,8 @@ import Traffluent
 @Suite("Testing what your code tracks examples", .timeLimit(.minutes(1)))
 struct TestingWhatYouTrackExamplesTests {
     // The article states that `SignedUp` is `Equatable`.
-    struct SignedUp: Event, Equatable {
+    @Event
+    struct SignedUp: Equatable {
         var plan: String
     }
 

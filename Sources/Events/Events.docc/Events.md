@@ -4,10 +4,11 @@ The types every other module shares: the `Event` protocol, the values its proper
 
 ## Overview
 
-An event is a value type conforming to ``Event``. Its stored properties are its properties, so a
-misspelled or mistyped one is a compile error. Its type gives the name destinations record it
-under, the ``ConsentCategory`` whose consent decides whether it is delivered, and the version of its
-shape. Each has a default: the type's name, ``ConsentCategory/analytics`` and 1.
+An event is a value that conforms to ``Event``, declared with `@Event`. Its stored properties
+are its properties, so a misspelled or mistyped one is a compile error. Its type gives the name
+destinations record it under, the ``ConsentCategory`` whose consent decides whether it is
+delivered, and the version of its shape. Each has a default: the type's name,
+``ConsentCategory/analytics`` and 1.
 
 Two property types carry rules of their own. A ``Sensitive`` value, such as an email address,
 prints as `<redacted>` and has no public accessor: a destination reads it through
@@ -20,18 +21,20 @@ A tracker (module `Trackers`) makes an ``EventRecord`` of each event it tracks: 
 random identifier, when and where it was tracked, and the `ServiceContext` it was tracked in.
 Destinations receive batches of these records.
 
-Write events with this module alone when you conform to ``Event`` by hand. To derive the
-conformance, the schema and constraint checks from the declaration, use `@Event` and
-`@Constrained` from the `EventMacros` module, which fill in ``EventSchema`` and
-``Event/constraintViolation()`` for you.
+Declare an event with `@Event` (module `EventMacros`, part of `import Traffluent`). It derives
+the ``Event`` conformance from the struct's declaration and fills in its ``EventSchema``, and
+`@Constrained` beside a property fills in ``Event/constraintViolation()``. To write the
+conformance by hand instead, see ``Event``.
 
 ```swift
+import Traffluent
+
 enum PlanName: Refinement {
     static let constraints: [Constraint<String>] = [.minLength(1), .maxLength(32)]
 }
 
-struct SignedUp: Event {
-    static let consentCategory = ConsentCategory.functional
+@Event(consent: .functional)
+struct SignedUp {
     var plan: Refined<String, PlanName>
     var email: Sensitive<String>
 }

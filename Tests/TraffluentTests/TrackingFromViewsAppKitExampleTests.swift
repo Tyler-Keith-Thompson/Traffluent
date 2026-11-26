@@ -10,11 +10,13 @@ import Traffluent
 @MainActor
 @Suite("Tracking from views examples: AppKit", .serialized, .timeLimit(.minutes(1)))
 struct TrackingFromViewsAppKitExampleTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 
-    struct ShareTapped: Event {}
+    @Event
+    struct ShareTapped {}
 
     final class CheckoutWindowController: NSWindowController, TrackerProviding {
         let tracker: Tracker

@@ -11,9 +11,11 @@ import Traffluent
 @MainActor
 @Suite("SwiftUITracking module examples", .serialized, .timeLimit(.minutes(1)))
 struct SwiftUITrackingModuleExamplesTests {
-    struct CartOpened: Event {}
+    @Event
+    struct CartOpened {}
 
-    struct CheckoutStarted: Event {
+    @Event
+    struct CheckoutStarted {
         var cartSize: Int
     }
 

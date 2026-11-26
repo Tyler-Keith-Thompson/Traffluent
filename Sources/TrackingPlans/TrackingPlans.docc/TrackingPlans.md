@@ -23,8 +23,8 @@ use `TrackingPlanTesting`. The schemas usually come from `@Event` (module `Event
 The module is a product of its own that `import Traffluent` leaves out.
 
 ```swift
-import EventMacros
 import TrackingPlans
+import Traffluent
 
 @Event(name: "signed_up")
 struct SignedUp {

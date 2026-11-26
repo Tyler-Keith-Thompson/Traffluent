@@ -141,7 +141,8 @@ reads it only through the record, with `reveal(_:)`, and printing or mirroring i
 `droppingCallSite()` removes their call sites. Every other destination receives both:
 
 ```swift
-struct SignedIn: Event {
+@Event
+struct SignedIn {
     var email: Sensitive<String>
 }
 

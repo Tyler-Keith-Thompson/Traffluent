@@ -9,7 +9,8 @@ import Traffluent
 
 @Suite("HTTPDestinations module examples", .timeLimit(.minutes(1)))
 struct HTTPDestinationsModuleExamplesTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 

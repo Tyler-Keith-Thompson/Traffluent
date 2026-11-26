@@ -8,7 +8,8 @@ import Traffluent
 
 @Suite("TrackerTesting module examples", .timeLimit(.minutes(1)))
 struct TrackerTestingModuleExamplesTests {
-    struct CheckoutStarted: Event {
+    @Event
+    struct CheckoutStarted {
         var cartSize: Int
     }
 

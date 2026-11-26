@@ -1,19 +1,18 @@
 // The example of the Persistence module's landing article
 // (Sources/Persistence/Persistence.docc/Persistence.md), verbatim, so the article cannot drift from
-// the code. Its conformance is the extension at the end of this file, on the suite's SignedUp.
+// the code.
 
 import Foundation
-import Persistence
 import SystemPackage
 import Testing
-import Trackers
 import Traffluent
 
 @Suite("Persistence module examples", .timeLimit(.minutes(1)))
 struct PersistenceModuleExamplesTests {
-    struct SignedUp: Event {
+    @Event(name: "signed_up")
+    struct SignedUp {
         var plan: String
-        var seats: Int
+        var seats: Int = 1
     }
 
     @Test("Keeping records in a segment store")
@@ -48,20 +47,5 @@ struct PersistenceModuleExamplesTests {
         let actual = try SignedUp(from: &decoder)
 
         #expect(actual.seats == expectedSeats)
-    }
-}
-
-extension PersistenceModuleExamplesTests.SignedUp: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(plan, forKey: "plan")
-            map.encode(seats, forKey: "seats")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        plan = try map.decode(forKey: "plan")
-        seats = try map.decode(forKey: "seats", default: 1)
     }
 }

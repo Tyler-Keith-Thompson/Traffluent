@@ -10,9 +10,11 @@ import Traffluent
 @MainActor
 @Suite("AppKitTracking module examples", .serialized, .timeLimit(.minutes(1)))
 struct AppKitTrackingModuleExamplesTests {
-    struct ShareTapped: Event {}
+    @Event
+    struct ShareTapped {}
 
-    struct CheckoutStarted: Event {
+    @Event
+    struct CheckoutStarted {
         var cartSize: Int
     }
 

@@ -10,19 +10,9 @@ each record to disk before publishing it. If this launch ends first, the record 
 next one:
 
 ```swift
-import Persistence
-
-extension SignedUp: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(plan, forKey: "plan")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        plan = try map.decode(forKey: "plan")
-    }
+@Event(name: "signed_up")
+struct SignedUp {
+    var plan: String
 }
 
 let store = try SegmentStore(events: [SignedUp.self])
@@ -35,8 +25,8 @@ the process is killed, which the worker hadn't reached yet, is lost. As the app 
 background, call `await tracker.flush()`, then `store.synchronize()`, or let `trackLifecycle` do
 both (<doc:AutomaticTracking>).
 
-An event declared with `@Event` is `BinaryCodable` already, so a store keeps it with no conformance
-written by hand (<doc:DefiningEvents>).
+`@Event` makes the event `BinaryCodable`, the encoding a store writes (<doc:DefiningEvents>). The
+`BinaryCodable` protocol's documentation shows the conformance written by hand.
 
 ### What the store writes
 

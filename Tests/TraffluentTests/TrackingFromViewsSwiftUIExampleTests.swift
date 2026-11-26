@@ -11,11 +11,13 @@ import Traffluent
 @MainActor
 @Suite("Tracking from views examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
 struct TrackingFromViewsSwiftUIExampleTests {
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 
-    struct PlanSelected: Event {
+    @Event
+    struct PlanSelected {
         var plan: String
     }
 

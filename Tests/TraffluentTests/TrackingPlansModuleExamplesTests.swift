@@ -2,9 +2,9 @@
 // (Sources/TrackingPlans/TrackingPlans.docc/TrackingPlans.md), verbatim, so the article cannot
 // drift from the code.
 
-import EventMacros
 import Testing
 import TrackingPlans
+import Traffluent
 
 @Suite("TrackingPlans module examples")
 struct TrackingPlansModuleExamplesTests {

@@ -2,7 +2,6 @@
 // (Sources/Traffluent/Traffluent.docc/ChoosingDestinations.md), verbatim, so the article cannot
 // drift from the code.
 
-import EventMacros
 import Foundation
 import Instrumentation
 import PostHogEncoding
@@ -12,11 +11,13 @@ import Traffluent
 
 @Suite("Choosing destinations examples", .timeLimit(.minutes(1)))
 struct ChoosingDestinationsExamplesTests {
-    struct SignedIn: Event {
+    @Event
+    struct SignedIn {
         var email: Sensitive<String>
     }
 
-    struct SignedUp: Event {
+    @Event
+    struct SignedUp {
         var plan: String
     }
 

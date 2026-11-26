@@ -7,7 +7,8 @@ import Traffluent
 
 @Suite("Sampling events examples", .timeLimit(.minutes(1)))
 struct SamplingEventsExamplesTests {
-    struct Scrolled: Event {
+    @Event
+    struct Scrolled {
         var offset: Int
     }
 

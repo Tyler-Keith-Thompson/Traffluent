@@ -33,7 +33,8 @@ final class SignedInAccount: Sendable {
 
 @Suite("Identifying people examples", .timeLimit(.minutes(1)))
 struct IdentifyingPeopleExamplesTests {
-    struct CheckoutStarted: Event {
+    @Event
+    struct CheckoutStarted {
         var itemCount: Int
     }
 

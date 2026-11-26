@@ -7,7 +7,8 @@ import Traffluent
 
 @Suite("Destinations module examples", .timeLimit(.minutes(1)))
 struct DestinationsModuleExamplesTests {
-    struct SignedUp: Event, Equatable {
+    @Event
+    struct SignedUp: Equatable {
         var plan: String
     }
 

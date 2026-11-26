@@ -19,7 +19,6 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/Traffluent",
-        "//Sources/EventMacros",
         "//Sources/GRDBPersistence",
         "//Sources/TrackingPlans",
         "//Sources/TrackingPlanTesting",

@@ -7,20 +7,28 @@ import Traffluent
 
 @Suite("What goes where examples")
 struct WhatGoesWhereExamplesTests {
-    struct CheckoutFailed: Event {
-        enum Reason: Sendable {
+    @Event
+    struct CheckoutFailed {
+        enum Reason: String {
             case paymentDeclined
             case outOfStock
             case networkUnavailable
         }
-        var reason: Reason
+        @Constrained(.pattern("^(paymentDeclined|outOfStock|networkUnavailable)$", example: "paymentDeclined"))
+        var reason: String
+
+        init(reason: Reason) {
+            self.reason = reason.rawValue
+        }
     }
 
-    struct CheckoutStarted: Event {
+    @Event
+    struct CheckoutStarted {
         var itemCount: Int
     }
 
-    struct CartViewed: Event {
+    @Event
+    struct CartViewed {
         var itemCount: Int
     }
 
