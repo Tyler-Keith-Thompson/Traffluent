@@ -11,9 +11,7 @@ public import Persistence
 import Sessions
 import StandardContext
 import StoreEvents
-#if canImport(SwiftUI)
-    import SwiftUITracking
-#endif
+import SwiftUITracking
 public import SystemPackage
 public import Trackers
 import TrackingPlans
@@ -56,13 +54,8 @@ public struct StoreAnalytics: Sendable {
         SignedUp.self,
     ]
 
-    #if canImport(SwiftUI)
-        private static let screenEvents: [any (Event & BinaryCodable).Type] = [ScreenViewed.self]
-    #else
-        private static let screenEvents: [any (Event & BinaryCodable).Type] = []
-    #endif
-
-    private static let libraryEvents: [any (Event & BinaryCodable).Type] = screenEvents + [
+    private static let libraryEvents: [any (Event & BinaryCodable).Type] = [
+        ScreenViewed.self,
         ControlActivated.self,
         SessionStarted.self,
         SessionEnded.self,

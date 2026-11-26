@@ -34,11 +34,6 @@ swift_test(
     name = "SwiftUITrackingTests",
     size = "small",
     tags = ["debug-only"],
-    target_compatible_with = select({
-        # APPLE_ONLY_TESTS in scripts/modules.py: nothing to run elsewhere.
-        "@platforms//os:macos": [],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
     deps = [":SwiftUITrackingTestsLibrary"],
 )
 

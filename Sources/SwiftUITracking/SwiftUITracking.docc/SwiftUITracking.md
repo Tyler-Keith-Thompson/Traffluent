@@ -64,9 +64,10 @@ covers all three frameworks.
 
 ## API
 
-The documentation site is built on Linux, where this module's API isn't there, so its symbols
-have no pages of their own here. Their doc comments are in the sources, and Xcode shows them
-for an Apple target.
+The documentation site is built on Linux, where this module's views aren't there, so their
+symbols have no pages of their own here. Their doc comments are in the sources, and Xcode shows
+them for an Apple target. ``ScreenViewed`` and ``ScreenKey`` build on every platform, so a
+tracking plan or a collector off Apple platforms can name them.
 
 ### Setting the tracker
 
@@ -82,5 +83,5 @@ for an Apple target.
 ### Screens
 
 - `View.trackScreen(_:)`
-- `ScreenViewed`
-- `ScreenKey`
+- ``ScreenViewed``
+- ``ScreenKey``

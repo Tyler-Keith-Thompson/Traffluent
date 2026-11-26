@@ -1,6 +1,5 @@
-// ScreenViewed is declared where SwiftUI is, so its tests run on Apple platforms; Bazel runs the
-// target on the Mac alone.
-#if canImport(SwiftUI)
+// ScreenViewed builds on every platform, so these tests run on Linux too: a tracking plan or a
+// collector there names it.
 import Events
 import Persistence
 import SwiftUITracking
@@ -35,4 +34,3 @@ struct ScreenViewedTests {
         #expect(actual == expected)
     }
 }
-#endif

@@ -3,9 +3,7 @@ import Events
 import LifecycleTracking
 import Sessions
 import StoreEvents
-#if canImport(SwiftUI)
-    import SwiftUITracking
-#endif
+import SwiftUITracking
 public import TrackingPlans
 
 extension TrackingPlan {
@@ -26,15 +24,8 @@ extension TrackingPlan {
         SignedUp.schema,
     ]
 
-    // ScreenViewed is declared in SwiftUITracking, which builds empty off Apple platforms, so a
-    // Linux build's plan leaves it out; the plan is exported on a Mac.
-    #if canImport(SwiftUI)
-        private static let screenSchemas = [ScreenViewed.schema]
-    #else
-        private static let screenSchemas: [EventSchema] = []
-    #endif
-
-    private static let librarySchemas = screenSchemas + [
+    private static let librarySchemas = [
+        ScreenViewed.schema,
         ControlActivated.schema,
         SessionStarted.schema,
         SessionEnded.schema,

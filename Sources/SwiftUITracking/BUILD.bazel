@@ -4,7 +4,7 @@ load("//tools:docc.bzl", "docc_archive")
 load("//tools:resources.bzl", "module_resources", "module_resources_data")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.
+# EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; the views are Apple platforms only, while ScreenViewed and ScreenKey build everywhere.
 swift_library(
     name = "SwiftUITracking",
     # `Bundle.module`, as SwiftPM generates it, for the resources below.

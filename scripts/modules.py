@@ -100,7 +100,7 @@ APPLE_ONLY_PACKAGES = ["grdb.swift"]
 # Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`), by
 # name. Bazel runs them on macOS alone: elsewhere they are incompatible, so `bazel test //...` skips
 # them, where a test binary that ran no tests would fail. SwiftPM still builds them, empty, on Linux.
-APPLE_ONLY_TESTS = ["SwiftUITrackingTests", "AppKitTrackingTests", "AutomaticScreenTrackingTests"]
+APPLE_ONLY_TESTS = ["AppKitTrackingTests", "AutomaticScreenTrackingTests"]
 
 # Test targets that also run in the iOS simulator, by name: tests of a module every platform builds
 # that holds code for UIKit alone (`#if canImport(UIKit)`). Each stays in Package.swift and keeps
@@ -141,7 +141,7 @@ MODULES = [
     # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
     ("TrackerTesting", "Pipeline", "withRecordingTracker(_:): runs a test's body with a fresh tracker bound to its task, then returns a TrackerRecording of every event tracked in it, in order, typed with events(of:).", ["Events", "Trackers"]),
     # Instrumentation
-    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; Apple platforms only, empty elsewhere.", ["Events", "Persistence", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
+    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; the views are Apple platforms only, while ScreenViewed and ScreenKey build everywhere.", ["Events", "Persistence", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
     ("UIKitTracking", "Instrumentation", "TrackerTrait: the tracker in a UIKit trait collection, set with traitOverrides.tracker on a window scene, view controller or view and read as traitCollection.tracker; and UIControl.track(_:for:), which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere.", ["Events", "Trackers"]),
     ("AppKitTracking", "Instrumentation", "TrackerProviding: a responder, window delegate or application delegate that holds a tracker; NSView.tracker, the tracker of the nearest one a view's actions reach; and NSControl.track(_:), which tracks an event through it each time the control sends its action, beside the action; macOS only, empty elsewhere.", ["Events", "Trackers"]),
     ("AutomaticScreenTracking", "Instrumentation", "trackScreensAutomatically(kinds:_:), on a UIWindowScene or an NSWindow: opt-in screen views, which track ScreenViewed through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a predicate given the DiscoveredScreen, and left to a manual trackScreen(_:) where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere.", ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking"]),

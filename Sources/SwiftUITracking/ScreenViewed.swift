@@ -1,4 +1,3 @@
-#if canImport(SwiftUI)
 public import Events
 public import Persistence
 
@@ -6,7 +5,8 @@ public import Persistence
 /// appears.
 ///
 /// It is `BinaryCodable`, so a store keeps it once its `events` list `ScreenViewed.self`, and its
-/// ``schema`` goes in a tracking plan beside the app's own events.
+/// ``schema`` goes in a tracking plan beside the app's own events. It builds on every platform, so
+/// a tracking plan or a collector off Apple platforms can name it too.
 public struct ScreenViewed: Event, BinaryCodable, Hashable {
     /// The viewed screen's name.
     public var screen: String
@@ -45,4 +45,3 @@ public struct ScreenViewed: Event, BinaryCodable, Hashable {
         screen = try map.decode(forKey: "screen")
     }
 }
-#endif
