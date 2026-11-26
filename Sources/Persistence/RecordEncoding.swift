@@ -1,13 +1,14 @@
-import Events
+internal import CBOR
+public import Events
 import Foundation
 
-/// A record's bytes on disk, the same for every store: a CBOR map of its identifier (`id`), its
-/// timestamp (`timestamp`), its event type's name (`name`) and `Event.schemaVersion` (`version`),
-/// its call site (`sourceLocation`, `null` when the record has none) and its event (`event`), in
-/// that order, each in its ``BinaryCodable`` form. The call site is a map of `fileID`, `file`
-/// (`null` when it equals `fileID`), `function`, `line` and `column`. Every key is written, `null`
-/// for a value there isn't, so a reader finds each in place rather than searching the map for one
-/// left out.
+/// A record's bytes on disk, the same for every store: a CBOR map, written by the CBOR package's
+/// `CBOREncoder` with its keys sorted, of its identifier (`id`, its UUID string), its timestamp
+/// (`timestamp`, a double of its seconds since 2001-01-01 UTC, which `Date` stores, so it reads
+/// back exactly), its event type's name (`name`) and `Event.schemaVersion` (`version`), its call
+/// site (`sourceLocation`, left out when the record has none) and its event (`event`, written by
+/// its `Codable` conformance). The call site is a map of `fileID`, `file` (left out when it equals
+/// `fileID`), `function`, `line` and `column`.
 ///
 /// A record without `version` has no version to compare: it is read by its event's name, whatever
 /// version the registered type is at, and dropped as undecodable if its bytes don't read.
@@ -15,39 +16,28 @@ import Foundation
 /// A record's context and delivery state are not part of it: a store keeps those, if at all, in a
 /// form of its own.
 package enum RecordEncoding {
-    /// Writes `record`, whose event `registration` encodes, to `encoder`.
-    ///
-    /// - Parameters:
-    ///   - record: The record to write.
-    ///   - registration: The registration of the record's event type.
-    ///   - encoder: Where the bytes go.
-    package static func encode(_ record: EventRecord, registration: EventRegistry.Registration, to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(record.id, forKey: "id")
-            map.encode(record.timestamp, forKey: "timestamp")
-            map.encode(registration.name, forKey: "name")
-            map.encode(registration.version, forKey: "version")
-            if let location = record.sourceLocation {
-                // The map itself, with no copy of the location: a map's head is neither `null`
-                // nor an optional's wrapper, so these are the bytes the optional would write.
-                map.encode(forKey: "sourceLocation") { StoredSourceLocation.encode(location, to: &$0) }
-            } else {
-                map.encode(StoredSourceLocation?.none, forKey: "sourceLocation")
-            }
-            map.encode(forKey: "event") { registration.encode(record.event, &$0) }
-        }
+    /// A record map's keys.
+    package enum Key: String, CodingKey {
+        case id
+        case timestamp
+        case name
+        case version
+        case sourceLocation
+        case event
     }
 
-    /// The bytes of `record`, whose event `registration` encodes.
+    /// The bytes of `record`, whose event `registration` encodes, with its `Sensitive` values
+    /// written as themselves.
     ///
     /// - Parameters:
     ///   - record: The record to write.
     ///   - registration: The registration of the record's event type.
     /// - Returns: The record's bytes.
-    package static func bytes(of record: EventRecord, registration: EventRegistry.Registration) -> [UInt8] {
-        var encoder = BinaryEncoder(writingSensitiveValues: true)
-        encode(record, registration: registration, to: &encoder)
-        return encoder.takeBytes()
+    /// - Throws: What the event's `encode(to:)` throws.
+    package static func bytes(of record: EventRecord, registration: EventRegistry.Registration) throws -> [UInt8] {
+        try SensitiveCoding.$revealsValues.withValue(true) {
+            try CBOREncoder().encode(StoredRecord(record: record, registration: registration))
+        }
     }
 
     /// What reading a record's bytes found: the record, or a record of a registered event type
@@ -64,67 +54,106 @@ package enum RecordEncoding {
     /// being decoded.
     ///
     /// - Parameters:
-    ///   - bytes: A record's bytes, as ``encode(_:registration:to:)`` wrote them.
+    ///   - bytes: A record's bytes, as ``bytes(of:registration:)`` wrote them.
     ///   - registry: The event types the store keeps.
     /// - Returns: The record, or ``Reading/versionMismatch(event:storedVersion:currentVersion:)``
     ///   when it holds a version that isn't its registered type's.
-    /// - Throws: ``BinaryDecodingError`` when the bytes aren't a record of a registered event type,
-    ///   or hold bytes past the record's map.
-    package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws(BinaryDecodingError) -> Reading {
-        var decoder = BinaryDecoder(bytes, readingSensitiveValues: true)
-        var map = try decoder.decodeMap()
-        guard decoder.isAtEnd else { throw .invalidValue }
-        let id: UUID = try map.decode(forKey: "id")
-        let timestamp: Date = try map.decode(forKey: "timestamp")
-        let name: String = try map.decode(forKey: "name")
-        let version: Int? = try map.decode(forKey: "version")
-        guard let registration = registry.registration(named: name) else { throw .invalidValue }
-        // Checked before the event is read: a version raised for a change whose bytes would still
-        // decode, such as a property whose meaning changed, must not be read as the new one.
-        if let version, version != registration.version {
-            return .versionMismatch(event: name, storedVersion: version, currentVersion: registration.version)
+    /// - Throws: `CBORError` when the bytes aren't one CBOR data item, or `DecodingError` when they
+    ///   aren't a record of a registered event type.
+    package static func record(from bytes: ArraySlice<UInt8>, registry: EventRegistry) throws -> Reading {
+        try SensitiveCoding.$revealsValues.withValue(true) {
+            // The decoder itself, kept past its initializer, so the event's type can be looked up
+            // by the record's name before the event is read, in one parse of the bytes.
+            let decoder = try CBORDecoder().decode(DecoderReference.self, from: bytes).decoder
+            let container = try decoder.container(keyedBy: Key.self)
+            let name = try container.decode(String.self, forKey: .name)
+            guard let registration = registry.registration(named: name) else {
+                throw DecodingError.dataCorruptedError(forKey: .name, in: container, debugDescription: "No event type of the store has this name.")
+            }
+            // Checked before the event is read: a version raised for a change whose bytes would
+            // still decode, such as a property whose meaning changed, must not be read as the new
+            // one.
+            if let version = try container.decodeIfPresent(Int.self, forKey: .version), version != registration.version {
+                return .versionMismatch(event: name, storedVersion: version, currentVersion: registration.version)
+            }
+            let id = try container.decode(UUID.self, forKey: .id)
+            let timestamp = Date(timeIntervalSinceReferenceDate: try container.decode(Double.self, forKey: .timestamp))
+            let location = try container.decodeIfPresent(StoredSourceLocation.self, forKey: .sourceLocation)
+            let event = try registration.decode(.event, container)
+            return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))
         }
-        let location: StoredSourceLocation? = try map.decode(forKey: "sourceLocation")
-        guard var eventDecoder = try map.decoder(forKey: "event") else { throw .keyNotFound }
-        let event = try registration.decode(&eventDecoder)
-        return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))
     }
 }
 
-/// A record's call site in its ``BinaryCodable`` form: a map, its file `null` when it equals
-/// its file ID, as it does unless `#filePath` was passed.
-private struct StoredSourceLocation: BinaryCodable {
+/// A record as it is written: a map of its fields and its event.
+private struct StoredRecord: Encodable {
+    let record: EventRecord
+    let registration: EventRegistry.Registration
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: RecordEncoding.Key.self)
+        try container.encode(record.id, forKey: .id)
+        // The seconds `Date` stores, rather than the CBOR package's tag 1 epoch time, whose seconds
+        // since 1970 round away the last bit of a date's seconds since 2001.
+        try container.encode(record.timestamp.timeIntervalSinceReferenceDate, forKey: .timestamp)
+        try container.encode(registration.name, forKey: .name)
+        try container.encode(registration.version, forKey: .version)
+        try container.encodeIfPresent(record.sourceLocation.map(StoredSourceLocation.init(location:)), forKey: .sourceLocation)
+        try registration.encode(record.event, .event, &container)
+    }
+}
+
+// This relies on swift-cbor's internals: its decoder holds the value it was handed, so the
+// reference stays readable after `init(from:)` returns, and decoding the reference reads nothing.
+// That is why the package is pinned exactly (scripts/modules.py); a bump must recheck both, which
+// the record round-trip tests in PersistenceTests do.
+/// The decoder a value is decoded from, which a record reads in two steps: its name, then its
+/// event through the type of that name.
+private struct DecoderReference: Decodable {
+    let decoder: any Decoder
+
+    init(from decoder: any Decoder) {
+        self.decoder = decoder
+    }
+}
+
+/// A record's call site as it is written: a map, without its file when it equals its file ID, as
+/// it does unless `#filePath` was passed.
+private struct StoredSourceLocation: Codable {
     let location: SourceLocation
+
+    private enum Key: String, CodingKey {
+        case fileID
+        case file
+        case function
+        case line
+        case column
+    }
 
     init(location: SourceLocation) {
         self.location = location
     }
 
-    func encode(to encoder: inout BinaryEncoder) {
-        Self.encode(location, to: &encoder)
-    }
-
-    /// Writes `location` as a stored call site.
-    static func encode(_ location: SourceLocation, to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(location.fileID, forKey: "fileID")
-            map.encode(location.file == location.fileID ? nil : location.file, forKey: "file")
-            map.encode(location.function, forKey: "function")
-            map.encode(location.line, forKey: "line")
-            map.encode(location.column, forKey: "column")
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: Key.self)
+        try container.encode(location.fileID, forKey: .fileID)
+        if location.file != location.fileID {
+            try container.encode(location.file, forKey: .file)
         }
+        try container.encode(location.function, forKey: .function)
+        try container.encode(location.line, forKey: .line)
+        try container.encode(location.column, forKey: .column)
     }
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        let fileID: String = try map.decode(forKey: "fileID")
-        let file: String? = try map.decode(forKey: "file")
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: Key.self)
+        let fileID = try container.decode(String.self, forKey: .fileID)
         location = SourceLocation(
-            file: file ?? fileID,
+            file: try container.decodeIfPresent(String.self, forKey: .file) ?? fileID,
             fileID: fileID,
-            function: try map.decode(forKey: "function"),
-            line: try map.decode(forKey: "line"),
-            column: try map.decode(forKey: "column")
+            function: try container.decode(String.self, forKey: .function),
+            line: try container.decode(Int.self, forKey: .line),
+            column: try container.decode(Int.self, forKey: .column)
         )
     }
 }

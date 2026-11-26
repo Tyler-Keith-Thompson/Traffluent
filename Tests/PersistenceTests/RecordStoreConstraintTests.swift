@@ -1,3 +1,4 @@
+import CBOR
 import Destinations
 import Events
 import Foundation
@@ -8,29 +9,19 @@ import Trackers
 @Suite("RecordStore: constraints", .timeLimit(.minutes(1)))
 struct RecordStoreConstraintTests {
     /// The event as an earlier release declared it: no constraint on its count.
-    struct Looser: Event, BinaryCodable, Equatable {
+    struct Looser: Event, Codable, Equatable {
         static let name = "Tapped"
         var count: Int
-
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(count, forKey: "count")
-            }
-        }
 
         init(count: Int) {
             self.count = count
         }
 
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            count = try map.decode(forKey: "count")
-        }
     }
 
     /// The same event, of the same name and encoding, as a later release declares it: its count
     /// is at least 0.
-    struct Stricter: Event, BinaryCodable, Equatable {
+    struct Stricter: Event, Codable, Equatable {
         static let name = "Tapped"
         var count: Int
 
@@ -38,20 +29,10 @@ struct RecordStoreConstraintTests {
             count >= 0 ? nil : ConstraintViolation(property: "count", keyword: .minimum(0))
         }
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(count, forKey: "count")
-            }
-        }
-
         init(count: Int) {
             self.count = count
         }
 
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            count = try map.decode(forKey: "count")
-        }
     }
 
     enum Positive: Refinement {
@@ -113,37 +94,37 @@ struct RecordStoreConstraintTests {
     @Test("A refined value is written as its value and reads back the same")
     func refinedRoundTrip() throws {
         let expected = try Refined<Int, Positive>(7)
-        var encoder = BinaryEncoder()
-        encoder.encode(expected)
-        var plain = BinaryEncoder()
-        plain.encode(7)
-        let expectedBytes = plain.bytes
-        var sut = BinaryDecoder(encoder.bytes)
+        let expectedBytes = try CBOREncoder().encode(7)
 
-        let actual = try sut.decode(Refined<Int, Positive>.self)
+        let bytes = try CBOREncoder().encode(expected)
+        let actual = try CBORDecoder().decode(Refined<Int, Positive>.self, from: bytes)
 
         #expect(actual == expected)
-        #expect(encoder.bytes == expectedBytes)
+        #expect(bytes == expectedBytes)
     }
 
-    @Test("Decoding a stored value its rule no longer accepts throws invalidValue rather than make one")
-    func refinedDecodingRejects() {
-        var encoder = BinaryEncoder()
-        encoder.encode(0)
-        var sut = BinaryDecoder(encoder.bytes)
+    @Test("Decoding a stored value its rule no longer accepts throws dataCorrupted rather than make one")
+    func refinedDecodingRejects() throws {
+        let bytes = try CBOREncoder().encode(0)
 
-        #expect(throws: BinaryDecodingError.invalidValue) {
-            _ = try sut.decode(Refined<Int, Positive>.self)
+        let error = #expect(throws: DecodingError.self) {
+            _ = try CBORDecoder().decode(Refined<Int, Positive>.self, from: bytes)
+        }
+
+        guard case .dataCorrupted = error else {
+            Issue.record("Expected dataCorrupted, got \(String(describing: error))")
+            return
         }
     }
 
     @Test("Decoding a refined value whose bytes run out throws what reading the value throws")
     func refinedDecodingTruncated() {
         // An unsigned integer's 8-byte head, cut after two of its bytes.
-        var sut = BinaryDecoder([0x1B, 0, 1])
+        let bytes: [UInt8] = [0x1B, 0, 1]
+        let expected = CBORError.unexpectedEnd(offset: 0)
 
-        #expect(throws: BinaryDecodingError.endOfData) {
-            _ = try sut.decode(Refined<Int, Positive>.self)
+        #expect(throws: expected) {
+            _ = try CBORDecoder().decode(Refined<Int, Positive>.self, from: bytes)
         }
     }
 }

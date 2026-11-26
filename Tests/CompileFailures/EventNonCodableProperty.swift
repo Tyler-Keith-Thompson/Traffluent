@@ -1,4 +1,4 @@
-// Must not compile: Coordinate isn't BinaryCodable, so @Event's requirement for `position` fails.
+// Must not compile: Coordinate isn't Codable, so @Event's requirement for `position` fails.
 
 import EventMacros
 

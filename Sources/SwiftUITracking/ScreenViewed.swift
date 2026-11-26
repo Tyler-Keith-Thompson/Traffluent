@@ -1,13 +1,12 @@
 public import Events
-public import Persistence
 
 /// Someone viewed the screen named ``screen``: what `trackScreen(_:)` tracks each time its view
 /// appears.
 ///
-/// It is `BinaryCodable`, so a store keeps it once its `events` list `ScreenViewed.self`, and its
+/// It is `Codable`, so a store keeps it once its `events` list `ScreenViewed.self`, and its
 /// ``schema`` goes in a tracking plan beside the app's own events. It builds on every platform, so
 /// a tracking plan or a collector off Apple platforms can name it too.
-public struct ScreenViewed: Event, BinaryCodable, Hashable {
+public struct ScreenViewed: Event, Codable, Hashable {
     /// The viewed screen's name.
     public var screen: String
 
@@ -25,23 +24,5 @@ public struct ScreenViewed: Event, BinaryCodable, Hashable {
     /// - Parameter screen: The viewed screen's name.
     public init(screen: String) {
         self.screen = screen
-    }
-
-    /// Writes a map of the screen's name (`screen`) to `encoder`.
-    ///
-    /// - Parameter encoder: Where the bytes go.
-    public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(screen, forKey: "screen")
-        }
-    }
-
-    /// Reads the screen's name from `decoder`.
-    ///
-    /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with a name.
-    public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        screen = try map.decode(forKey: "screen")
     }
 }

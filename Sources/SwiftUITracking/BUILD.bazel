@@ -13,7 +13,6 @@ swift_library(
     module_name = "SwiftUITracking",
     deps = [
         "//Sources/Events",
-        "//Sources/Persistence",
         "//Sources/Trackers",
         "//Sources/UIKitTracking",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
@@ -38,7 +37,6 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
-        "//Sources/Persistence:PersistenceDocumentation",
         "//Sources/Trackers:TrackersDocumentation",
         "//Sources/UIKitTracking:UIKitTrackingDocumentation",
     ],

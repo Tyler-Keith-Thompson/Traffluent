@@ -1,172 +1,180 @@
+internal import CBOR
 import Foundation
-import Persistence
 internal import TrackingPlans
 
-/// Reads an event's `BinaryCodable` bytes, a CBOR map of its properties, as JSON, guided by each
-/// property's type as its schema writes it.
+/// Reads an event's CBOR, the map of its properties its `Encodable` conformance writes, as JSON,
+/// guided by each property's type as its schema writes it.
 ///
-/// The bytes alone don't say everything the JSON needs: a `Date` is a bare double of its seconds,
-/// and an optional's value may sit in a one-element array that marks it apart from `nil`. The
-/// written type says which, as it does for the plan's documents. Where there is none, the bytes are
-/// read for what they hold.
-// Over the bytes rather than a Mirror of the event, which D7 rules out: it is slow, can't see
-// optionality and can't reach a Sensitive value, whose mirror is empty.
+/// The bytes alone don't say everything the JSON needs: a `Date` is a bare double of its seconds
+/// since 2001 where `@Event` writes it, an optional's `nil` is left out, and a `Sensitive` value
+/// a redacting encoding hides is `null`. The written type says which, as it does for the plan's
+/// documents. Where there is none, the bytes are read for what they hold.
+// Over the CBOR package's value tree rather than a Mirror of the event, which D7 rules out: it is
+// slow, can't see optionality and can't reach a Sensitive value, whose mirror is empty.
 struct PropertyReader {
-    private var decoder: BinaryDecoder
+    /// Whether a `Sensitive` value was written as `null` in its place.
+    private let redactsSensitiveValues: Bool
 
-    /// A reader of `bytes`, from their start.
-    init(bytes: [UInt8]) {
-        decoder = BinaryDecoder(bytes)
+    /// A reader of an event's CBOR, written with its `Sensitive` values redacted when
+    /// `redactsSensitiveValues` is set.
+    init(redactsSensitiveValues: Bool) {
+        self.redactsSensitiveValues = redactsSensitiveValues
     }
 
-    /// The members of the map the bytes start with, each read through its type in `types`;
-    /// a redacted value is left out.
+    /// The members of the map `bytes` hold, each read through its type in `types`; a redacted
+    /// value is left out, and an optional property missing from the map is `null`.
     ///
     /// - Parameters:
+    ///   - bytes: The event's CBOR.
     ///   - types: Each property's type as written; a missing or `nil` one is read for what the
     ///     bytes hold.
     ///   - event: The event's name, for the error.
     /// - Throws: ``PropertyReadingError/unrepresentableValue(event:property:)`` naming the
-    ///   property whose bytes JSON can't hold, or the event's name for bytes that aren't a map.
-    mutating func properties(types: [String: WrittenType?], event: String) throws(PropertyReadingError) -> [String: JSON] {
-        let count: Int
-        do {
-            count = try decoder.readCount(of: .map, elementSize: 2)
-        } catch {
+    ///   property whose value JSON can't hold, or the event's name for bytes that aren't a map
+    ///   keyed by text.
+    func properties(of bytes: [UInt8], types: [String: WrittenType?], event: String) throws(PropertyReadingError) -> [String: JSON] {
+        guard let item = try? CBOR.decode(bytes), case .map(let entries) = item else {
             throw .unrepresentableValue(event: event, property: "")
         }
+        var values: [(name: String, value: CBOR)] = []
+        for (key, value) in entries {
+            guard case .textString(let name) = key else { throw .unrepresentableValue(event: event, property: "") }
+            values.append((name, value))
+        }
         var members: [String: JSON] = [:]
-        for _ in 0 ..< count {
-            let key: String
+        // By name, so of two properties JSON can't hold, the error always names the same one.
+        for (name, value) in values.sorted(by: { $0.name < $1.name }) {
             do {
-                key = try decoder.readText()
+                members[name] = try json(value, as: types[name] ?? nil)
             } catch {
-                throw .unrepresentableValue(event: event, property: "")
+                throw .unrepresentableValue(event: event, property: name)
             }
-            do {
-                members[key] = try value(of: types[key] ?? nil)
-            } catch {
-                throw .unrepresentableValue(event: event, property: key)
+        }
+        // An optional property's nil is left out of the map; its JSON is null, as the plan's
+        // documents allow.
+        for (name, type) in types where entries[.textString(name)] == nil {
+            if case .optional = type {
+                members[name] = .null
             }
         }
         return members
     }
 
-    /// The next value, read as `type`, or `nil` for a redacted one.
-    private mutating func value(of type: WrittenType?) throws(BinaryDecodingError) -> JSON? {
-        if decoder.peek() == BinarySimpleValue.undefined {
-            _ = try decoder.readByte()
-            return nil
-        }
+    /// `value` read as `type`, or `nil` for a redacted one.
+    private func json(_ value: CBOR, as type: WrittenType?) throws(Unrepresentable) -> JSON? {
         switch type?.shape {
         case .optional(let wrapped):
-            switch decoder.peek() {
-            case BinarySimpleValue.null:
-                _ = try decoder.readByte()
-                return .null
-            case Bool?.wrapperHead:
-                // The same head for every wrapped type: a value whose own bytes start with null or
-                // with this head, kept apart from nil.
-                _ = try decoder.readByte()
-                return try value(of: wrapped)
-            default:
-                return try value(of: wrapped)
-            }
-        case .value(let wrapped):
-            return try value(of: wrapped)
+            guard value.isNull else { return try json(value, as: wrapped) }
+            // A redacted Sensitive value is null too: left out, as a redacted value is.
+            if redactsSensitiveValues, case .sensitive = wrapped.shape { return nil }
+            return .null
+        case .sensitive(let wrapped):
+            guard !redactsSensitiveValues else { return nil }
+            return try json(value, as: wrapped)
+        case .refined(let wrapped):
+            return try json(value, as: wrapped)
         case .array(let element):
-            let count = try decoder.readCount(of: .array)
+            guard case .array(let items) = value else { throw Unrepresentable() }
             var elements: [JSON] = []
-            for _ in 0 ..< count {
-                elements.append(try value(of: element) ?? .null)
+            for item in items {
+                elements.append(try json(item, as: element) ?? .null)
             }
             return .array(elements)
         case .date:
-            let seconds = try decoder.decode(Double.self)
-            guard seconds.isFinite else { throw .invalidValue }
-            return .string(Date(timeIntervalSinceReferenceDate: seconds).propertyTimestamp)
+            return try .string(Self.date(value).propertyTimestamp)
         case .other, nil:
-            return try anyValue()
+            return try anyValue(value)
         }
     }
 
-    /// The next value, read for what its bytes hold, or `nil` for a redacted one.
-    private mutating func anyValue() throws(BinaryDecodingError) -> JSON? {
-        switch decoder.peek() {
-        case BinarySimpleValue.undefined:
-            _ = try decoder.readByte()
-            return nil
-        case BinarySimpleValue.null:
-            _ = try decoder.readByte()
+    /// `value`, read for what it holds.
+    private func anyValue(_ value: CBOR) throws(Unrepresentable) -> JSON {
+        switch value {
+        case .null:
             return .null
-        case BinarySimpleValue.false:
-            _ = try decoder.readByte()
-            return .boolean(false)
-        case BinarySimpleValue.true:
-            _ = try decoder.readByte()
-            return .boolean(true)
-        case BinarySimpleValue.float64:
-            return try .finite(decoder.decode(Double.self))
-        case BinarySimpleValue.float32:
-            let number = try decoder.decode(Float.self)
+        case .bool(let boolean):
+            return .boolean(boolean)
+        case .double(let number):
+            return try .finite(number)
+        case .float(let number):
             // Through its description, the shortest that reads back as the same Float, so 0.1 is
             // 0.1 rather than the Double nearest the Float, 0.10000000149011612. A Float's
             // description always parses as a Double, `nan` and `inf` included, which `finite`
             // rejects.
-            guard let value = Double(number.description) else { throw .invalidValue }
-            return try .finite(value)
-        default:
-            break
-        }
-        let head = try decoder.readHead()
-        switch head.majorType {
-        case .unsignedInteger:
-            return Int64(exactly: head.argument).map(JSON.integer) ?? .number(Double(head.argument))
-        case .negativeInteger:
+            guard let number = Double(number.description) else { throw Unrepresentable() }
+            return try .finite(number)
+        case .half:
+            guard let number = value.doubleValue else { throw Unrepresentable() }
+            return try .finite(number)
+        case .unsignedInt(let magnitude):
+            return Int64(exactly: magnitude).map(JSON.integer) ?? .number(Double(magnitude))
+        case .negativeInt(let argument):
             // CBOR writes a negative n as -1 - n, which is ~n in two's complement.
-            return Int64(exactly: head.argument).map { .integer(~$0) } ?? .number(-1 - Double(head.argument))
-        case .textString:
-            let utf8 = try decoder.read(decoder.count(head.argument, elementSize: 1))
-            guard let text = String(validating: utf8, as: UTF8.self) else { throw .invalidValue }
+            return Int64(exactly: argument).map { .integer(~$0) } ?? .number(-1 - Double(argument))
+        case .textString(let text):
             return .string(text)
-        case .array:
+        case .array(let items):
             var elements: [JSON] = []
-            for _ in 0 ..< (try decoder.count(head.argument, elementSize: 1)) {
-                elements.append(try anyValue() ?? .null)
+            for item in items {
+                elements.append(try anyValue(item))
             }
             return .array(elements)
-        case .map:
+        case .map(let entries):
             var members: [String: JSON] = [:]
-            for _ in 0 ..< (try decoder.count(head.argument, elementSize: 2)) {
-                let key = try decoder.readText()
-                members[key] = try anyValue()
+            for (key, item) in entries {
+                guard case .textString(let name) = key else { throw Unrepresentable() }
+                members[name] = try anyValue(item)
             }
             return .object(members)
-        case .tag where head.argument == UUID.cborTag:
-            guard try decoder.readCount(of: .byteString) == 16 else { throw .invalidValue }
-            let bytes = try decoder.read(16)
-            var uuid: uuid_t = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            withUnsafeMutableBytes(of: &uuid) { $0.copyBytes(from: bytes) }
-            return .string(UUID(uuid: uuid).uuidString)
-        case .byteString, .tag, .simpleOrFloat:
-            // Bytes, other tags and other simple values: JSON has no form for them, and no
-            // standard type's encoding writes them.
-            throw .invalidValue
+        case .tagged(.epochDateTime, _):
+            // A Date the CBOR package wrote itself: one inside an array or a type of the app's
+            // own, which `@Event` doesn't reach.
+            return try .string(Self.date(value).propertyTimestamp)
+        default:
+            // Bytes, other tags and other simple values, undefined among them: JSON has no form
+            // for them, and no standard type's encoding writes them.
+            throw Unrepresentable()
         }
+    }
+
+    /// The date `value` holds: a bare double of its seconds since 2001, as `@Event` writes a
+    /// `Date` property, or tag 1's seconds since 1970, as the CBOR package writes one it reaches
+    /// itself.
+    private static func date(_ value: CBOR) throws(Unrepresentable) -> Date {
+        let date: Date
+        switch value {
+        case .double(let seconds):
+            date = Date(timeIntervalSinceReferenceDate: seconds)
+        case .tagged(.epochDateTime, .unsignedInt(let seconds)):
+            date = Date(timeIntervalSince1970: Double(seconds))
+        case .tagged(.epochDateTime, .negativeInt(let argument)):
+            date = Date(timeIntervalSince1970: -1 - Double(argument))
+        case .tagged(.epochDateTime, .double(let seconds)):
+            date = Date(timeIntervalSince1970: seconds)
+        default:
+            throw Unrepresentable()
+        }
+        guard date.timeIntervalSinceReferenceDate.isFinite else { throw Unrepresentable() }
+        return date
     }
 }
 
-/// How a written type's value is read from its bytes.
+/// A value JSON has no form for, or bytes that don't hold the value their type says.
+private struct Unrepresentable: Error {}
+
+/// How a written type's value is read from its CBOR.
 private enum Shape {
     /// `T?`, `T!` or `Optional<T>`: `null`, or `T`'s value.
     case optional(WrittenType)
-    /// `Refined<T, Rule>` or `Sensitive<T>`, whose bytes are `T`'s.
-    case value(WrittenType)
+    /// `Sensitive<T>`: `T`'s value, or `null` where it is redacted.
+    case sensitive(WrittenType)
+    /// `Refined<T, Rule>`, whose value is `T`'s.
+    case refined(WrittenType)
     /// `[T]` or `Array<T>`.
     case array(WrittenType)
-    /// `Date`, whose bytes are a double of its seconds since 2001.
+    /// `Date`: a double of its seconds since 2001, or tag 1's since 1970.
     case date
-    /// Any other type, read for what its bytes hold.
+    /// Any other type, read for what its value holds.
     case other
 }
 
@@ -177,8 +185,8 @@ extension WrittenType {
         if case .array(let element) = self { return .array(element) }
         if let arguments = names("Optional", in: ["Swift"]), arguments.count == 1 { return .optional(arguments[0]) }
         if let arguments = names("Array", in: ["Swift"]), arguments.count == 1 { return .array(arguments[0]) }
-        if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .value(arguments[0]) }
-        if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .value(arguments[0]) }
+        if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .refined(arguments[0]) }
+        if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .sensitive(arguments[0]) }
         if names("Date", in: ["Foundation", "FoundationEssentials"])?.isEmpty == true { return .date }
         return .other
     }
@@ -187,19 +195,9 @@ extension WrittenType {
 extension JSON {
     /// A finite number as JSON.
     ///
-    /// - Throws: ``BinaryDecodingError/invalidValue`` for a NaN or an infinity, which JSON can't
-    ///   hold.
-    fileprivate static func finite(_ number: Double) throws(BinaryDecodingError) -> JSON {
-        guard let json = JSON.number(exactly: number) else { throw .invalidValue }
+    /// - Throws: `Unrepresentable` for a NaN or an infinity, which JSON can't hold.
+    fileprivate static func finite(_ number: Double) throws(Unrepresentable) -> JSON {
+        guard let json = JSON.number(exactly: number) else { throw Unrepresentable() }
         return json
-    }
-}
-
-extension BinaryDecoder {
-    /// Reads a text string: a map's key.
-    fileprivate mutating func readText() throws(BinaryDecodingError) -> String {
-        let utf8 = try read(readCount(of: .textString))
-        guard let text = String(validating: utf8, as: UTF8.self) else { throw .invalidValue }
-        return text
     }
 }

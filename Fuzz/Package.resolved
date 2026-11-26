@@ -20,6 +20,15 @@
       }
     },
     {
+      "identity" : "swift-cbor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/brokenhandsio/swift-cbor",
+      "state" : {
+        "revision" : "bf0addcfeb59d5e49c519ca6c6bbabb8f47a1b92",
+        "version" : "1.0.0-rc.1"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",

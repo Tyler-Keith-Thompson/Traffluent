@@ -3,14 +3,14 @@
 
 load("//tools:compile_failure_test.bzl", "swift_compile_failure_test")
 
-# @Event on a struct with a stored property whose type isn't BinaryCodable: the error names the
+# @Event on a struct with a stored property whose type isn't Codable: the error names the
 # property, through the requirement the macro generates for each one.
 swift_compile_failure_test(
-    name = "EventNonBinaryCodableProperty",
+    name = "EventNonCodableProperty",
     size = "small",
-    src = "EventNonBinaryCodableProperty.swift",
+    src = "EventNonCodableProperty.swift",
     expected_errors = [
-        "error: static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'",
+        "error: static method 'requireCodable(position:)' requires that 'Coordinate' conform to 'Decodable'",
     ],
     plugin = "//Sources/EventMacrosPlugin",
     plugin_module_name = "EventMacrosPlugin",
@@ -18,12 +18,12 @@ swift_compile_failure_test(
     deps = ["//Sources/EventMacros"],
 )
 
-# The same struct with every property BinaryCodable compiles, so the check above fails for the
+# The same struct with every property Codable compiles, so the check above fails for the
 # property's type alone and not because this rule can't build the fixture.
 swift_compile_failure_test(
-    name = "EventBinaryCodablePropertiesControl",
+    name = "EventCodablePropertiesControl",
     size = "small",
-    src = "EventBinaryCodablePropertiesControl.swift",
+    src = "EventCodablePropertiesControl.swift",
     plugin = "//Sources/EventMacrosPlugin",
     plugin_module_name = "EventMacrosPlugin",
     tags = ["debug-only"],

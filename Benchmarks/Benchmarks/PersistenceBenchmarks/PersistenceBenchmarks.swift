@@ -10,20 +10,8 @@ struct Tapped: Event {
     var screen: String
 }
 
-extension Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(screen, forKey: "screen")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        screen = try map.decode(forKey: "screen")
-    }
-}
+// Swift's synthesized conformance, as an app's own event type has.
+extension Tapped: Codable {}
 
 // A record as the positional encoding the keyed one replaced wrote it, by hand with no library
 // code: its identifier's 16 bytes, timestamp, fileID, file (nil: it equals fileID), function, line,
@@ -32,8 +20,8 @@ extension Tapped: BinaryCodable {
 // an optional as a byte before the value). These baselines are the floor the store's append
 // and recovery are measured against, with no ratio budget: the store does work they leave out
 // (directory listing, event-type registration, more allocations per record), so their ratio
-// measures the store as much as the encoding. The encoding's own 2x budget is in
-// EventMacrosBenchmarks.
+// measures the store as much as the encoding. The encoding's own budget, D9 in
+// .kanban/triage.md, is measured in EventMacrosBenchmarks.
 struct PositionalRecord {
     var id: UUID
     var timestamp: Date
@@ -196,8 +184,8 @@ let benchmarks: @Sendable () -> Void = {
     let positional = records.map {
         PositionalRecord(id: $0.id, timestamp: $0.timestamp, fileID: location.fileID, function: location.function, line: location.line, column: location.column, name: Tapped.name, number: ($0.event as! Tapped).number, screen: "Checkout")
     }
-    // The segment header, version 2, which a store's segment starts with.
-    let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
+    // The segment header, version 3, which a store's segment starts with.
+    let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0]
 
     // MARK: record: a thousand records' encoding, written to and recovered from a store.
     //

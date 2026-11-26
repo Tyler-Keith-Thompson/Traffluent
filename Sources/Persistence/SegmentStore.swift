@@ -17,8 +17,9 @@ public import SystemPackage
 ///   ``synchronize()`` is called: call it, after the tracker's `flush()`, as the app moves to the
 ///   background or terminates.
 ///   A record whose write fails (the disk is full, say) is kept in memory only, and reported as
-///   ``DropReport/writeFailed(recordCount:timestamps:)``.
-/// - **What is kept.** Only events of the types in `events`, which conform to ``BinaryCodable``.
+///   ``DropReport/writeFailed(recordCount:timestamps:)``, and so is one whose event's
+///   `encode(to:)` throws.
+/// - **What is kept.** Only events of the types in `events`, which conform to `Codable`.
 ///   Events of any other type are kept in memory only: they are delivered in this run like any
 ///   other, are never written, and are lost if the app ends first. The first record of each such
 ///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out of `events` by
@@ -89,7 +90,7 @@ public struct SegmentStore: RecordStore {
     ///   the directory can't be created or read, or a segment in it can't be opened, read or
     ///   truncated.
     public init(
-        events: [any (Event & BinaryCodable).Type],
+        events: [any (Event & Codable).Type],
         directory: FilePath = SegmentStore.defaultDirectory,
         byteBound: Int = SegmentStore.defaultByteBound,
         segmentByteCount: Int? = nil

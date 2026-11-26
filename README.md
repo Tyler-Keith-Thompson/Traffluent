@@ -96,7 +96,7 @@ in [`Examples/`](Examples).
 - [`Sessions`](https://tyler-keith-thompson.github.io/Traffluent/documentation/sessions): `Enricher.sessions`: a session identifier held in memory only
 - [`StandardContext`](https://tyler-keith-thompson.github.io/Traffluent/documentation/standardcontext): Enrichers for the app, device, operating system, locale, network and identifier for vendor
 - [`Checksums`](https://tyler-keith-thompson.github.io/Traffluent/documentation/checksums): `CRC32`
-- [`Persistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/persistence): `RecordStore`, `SegmentStore` and `BinaryCodable`
+- [`Persistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/persistence): `RecordStore` and `SegmentStore`
 - [`GRDBPersistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/grdbpersistence): `DatabaseStore`, a store in the app's GRDB database (not in `import Traffluent`)
 - [`EventMacros`](https://tyler-keith-thompson.github.io/Traffluent/documentation/eventmacros): `@Event` and `@Constrained`
 - [`TrackingPlans`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackingplans): `TrackingPlan`, its check and `TrackingPlanCommand` (not in `import Traffluent`)

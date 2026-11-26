@@ -31,7 +31,7 @@ struct EventMacroConstraintExpansionTests {
                     public var page: Int
                 }
 
-                extension Searched: Events.Event, Persistence.BinaryCodable {
+                extension Searched: Events.Event, Swift.Encodable, Swift.Decodable {
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.ValidationKeyword])),
@@ -78,39 +78,44 @@ struct EventMacroConstraintExpansionTests {
                         return nil
                     }
 
-                    private static func requireBinaryCodable(query: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(query: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(ratio: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(ratio: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(page: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(page: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(query: \.query)
-                        requireBinaryCodable(ratio: \.ratio)
-                        requireBinaryCodable(page: \.page)
+                    private static var codableRequirements: Void {
+                        requireCodable(query: \.query)
+                        requireCodable(ratio: \.ratio)
+                        requireCodable(page: \.page)
                     }
 
-                    public func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.query, forKey: "query")
-                            map.encode(self.ratio, forKey: "ratio")
-                            map.encode(self.page, forKey: "page")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case query
+                        case ratio
+                        case page
                     }
 
-                    public init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.query = try map.decode(forKey: "query")
-                        self.ratio = try map.decode(forKey: "ratio")
-                        self.page = try map.decode(forKey: "page")
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.query, forKey: .query)
+                        try container.encodeIfPresent(self.ratio, forKey: .ratio)
+                        try container.encode(self.page, forKey: .page)
+                    }
+
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.query = try container.decode(String.self, forKey: .query)
+                        self.ratio = try container.decodeIfPresent(Double.self, forKey: .ratio)
+                        self.page = try container.decode(Int.self, forKey: .page)
                     }
                 }
                 """#,
             macroSpecs: [
-                "Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"]),
+                "Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"]),
                 "Constrained": MacroSpec(type: ConstrainedMacro.self),
             ],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -190,7 +195,7 @@ struct EventMacroConstraintExpansionTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: message, line: 3, column: 18)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -220,7 +225,7 @@ struct EventMacroConstraintExpansionTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: message, line: 3, column: 18)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -247,7 +252,7 @@ struct EventMacroConstraintExpansionTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: message, line: 3, column: column)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -311,22 +316,25 @@ struct EventMacroConstraintExpansionTests {
                         return nil
                     }
 
-                    private static func requireBinaryCodable(query: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(query: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(query: \\.query)
+                    private static var codableRequirements: Void {
+                        requireCodable(query: \\.query)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.query, forKey: "query")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case query
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.query = try map.decode(forKey: "query")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.query, forKey: .query)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.query = try container.decode(String.self, forKey: .query)
                     }
                 }
                 """,
@@ -355,7 +363,7 @@ struct EventMacroConstraintExpansionTests {
                 message: #"@Constrained's example "abc" breaks .maxLength(2); give an example every constraint on the property accepts"#,
                 line: 3, column: 33
             )],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -395,22 +403,25 @@ struct EventMacroConstraintExpansionTests {
                         return nil
                     }
 
-                    private static func requireBinaryCodable(query: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(query: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(query: \.query)
+                    private static var codableRequirements: Void {
+                        requireCodable(query: \.query)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.query, forKey: "query")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case query
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.query = try map.decode(forKey: "query")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.query, forKey: .query)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.query = try container.decode(String.self, forKey: .query)
                     }
                 }
                 """##,

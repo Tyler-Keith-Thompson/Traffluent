@@ -44,9 +44,9 @@ public struct StoreAnalytics: Sendable {
 
     /// The event types the store keeps on disk: every event the app tracks, so none is lost when
     /// the app ends before delivering it.
-    public static let storedEvents: [any (Event & BinaryCodable).Type] = storeEvents + libraryEvents
+    public static let storedEvents: [any (Event & Codable).Type] = storeEvents + libraryEvents
 
-    private static let storeEvents: [any (Event & BinaryCodable).Type] = [
+    private static let storeEvents: [any (Event & Codable).Type] = [
         ProductAddedToCart.self,
         PromotionTapped.self,
         CheckoutStarted.self,
@@ -54,7 +54,7 @@ public struct StoreAnalytics: Sendable {
         SignedUp.self,
     ]
 
-    private static let libraryEvents: [any (Event & BinaryCodable).Type] = [
+    private static let libraryEvents: [any (Event & Codable).Type] = [
         ScreenViewed.self,
         ControlActivated.self,
         SessionStarted.self,

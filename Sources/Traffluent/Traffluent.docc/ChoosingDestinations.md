@@ -76,7 +76,7 @@ trace context. A `Sensitive` value is sent only while the record reveals it.
 A record the encoder can't write is left out of the request, and the rest of its batch is sent.
 That happens when the plan has no schema for the record's event at its version (an event the
 library tracks, such as `SessionStarted`, that the plan doesn't list), when the event isn't
-`BinaryCodable`, or when a value has no JSON form, such as a NaN. The encoder logs each skipped
+`Encodable`, or when a value has no JSON form, such as a NaN. The encoder logs each skipped
 record at error level, and `batch(of:)` returns them as `SkippedRecord`s. A batch with no record
 the encoder can write sends nothing.
 
@@ -118,9 +118,9 @@ the project's settings.
 
 A `Sensitive` value is never sent, whatever the record reveals, so a value meant for PostHog isn't
 `Sensitive`. Properties whose names PostHog reads as settings or identity (`$`-prefixed ones, which
-only a hand-written `BinaryCodable` conformance can write, and `distinct_id`) are left out and
+only a hand-written `Encodable` conformance can write, and `distinct_id`) are left out and
 logged. Like the collector's encoder, it leaves out a record the plan doesn't describe, one that
-isn't `BinaryCodable` and one holding a value JSON can't, and also one whose event name starts with
+isn't `Encodable` and one holding a value JSON can't, and also one whose event name starts with
 `$`, as PostHog keeps those names for its own events. It logs each at error level, and
 `batch(of:)` returns them as `PostHogSkippedRecord`s.
 

@@ -64,23 +64,17 @@ struct DatabaseStoreArgumentTests {
     }
 }
 
-extension DatabaseStoreArgumentTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
+extension DatabaseStoreArgumentTests.Tapped: Codable {}
+
+extension DatabaseStoreArgumentTests.Renamed: Codable {
+    private enum CodingKeys: CodingKey {}
+
+    func encode(to encoder: any Encoder) throws {
+        _ = encoder.container(keyedBy: CodingKeys.self)
     }
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
-    }
-}
-
-extension DatabaseStoreArgumentTests.Renamed: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
+    init(from decoder: any Decoder) throws {
+        _ = try decoder.container(keyedBy: CodingKeys.self)
         self = .only
     }
 }

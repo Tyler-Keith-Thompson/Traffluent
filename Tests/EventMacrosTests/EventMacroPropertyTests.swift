@@ -1,6 +1,8 @@
 // Property tests against a naive reference: a generated conformance writes exactly the bytes of the
-// hand-written one, and what it encodes decodes to the same value.
+// compiler's synthesized one and of the map CBOR's value model builds, and what it encodes decodes
+// to the same value.
 
+import CBOR
 import EventMacros
 import PropertyBased
 import Testing
@@ -18,8 +20,8 @@ struct EventMacroPropertyTests {
         var discount: Double
     }
 
-    // The reference: the same fields, encoded by hand as BinaryCodable's documentation shows.
-    struct HandWrittenCheckout: BinaryCodable {
+    // The reference: the same fields, with the conformance the compiler synthesizes.
+    struct SynthesizedCheckout: Codable {
         var total: Int
         var currency: String
         var coupon: String?
@@ -35,27 +37,6 @@ struct EventMacroPropertyTests {
             express = checkout.express
             discount = checkout.discount
         }
-
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(total, forKey: "total")
-                map.encode(currency, forKey: "currency")
-                map.encode(coupon, forKey: "coupon")
-                map.encode(items, forKey: "items")
-                map.encode(express, forKey: "express")
-                map.encode(discount, forKey: "discount")
-            }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            total = try map.decode(forKey: "total")
-            currency = try map.decode(forKey: "currency")
-            coupon = try map.decode(forKey: "coupon")
-            items = try map.decode(forKey: "items")
-            express = try map.decode(forKey: "express")
-            discount = try map.decode(forKey: "discount")
-        }
     }
 
     @Test("Any generated event decodes to the value encoded", .tags(.randomized))
@@ -69,18 +50,15 @@ struct EventMacroPropertyTests {
                 express: express,
                 discount: Double(discount) / 100
             )
-            var encoder = BinaryEncoder()
-            checkout.encode(to: &encoder)
-            var decoder = BinaryDecoder(encoder.bytes)
+            let bytes = try? CBOREncoder().encode(checkout)
 
-            let actual = try? Checkout(from: &decoder)
+            let actual = try? bytes.flatMap { try CBORDecoder().decode(Checkout.self, from: $0) }
 
             #expect(actual == checkout)
-            #expect(decoder.isAtEnd)
         }
     }
 
-    @Test("Any generated event's bytes are the hand-written conformance's", .tags(.randomized))
+    @Test("Any generated event's bytes are the synthesized conformance's, and the map CBOR's value model builds", .tags(.randomized))
     func matchesHandWritten() async {
         await propertyCheck(count: 300, input: Gen.int(in: .min ... .max), Gen.uint8().array(of: 0...12), Gen.uint8().array(of: 0...12).optional, Gen.uint32().array(of: 0...8), Gen.bool, Gen.int(in: -1_000_000...1_000_000)) { total, currency, coupon, items, express, discount in
             let checkout = Checkout(
@@ -91,14 +69,21 @@ struct EventMacroPropertyTests {
                 express: express,
                 discount: Double(discount) / 100
             )
-            var reference = BinaryEncoder()
-            HandWrittenCheckout(checkout).encode(to: &reference)
-            let expected = reference.bytes
-            var sut = BinaryEncoder()
+            let synthesized = try? CBOREncoder().encode(SynthesizedCheckout(checkout))
+            var entries: [CBOR: CBOR] = [
+                .textString("total"): CBOR(integerLiteral: Int64(checkout.total)),
+                .textString("currency"): .textString(checkout.currency),
+                .textString("items"): .array(checkout.items.map { CBOR(integerLiteral: Int64($0)) }),
+                .textString("express"): .bool(checkout.express),
+                .textString("discount"): .double(checkout.discount),
+            ]
+            entries[.textString("coupon")] = checkout.coupon.map { .textString($0) }
+            let model = CBOR.map(entries).encode()
 
-            checkout.encode(to: &sut)
+            let actual = try? CBOREncoder().encode(checkout)
 
-            #expect(sut.bytes == expected)
+            #expect(actual == synthesized)
+            #expect(actual == model)
         }
     }
 }

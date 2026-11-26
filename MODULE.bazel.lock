@@ -619,7 +619,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 8a2f3d286946af372c94695c78fea1478124e2d1116ed743b92e9e9b6b389430"
+          "FILE:@@//swift/Package.resolved d93537dbc90b9db0b09e8975d733ab7847c1b2ebd85b2e59631446794703c774"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -639,6 +639,7 @@
                 "@swiftpkg_swift_collections//:pkg_info.json": "swift-collections",
                 "@swiftpkg_swift_syntax//:pkg_info.json": "swift-syntax",
                 "@swiftpkg_swift_json_schema//:pkg_info.json": "swift-json-schema",
+                "@swiftpkg_swift_cbor//:pkg_info.json": "swift-cbor",
                 "@swiftpkg_swiftcbor//:pkg_info.json": "swiftcbor"
               }
             }
@@ -656,6 +657,7 @@
               "repo_names": [
                 "swiftpkg_afluent",
                 "swiftpkg_grdb.swift",
+                "swiftpkg_swift_cbor",
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_collections",
                 "swiftpkg_swift_concurrency_extras",
@@ -945,6 +947,27 @@
               "binary_target_deps": false
             }
           },
+          "swiftpkg_swift_cbor": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_cbor",
+              "commit": "bf0addcfeb59d5e49c519ca6c6bbabb8f47a1b92",
+              "remote": "https://github.com/brokenhandsio/swift-cbor",
+              "version": "1.0.0-rc.1",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
+              "system_sdk_deps": false,
+              "binary_target_deps": false
+            }
+          },
           "swiftpkg_swiftcbor": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -1003,6 +1026,7 @@
             "swiftpkg_swift_collections",
             "swiftpkg_swift_syntax",
             "swiftpkg_swift_json_schema",
+            "swiftpkg_swift_cbor",
             "swiftpkg_swiftcbor",
             "swift_deps_info",
             "swift_package"

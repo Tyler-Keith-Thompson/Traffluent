@@ -22,16 +22,11 @@ struct PostHogDeliveryTests {
     }
 
     /// An event named as one of PostHog's own.
-    struct Identify: Event, BinaryCodable {
+    struct Identify: Event, Codable {
         static let name = "$identify"
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { _ in }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     enum TraceParentKey: ServiceContextKey {

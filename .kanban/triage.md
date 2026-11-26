@@ -148,10 +148,13 @@ bad row in a dashboard.
 - D7. Swift types are the source of an event's schema (TRAF-15, decided by the agent working it,
   2026-11-23; the owner asked for "codegen where it makes sense" and may change this). `@Event`
   (module EventMacros, outside the umbrella) derives the conformance, the name, an `EventSchema`
-  value and the binary encoding from the declaration. A schema file such as a JSON Schema tracking
-  plan is an export of those types, never the input. Rejected: an external schema file with
-  codegen into Swift, which makes the Swift type a generated copy of something else; `Codable`
-  (too slow, per the owner); and a runtime Mirror walk (slow, can't see optionality).
+  value and the `Codable` conformance from the declaration. A schema file such as a JSON Schema
+  tracking plan is an export of those types, never the input. `Codable` is allowed when the format
+  is CBOR (the owner, 2026-11-26, TRAF-83: "We can use codable if it's using CBOR"), so stores
+  write events through their `Codable` conformances and ship no coder of their own. Rejected: an
+  external schema file with codegen into Swift, which makes the Swift type a generated copy of
+  something else; a hand-written binary coder protocol (the owner, TRAF-83: "Let's do that so we
+  stop shipping our own custom codable"); and a runtime Mirror walk (slow, can't see optionality).
 - D8. Automatic instrumentation covers app lifecycle (TRAF-24), screen views (TRAF-22) and control
   taps (TRAF-23), and is
   opt in: nothing is tracked until the app turns it on for a scene or window, and each kind can be
@@ -163,11 +166,32 @@ bad row in a dashboard.
 - D9. Persisted events and records are CBOR (RFC 8949) maps keyed by property name (TRAF-35, the
   owner's choice of CBOR over a custom JSON encoder, 2026-11-23), so a stored record survives an
   added optional property or a removed one; a record that no longer decodes is dropped with a drop
-  report. The writer and reader are hand-written in Persistence and must keep `@Event`
-  encode and decode together within 2× the simulated instructions of the positional form (a
-  BASELINE in the EventMacros benchmarks). The Persistence benchmarks' positional BASELINEs are a
-  floor for the store's append and recovery, without a ratio budget. Rejected: the positional encoding (breaks on any field
-  change), SwiftCBOR (an allocation per item), and Codable-based CBOR packages (D7).
+  report. Stores write them through `Codable` with brokenhandsio's swift-cbor (TRAF-83, D7). New
+  code keeps the 2× budget: within 2× the simulated instructions of the hand-written form it
+  replaces. The record coder alone has a one-time exception (the owner, 2026-11-26, TRAF-83:
+  "Don't raise, make a one time exception."). `@Event` encode and decode together must keep pace
+  with a hand-written `Codable` conformance through the same package (a BASELINE in the EventMacros
+  benchmarks), not with the positional form, which stays as the floor. The Persistence benchmarks'
+  positional BASELINEs are a floor for the store's append and recovery, without a ratio budget.
+  Simulated instructions, p50, release, at TRAF-83:
+
+  | Benchmark | Hand-written coder | swift-cbor | Positional floor |
+  |---|---|---|---|
+  | `@Event` encode + decode | 2,365K (1.30×) | 26,487K (14.6×) | 1,813K |
+  | Hand-written `Codable` encode + decode | — | 26,487K (14.6×) | 1,813K |
+  | SegmentStore append | 4,979K (1.22×) | 58,889K (14.5×) | 4,072K |
+  | SegmentStore recovery | about 10M (1.7×) | 63,143K (10.6×) | 5,959K |
+
+  Why: a coder of the project's own is code to own, fuzz and keep in step with Codable, and the
+  owner wanted none shipped. The cost is the package's `Codable` path, which builds a CBOR value
+  tree and allocates for it; `@Event`'s generated code matches a hand-written conformance's count
+  exactly, so nothing is left to win on Traffluent's side. A store writes once per tracked event,
+  off the caller's path, so the time is spent where a delay costs nothing. A faster CBOR `Codable`
+  package, or a release of this one that streams, is taken without a new decision. Rejected:
+  raising the 2× budget for everything (it keeps holding new code to the hand-written form);
+  forking swift-cbor to make it faster (a coder of our own by another name); the positional
+  encoding (breaks on any field change); SwiftCBOR (an allocation per item, and its own value type
+  rather than `Codable`).
 - D10. Throw, don't trap (the owner, 2026-11-26, TRAF-86): "Trap/checked only makes sense for high
   performance libs where fatalError is a reasonable thing to do. An analytics library doesn't make
   sense. `checked` should be removed and EVERYTHING that can throw, should throw. No trapping."

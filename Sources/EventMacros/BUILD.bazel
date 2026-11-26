@@ -3,14 +3,13 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# The @Event macro: an event's Event and BinaryCodable conformances, its name and its EventSchema, derived from its declaration; and @Constrained, the constraints a property declares, which @Event checks.
+# The @Event macro: an event's Event and Codable conformances, its name and its EventSchema, derived from its declaration; and @Constrained, the constraints a property declares, which @Event checks.
 swift_library(
     name = "EventMacros",
     srcs = glob(["**/*.swift"]),
     module_name = "EventMacros",
     deps = [
         "//Sources/Events",
-        "//Sources/Persistence",
     ],
     plugins = [
         "//Sources/EventMacrosPlugin",
@@ -25,7 +24,6 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
-        "//Sources/Persistence:PersistenceDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

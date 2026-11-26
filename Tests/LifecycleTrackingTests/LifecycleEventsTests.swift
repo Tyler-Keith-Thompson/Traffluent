@@ -1,95 +1,85 @@
+import CBOR
 import Events
 import LifecycleTracking
-import Persistence
 import PropertyBased
 import Testing
 
 @Suite("Lifecycle events")
 struct LifecycleEventsTests {
-    @Test("An install's bytes decode to the same install, with none left over")
+    @Test("An install's CBOR decodes to the same install")
     func installedRoundTrip() throws {
         let expected = ApplicationInstalled(version: "1.2.0")
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(expected)
 
-        let actual = try ApplicationInstalled(from: &decoder)
+        let actual = try CBORDecoder().decode(ApplicationInstalled.self, from: bytes)
 
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
-    @Test("An update encodes as a map of its previous version, then its version, and decodes back")
+    @Test("An update encodes as a map of its version and its previous version, and decodes back")
     func updatedRoundTrip() throws {
         let expected = ApplicationUpdated(previousVersion: "1.1.0", version: "1.2.0")
-        var reference = BinaryEncoder()
-        reference.encodeMap { map in
-            map.encode("1.1.0", forKey: "previousVersion")
-            map.encode("1.2.0", forKey: "version")
-        }
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        // {"version": "1.2.0", "previousVersion": "1.1.0"}, keys in CBOR's sorted order.
+        let expectedBytes: [UInt8] = [
+            0xA2,
+            0x67, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x65, 0x31, 0x2E, 0x32, 0x2E, 0x30,
+            0x6F, 0x70, 0x72, 0x65, 0x76, 0x69, 0x6F, 0x75, 0x73, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E,
+            0x65, 0x31, 0x2E, 0x31, 0x2E, 0x30,
+        ]
+        let bytes = try CBOREncoder().encode(expected)
 
-        let actual = try ApplicationUpdated(from: &decoder)
+        let actual = try CBORDecoder().decode(ApplicationUpdated.self, from: bytes)
 
-        #expect(encoder.bytes == reference.bytes)
+        #expect(bytes == expectedBytes)
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
-    @Test("A map holding a previous version but no version doesn't decode as an update")
+    @Test("A map holding a previous version but no version doesn't decode as an update: keyNotFound names version")
     func updatedTruncated() {
-        var encoder = BinaryEncoder()
-        encoder.encodeMap { map in
-            map.encode("1.1.0", forKey: "previousVersion")
-        }
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = CBOR.map([.textString("previousVersion"): .textString("1.1.0")]).encode()
+        let expectedKey = "version"
 
-        #expect(throws: BinaryDecodingError.keyNotFound) {
-            try ApplicationUpdated(from: &decoder)
+        let error = #expect(throws: DecodingError.self) {
+            try CBORDecoder().decode(ApplicationUpdated.self, from: bytes)
         }
+
+        guard case .keyNotFound(let key, _) = error else {
+            Issue.record("Expected keyNotFound, got \(String(describing: error))")
+            return
+        }
+        #expect(key.stringValue == expectedKey)
     }
 
-    @Test("An open's bytes decode to the same open, from the background or not", arguments: [false, true])
+    @Test("An open's CBOR decodes to the same open, from the background or not", arguments: [false, true])
     func openedRoundTrip(fromBackground: Bool) throws {
         let expected = ApplicationOpened(fromBackground: fromBackground)
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(expected)
 
-        let actual = try ApplicationOpened(from: &decoder)
+        let actual = try CBORDecoder().decode(ApplicationOpened.self, from: bytes)
 
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
     @Test("Empty bytes don't decode as an open")
     func openedTruncated() {
-        var decoder = BinaryDecoder([])
+        let bytes: [UInt8] = []
 
-        #expect(throws: BinaryDecodingError.self) {
-            try ApplicationOpened(from: &decoder)
+        #expect(throws: CBORError.self) {
+            try CBORDecoder().decode(ApplicationOpened.self, from: bytes)
         }
     }
 
     @Test("A move to the background and an end encode as an empty map, and decode from one")
     func propertylessRoundTrip() throws {
         let expectedBytes: [UInt8] = [0xA0]
-        var backgroundedEncoder = BinaryEncoder()
-        ApplicationBackgrounded().encode(to: &backgroundedEncoder)
-        var terminatedEncoder = BinaryEncoder()
-        ApplicationTerminated().encode(to: &terminatedEncoder)
-        var backgroundedDecoder = BinaryDecoder(expectedBytes)
-        var terminatedDecoder = BinaryDecoder(expectedBytes)
 
-        let actualBackgrounded = try ApplicationBackgrounded(from: &backgroundedDecoder)
-        let actualTerminated = try ApplicationTerminated(from: &terminatedDecoder)
+        let backgrounded = try CBOREncoder().encode(ApplicationBackgrounded())
+        let terminated = try CBOREncoder().encode(ApplicationTerminated())
+        let actualBackgrounded = try CBORDecoder().decode(ApplicationBackgrounded.self, from: expectedBytes)
+        let actualTerminated = try CBORDecoder().decode(ApplicationTerminated.self, from: expectedBytes)
 
-        #expect(backgroundedEncoder.bytes == expectedBytes)
-        #expect(terminatedEncoder.bytes == expectedBytes)
-        #expect(backgroundedDecoder.isAtEnd)
-        #expect(terminatedDecoder.isAtEnd)
+        #expect(backgrounded == expectedBytes)
+        #expect(terminated == expectedBytes)
         #expect(actualBackgrounded == ApplicationBackgrounded())
         #expect(actualTerminated == ApplicationTerminated())
     }
@@ -122,26 +112,19 @@ struct LifecycleEventsTests {
         #expect(actual == expected)
     }
 
-    @Test("An update encodes as a map of its two versions and decodes back, for any two strings")
+    @Test("An update encodes as the map of its two versions CBOR's value model writes, and decodes back, for any two strings")
     func updatedEncodingProperty() async {
         await propertyCheck(count: 300, input: Gen.uint8().array(of: 0...24), Gen.uint8().array(of: 0...24)) { previousBytes, versionBytes in
             let previous = String(decoding: previousBytes, as: UTF8.self)
             let version = String(decoding: versionBytes, as: UTF8.self)
             let update = ApplicationUpdated(previousVersion: previous, version: version)
-            var reference = BinaryEncoder()
-            reference.encodeMap { map in
-                map.encode(previous, forKey: "previousVersion")
-                map.encode(version, forKey: "version")
-            }
+            let reference = CBOR.map([.textString("previousVersion"): .textString(previous), .textString("version"): .textString(version)]).encode()
 
-            var encoder = BinaryEncoder()
-            update.encode(to: &encoder)
-            var decoder = BinaryDecoder(encoder.bytes)
-            let decoded = try? ApplicationUpdated(from: &decoder)
+            let bytes = try? CBOREncoder().encode(update)
+            let decoded = try? CBORDecoder().decode(ApplicationUpdated.self, from: reference)
 
-            #expect(encoder.bytes == reference.bytes)
+            #expect(bytes == reference)
             #expect(decoded == update)
-            #expect(decoder.isAtEnd)
         }
     }
 }

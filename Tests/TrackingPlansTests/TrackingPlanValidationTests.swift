@@ -35,19 +35,9 @@ struct TrackingPlanValidationTests {
         var referrer: String?
     }
 
-    struct Coordinate: BinaryCodable {
+    struct Coordinate: Codable {
         var latitude: Double
 
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            latitude = try map.decode(forKey: "latitude")
-        }
-
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(latitude, forKey: "latitude")
-            }
-        }
     }
 
     @Event(name: "Box<String>")

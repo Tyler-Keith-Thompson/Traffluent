@@ -83,7 +83,6 @@ MUTANTS = [
     Mutant("movenotwritten", R, "state?.isInWindow = window != nil", "", mode="stmt"),
     Mutant("windowinverted", R, "window != nil", "window == nil"),
     # ScreenViewed.
-    Mutant("screennotencoded", V, 'map.encode(screen, forKey: "screen")', "", mode="stmt"),
     Mutant("schemaversion", V, "schemaVersion", "0"),
     # The whole list first, so the property's own mutants find it in the else branch.
     Mutant("schemanoproperty", V, "[" + PROPERTY + "]", "[]"),

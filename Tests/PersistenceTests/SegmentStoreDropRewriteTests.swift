@@ -266,35 +266,8 @@ struct SegmentStoreDropRewriteTests {
     }
 }
 
-extension SegmentStoreDropRewriteTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
+extension SegmentStoreDropRewriteTests.Tapped: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
+extension SegmentStoreDropRewriteTests.Other: Codable {}
 
-extension SegmentStoreDropRewriteTests.Other: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
-    }
-}
-
-extension SegmentStoreDropRewriteTests.OtherVersion2: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
-    }
-}
+extension SegmentStoreDropRewriteTests.OtherVersion2: Codable {}

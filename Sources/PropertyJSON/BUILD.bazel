@@ -10,8 +10,8 @@ swift_library(
     module_name = "PropertyJSON",
     deps = [
         "//Sources/Events",
-        "//Sources/Persistence",
         "//Sources/TrackingPlans",
+        "@swiftpkg_swift_cbor//:CBOR",
     ],
     visibility = ["//visibility:public"],
 )
@@ -23,7 +23,6 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
-        "//Sources/Persistence:PersistenceDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
     ],
     tags = ["manual"],

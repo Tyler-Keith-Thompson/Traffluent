@@ -127,26 +127,17 @@ struct SegmentStoreArgumentTests {
     }
 }
 
-extension SegmentStoreArgumentTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
+extension SegmentStoreArgumentTests.Tapped: Codable {}
+
+extension SegmentStoreArgumentTests.Renamed: Codable {
+    private enum CodingKeys: CodingKey {}
+
+    func encode(to encoder: any Encoder) throws {
+        _ = encoder.container(keyedBy: CodingKeys.self)
     }
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension SegmentStoreArgumentTests.Renamed: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
+    init(from decoder: any Decoder) throws {
+        _ = try decoder.container(keyedBy: CodingKeys.self)
         self = .only
     }
 }

@@ -46,13 +46,14 @@ public import TrackingPlans
 /// with no session has none. The record's vendor identifier and trace context, and any other
 /// context value, aren't sent.
 ///
-/// Properties are read from the event's `BinaryCodable` form, which `@Event` derives, through the
+/// Properties are read from the event's `Encodable` form, which `@Event` derives, through the
 /// types its schema in `plan` lists: a `String` is a string; a `Bool` a boolean; an integer, a
 /// `Double` or a `Float` a number; a `Date` an ISO 8601 string, as `timestamp` is; a `UUID` an
 /// uppercase UUID string; an array an array; and an optional's `nil` is `null`. A `Refined` value
-/// is its value. A ``/Events/Sensitive`` value is never sent, whatever the record reveals: the
-/// property is left out, and an element of an array is `null`. A property whose name starts with
-/// `$`, which only a hand-written `BinaryCodable` conformance can write, or is `distinct_id`, is
+/// is its value. A type the plan can't map is written as its encoding holds it. A
+/// ``/Events/Sensitive`` value is never sent, whatever the record reveals: the property is left
+/// out, an element of an array is `null`, and one inside a type the plan can't map is `null`. A property whose name starts with
+/// `$`, which only a hand-written `Encodable` conformance can write, or is `distinct_id`, is
 /// left out and logged at notice level, as PostHog reads those names as settings (`$set`,
 /// `$process_person_profile`) or the identity.
 ///
@@ -69,7 +70,7 @@ public import TrackingPlans
 ///
 /// A record the encoder can't write is left out of the body, and the batch's other records are
 /// sent: one whose event and version `plan` doesn't describe, one whose event name starts with `$`
-/// (a name PostHog keeps for its own events), one whose event isn't `BinaryCodable`, or one that
+/// (a name PostHog keeps for its own events), one whose event isn't `Encodable`, or one that
 /// holds a value JSON can't (``PostHogEncodingError``). Each is logged at error level;
 /// ``batch(of:)`` returns them as ``PostHogSkippedRecord``s. When every record of a batch is left
 /// out, ``encode(_:)`` throws, so `HTTPDestination` sends nothing for it.
@@ -212,7 +213,7 @@ extension PostHogEncodingError {
     /// The reason the property reader gave, as this encoder's.
     fileprivate init(_ error: PropertyReadingError) {
         switch error {
-        case .notBinaryCodable(let name): self = .notBinaryCodable(name: name)
+        case .notEncodable(let name): self = .notEncodable(name: name)
         case .unrepresentableValue(let event, let property): self = .unrepresentableValue(event: event, property: property)
         }
     }

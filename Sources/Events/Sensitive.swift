@@ -18,6 +18,11 @@
 /// the value shows `<redacted>`, so a destination that writes events out as text never writes it.
 ///
 /// It isn't `Equatable`: comparing it with a guess would reveal it.
+///
+/// It is `Codable` when its value is, so a store can keep it, and only a library encoding reads or
+/// writes the value. Any other encoder, yours included, writes `null` in its place without an
+/// error, and any other decoder throws `DecodingError.dataCorrupted`. So don't put a `Sensitive` in
+/// your own `Codable` models: what you encode loses the value, and nothing you encode decodes.
 public struct Sensitive<Value: Sendable>: Sendable {
     /// The value, for the library's own encodings (a store's, say); destinations go through
     /// `EventRecord.reveal(_:)`.

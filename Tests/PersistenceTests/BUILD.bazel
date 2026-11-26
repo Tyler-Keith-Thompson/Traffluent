@@ -19,6 +19,7 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/Persistence",
+        "@swiftpkg_swift_cbor//:CBOR",
         "//Sources/GRDBPersistence",
         "//Sources/Checksums",
         "//Sources/Events",

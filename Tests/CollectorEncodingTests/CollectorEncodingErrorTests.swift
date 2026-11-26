@@ -32,16 +32,15 @@ struct CollectorEncodingErrorTests {
     }
 
     /// Encodes as a bare integer rather than a map of its properties.
-    struct NotAMap: Event, BinaryCodable {
+    struct NotAMap: Event, Encodable {
         static let name = "not_a_map"
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(1)
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(1)
         }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     @Test("An event the plan doesn't describe throws unknownEvent with its name and version")
@@ -67,12 +66,12 @@ struct CollectorEncodingErrorTests {
         }
     }
 
-    @Test("An event that isn't BinaryCodable throws notBinaryCodable")
-    func notBinaryCodable() throws {
+    @Test("An event that isn't Encodable throws notEncodable")
+    func notEncodable() throws {
         let schema = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = CollectorEncodingError.notBinaryCodable(name: "HandWritten")
+        let expected = CollectorEncodingError.notEncodable(name: "HandWritten")
 
         #expect(throws: expected) {
             try sut.encode([record])

@@ -13,23 +13,13 @@ import Trackers
 
 @Suite("trackLifecycle: durability", .timeLimit(.minutes(1)))
 struct DurabilityTests {
-    struct Tapped: Event, BinaryCodable, Equatable {
+    struct Tapped: Event, Codable, Equatable {
         var number: Int
 
         init(number: Int) {
             self.number = number
         }
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(number, forKey: "number")
-            }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            number = try map.decode(forKey: "number")
-        }
     }
 
     /// A store that keeps nothing, noting each append and synchronize in order.
@@ -177,7 +167,7 @@ struct DurabilityTests {
             try? FileManager.default.removeItem(atPath: path)
             try? FileManager.default.removeItem(atPath: killed)
         }
-        let events: [any (Event & BinaryCodable).Type] = [Tapped.self, ApplicationBackgrounded.self]
+        let events: [any (Event & Codable).Type] = [Tapped.self, ApplicationBackgrounded.self]
         final class SynchronizationSignallingStore: RecordStore {
             let store: SegmentStore
             let synchronizations: AsyncStream<Void>

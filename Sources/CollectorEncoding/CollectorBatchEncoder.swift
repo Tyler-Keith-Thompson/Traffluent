@@ -37,7 +37,7 @@ public import TrackingPlans
 /// | `context` | The context values listed below that the record's context holds |
 /// | `isRedelivered` | The record's `EventRecord/isRedelivered` |
 ///
-/// Properties are read from the event's `BinaryCodable` form, which `@Event` derives, through
+/// Properties are read from the event's `Encodable` form, which `@Event` derives, through
 /// the types its schema in `plan` lists, so the values are the ones the plan's documents describe:
 /// a `String` is a string; a `Bool` a boolean; an integer or a `Double` or `Float` a number; a
 /// `Date` an ISO 8601 string, as `timestamp` is; a `UUID` an uppercase UUID string; an array an
@@ -47,7 +47,8 @@ public import TrackingPlans
 /// A ``/Events/Sensitive`` value is written as its value when the record reveals it
 /// (`EventRecord/revealsSensitiveValues`), as every destination may, and left out once a delivery
 /// redacts it (`redactingSensitiveValues()`): a redacted property is missing from `properties`,
-/// and an element of an array is `null`. The plan's documents allow both, as they never require a
+/// and an element of an array, or a value inside a type the plan can't map, is `null`. The plan's
+/// documents allow both, as they never require a
 /// `Sensitive` property and let a `Sensitive` element be `null`, so a collector that validates
 /// against the plan accepts the record.
 ///
@@ -66,7 +67,7 @@ public import TrackingPlans
 /// | `vendorIdentifier` | `VendorIdentifierKey` | The vendor identifier, a UUID string; left out when redacted |
 ///
 /// A record the encoder can't write is left out of the body, and the batch's other records are
-/// sent: one whose event and version `plan` doesn't describe, whose event isn't `BinaryCodable`,
+/// sent: one whose event and version `plan` doesn't describe, whose event isn't `Encodable`,
 /// or that holds a value JSON can't (``CollectorEncodingError``). Each is logged at error level;
 /// ``batch(of:)`` returns them as ``SkippedRecord``s. When every record of a batch is left out,
 /// ``encode(_:)`` throws, so `HTTPDestination` sends nothing for it.
@@ -169,7 +170,7 @@ private struct EventVersion: Hashable {
 }
 
 extension EventRecord {
-    /// The event's properties as JSON, read from its `BinaryCodable` form through `types`, with
+    /// The event's properties as JSON, read from its `Encodable` form through `types`, with
     /// its sensitive values while the record reveals them.
     fileprivate func properties(types: [String: WrittenType?]) throws(CollectorEncodingError) -> [String: JSON] {
         do {
@@ -184,7 +185,7 @@ extension CollectorEncodingError {
     /// The reason the property reader gave, as this encoder's.
     fileprivate init(_ error: PropertyReadingError) {
         switch error {
-        case .notBinaryCodable(let name): self = .notBinaryCodable(name: name)
+        case .notEncodable(let name): self = .notEncodable(name: name)
         case .unrepresentableValue(let event, let property): self = .unrepresentableValue(event: event, property: property)
         }
     }

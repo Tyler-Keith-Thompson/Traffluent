@@ -36,7 +36,7 @@ MUTANTS = [
     Mutant("alwaysreveals", B, "revealsSensitiveValues", "true", nth=1),
     Mutant("neverreveals", B, "revealsSensitiveValues", "false", nth=1),
     Mutant("wholeseconds", D, "true", "false"),
-    Mutant("notbinarycodableasunrepresentable", B, ".notBinaryCodable(name: name)", 'CollectorEncodingError.unrepresentableValue(event: name, property: "")'),
+    Mutant("notencodableasunrepresentable", B, ".notEncodable(name: name)", 'CollectorEncodingError.unrepresentableValue(event: name, property: "")'),
     Mutant("propertyunnamed", B, ".unrepresentableValue(event: event, property: property)", '.unrepresentableValue(event: event, property: "")'),
     # Context.
     Mutant("applicationabbreviated", C, '"application"', '"app"'),

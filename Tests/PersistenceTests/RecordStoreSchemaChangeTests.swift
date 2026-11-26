@@ -220,165 +220,31 @@ struct RecordStoreSchemaChangeTests {
     }
 }
 
-extension RecordStoreSchemaChangeTests.Original: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-        }
-    }
+extension RecordStoreSchemaChangeTests.Original: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
+extension RecordStoreSchemaChangeTests.WithCoupon: Codable {}
+
+extension RecordStoreSchemaChangeTests.WithoutLabel: Codable {}
+
+extension RecordStoreSchemaChangeTests.Reordered: Codable {}
+
+extension RecordStoreSchemaChangeTests.WithSeats: Codable {}
+
+extension RecordStoreSchemaChangeTests.Retyped: Codable {}
+
+extension RecordStoreSchemaChangeTests.WithCurrency: Codable {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        number = try container.decode(Int.self, forKey: .number)
+        label = try container.decode(String.self, forKey: .label)
+        currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"
     }
 }
 
-extension RecordStoreSchemaChangeTests.WithCoupon: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-            map.encode(coupon, forKey: "coupon")
-        }
-    }
+extension RecordStoreSchemaChangeTests.OriginalVersion2: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-        coupon = try map.decode(forKey: "coupon")
-    }
-}
+extension RecordStoreSchemaChangeTests.Swiped: Codable {}
 
-extension RecordStoreSchemaChangeTests.WithoutLabel: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
+extension RecordStoreSchemaChangeTests.SwipedVersion3: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.Reordered: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(label, forKey: "label")
-            map.encode(number, forKey: "number")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        label = try map.decode(forKey: "label")
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.WithSeats: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-            map.encode(seats, forKey: "seats")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-        seats = try map.decode(forKey: "seats")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.Retyped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.WithCurrency: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-            map.encode(currency, forKey: "currency")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-        currency = try map.decode(forKey: "currency", default: "USD")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.OriginalVersion2: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.Swiped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.SwipedVersion3: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension RecordStoreSchemaChangeTests.Marker: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
+extension RecordStoreSchemaChangeTests.Marker: Codable {}

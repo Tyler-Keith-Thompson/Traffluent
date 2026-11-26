@@ -1,6 +1,7 @@
 // What @Event generates, compiled by the real compiler and run: names, consent categories,
-// schemas and the binary encoding, against hand-worked bytes.
+// schemas and the coding, through the CBOR package a store writes with, against hand-worked bytes.
 
+import CBOR
 import EventMacros
 import Testing
 
@@ -42,7 +43,7 @@ struct EventMacroTests {
     }
 
     @Event
-    struct Box<Value: BinaryCodable & Sendable> {
+    struct Box<Value: Codable & Sendable> {
         var value: Value
     }
 
@@ -96,15 +97,12 @@ struct EventMacroTests {
     func empty() throws {
         let expectedSchema = EventSchema(name: "Crashed", version: 1, consentCategory: ConsentCategory("crash-reports"), properties: [])
         let expectedBytes: [UInt8] = [0xA0]
-        var encoder = BinaryEncoder()
-        var decoder = BinaryDecoder(expectedBytes)
 
-        Crashed().encode(to: &encoder)
-        _ = try Crashed(from: &decoder)
+        let bytes = try CBOREncoder().encode(Crashed())
+        _ = try CBORDecoder().decode(Crashed.self, from: expectedBytes)
 
         #expect(Crashed.schema == expectedSchema)
-        #expect(encoder.bytes == expectedBytes)
-        #expect(decoder.isAtEnd)
+        #expect(bytes == expectedBytes)
     }
 
     @Test("The schema leaves out static and computed properties and a let with an initial value, and keeps observed ones and marks a var with an initial value as having a default")
@@ -130,41 +128,44 @@ struct EventMacroTests {
         #expect(actual == expected)
     }
 
-    @Test("The event is a map with each stored property under its name, in declaration order, in its own binary form")
-    func encodesInOrder() {
+    @Test("The event is a map with each stored property under its name, keys in CBOR's sorted order, each value in its own form")
+    func encodesSorted() throws {
         // {"plan": "pro", "seats": 3}
         let expected: [UInt8] = [0xA2, 0x64, 0x70, 0x6C, 0x61, 0x6E, 0x63, 0x70, 0x72, 0x6F, 0x65, 0x73, 0x65, 0x61, 0x74, 0x73, 0x03]
-        var sut = BinaryEncoder()
 
-        SignedUp(plan: "pro", seats: 3).encode(to: &sut)
+        let actual = try CBOREncoder().encode(SignedUp(plan: "pro", seats: 3))
 
-        #expect(sut.bytes == expected)
+        #expect(actual == expected)
     }
 
-    @Test("Each stored property is read back by its name, whatever the order of the map's entries")
+    @Test("An optional property's nil is left out of the map")
+    func nilLeftOut() throws {
+        // {"plan": "pro"}
+        let expected: [UInt8] = [0xA1, 0x64, 0x70, 0x6C, 0x61, 0x6E, 0x63, 0x70, 0x72, 0x6F]
+
+        let actual = try CBOREncoder().encode(SignedUp(plan: "pro", seats: nil))
+
+        #expect(actual == expected)
+    }
+
+    @Test("Each stored property is read back by its name, and an optional one from a missing key or a null as nil")
     func decodesByName() throws {
-        var encoder = BinaryEncoder()
-        encoder.encodeMap { map in
-            map.encode(Int?.none, forKey: "seats")
-            map.encode("team", forKey: "plan")
-        }
-        var decoder = BinaryDecoder(encoder.bytes)
+        let missing = CBOR.map([.textString("plan"): .textString("team")]).encode()
+        let null = CBOR.map([.textString("seats"): .null, .textString("plan"): .textString("team")]).encode()
+        let expectedPlan = "team"
 
-        let actual = try SignedUp(from: &decoder)
+        let actual = try [missing, null].map { try CBORDecoder().decode(SignedUp.self, from: $0) }
 
-        #expect(actual.plan == "team")
-        #expect(actual.seats == nil)
-        #expect(decoder.isAtEnd)
+        #expect(actual.map(\.plan) == [expectedPlan, expectedPlan])
+        #expect(actual.map(\.seats) == [nil, nil])
     }
 
-    @Test("Properties named like the encoding's parameters, or with backticks, still encode and decode themselves")
+    @Test("Properties named like the coding's parameters, or with backticks, still encode and decode themselves")
     func awkwardNames() throws {
         let value = Shapes(count: 1, tags: ["a"], ratio: 0.5, wrapped: true, qualified: -2, default: 9, encoder: 10, decoder: 11, map: 15, first: 12, second: 13, assigned: true, observed: 14)
-        var encoder = BinaryEncoder()
-        value.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(value)
 
-        let actual = try Shapes(from: &decoder)
+        let actual = try CBORDecoder().decode(Shapes.self, from: bytes)
 
         #expect(actual.count == 1)
         #expect(actual.tags == ["a"])
@@ -180,18 +181,32 @@ struct EventMacroTests {
         #expect(actual.assigned)
         #expect(actual.observed == 14)
         #expect(actual.fixed == 7)
-        #expect(decoder.isAtEnd)
     }
 
     @Test("Bytes cut short of an event throw rather than read past the end")
-    func truncated() {
-        var encoder = BinaryEncoder()
-        SignedUp(plan: "pro", seats: 3).encode(to: &encoder)
-        var decoder = BinaryDecoder(Array(encoder.bytes.dropLast()))
+    func truncated() throws {
+        let bytes = try CBOREncoder().encode(SignedUp(plan: "pro", seats: 3))
+        let expected = CBORError.unexpectedEnd(offset: 16)
 
-        #expect(throws: BinaryDecodingError.endOfData) {
-            _ = try SignedUp(from: &decoder)
+        #expect(throws: expected) {
+            _ = try CBORDecoder().decode(SignedUp.self, from: Array(bytes.dropLast()))
         }
+    }
+
+    @Test("A required property missing from the map throws keyNotFound naming it")
+    func requiredMissing() {
+        let bytes = CBOR.map([.textString("seats"): 2]).encode()
+        let expectedKey = "plan"
+
+        let error = #expect(throws: DecodingError.self) {
+            _ = try CBORDecoder().decode(SignedUp.self, from: bytes)
+        }
+
+        guard case .keyNotFound(let key, _) = error else {
+            Issue.record("Expected keyNotFound, got \(String(describing: error))")
+            return
+        }
+        #expect(key.stringValue == expectedKey)
     }
 
     @Test("A generic event encodes its generic property")
@@ -199,11 +214,9 @@ struct EventMacroTests {
         let expected = EventSchema(name: "Box<String>", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: "Value", isOptional: false),
         ])
-        var encoder = BinaryEncoder()
-        Box(value: "lid").encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(Box(value: "lid"))
 
-        let actual = try Box<String>(from: &decoder)
+        let actual = try CBORDecoder().decode(Box<String>.self, from: bytes)
 
         #expect(actual.value == "lid")
         #expect(Box<String>.schema == expected)
@@ -211,11 +224,9 @@ struct EventMacroTests {
 
     @Test("A public event's generated members are public, as its conformances need")
     func published() throws {
-        var encoder = BinaryEncoder()
-        Published(value: 5).encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(Published(value: 5))
 
-        let actual = try Published(from: &decoder)
+        let actual = try CBORDecoder().decode(Published.self, from: bytes)
 
         #expect(actual.value == 5)
         #expect(Published.name == "Published")

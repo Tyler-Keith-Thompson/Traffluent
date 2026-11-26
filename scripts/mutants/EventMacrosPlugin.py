@@ -24,11 +24,6 @@ P = "StoredProperty.swift"
 D = "EventMacroDiagnostic.swift"
 C = "DeclaredConstraint.swift"
 X = "ConstrainedMacro.swift"
-# decode's lines, as EventMacro.swift writes them.
-DECODE_LINES = r'''properties.map {
-            let fallback = $0.hasDefaultValue ? ", default: self.\($0.identifier)" : ""
-            return "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\"\(fallback))\n"
-        }'''
 # A schema property's entry, as EventMacro.swift writes it.
 PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\($0.identifier)), keywords: \($0.keywords)),"'
 
@@ -48,18 +43,51 @@ MUTANTS = [
     Mutant("schemanamebackticked", M, PROPERTY, PROPERTY.replace("$0.name", "$0.identifier")),
     Mutant("schemanotoptional", M, PROPERTY, PROPERTY.replace(r"\($0.isOptional)", "false")),
     Mutant("emptylistbracketed", M, '"[]"', '"[\\n    ]"'),
-    Mutant("encodereversed", M, 'properties.map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }', 'properties.reversed().map { "        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n" }'),
-    # After encodereversed, its literal occurs twice; the second is the original's.
-    Mutant("encodeunqualified", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', nth=1),
-    Mutant("decodereversed", M, DECODE_LINES, "properties.reversed()" + DECODE_LINES.removeprefix("properties")),
-    # A key is the property's name without backticks, as the schema's is. After the mutants
-    # above, each literal occurs twice, the second the original's.
-    Mutant("encodekeybackticked", M, '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.name)\\")\\n"', '"        map.encode(self.\\($0.identifier), forKey: \\"\\($0.identifier)\\")\\n"', nth=1),
-    Mutant("decodekeybackticked", M, '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.name)\\"\\(fallback))\\n"', '"    self.\\($0.identifier) = try map.decode(forKey: \\"\\($0.identifier)\\"\\(fallback))\\n"', nth=1),
-    Mutant("emptymapnotwritten", M, '"    encoder.encodeMap { _ in\\n    }\\n"', '""'),
+    # The coding (TRAF-83): CodingKeys, encode(to:) and init(from:) over Codable.
+    # Left out: reversing the order of encode(to:)'s and init(from:)'s lines, whose closures span
+    # statements a mutant switch can't wrap. The expansion tests pin both orders.
+    Mutant("decodabledropped", M, '"Swift.Decodable"', '"Swift.Encodable"'),
+    Mutant("keysreversed", M, 'properties.map { "    case \\($0.identifier)\\n" }', 'properties.reversed().map { "    case \\($0.identifier)\\n" }'),
+    # After keysreversed, its literal occurs twice; the second is the original's.
+    Mutant("keyrawbackticked", M, '"    case \\($0.identifier)\\n"', '"    case \\($0.identifier) = \\"\\($0.identifier)\\"\\n"', nth=1),
+    Mutant("emptykeystyped", M, '        guard !properties.isEmpty else { return "private enum CodingKeys: Swift.CodingKey {\\n}" }', '', mode="stmt"),
+    Mutant("nilwritten", M, 'property.isOptional && !property.hasDefaultValue ? "encodeIfPresent" : "encode"', '"encode"'),
+    Mutant("defaultednilleftout", M, 'property.isOptional && !property.hasDefaultValue', 'property.isOptional'),
+    Mutant("dateencodedasdate", M, '"\\(unwrap).timeIntervalSinceReferenceDate"', '""'),
+    Mutant("dateunwrapforced", M, 'property.isOptional ? "?" : ""', '""'),
+    Mutant("emptyencodenocontainer", M, '"    _ = encoder.container(keyedBy: CodingKeys.self)\\n"', '""'),
+    Mutant("optionalrequired", M, 'property.isOptional ? "decodeIfPresent" : "decode"', '"decode"', nth=0),
+    Mutant("scalarsgeneric", M, 'property.isDate || property.isStandardScalar || property.dateArrayElement != nil', 'false'),
+    Mutant("dategeneric", M, 'property.isDate || property.isStandardScalar || property.dateArrayElement != nil', 'property.isStandardScalar || property.dateArrayElement != nil'),
+    Mutant("datearraygeneric", M, 'property.isDate || property.isStandardScalar || property.dateArrayElement != nil', 'property.isDate || property.isStandardScalar'),
+    Mutant("datereadasdate", M, 'if property.isDate { return "Swift.Double" }', '', mode="stmt"),
+    # Left out: reading an array of dates as its own type in writtenType(of:), whose guard binds the
+    # element a statement mutant would scope away. The expansion tests pin the read type.
+    Mutant("optionaldatearrayreadasdates", M, 'element.isOptional ? "[Swift.Double?]" : "[Swift.Double]"', '"[Swift.Double]"'),
+    Mutant("datearrayencodedasdates", M, 'seconds ?? ""', '""'),
+    Mutant("optionaldateelementsforced", M, '"\\(unwrap).map { $0?.timeIntervalSinceReferenceDate }"', '"\\(unwrap).map(\\\\.timeIntervalSinceReferenceDate)"'),
+    Mutant("datearraydecodedasdoubles", M, 'Self.dates(from: read, element: element, isOptional: property.isOptional)', 'read'),
+    Mutant("optionaldatearrayunwrapped", M, 'isOptional ? "\\(read).map { $0\\(array) }" : "\\(read)\\(array)"', '"\\(read)\\(array)"'),
+    Mutant("optionaldateelementsnotmapped", M, 'element.isOptional ? ".map { $0.map(\\(date)) }" : ".map(\\(date))"', '".map(\\(date))"'),
+    Mutant("datearrayundetected", P, 'guard Self.dateNames.contains(name) else { return nil }', 'return nil', mode="stmt"),
+    Mutant("optionaldateelementundetected", P, 'element.hasSuffix("?")', 'false'),
+    Mutant("datedecodedasdate", M, '!property.isDate', 'true'),
+    Mutant("decodefunctionsdropped", M, 'decodeFunctions(of: properties)', '[String]()'),
+    Mutant("scalarqualifiedmissed", P, 'typeName.hasPrefix("Swift.") ? String(typeName.dropFirst("Swift.".count)) : typeName', 'typeName'),
+    Mutant("scalarsnone", P, '["String", "Bool", "Double", "Float", "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64"].contains(name)', 'false'),
+    Mutant("decodefunctionmissing", M, 'generic.contains { !$0.isOptional }', 'false'),
+    Mutant("decodeifpresentfunctionmissing", M, 'generic.contains(where: \\.isOptional)', 'false'),
+    Mutant("decodefunctionsalways", M, 'generic.contains { !$0.isOptional }', 'true'),
+    Mutant("decodefunctionsforscalars", M, 'properties.filter { !$0.isDate && !$0.isStandardScalar && $0.dateArrayElement == nil }', 'properties'),
+    Mutant("decodefunctionsfordatearrays", M, '$0.dateArrayElement == nil', 'true'),
+    Mutant("optionaldatenotmapped", M, 'property.isOptional ? "\\(read).map(\\(date))" : "\\(property.typeName)(timeIntervalSinceReferenceDate: \\(read))"', '"\\(property.typeName)(timeIntervalSinceReferenceDate: \\(read))"'),
+    Mutant("defaultnotdecoded", M, '            guard property.hasDefaultValue else { return "    \\(assignment)\\n" }', '            return "    \\(assignment)\\n"', mode="stmt"),
+    Mutant("defaultalwaysguarded", M, '            guard property.hasDefaultValue else { return "    \\(assignment)\\n" }', '', mode="stmt"),
+    Mutant("emptydecodenocontainer", M, '"    _ = try decoder.container(keyedBy: CodingKeys.self)\\n"', '""'),
+    Mutant("dateundetected", P, 'Self.dateNames.contains(typeName)', 'typeName == "Date"'),
     Mutant("requirementsnone", M, "        guard !properties.isEmpty else { return [] }", "        return []", mode="stmt"),
-    Mutant("requirementlabelidentifier", M, '"private static func requireBinaryCodable(\\($0.label): KeyPath<Self, some Persistence.BinaryCodable>) {}"', '"private static func requireBinaryCodable(\\($0.identifier): KeyPath<Self, some Persistence.BinaryCodable>) {}"'),
-    Mutant("requirementsuncalled", M, '["private static var binaryCodableRequirements: Void {\\n\\(calls)}"]', "[]"),
+    Mutant("requirementlabelidentifier", M, '"private static func requireCodable(\\($0.label): KeyPath<Self, some Swift.Codable>) {}"', '"private static func requireCodable(\\($0.identifier): KeyPath<Self, some Swift.Codable>) {}"'),
+    Mutant("requirementsuncalled", M, '["private static var codableRequirements: Void {\\n\\(calls)}"]', "[]"),
     # EventArguments: what the attribute was given.
     Mutant("nilnotdefault", A, "            if expression.is(NilLiteralExprSyntax.self) { continue }", "", mode="stmt"),
     Mutant("namelabel", A, '"name"', '"title"'),
@@ -127,6 +155,4 @@ MUTANTS = [
     # missing.
     Mutant("defaultvalueundetected", P, "binding.initializer != nil", "false", nth=1),
     Mutant("defaultnotinschema", M, '$0.hasDefaultValue ? "hasDefaultValue: true, " : ""', '""'),
-    # After decodereversed, decode's fallback occurs twice, the second the original's.
-    Mutant("defaultnotdecoded", M, '$0.hasDefaultValue ? ", default: self.\\($0.identifier)" : ""', '""', nth=1),
 ]

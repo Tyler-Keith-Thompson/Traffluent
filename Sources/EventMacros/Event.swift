@@ -1,9 +1,8 @@
-// The generated code names these modules' types, so a file that imports EventMacros alone can
+// The generated code names this module's types, so a file that imports EventMacros alone can
 // expand the macro.
 @_exported public import Events
-@_exported public import Persistence
 
-/// Makes a struct an event: derives its `Event` and `BinaryCodable` conformances, its name and its
+/// Makes a struct an event: derives its `Event` and `Codable` conformances, its name and its
 /// ``/Events/EventSchema`` from its declaration.
 ///
 /// ```swift
@@ -28,19 +27,26 @@
 ///   declaration order.
 /// - `constraintViolation()`, when a property declares constraints with ``Constrained(_:)``: the
 ///   first property, in declaration order, whose value breaks one, which a tracker rejects.
-/// - `encode(to:)` and `init(from:)`, which write a CBOR map of the stored properties, each under
-///   its name, in declaration order, and read each back by its name, as a hand-written conformance
-///   would. An optional property missing from the map reads as `nil`, and one with a default
-///   value as that value. A ``/Events/Sensitive`` property goes through its own conformance, so
-///   only a store's encoder writes its value.
+/// - `CodingKeys`, `encode(to:)`, `init(from:)` and the private functions it reads some types
+///   through, which write a keyed container of the stored
+///   properties, each under its name, and read each back by its name, as a hand-written
+///   conformance would. A store writes the container as a CBOR map. An optional property's `nil`
+///   is left out, and an optional property missing from the map reads as `nil`; one with a
+///   default value reads as that value, so its `nil` is written. A `Date` property, optional or
+///   not, and each date in a `[Date]` or `[Date?]` property, is written as the seconds since 2001
+///   it stores, so it reads back exactly. A `Date` inside a `Codable` type of your own takes the
+///   CBOR package's own form, seconds since 1970, and reads back to within a rounding of a
+///   microsecond's scale. A
+///   ``/Events/Sensitive`` property goes through its own conformance, so only a store writes its
+///   value.
 ///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
 /// The struct keeps its memberwise initializer.
 ///
-/// A stored property whose type isn't `BinaryCodable` is a compile error naming it:
-/// `static method 'requireBinaryCodable(bad:)' requires that 'Foo' conform to 'BinaryCodable'` for
-/// a property `bad` of type `Foo`. Applying the macro to anything but a struct, a property with no
+/// A stored property whose type isn't `Codable` is a compile error naming it:
+/// `static method 'requireCodable(bad:)' requires that 'Foo' conform to 'Decodable'` for a
+/// property `bad` of type `Foo`. Applying the macro to anything but a struct, a property with no
 /// type annotation, a `lazy` property, a destructuring pattern, a name that isn't a non-empty string
 /// literal and a version that isn't a positive integer literal are compile errors too.
 ///
@@ -100,9 +106,10 @@
 ///     each breaking change; 1 by default.
 @attached(
     extension,
-    conformances: Event, BinaryCodable,
-    names: named(name), named(consentCategory), named(schemaVersion), named(schema), named(constraintViolation), named(encode(to:)),
-    named(init(from:)), named(requireBinaryCodable), named(binaryCodableRequirements)
+    conformances: Event, Encodable, Decodable,
+    names: named(name), named(consentCategory), named(schemaVersion), named(schema), named(constraintViolation), named(CodingKeys),
+    named(encode(to:)), named(init(from:)), named(decodeValue), named(decodeIfPresentValue),
+    named(requireCodable), named(codableRequirements)
 )
 public macro Event(
     name: String? = nil,

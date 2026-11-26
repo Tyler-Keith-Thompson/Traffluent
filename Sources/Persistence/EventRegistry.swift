@@ -9,16 +9,16 @@ package struct EventRegistry: Sendable {
         package let name: String
         /// The type's `Event.schemaVersion`, which each of its records on disk carries.
         package let version: Int
-        /// Writes an event of this type.
-        package let encode: @Sendable (any Event, inout BinaryEncoder) -> Void
-        /// Reads an event of this type.
-        package let decode: @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
+        /// Writes an event of this type under `key`.
+        package let encode: @Sendable (any Event, _ key: RecordEncoding.Key, inout KeyedEncodingContainer<RecordEncoding.Key>) throws -> Void
+        /// Reads an event of this type from under `key`.
+        package let decode: @Sendable (_ key: RecordEncoding.Key, KeyedDecodingContainer<RecordEncoding.Key>) throws -> any Event
 
         init(
             name: String,
             version: Int,
-            encode: @escaping @Sendable (any Event, inout BinaryEncoder) -> Void,
-            decode: @escaping @Sendable (inout BinaryDecoder) throws(BinaryDecodingError) -> any Event
+            encode: @escaping @Sendable (any Event, _ key: RecordEncoding.Key, inout KeyedEncodingContainer<RecordEncoding.Key>) throws -> Void,
+            decode: @escaping @Sendable (_ key: RecordEncoding.Key, KeyedDecodingContainer<RecordEncoding.Key>) throws -> any Event
         ) {
             self.name = name
             self.version = version
@@ -35,7 +35,7 @@ package struct EventRegistry: Sendable {
     /// - Throws: ``DuplicateEventName`` when two of `types` share an `Event.name`, as recovery
     ///   couldn't tell their records apart: one type per event, at its current
     ///   `Event.schemaVersion`. A type listed twice is one type.
-    package init(_ types: [any (Event & BinaryCodable).Type]) throws(DuplicateEventName) {
+    package init(_ types: [any (Event & Codable).Type]) throws(DuplicateEventName) {
         var byType: [ObjectIdentifier: Registration] = [:]
         var byName: [String: Registration] = [:]
         for type in types {
@@ -58,22 +58,22 @@ package struct EventRegistry: Sendable {
         byName[name]
     }
 
-    private static func registration<E: Event & BinaryCodable>(of type: E.Type) -> Registration {
+    private static func registration<E: Event & Codable>(of type: E.Type) -> Registration {
         Registration(
             name: E.name,
             version: E.schemaVersion,
-            encode: { event, encoder in
+            encode: { event, key, container in
                 // The registry finds a registration by the event's own type, so the cast holds.
                 // Were it to fail, the record's event is written as null, which recovery reports
                 // as undecodable, rather than trap in the app.
                 guard let event = event as? E else {
-                    encoder.write(BinarySimpleValue.null)
+                    try container.encodeNil(forKey: key)
                     return
                 }
-                event.encode(to: &encoder)
+                try container.encode(event, forKey: key)
             },
-            decode: { (decoder: inout BinaryDecoder) throws(BinaryDecodingError) -> any Event in
-                try E(from: &decoder)
+            decode: { key, container in
+                try container.decode(E.self, forKey: key)
             }
         )
     }

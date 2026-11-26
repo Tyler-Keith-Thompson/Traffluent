@@ -130,8 +130,9 @@ from being read as the new meaning.
 
 ## Hand-written events
 
-`@Event` keeps the version, the encoding and the schema in step. An event that writes its own
-conformances instead (the `Event` and `BinaryCodable` protocols' documentation shows one) must do
-that itself: declare `schemaVersion`, read a property with a default value through
-`KeyedBinaryDecoder.decode(_:forKey:default:)`, and give its `EventSchema` the same version and
-`hasDefaultValue: true` for that property, so the plan and its check see what the store does.
+`@Event` keeps the version, the coding and the schema in step. An event that writes its own
+conformances instead (the `Event` protocol's documentation shows one) must do that itself: declare
+`schemaVersion`, read a property with a default value only when its key is present
+(`try container.decodeIfPresent(String.self, forKey: .currency) ?? "USD"`), and give its
+`EventSchema` the same version and `hasDefaultValue: true` for that property, so the plan and its
+check see what the store does.

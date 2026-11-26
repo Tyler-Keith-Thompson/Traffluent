@@ -20,7 +20,7 @@ Properties are read through the event's schema in the `TrackingPlan` the encoder
 `Sensitive` value is never sent, whatever the record reveals, and a property whose name starts with
 `$` or is `distinct_id` is left out and logged. A record the encoder can't write is left out and
 the rest of the batch is sent: one the plan doesn't describe, one whose event name starts with `$`,
-one whose event isn't `BinaryCodable` and one holding a value JSON can't.
+one whose event isn't `Encodable` and one holding a value JSON can't.
 ``PostHogBatchEncoder/batch(of:)`` returns each as a ``PostHogSkippedRecord``.
 
 To send to TraffluentCollector, use `CollectorBatchEncoder` (module `CollectorEncoding`)

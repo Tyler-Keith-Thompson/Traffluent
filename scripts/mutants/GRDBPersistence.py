@@ -42,7 +42,9 @@ MUTANTS = [
     Mutant("earliestnotwidened", L, "min($0.lowerBound, timestamp)", "$0.lowerBound"),
     Mutant("latestnotwidened", L, "max($0.upperBound, timestamp)", "timestamp"),
     Mutant("deletesonlyfirst", L, "lastPosition = position", "lastPosition = lastPosition ?? position", mode="stmt"),
-    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt"),
+    # The first report is an event whose encode(to:) throws (TRAF-83), the second a failed write's.
+    Mutant("encodefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=0),
+    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=1),
     # A drop that yields no report leaves the test waiting for it; the suite's time limit catches it.
     Mutant("recoverydropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=0),
     Mutant("dropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=1),

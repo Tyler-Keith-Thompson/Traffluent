@@ -5,7 +5,7 @@ Derive an event's conformances and schema from its declaration with `@Event`, an
 ## Overview
 
 `@Event` (module ``/EventMacros``, part of `import Traffluent`) makes a struct an event from its
-declaration, and is how you declare one. It adds the `Event` and `BinaryCodable`
+declaration, and is how you declare one. It adds the `Event`, `Encodable` and `Decodable`
 conformances, the event's name, consent category and schema version when you give them, and a
 `schema`, an `EventSchema` value that tooling reads:
 
@@ -25,16 +25,20 @@ let properties = CheckoutStarted.schema.properties.map(\.name)  // ["cartSize", 
 
 The schema holds the name, the version, the consent category and each stored property's name, its
 type as written, its optionality and whether it has a default value, in declaration order. The
-encoding writes each of those properties under its name (<doc:PersistingRecords>), and a
-`Sensitive` property keeps its redaction. The `Event` and `BinaryCodable` protocols' documentation
-shows the same conformances written by hand. A record stored before a property with a default value
+`Codable` conformance writes each of those properties under its name (<doc:PersistingRecords>). An
+optional's `nil` is left out, a `Date` property, or each date in a `[Date]` or `[Date?]`, is
+written as the seconds since 2001 it holds, so it reads back exactly, and a `Sensitive` property
+keeps its redaction. A `Date` the macro doesn't reach, inside a `Codable` type of your own or in an
+event whose `Codable` conformance Swift synthesizes, takes the CBOR package's own form, seconds
+since 1970, and reads back to within a rounding of a microsecond's scale. The `Event` protocol's documentation
+shows the conformance written by hand. A record stored before a property with a default value
 (`var currency: String = "USD"`) was added reads it as its default.
 
 `version:` counts breaking changes only, and is 1 when left out; <doc:ChangingEvents> shows each
 kind of change. `consent:` sets the event's `consentCategory` (`@Event(consent: .advertising)`).
 
-A stored property whose type isn't `BinaryCodable` is a compile error that names it:
-`static method 'requireBinaryCodable(position:)' requires that 'Coordinate' conform to 'BinaryCodable'`.
+A stored property whose type isn't `Codable` is a compile error that names it:
+`static method 'requireCodable(position:)' requires that 'Coordinate' conform to 'Decodable'`.
 So are `@Event` on anything but a struct, and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
 

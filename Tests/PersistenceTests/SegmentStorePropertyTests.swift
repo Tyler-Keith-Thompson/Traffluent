@@ -67,17 +67,4 @@ struct SegmentStorePropertyTests {
     }
 }
 
-extension SegmentStorePropertyTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-    }
-}
+extension SegmentStorePropertyTests.Tapped: Codable {}

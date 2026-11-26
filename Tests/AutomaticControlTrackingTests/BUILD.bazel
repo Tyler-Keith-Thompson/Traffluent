@@ -21,6 +21,7 @@ swift_library(
         "//Sources/AutomaticControlTracking",
         "//Sources/Events",
         "//Sources/Persistence",
+        "@swiftpkg_swift_cbor//:CBOR",
         "@swiftpkg_swift_property_based//:PropertyBased",
     ],
 )

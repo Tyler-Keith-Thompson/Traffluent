@@ -9,7 +9,7 @@ import Testing
 
 @Suite("@Event expansions")
 struct EventMacroExpansionTests {
-    @Test("A struct gets Event, BinaryCodable, a schema, a requirement per property and its encoding, a map of each property under its name, in declaration order")
+    @Test("A struct gets Event, Encodable and Decodable, a schema, a requirement per property, its coding keys and its coding, each property under its name")
     func structure() {
         assertMacroExpansion(
             """
@@ -25,7 +25,7 @@ struct EventMacroExpansionTests {
                     var seats: Int?
                 }
 
-                extension SignedUp: Events.Event, Persistence.BinaryCodable {
+                extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.plan), keywords: Events.ValidationKeyword.keywords(of: \\Self.plan)),
@@ -33,32 +33,36 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(plan: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(plan: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(seats: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(seats: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(plan: \\.plan)
-                        requireBinaryCodable(seats: \\.seats)
+                    private static var codableRequirements: Void {
+                        requireCodable(plan: \\.plan)
+                        requireCodable(seats: \\.seats)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.plan, forKey: "plan")
-                            map.encode(self.seats, forKey: "seats")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case plan
+                        case seats
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.plan = try map.decode(forKey: "plan")
-                        self.seats = try map.decode(forKey: "seats")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.plan, forKey: .plan)
+                        try container.encodeIfPresent(self.seats, forKey: .seats)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.plan = try container.decode(String.self, forKey: .plan)
+                        self.seats = try container.decodeIfPresent(Int.self, forKey: .seats)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -79,7 +83,7 @@ struct EventMacroExpansionTests {
                     public var coupon: String? = nil
                 }
 
-                extension CartViewed: Events.Event, Persistence.BinaryCodable {
+                extension CartViewed: Events.Event, Swift.Encodable, Swift.Decodable {
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.currency), keywords: Events.ValidationKeyword.keywords(of: \\Self.currency)),
@@ -87,32 +91,40 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(currency: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(currency: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(coupon: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(coupon: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(currency: \\.currency)
-                        requireBinaryCodable(coupon: \\.coupon)
+                    private static var codableRequirements: Void {
+                        requireCodable(currency: \\.currency)
+                        requireCodable(coupon: \\.coupon)
                     }
 
-                    public func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.currency, forKey: "currency")
-                            map.encode(self.coupon, forKey: "coupon")
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case currency
+                        case coupon
+                    }
+
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.currency, forKey: .currency)
+                        try container.encode(self.coupon, forKey: .coupon)
+                    }
+
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        if container.contains(.currency) {
+                            self.currency = try container.decode(String.self, forKey: .currency)
                         }
-                    }
-
-                    public init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.currency = try map.decode(forKey: "currency", default: self.currency)
-                        self.coupon = try map.decode(forKey: "coupon", default: self.coupon)
+                        if container.contains(.coupon) {
+                            self.coupon = try container.decodeIfPresent(String.self, forKey: .coupon)
+                        }
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -131,7 +143,7 @@ struct EventMacroExpansionTests {
                     var campaign: String
                 }
 
-                extension AdClicked: Events.Event, Persistence.BinaryCodable {
+                extension AdClicked: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var name: String {
                         "ad_clicked"
                     }
@@ -150,26 +162,29 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(campaign: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(campaign: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(campaign: \.campaign)
+                    private static var codableRequirements: Void {
+                        requireCodable(campaign: \.campaign)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.campaign, forKey: "campaign")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case campaign
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.campaign = try map.decode(forKey: "campaign")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.campaign, forKey: .campaign)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.campaign = try container.decode(String.self, forKey: .campaign)
                     }
                 }
                 """#,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -186,22 +201,24 @@ struct EventMacroExpansionTests {
                 struct Opened {
                 }
 
-                extension Opened: Events.Event, Persistence.BinaryCodable {
+                extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -218,7 +235,7 @@ struct EventMacroExpansionTests {
                 struct Crashed {
                 }
 
-                extension Crashed: Events.Event, Persistence.BinaryCodable {
+                extension Crashed: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var name: String {
                         #"crash"#
                     }
@@ -231,17 +248,19 @@ struct EventMacroExpansionTests {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """##,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -263,7 +282,7 @@ struct EventMacroExpansionTests {
                 package struct B {
                 }
 
-                extension A: Events.Event, Persistence.BinaryCodable {
+                extension A: Events.Event, Swift.Encodable, Swift.Decodable {
                     public static var name: String {
                         "a"
                     }
@@ -272,17 +291,19 @@ struct EventMacroExpansionTests {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    public func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    public init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    public init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
 
-                extension B: Events.Event, Persistence.BinaryCodable {
+                extension B: Events.Event, Swift.Encodable, Swift.Decodable {
                     package static var consentCategory: Events.ConsentCategory {
                         .functional
                     }
@@ -291,17 +312,19 @@ struct EventMacroExpansionTests {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    package func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    package init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    package init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -344,7 +367,7 @@ struct EventMacroExpansionTests {
                     }
                 }
 
-                extension Shapes: Events.Event, Persistence.BinaryCodable {
+                extension Shapes: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.assigned), keywords: Events.ValidationKeyword.keywords(of: \\Self.assigned)),
@@ -354,44 +377,52 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(assigned: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(assigned: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(first: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(first: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(second: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(second: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(observed: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(observed: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(assigned: \\.assigned)
-                        requireBinaryCodable(first: \\.first)
-                        requireBinaryCodable(second: \\.second)
-                        requireBinaryCodable(observed: \\.observed)
+                    private static var codableRequirements: Void {
+                        requireCodable(assigned: \\.assigned)
+                        requireCodable(first: \\.first)
+                        requireCodable(second: \\.second)
+                        requireCodable(observed: \\.observed)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.assigned, forKey: "assigned")
-                            map.encode(self.first, forKey: "first")
-                            map.encode(self.second, forKey: "second")
-                            map.encode(self.observed, forKey: "observed")
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case assigned
+                        case first
+                        case second
+                        case observed
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.assigned, forKey: .assigned)
+                        try container.encode(self.first, forKey: .first)
+                        try container.encode(self.second, forKey: .second)
+                        try container.encode(self.observed, forKey: .observed)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.assigned = try container.decode(Bool.self, forKey: .assigned)
+                        self.first = try container.decode(UInt16.self, forKey: .first)
+                        self.second = try container.decode(UInt16.self, forKey: .second)
+                        if container.contains(.observed) {
+                            self.observed = try container.decode(Int32.self, forKey: .observed)
                         }
-                    }
-
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.assigned = try map.decode(forKey: "assigned")
-                        self.first = try map.decode(forKey: "first")
-                        self.second = try map.decode(forKey: "second")
-                        self.observed = try map.decode(forKey: "observed", default: self.observed)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -424,7 +455,7 @@ struct EventMacroExpansionTests {
                     var h: Array<Int>
                 }
 
-                extension Spellings: Events.Event, Persistence.BinaryCodable {
+                extension Spellings: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "a", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.a), keywords: Events.ValidationKeyword.keywords(of: \\Self.a)),
@@ -438,68 +469,86 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(a: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(a: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(b: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(b: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(c: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(c: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(d: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(d: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(e: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(e: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(f: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(f: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(g: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(g: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(h: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(h: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(a: \\.a)
-                        requireBinaryCodable(b: \\.b)
-                        requireBinaryCodable(c: \\.c)
-                        requireBinaryCodable(d: \\.d)
-                        requireBinaryCodable(e: \\.e)
-                        requireBinaryCodable(f: \\.f)
-                        requireBinaryCodable(g: \\.g)
-                        requireBinaryCodable(h: \\.h)
+                    private static var codableRequirements: Void {
+                        requireCodable(a: \\.a)
+                        requireCodable(b: \\.b)
+                        requireCodable(c: \\.c)
+                        requireCodable(d: \\.d)
+                        requireCodable(e: \\.e)
+                        requireCodable(f: \\.f)
+                        requireCodable(g: \\.g)
+                        requireCodable(h: \\.h)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.a, forKey: "a")
-                            map.encode(self.b, forKey: "b")
-                            map.encode(self.c, forKey: "c")
-                            map.encode(self.d, forKey: "d")
-                            map.encode(self.e, forKey: "e")
-                            map.encode(self.f, forKey: "f")
-                            map.encode(self.g, forKey: "g")
-                            map.encode(self.h, forKey: "h")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case a
+                        case b
+                        case c
+                        case d
+                        case e
+                        case f
+                        case g
+                        case h
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.a = try map.decode(forKey: "a")
-                        self.b = try map.decode(forKey: "b")
-                        self.c = try map.decode(forKey: "c")
-                        self.d = try map.decode(forKey: "d")
-                        self.e = try map.decode(forKey: "e")
-                        self.f = try map.decode(forKey: "f")
-                        self.g = try map.decode(forKey: "g")
-                        self.h = try map.decode(forKey: "h")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encodeIfPresent(self.a, forKey: .a)
+                        try container.encodeIfPresent(self.b, forKey: .b)
+                        try container.encodeIfPresent(self.c, forKey: .c)
+                        try container.encodeIfPresent(self.d, forKey: .d)
+                        try container.encode(self.e, forKey: .e)
+                        try container.encode(self.f, forKey: .f)
+                        try container.encodeIfPresent(self.g, forKey: .g)
+                        try container.encode(self.h, forKey: .h)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.a = try container.decodeIfPresent(Int.self, forKey: .a)
+                        self.b = try container.decodeIfPresent(Int.self, forKey: .b)
+                        self.c = try container.decodeIfPresent(Int.self, forKey: .c)
+                        self.d = try container.decodeIfPresent(Int.self, forKey: .d)
+                        self.e = try Self.decodeValue(from: container, forKey: .e)
+                        self.f = try Self.decodeValue(from: container, forKey: .f)
+                        self.g = try Self.decodeIfPresentValue(from: container, forKey: .g)
+                        self.h = try Self.decodeValue(from: container, forKey: .h)
+                    }
+
+                    private static func decodeValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded {
+                        try container.decode(Decoded.self, forKey: key)
+                    }
+
+                    private static func decodeIfPresentValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded? {
+                        try container.decodeIfPresent(Decoded.self, forKey: key)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -520,7 +569,7 @@ struct EventMacroExpansionTests {
                     var `var`: Int
                 }
 
-                extension Keywords: Events.Event, Persistence.BinaryCodable {
+                extension Keywords: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "default", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.`default`), keywords: Events.ValidationKeyword.keywords(of: \\Self.`default`)),
@@ -528,32 +577,252 @@ struct EventMacroExpansionTests {
                         ])
                     }
 
-                    private static func requireBinaryCodable(default: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(default: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static func requireBinaryCodable(`var`: KeyPath<Self, some Persistence.BinaryCodable>) {
+                    private static func requireCodable(`var`: KeyPath<Self, some Swift.Codable>) {
                     }
 
-                    private static var binaryCodableRequirements: Void {
-                        requireBinaryCodable(default: \\.`default`)
-                        requireBinaryCodable(`var`: \\.`var`)
+                    private static var codableRequirements: Void {
+                        requireCodable(default: \\.`default`)
+                        requireCodable(`var`: \\.`var`)
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { map in
-                            map.encode(self.`default`, forKey: "default")
-                            map.encode(self.`var`, forKey: "var")
-                        }
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case `default`
+                        case `var`
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        var map = try decoder.decodeMap()
-                        self.`default` = try map.decode(forKey: "default")
-                        self.`var` = try map.decode(forKey: "var")
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.`default`, forKey: .`default`)
+                        try container.encode(self.`var`, forKey: .`var`)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.`default` = try container.decode(Int.self, forKey: .`default`)
+                        self.`var` = try container.decode(Int.self, forKey: .`var`)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A Date property is written as the seconds since 2001 it stores, and read back from them, optional or not, by any spelling of Date")
+    func dates() {
+        assertMacroExpansion(
+            """
+            @Event
+            struct Purchased {
+                var at: Date
+                var shipped: Foundation.Date?
+                var refunded: Date? = nil
+            }
+            """,
+            expandedSource: """
+                struct Purchased {
+                    var at: Date
+                    var shipped: Foundation.Date?
+                    var refunded: Date? = nil
+                }
+
+                extension Purchased: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
+                            Events.EventSchema.Property(name: "at", typeName: "Date", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.at), keywords: Events.ValidationKeyword.keywords(of: \\Self.at)),
+                            Events.EventSchema.Property(name: "shipped", typeName: "Foundation.Date", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.shipped), keywords: Events.ValidationKeyword.keywords(of: \\Self.shipped)),
+                            Events.EventSchema.Property(name: "refunded", typeName: "Date", isOptional: true, hasDefaultValue: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.refunded), keywords: Events.ValidationKeyword.keywords(of: \\Self.refunded)),
+                        ])
+                    }
+
+                    private static func requireCodable(at: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(shipped: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(refunded: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static var codableRequirements: Void {
+                        requireCodable(at: \\.at)
+                        requireCodable(shipped: \\.shipped)
+                        requireCodable(refunded: \\.refunded)
+                    }
+
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case at
+                        case shipped
+                        case refunded
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.at.timeIntervalSinceReferenceDate, forKey: .at)
+                        try container.encodeIfPresent(self.shipped?.timeIntervalSinceReferenceDate, forKey: .shipped)
+                        try container.encode(self.refunded?.timeIntervalSinceReferenceDate, forKey: .refunded)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.at = try Date(timeIntervalSinceReferenceDate: container.decode(Swift.Double.self, forKey: .at))
+                        self.shipped = try container.decodeIfPresent(Swift.Double.self, forKey: .shipped).map(Foundation.Date.init(timeIntervalSinceReferenceDate:))
+                        if container.contains(.refunded) {
+                            self.refunded = try container.decodeIfPresent(Swift.Double.self, forKey: .refunded).map(Date.init(timeIntervalSinceReferenceDate:))
+                        }
+                    }
+                }
+                """,
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("An array of dates or of optional dates is written as the seconds since 2001 each stores, and read back from them, the array optional or not")
+    func dateArrays() {
+        assertMacroExpansion(
+            """
+            @Event
+            struct Scheduled {
+                var slots: [Date]
+                var maybe: [Foundation.Date?]
+                var later: [Date]?
+            }
+            """,
+            expandedSource: """
+                struct Scheduled {
+                    var slots: [Date]
+                    var maybe: [Foundation.Date?]
+                    var later: [Date]?
+                }
+
+                extension Scheduled: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
+                            Events.EventSchema.Property(name: "slots", typeName: "[Date]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.slots), keywords: Events.ValidationKeyword.keywords(of: \\Self.slots)),
+                            Events.EventSchema.Property(name: "maybe", typeName: "[Foundation.Date?]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.maybe), keywords: Events.ValidationKeyword.keywords(of: \\Self.maybe)),
+                            Events.EventSchema.Property(name: "later", typeName: "[Date]", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.later), keywords: Events.ValidationKeyword.keywords(of: \\Self.later)),
+                        ])
+                    }
+
+                    private static func requireCodable(slots: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(maybe: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(later: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static var codableRequirements: Void {
+                        requireCodable(slots: \\.slots)
+                        requireCodable(maybe: \\.maybe)
+                        requireCodable(later: \\.later)
+                    }
+
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case slots
+                        case maybe
+                        case later
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.slots.map(\\.timeIntervalSinceReferenceDate), forKey: .slots)
+                        try container.encode(self.maybe.map {
+                                $0?.timeIntervalSinceReferenceDate
+                            }, forKey: .maybe)
+                        try container.encodeIfPresent(self.later?.map(\\.timeIntervalSinceReferenceDate), forKey: .later)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.slots = try container.decode([Swift.Double].self, forKey: .slots).map(Date.init(timeIntervalSinceReferenceDate:))
+                        self.maybe = try container.decode([Swift.Double?].self, forKey: .maybe).map {
+                            $0.map(Foundation.Date.init(timeIntervalSinceReferenceDate:))
+                        }
+                        self.later = try container.decodeIfPresent([Swift.Double].self, forKey: .later).map {
+                            $0.map(Date.init(timeIntervalSinceReferenceDate:))
+                        }
+                    }
+                }
+                """,
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A standard scalar, as written or qualified by Swift, is read by the container's method for its type; any other type through a generic function")
+    func standardScalars() {
+        assertMacroExpansion(
+            """
+            @Event
+            struct Counted {
+                var label: Swift.String
+                var count: Int
+                var tags: [String]
+            }
+            """,
+            expandedSource: """
+                struct Counted {
+                    var label: Swift.String
+                    var count: Int
+                    var tags: [String]
+                }
+
+                extension Counted: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
+                            Events.EventSchema.Property(name: "label", typeName: "Swift.String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.label), keywords: Events.ValidationKeyword.keywords(of: \\Self.label)),
+                            Events.EventSchema.Property(name: "count", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.count), keywords: Events.ValidationKeyword.keywords(of: \\Self.count)),
+                            Events.EventSchema.Property(name: "tags", typeName: "[String]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.tags), keywords: Events.ValidationKeyword.keywords(of: \\Self.tags)),
+                        ])
+                    }
+
+                    private static func requireCodable(label: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(count: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static func requireCodable(tags: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static var codableRequirements: Void {
+                        requireCodable(label: \\.label)
+                        requireCodable(count: \\.count)
+                        requireCodable(tags: \\.tags)
+                    }
+
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case label
+                        case count
+                        case tags
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.label, forKey: .label)
+                        try container.encode(self.count, forKey: .count)
+                        try container.encode(self.tags, forKey: .tags)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.label = try container.decode(Swift.String.self, forKey: .label)
+                        self.count = try container.decode(Int.self, forKey: .count)
+                        self.tags = try Self.decodeValue(from: container, forKey: .tags)
+                    }
+
+                    private static func decodeValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded {
+                        try container.decode(Decoded.self, forKey: key)
+                    }
+                }
+                """,
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -570,22 +839,24 @@ struct EventMacroExpansionTests {
                 struct Opened: Event {
                 }
 
-                extension Opened: Persistence.BinaryCodable {
+                extension Opened: Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Persistence.BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Swift.Encodable", "Swift.Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -595,11 +866,11 @@ struct EventMacroExpansionTests {
         assertMacroExpansion(
             """
             @Event
-            struct Closed: Event, BinaryCodable {
+            struct Closed: Event, Encodable, Decodable {
             }
             """,
             expandedSource: """
-                struct Closed: Event, BinaryCodable {
+                struct Closed: Event, Encodable, Decodable {
                 }
 
                 extension Closed {
@@ -607,13 +878,15 @@ struct EventMacroExpansionTests {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """,
@@ -638,22 +911,24 @@ struct EventMacroExpansionTests {
                     }
                 }
 
-                extension Checkout.Started: Events.Event, Persistence.BinaryCodable {
+                extension Checkout.Started: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
 
-                    func encode(to encoder: inout Persistence.BinaryEncoder) {
-                        encoder.encodeMap { _ in
-                        }
+                    private enum CodingKeys: Swift.CodingKey {
                     }
 
-                    init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {
-                        _ = try decoder.decodeMap()
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
                 """,
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }

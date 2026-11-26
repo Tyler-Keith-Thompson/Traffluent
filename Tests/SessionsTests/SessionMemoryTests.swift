@@ -9,23 +9,13 @@ import Trackers
 
 @Suite("Sessions: random and in memory only", .timeLimit(.minutes(1)))
 struct SessionMemoryTests {
-    struct Tapped: Event, BinaryCodable, Equatable {
+    struct Tapped: Event, Codable, Equatable {
         var number: Int
 
         init(number: Int) {
             self.number = number
         }
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(number, forKey: "number")
-            }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            number = try map.decode(forKey: "number")
-        }
     }
 
     @Test("A new tracker, as on a relaunch, starts a new session with a new identifier, a version 7 UUID")
@@ -56,7 +46,7 @@ struct SessionMemoryTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let withSessions = root.appending(path: "with")
         let without = root.appending(path: "without")
-        let events: [any (Event & BinaryCodable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
+        let events: [any (Event & Codable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
         let sessionStore = try SegmentStore(events: events, directory: FilePath(withSessions.path(percentEncoded: false)))
         let controlStore = try SegmentStore(events: events, directory: FilePath(without.path(percentEncoded: false)))
         let sut = Tracker(store: sessionStore, enrichers: [try .sessions(timeout: .seconds(60))], now: {
@@ -113,7 +103,7 @@ struct SessionMemoryTests {
         let directory = FileManager.default.temporaryDirectory.appending(path: "Sessions-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let path = FilePath(directory.path(percentEncoded: false))
-        let events: [any (Event & BinaryCodable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
+        let events: [any (Event & Codable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
         do {
             let store = try SegmentStore(events: events, directory: path)
             let earlier = Tracker(store: store, enrichers: [.sessions()])

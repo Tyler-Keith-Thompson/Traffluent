@@ -543,28 +543,6 @@ struct RecordStoreDeliveryTests {
     }
 }
 
-extension RecordStoreDeliveryTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
+extension RecordStoreDeliveryTests.Tapped: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension RecordStoreDeliveryTests.SignedUp: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(email, forKey: "email")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        email = try map.decode(forKey: "email")
-    }
-}
+extension RecordStoreDeliveryTests.SignedUp: Codable {}

@@ -164,7 +164,15 @@ final class SegmentLog: Acknowledger {
             swap(&spare, &state.spareFrameBuffer)
             return spare
         }
-        guard let frame = SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare) else {
+        let encoded: SegmentFormat.Frame?
+        do {
+            encoded = try SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare)
+        } catch {
+            Self.logger.error("Kept a \(registration.name) record in memory only: encoding its event failed with \(error)")
+            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            return record
+        }
+        guard let frame = encoded else {
             Self.logger.error("Kept a \(registration.name) record in memory only: its frame would be larger than a frame can be")
             dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
@@ -436,7 +444,7 @@ final class SegmentLog: Acknowledger {
             guard case .segment(let contents) = SegmentFormat.read(bytes) else { continue }
             for frame in contents.records where segment.indices.contains(frame.index) {
                 let reading: RecordEncoding.Reading
-                do throws(BinaryDecodingError) {
+                do {
                     reading = try RecordEncoding.record(from: bytes[frame.payload], registry: registry)
                 } catch {
                     Self.logger.error("Couldn't read a record in \(segment.file) back, so it waits for a later launch: decoding it failed with \(error)")
@@ -587,7 +595,7 @@ final class SegmentLog: Acknowledger {
             var undecodable = 0
             var mismatches = VersionMismatchCounts()
             for frame in contents.records {
-                do throws(BinaryDecodingError) {
+                do {
                     switch try RecordEncoding.record(from: bytes[frame.payload], registry: registry) {
                     case .record(var record):
                         record.isRedelivered = contents.marked.contains(frame.index)

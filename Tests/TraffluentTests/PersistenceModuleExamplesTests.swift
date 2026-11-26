@@ -2,6 +2,7 @@
 // (Sources/Persistence/Persistence.docc/Persistence.md), verbatim, so the article cannot drift from
 // the code.
 
+import CBOR
 import Foundation
 import SystemPackage
 import Testing
@@ -37,14 +38,10 @@ struct PersistenceModuleExamplesTests {
 
     @Test("A record written without seats reads the default")
     func seatsDefault() throws {
-        var encoder = BinaryEncoder()
-        encoder.encodeMap { map in
-            map.encode("pro", forKey: "plan")
-        }
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = CBOR.map([.textString("plan"): .textString("pro")]).encode()
         let expectedSeats = 1
 
-        let actual = try SignedUp(from: &decoder)
+        let actual = try CBORDecoder().decode(SignedUp.self, from: bytes)
 
         #expect(actual.seats == expectedSeats)
     }

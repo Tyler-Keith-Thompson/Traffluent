@@ -125,15 +125,4 @@ struct HTTPDestinationStoreTests {
     }
 }
 
-extension HTTPDestinationStoreTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
+extension HTTPDestinationStoreTests.Tapped: Codable {}

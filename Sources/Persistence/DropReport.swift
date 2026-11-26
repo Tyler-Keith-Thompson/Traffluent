@@ -15,7 +15,7 @@ public enum DropReport: Sendable, Hashable {
     /// enough, lost if it ends first.
     case writeFailed(recordCount: Int, timestamps: ClosedRange<Date>)
     /// Recovery read `recordCount` intact records it couldn't decode: their event type isn't in
-    /// the store's `events`, or its ``BinaryCodable/init(from:)`` threw, as it does for a record
+    /// the store's `events`, or its `init(from:)` threw, as it does for a record
     /// written before a required property was added or a property's type changed while the
     /// event's `Event.schemaVersion` stayed the same.
     case undecodable(recordCount: Int)

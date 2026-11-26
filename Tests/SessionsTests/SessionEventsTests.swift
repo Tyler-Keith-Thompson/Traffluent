@@ -1,5 +1,5 @@
+import CBOR
 import Events
-import Persistence
 import Sessions
 import Testing
 import Trackers
@@ -10,18 +10,16 @@ struct SessionEventsTests {
     @Test("A start encodes as an empty map, and decodes from one")
     func startedRoundTrip() throws {
         let expected = SessionStarted()
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let expectedBytes: [UInt8] = [0xA0]
 
-        let actual = try SessionStarted(from: &decoder)
+        let bytes = try CBOREncoder().encode(expected)
+        let actual = try CBORDecoder().decode(SessionStarted.self, from: bytes)
 
-        #expect(encoder.bytes == [0xA0])
+        #expect(bytes == expectedBytes)
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
-    @Test("An end encodes as a map of its duration's seconds, then its attoseconds, and decodes back", arguments: [
+    @Test("An end encodes as a map of its duration's seconds and its attoseconds, and decodes back", arguments: [
         Duration.zero,
         .seconds(90),
         .milliseconds(1_500),
@@ -30,33 +28,32 @@ struct SessionEventsTests {
     ])
     func endedRoundTrip(duration: Duration) throws {
         let expected = SessionEnded(duration: duration)
-        var reference = BinaryEncoder()
-        reference.encodeMap { map in
-            map.encode(duration.components.seconds, forKey: "seconds")
-            map.encode(duration.components.attoseconds, forKey: "attoseconds")
-        }
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let reference = CBOR.map([
+            .textString("seconds"): CBOR(integerLiteral: duration.components.seconds),
+            .textString("attoseconds"): CBOR(integerLiteral: duration.components.attoseconds),
+        ]).encode()
 
-        let actual = try SessionEnded(from: &decoder)
+        let bytes = try CBOREncoder().encode(expected)
+        let actual = try CBORDecoder().decode(SessionEnded.self, from: bytes)
 
-        #expect(encoder.bytes == reference.bytes)
+        #expect(bytes == reference)
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
-    @Test("A map holding seconds but no attoseconds doesn't decode as an end")
+    @Test("A map holding seconds but no attoseconds doesn't decode as an end: keyNotFound names attoseconds")
     func endedTruncated() {
-        var encoder = BinaryEncoder()
-        encoder.encodeMap { map in
-            map.encode(Int64(90), forKey: "seconds")
-        }
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = CBOR.map([.textString("seconds"): 90]).encode()
+        let expectedKey = "attoseconds"
 
-        #expect(throws: BinaryDecodingError.keyNotFound) {
-            try SessionEnded(from: &decoder)
+        let error = #expect(throws: DecodingError.self) {
+            try CBORDecoder().decode(SessionEnded.self, from: bytes)
         }
+
+        guard case .keyNotFound(let key, _) = error else {
+            Issue.record("Expected keyNotFound, got \(String(describing: error))")
+            return
+        }
+        #expect(key.stringValue == expectedKey)
     }
 
     @Test("The events' schemas name them, at version 1, for analytics, an end with its duration")

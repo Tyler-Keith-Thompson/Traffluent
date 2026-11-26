@@ -50,30 +50,18 @@ struct CollectorPropertyEncodingTests {
         var refined: Refined<Date, AnyDate>
     }
 
-    struct Money: BinaryCodable {
+    struct Money: Codable {
         var amount: Int
         var currency: String
-
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(amount, forKey: "amount")
-                map.encode(currency, forKey: "currency")
-            }
-        }
 
         init(amount: Int, currency: String) {
             self.amount = amount
             self.currency = currency
         }
 
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            amount = try map.decode(forKey: "amount")
-            currency = try map.decode(forKey: "currency")
-        }
     }
 
-    struct Card: BinaryCodable {
+    struct Card: Codable {
         var last4: String
         var number: Sensitive<String>
 
@@ -82,18 +70,6 @@ struct CollectorPropertyEncodingTests {
             self.number = number
         }
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(last4, forKey: "last4")
-                map.encode(number, forKey: "number")
-            }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            last4 = try map.decode(forKey: "last4")
-            number = try map.decode(forKey: "number")
-        }
     }
 
     @Event(name: "paid")
@@ -188,14 +164,14 @@ struct CollectorPropertyEncodingTests {
         #expect(actual == expected)
     }
 
-    @Test("A type the plan can't map leaves a redacted sensitive member out, and writes a revealed one")
+    @Test("A type the plan can't map writes a redacted sensitive member as null, and a revealed one as its value")
     func unmappedTypeWithSensitiveMember() throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Paid.schema]), instrument: NoOpInstrument())
         let event = Paid(card: Card(last4: "4242", number: Sensitive("4242424242424242")))
         let redacted = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         var revealed = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         revealed.revealsSensitiveValues = true
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242"}},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":"4242424242424242"}},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":null}},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":"4242424242424242"}},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
         let actual = String(decoding: try sut.encode([redacted, revealed]).body, as: UTF8.self)
 

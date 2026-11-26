@@ -34,6 +34,33 @@ struct StoredProperty {
         "[" + constraints.map(\.source).joined(separator: ", ") + "]"
     }
 
+    /// Whether the type is Foundation's `Date`, as written: its value is encoded as the seconds it
+    /// stores, rather than through an encoder's own form of a date.
+    var isDate: Bool {
+        Self.dateNames.contains(typeName)
+    }
+
+    /// The element of an array of `Date`s or of optional `Date`s, as written (`[Date]`, `[Date?]`),
+    /// whose values are encoded as the seconds they store too; `nil` for any other type.
+    var dateArrayElement: DateArrayElement? {
+        guard typeName.hasPrefix("["), typeName.hasSuffix("]") else { return nil }
+        let element = String(typeName.dropFirst().dropLast())
+        let isOptionalElement = element.hasSuffix("?")
+        let name = isOptionalElement ? String(element.dropLast()) : element
+        guard Self.dateNames.contains(name) else { return nil }
+        return DateArrayElement(typeName: name, isOptional: isOptionalElement)
+    }
+
+    /// The spellings of Foundation's `Date`.
+    private static let dateNames = ["Date", "Foundation.Date", "FoundationEssentials.Date"]
+
+    /// Whether the type is one a keyed decoding container has a method of its own for: `String`,
+    /// `Bool`, a standard integer or floating-point type, as written or qualified by `Swift`.
+    var isStandardScalar: Bool {
+        let name = typeName.hasPrefix("Swift.") ? String(typeName.dropFirst("Swift.".count)) : typeName
+        return ["String", "Bool", "Double", "Float", "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64"].contains(name)
+    }
+
     /// The name as an argument label: without backticks, which a label needs only for `inout`,
     /// `var` and `let`.
     var label: String {
@@ -156,4 +183,12 @@ extension GenericArgumentClauseSyntax {
         guard case .type(let type) = arguments.first?.argument else { return nil }
         return type
     }
+}
+
+/// The element of a property's array of dates.
+struct DateArrayElement {
+    /// The element's `Date`, as written.
+    let typeName: String
+    /// Whether the element is optional, `[Date?]`.
+    let isOptional: Bool
 }

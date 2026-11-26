@@ -3,11 +3,11 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// `@Event`: an extension of the struct it is attached to that conforms it to `Event` and
-/// `BinaryCodable`, with its `name`, `consentCategory`, `schemaVersion`, `schema` and, when a
-/// property declares constraints with `@Constrained`, its `constraintViolation()`, and its
-/// encoding: a map of its stored properties, each under its name, read back with each property's
-/// default value when its key is missing.
+/// `@Event`: an extension of the struct it is attached to that conforms it to `Event`,
+/// `Encodable` and `Decodable`, with its `name`, `consentCategory`, `schemaVersion`, `schema`
+/// and, when a property declares constraints with `@Constrained`, its `constraintViolation()`,
+/// and its coding: a keyed container of its stored properties, each under its name, an optional's
+/// `nil` left out, read back with each property's default value when its key is missing.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
@@ -32,12 +32,12 @@ public struct EventMacro: ExtensionMacro {
         }
         let access = structure.modifiers.first { [.keyword(.public), .keyword(.package)].contains($0.name.tokenKind) }
             .map { "\($0.name.text) " } ?? ""
-        let conformances = [("Event", "Events.Event"), ("BinaryCodable", "Persistence.BinaryCodable")]
+        let conformances = [("Event", "Events.Event"), ("Encodable", "Swift.Encodable"), ("Decodable", "Swift.Decodable")]
             .filter { name, _ in protocols.contains { $0.trimmedDescription.split(separator: ".").last.map(String.init) == name } }
             .map { $0.1 }
         let inheritance = conformances.isEmpty ? "" : ": " + conformances.joined(separator: ", ")
-        // The requirements come before the encoding, so a property that isn't BinaryCodable is
-        // first reported where the error names it.
+        // The requirements come before the coding, so a property that isn't Codable is first
+        // reported where the error names it.
         let members = [
             arguments.name.map { "\(access)static var name: String {\n    \($0)\n}" },
             arguments.consent.map { "\(access)static var consentCategory: Events.ConsentCategory {\n    \($0)\n}" },
@@ -45,9 +45,10 @@ public struct EventMacro: ExtensionMacro {
             schema(of: properties, access: access),
             constraintViolation(of: properties, access: access),
         ] + requirements(of: properties) + [
+            codingKeys(of: properties),
             encode(properties, access: access),
             decode(properties, access: access),
-        ]
+        ] + decodeFunctions(of: properties)
         let body = members.compactMap { $0 }.joined(separator: "\n\n")
         // The expansion is formatted after it returns, which indents the members.
         let source = "extension \(type.trimmedDescription)\(inheritance) {\n\(body)\n}"
@@ -102,41 +103,109 @@ public struct EventMacro: ExtensionMacro {
         return "\(access)func constraintViolation() -> Events.ConstraintViolation? {\n" + checks.map { $0 + "\n" }.joined() + "return nil\n}"
     }
 
-    /// `encode(to:)`, writing a map with each property under its name, in declaration order.
-    private static func encode(_ properties: [StoredProperty], access: String) -> String {
-        let lines = properties.map { "        map.encode(self.\($0.identifier), forKey: \"\($0.name)\")\n" }.joined()
-        let body = properties.isEmpty ? "    encoder.encodeMap { _ in\n    }\n" : "    encoder.encodeMap { map in\n\(lines)    }\n"
-        return "\(access)func encode(to encoder: inout Persistence.BinaryEncoder) {\n\(body)}"
+    /// `CodingKeys`: a key per property, its name as its string value, in declaration order.
+    private static func codingKeys(of properties: [StoredProperty]) -> String {
+        // No raw type without cases: an enum with none can't declare one.
+        guard !properties.isEmpty else { return "private enum CodingKeys: Swift.CodingKey {\n}" }
+        let cases = properties.map { "    case \($0.identifier)\n" }.joined()
+        return "private enum CodingKeys: Swift.String, Swift.CodingKey {\n\(cases)}"
     }
 
-    /// `init(from:)`, reading each property by its name, in declaration order, which finds each
-    /// at once while the declaration hasn't changed. An optional property missing from the map, as
-    /// one added since it was written is, reads as `nil`: `decode(forKey:)`'s optional overload. One
-    /// with a default value reads as that value, which the property already holds as the
-    /// initializer starts: the decoder is given the property itself rather than a copy of the
-    /// declaration's expression, which so runs once, in its own context.
-    private static func decode(_ properties: [StoredProperty], access: String) -> String {
-        let lines = properties.map {
-            let fallback = $0.hasDefaultValue ? ", default: self.\($0.identifier)" : ""
-            return "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\"\(fallback))\n"
+    /// `encode(to:)`, writing each property under its name (the encoder orders the keys: the CBOR
+    /// package sorts them canonically): an optional's `nil` left out, unless the property has a
+    /// default value, which a missing key would read instead; a `Date`, or each in a `[Date]` or
+    /// `[Date?]`, as the seconds since 2001 it stores, which read back exactly.
+    private static func encode(_ properties: [StoredProperty], access: String) -> String {
+        let lines = properties.map { property in
+            let unwrap = property.isOptional ? "?" : ""
+            let seconds = property.dateArrayElement.map { element in
+                element.isOptional ? "\(unwrap).map { $0?.timeIntervalSinceReferenceDate }" : "\(unwrap).map(\\.timeIntervalSinceReferenceDate)"
+            }
+            let value = "self.\(property.identifier)" + (property.isDate ? "\(unwrap).timeIntervalSinceReferenceDate" : seconds ?? "")
+            let method = property.isOptional && !property.hasDefaultValue ? "encodeIfPresent" : "encode"
+            return "    try container.\(method)(\(value), forKey: .\(property.identifier))\n"
         }.joined()
-        let body = properties.isEmpty ? "    _ = try decoder.decodeMap()\n" : "    var map = try decoder.decodeMap()\n\(lines)"
-        return "\(access)init(from decoder: inout Persistence.BinaryDecoder) throws(Persistence.BinaryDecodingError) {\n\(body)}"
+        let body = properties.isEmpty
+            ? "    _ = encoder.container(keyedBy: CodingKeys.self)\n"
+            : "    var container = encoder.container(keyedBy: CodingKeys.self)\n\(lines)"
+        return "\(access)func encode(to encoder: any Swift.Encoder) throws {\n\(body)}"
+    }
+
+    /// `init(from:)`, reading each property by its name, in declaration order. An optional
+    /// property missing from the container, as one added since it was written is, or holding
+    /// `nil`, reads as `nil`. One with a default value reads as that value when its key is missing,
+    /// which the property already holds as the initializer starts, so the declaration's expression
+    /// runs once, in its own context.
+    private static func decode(_ properties: [StoredProperty], access: String) -> String {
+        let reads = properties.map { property in
+            let key = ".\(property.identifier)"
+            let method = property.isOptional ? "decodeIfPresent" : "decode"
+            // A standard scalar, or the Double a Date is written as, is read by the container's
+            // own method for its type, which a generic read would go through a decoder of its own
+            // for.
+            let read = property.isDate || property.isStandardScalar || property.dateArrayElement != nil
+                ? "container.\(method)(\(Self.writtenType(of: property)).self, forKey: \(key))"
+                : "Self.\(method)Value(from: container, forKey: \(key))"
+            let date = "\(property.typeName).init(timeIntervalSinceReferenceDate:)"
+            let value = property.dateArrayElement.map { element in
+                Self.dates(from: read, element: element, isOptional: property.isOptional)
+            } ?? (!property.isDate ? read : property.isOptional ? "\(read).map(\(date))" : "\(property.typeName)(timeIntervalSinceReferenceDate: \(read))")
+            let assignment = "self.\(property.identifier) = try \(value)"
+            guard property.hasDefaultValue else { return "    \(assignment)\n" }
+            return "    if container.contains(\(key)) {\n        \(assignment)\n    }\n"
+        }.joined()
+        let body = properties.isEmpty
+            ? "    _ = try decoder.container(keyedBy: CodingKeys.self)\n"
+            : "    let container = try decoder.container(keyedBy: CodingKeys.self)\n\(reads)"
+        return "\(access)init(from decoder: any Swift.Decoder) throws {\n\(body)}"
+    }
+
+    /// The type a property is written as, which `init(from:)` reads: `Swift.Double` for a `Date`,
+    /// an array of them for an array of dates, the type itself otherwise.
+    private static func writtenType(of property: StoredProperty) -> String {
+        if property.isDate { return "Swift.Double" }
+        guard let element = property.dateArrayElement else { return property.typeName }
+        return element.isOptional ? "[Swift.Double?]" : "[Swift.Double]"
+    }
+
+    /// The dates an array of seconds `read` holds, each element `nil` where its seconds are, and
+    /// the whole `nil` when the property is optional and its array is.
+    private static func dates(from read: String, element: DateArrayElement, isOptional: Bool) -> String {
+        let date = "\(element.typeName).init(timeIntervalSinceReferenceDate:)"
+        let array = element.isOptional ? ".map { $0.map(\(date)) }" : ".map(\(date))"
+        return isOptional ? "\(read).map { $0\(array) }" : "\(read)\(array)"
+    }
+
+    /// The functions `init(from:)` reads a property of any other type through, those it calls.
+    ///
+    /// The extension is outside the struct, where a type nested in the struct's enclosing type is
+    /// out of scope, so these reads never name the property's type: the functions take it from the
+    /// property they assign. Static rather than local functions, which would capture the container.
+    private static func decodeFunctions(of properties: [StoredProperty]) -> [String] {
+        let generic = properties.filter { !$0.isDate && !$0.isStandardScalar && $0.dateArrayElement == nil }
+        return [
+            generic.contains { !$0.isOptional }
+                ? "private static func decodeValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded {\n    try container.decode(Decoded.self, forKey: key)\n}"
+                : nil,
+            generic.contains(where: \.isOptional)
+                ? "private static func decodeIfPresentValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded? {\n    try container.decodeIfPresent(Decoded.self, forKey: key)\n}"
+                : nil,
+        ].compactMap { $0 }
     }
 
     /// One function per property whose label is the property's name, and a body that calls each:
-    /// a property whose type isn't `BinaryCodable` fails to compile there, and the error names the
-    /// function with its label, `requireBinaryCodable(plan:)`. The encoding's own calls name only
-    /// `encode`. The body is never called, so it costs nothing at run time.
+    /// a property whose type isn't `Codable` fails to compile there, and the error names the
+    /// function with its label, `requireCodable(plan:)`. The coding's own calls name only
+    /// `encode` and `decode`. The body is never called, so it costs nothing at run time.
     private static func requirements(of properties: [StoredProperty]) -> [String] {
         guard !properties.isEmpty else { return [] }
         // An opaque type rather than a named generic parameter, which could shadow one of the
         // event's own.
         let functions = properties.map {
-            "private static func requireBinaryCodable(\($0.label): KeyPath<Self, some Persistence.BinaryCodable>) {}"
+            "private static func requireCodable(\($0.label): KeyPath<Self, some Swift.Codable>) {}"
         }
-        let calls = properties.map { "    requireBinaryCodable(\($0.label): \\.\($0.identifier))\n" }.joined()
-        return functions + ["private static var binaryCodableRequirements: Void {\n\(calls)}"]
+        let calls = properties.map { "    requireCodable(\($0.label): \\.\($0.identifier))\n" }.joined()
+        return functions + ["private static var codableRequirements: Void {\n\(calls)}"]
     }
 }
 

@@ -24,23 +24,29 @@ struct PostHogIdentityTests {
     }
 
     /// Writes the names PostHog reads as identity and settings, which no `@Event` property can be.
-    struct ClaimsAnIdentity: Event, BinaryCodable {
+    struct ClaimsAnIdentity: Event, Encodable {
         static let name = "claims_an_identity"
+
+        enum Key: String, CodingKey {
+            case processPersonProfile = "$process_person_profile"
+            case geoIPDisable = "$geoip_disable"
+            case sessionID = "$session_id"
+            case distinctID = "distinct_id"
+            case set = "$set"
+            case count
+        }
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(true, forKey: "$process_person_profile")
-                map.encode(false, forKey: "$geoip_disable")
-                map.encode("someone-else", forKey: "$session_id")
-                map.encode("someone-else", forKey: "distinct_id")
-                map.encode("ada@example.com", forKey: "$set")
-                map.encode(1, forKey: "count")
-            }
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            try container.encode(true, forKey: .processPersonProfile)
+            try container.encode(false, forKey: .geoIPDisable)
+            try container.encode("someone-else", forKey: .sessionID)
+            try container.encode("someone-else", forKey: .distinctID)
+            try container.encode("ada@example.com", forKey: .set)
+            try container.encode(1, forKey: .count)
         }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     @Test("distinct_id is the record's session, lowercase, and $session_id the same session")

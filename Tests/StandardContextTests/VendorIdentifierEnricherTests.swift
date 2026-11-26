@@ -8,23 +8,13 @@ import Trackers
 
 @Suite("StandardContext: the identifier for vendor", .timeLimit(.minutes(1)))
 struct VendorIdentifierEnricherTests {
-    struct Tapped: Event, BinaryCodable {
+    struct Tapped: Event, Codable {
         var number: Int
 
         init(number: Int) {
             self.number = number
         }
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode(number, forKey: "number")
-            }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-            var map = try decoder.decodeMap()
-            number = try map.decode(forKey: "number")
-        }
     }
 
     @Test("The vendor identifier enricher sets VendorIdentifierKey to the system's identifier, which the record reveals")
@@ -95,7 +85,7 @@ struct VendorIdentifierEnricherTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let withIdentifier = root.appending(path: "with")
         let without = root.appending(path: "without")
-        let events: [any (Event & BinaryCodable).Type] = [Tapped.self]
+        let events: [any (Event & Codable).Type] = [Tapped.self]
         let store = try SegmentStore(events: events, directory: FilePath(withIdentifier.path(percentEncoded: false)))
         let controlStore = try SegmentStore(events: events, directory: FilePath(without.path(percentEncoded: false)))
         let sut = Tracker(store: store, enrichers: [.vendorIdentifier(identifier)])

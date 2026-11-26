@@ -30,7 +30,7 @@ public import Persistence
 ///   Tracking inside one of the app's own writes to the same database is allowed: the record
 ///   doesn't join the app's transaction, and the worker inserts it once that write is done, even
 ///   if it rolls back.
-/// - **What is kept.** Only events of the types in `events`, which conform to `BinaryCodable`,
+/// - **What is kept.** Only events of the types in `events`, which conform to `Codable`,
 ///   in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
 ///   they are delivered in this run like any other, are never written, and are lost if the app
 ///   ends first. The first record of each such type is reported as
@@ -87,7 +87,7 @@ public struct DatabaseStore: RecordStore {
     ///   read-only, or `table` holds a double quote) or read, or the rows recovery drops can't be
     ///   deleted.
     public init(
-        events: [any (Event & BinaryCodable).Type],
+        events: [any (Event & Codable).Type],
         database: some DatabaseWriter,
         table: String = DatabaseStore.defaultTable,
         byteBound: Int = DatabaseStore.defaultByteBound

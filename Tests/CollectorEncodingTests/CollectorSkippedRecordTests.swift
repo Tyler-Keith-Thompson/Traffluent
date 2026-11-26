@@ -74,8 +74,8 @@ struct CollectorSkippedRecordTests {
         #expect(actual == expected)
     }
 
-    @Test("A record whose event isn't BinaryCodable is left out as notBinaryCodable, not the batch")
-    func notBinaryCodableInTheMiddle() throws {
+    @Test("A record whose event isn't Encodable is left out as notEncodable, not the batch")
+    func notEncodableInTheMiddle() throws {
         let handWritten = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema, handWritten]), instrument: NoOpInstrument())
         let skipped = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)
@@ -84,7 +84,7 @@ struct CollectorSkippedRecordTests {
             skipped,
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil),
         ]
-        let expectedSkipped = [SkippedRecord(recordID: skipped.id, eventName: "HandWritten", schemaVersion: 1, reason: .notBinaryCodable(name: "HandWritten"))]
+        let expectedSkipped = [SkippedRecord(recordID: skipped.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
         let expectedBody = try sut.encode([batch[0], batch[2]])
 
         let actual = sut.batch(of: batch)

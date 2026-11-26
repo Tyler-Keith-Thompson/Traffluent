@@ -5,7 +5,7 @@ import SystemPackage
 /// The bytes of a segment file.
 ///
 /// A segment starts with an 8-byte header: the magic number `TRFL` (`54 52 46 4C`), the format
-/// version as a little-endian `UInt16` (2), and two reserved zero bytes. Frames follow, each a
+/// version as a little-endian `UInt16` (3), and two reserved zero bytes. Frames follow, each a
 /// little-endian `UInt32` payload length, the payload's CRC-32 as a little-endian `UInt32`, and the
 /// payload. A payload's first byte is its kind:
 ///
@@ -20,9 +20,12 @@ import SystemPackage
 /// reports its bytes as a corruption.
 enum SegmentFormat {
     /// The header every segment of this version starts with.
-    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
+    // Version 3 writes records through Codable and the CBOR package (TRAF-83), so a segment of
+    // version 2, the earlier hand-written coder's records, is read as an earlier version:
+    // deleted and reported.
+    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0]
     /// The format version `header` names.
-    static let version: UInt16 = 2
+    static let version: UInt16 = 3
     /// The bytes before each frame's payload: its length and checksum.
     static let frameHeaderByteCount = 8
 
@@ -98,40 +101,47 @@ enum SegmentFormat {
         return .segment(contents)
     }
 
-    /// A frame's bytes, at the start of a buffer that may hold more past them.
+    /// A frame's bytes.
     struct Frame {
-        /// The frame's bytes, then whatever the buffer held past them.
+        /// The frame's bytes.
         let buffer: [UInt8]
-        /// How many bytes of `buffer` the frame takes.
-        let byteCount: Int
+
+        /// How many bytes the frame takes.
+        var byteCount: Int {
+            buffer.count
+        }
 
         /// Writes the frame's bytes to `descriptor`.
         func write(to descriptor: FileDescriptor) throws(Errno) {
             try buffer.withUnsafeBytes { bytes in
-                Result { () throws(Errno) in try descriptor.writeAll(UnsafeRawBufferPointer(rebasing: bytes[..<byteCount])) }
+                Result { () throws(Errno) in try descriptor.writeAll(bytes) }
             }.get()
         }
     }
 
     /// The frame of `record`, whose event `registration` encodes, written over `buffer`: one
-    /// kept from an earlier frame, so a record's frame needs no allocation of its own; `nil` when
-    /// its payload is over `UInt32.max` bytes, which a frame's length can't state.
-    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration, reusing buffer: consuming [UInt8]) -> Frame? {
-        var encoder = frameEncoder(of: .record, reusing: buffer)
-        RecordEncoding.encode(record, registration: registration, to: &encoder)
-        guard seal(&encoder) else { return nil }
-        return Frame(buffer: encoder.buffer, byteCount: encoder.byteCount)
+    /// kept from an earlier frame, so a record's frame needs no allocation of its own besides its
+    /// encoding; `nil` when its payload is over `UInt32.max` bytes, which a frame's length can't
+    /// state.
+    ///
+    /// - Throws: What the event's `encode(to:)` throws.
+    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration, reusing buffer: consuming [UInt8]) throws -> Frame? {
+        let payload = try RecordEncoding.bytes(of: record, registration: registration)
+        var frame = frameStart(of: .record, reusing: buffer, payloadByteCount: payload.count)
+        frame.append(contentsOf: payload)
+        guard seal(&frame) else { return nil }
+        return Frame(buffer: frame)
     }
 
     /// The frame of a delivery mark naming records `indices`; `nil` when its payload is over
     /// `UInt32.max` bytes, which a frame's length can't state.
     static func deliveryMarkFrame(of indices: [UInt32]) -> [UInt8]? {
-        var encoder = frameEncoder(of: .deliveryMark, reusing: [])
+        var frame = frameStart(of: .deliveryMark, reusing: [], payloadByteCount: 4 * indices.count)
         for index in indices {
-            encoder.writeLittleEndian(index)
+            withUnsafeBytes(of: index.littleEndian) { frame.append(contentsOf: $0) }
         }
-        guard seal(&encoder) else { return nil }
-        return encoder.takeBytes()
+        guard seal(&frame) else { return nil }
+        return frame
     }
 
     /// A segment holding only the record frames `frames` of the segment `bytes`, renumbered from
@@ -155,21 +165,23 @@ enum SegmentFormat {
         return compacted
     }
 
-    /// An encoder writing over `buffer`, holding room for a frame's length and checksum, then
-    /// `kind`'s byte.
-    private static func frameEncoder(of kind: Kind, reusing buffer: consuming [UInt8]) -> BinaryEncoder {
-        var encoder = BinaryEncoder(reusing: buffer)
-        encoder.writeLittleEndian(UInt64(0))
-        encoder.write(kind.rawValue)
-        return encoder
+    /// `buffer`, emptied, holding room for a frame's length and checksum, then `kind`'s byte, with
+    /// capacity for `payloadByteCount` bytes more.
+    private static func frameStart(of kind: Kind, reusing buffer: consuming [UInt8], payloadByteCount: Int) -> [UInt8] {
+        var frame = buffer
+        frame.removeAll(keepingCapacity: true)
+        frame.reserveCapacity(frameHeaderByteCount + 1 + payloadByteCount)
+        frame.append(contentsOf: repeatElement(0, count: frameHeaderByteCount))
+        frame.append(kind.rawValue)
+        return frame
     }
 
-    /// Fills in the length and checksum of the frame `encoder` holds.
+    /// Fills in the length and checksum of `frame`.
     ///
     /// - Returns: Whether it could: `false`, leaving them unset, for a payload over `UInt32.max`
     ///   bytes (a single event of 4 GiB), whose length a frame can't state.
-    private static func seal(_ encoder: inout BinaryEncoder) -> Bool {
-        encoder.withWrittenBytes { frame in
+    private static func seal(_ frame: inout [UInt8]) -> Bool {
+        frame.withUnsafeMutableBytes { frame in
             guard let length = UInt32(exactly: frame.count - frameHeaderByteCount) else { return false }
             let checksum = CRC32.checksum(of: UnsafeRawBufferPointer(rebasing: frame[frameHeaderByteCount...]))
             frame.storeBytes(of: length.littleEndian, toByteOffset: 0, as: UInt32.self)

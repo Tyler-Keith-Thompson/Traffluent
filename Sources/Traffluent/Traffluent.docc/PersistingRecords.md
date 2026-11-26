@@ -25,14 +25,19 @@ the process is killed, which the worker hadn't reached yet, is lost. As the app 
 background, call `await tracker.flush()`, then `store.synchronize()`, or let `trackLifecycle` do
 both (<doc:AutomaticTracking>).
 
-`@Event` makes the event `BinaryCodable`, the encoding a store writes (<doc:DefiningEvents>). The
-`BinaryCodable` protocol's documentation shows the conformance written by hand.
+`@Event` makes the event `Codable`, the conformance a store writes it through
+(<doc:DefiningEvents>). Swift's synthesized `Codable` conformance, or one written by hand, works
+too. `@Event` writes a `Date` property, and each date in a `[Date]` or `[Date?]`, as the seconds
+since 2001 it stores, so it reads back exactly. A `Date` the macro doesn't reach, inside a
+`Codable` type of your own or in a synthesized conformance, takes the CBOR package's own form,
+seconds since 1970, and reads back to within a rounding of a microsecond's scale.
 
 ### What the store writes
 
-The store keeps only the event types in `events`, which conform to `BinaryCodable`, a compact
-binary encoding: CBOR (RFC 8949), each event a map of its properties under their names, which any
-CBOR decoder can read. Any other event is kept in memory only: delivered in this run, never written.
+The store keeps only the event types in `events`, which conform to `Codable`. It writes each event
+through that conformance in CBOR (RFC 8949), a compact binary encoding, as a map of its properties
+under their names, which any CBOR decoder can read. A `Sensitive` value is written in full, as the
+store keeps it for destinations that reveal it, and read back only by the store. Any other event is kept in memory only: delivered in this run, never written.
 
 The log is a directory of append-only segment files: in Application Support on Apple platforms
 (excluded from backups), and in the XDG state directory on Linux, unless `directory:` says
@@ -53,7 +58,9 @@ A record whose delivery had started when the app ended comes back with `isRedeli
 destination can tell it may have been sent before. A record is never sent without that mark on disk
 first; one whose mark can't be written waits for a later launch. After a rollback, a segment
 written by a newer release, in a later format version, is left untouched. One in an earlier format
-version is deleted and reported as a corruption.
+version is deleted and reported as a corruption. Every segment Traffluent 0.0.44 or earlier wrote
+is in an earlier format, so updating from one of those releases drops the records it left
+undelivered, each segment reported on `dropReports` as `.corruption`.
 
 The store makes the log durable against power loss too (`fsync`), once per batch. Call
 `store.synchronize()`, after `tracker.flush()`, as the app moves to the background or terminates. A
@@ -83,7 +90,10 @@ An app on Apple platforms that already keeps a GRDB database can keep its record
 own that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a
 table name, creates the table with a migration of its own, and opens no second SQLite database.
 
-It makes the same promises as `SegmentStore`. The worker commits each record before publishing it.
+It makes the same promises as `SegmentStore`, and it doesn't read the rows Traffluent 0.0.44 or
+earlier wrote either: each is deleted at recovery and reported as `.undecodable`, or as
+`.versionMismatch` where its stored version differs from its type's. The worker commits each record
+before publishing it.
 A batch is marked before it goes out, and its rows are deleted once it is delivered. The table is
 bounded by its records' encoded bytes, with the oldest dropped and reported, and records are
 encoded the same way.

@@ -50,8 +50,6 @@ ASSOCIATE = "objc_setAssociatedObject(self, ControlDiscovery.associationKey, dis
 DISSOCIATE = "objc_setAssociatedObject(self, ControlDiscovery.associationKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)"
 
 MUTANTS = [
-    Mutant("kindkeyedascontrol", E, 'map.encode(kind, forKey: "kind")', 'map.encode(kind, forKey: "control")', mode="stmt"),
-    Mutant("kindunread", E, '        kind = try map.decode(forKey: "kind")', "        kind = control", mode="stmt"),
     Mutant("schemaversion", E, "schemaVersion", "2"),
     Mutant("schemaoptional", E, 'EventSchema.Property(name: "kind", typeName: "String", isOptional: false)', 'EventSchema.Property(name: "kind", typeName: "String", isOptional: true)'),
 ]

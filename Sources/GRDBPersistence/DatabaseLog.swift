@@ -120,7 +120,14 @@ final class DatabaseLog: Acknowledger {
             }
             return record
         }
-        let payload = RecordEncoding.bytes(of: record, registration: registration)
+        let payload: [UInt8]
+        do {
+            payload = try RecordEncoding.bytes(of: record, registration: registration)
+        } catch {
+            Self.logger.error("Kept a \(registration.name) record in memory only: encoding its event failed with \(error)")
+            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            return record
+        }
         guard payload.count <= byteBound else {
             Self.logger.notice("Kept a \(registration.name) record in memory only: its \(payload.count) bytes are more than a table bounded to \(byteBound) bytes can hold")
             return record
@@ -245,7 +252,7 @@ final class DatabaseLog: Acknowledger {
                 for position in positions {
                     guard let payload = try Data.fetchOne(statement, arguments: [Int64(truncatingIfNeeded: position)]) else { continue }
                     let reading: RecordEncoding.Reading
-                    do throws(BinaryDecodingError) {
+                    do {
                         reading = try RecordEncoding.record(from: Array(payload)[...], registry: registry)
                     } catch {
                         Self.logger.error("Couldn't read a record in \(table) back, so it waits for a later launch: decoding it failed with \(error)")
@@ -332,7 +339,7 @@ final class DatabaseLog: Acknowledger {
         for row in rows {
             let position: Int64 = row[0]
             let payload: Data = row[1]
-            do throws(BinaryDecodingError) {
+            do {
                 switch try RecordEncoding.record(from: Array(payload)[...], registry: registry) {
                 case .record(var record):
                     record.isRedelivered = row[2]

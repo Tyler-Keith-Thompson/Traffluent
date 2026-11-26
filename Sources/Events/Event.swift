@@ -11,6 +11,15 @@
 ///
 /// A property destinations shouldn't see unless they must, such as an email address, is a
 /// ``Sensitive`` value.
+///
+/// A store keeps an event on disk only when it is also `Codable`. Swift's synthesized
+/// conformance works, as does `@Event`'s (module `EventMacros`) or one written by hand.
+///
+/// ```swift
+/// struct SignedUp: Event, Codable {
+///     var plan: String
+/// }
+/// ```
 public protocol Event: Sendable {
     /// The name destinations record the event under. Defaults to the type's name.
     static var name: String { get }

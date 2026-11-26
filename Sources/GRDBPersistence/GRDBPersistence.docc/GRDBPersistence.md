@@ -14,7 +14,10 @@ transaction of its own, before publishing it. A batch's rows are marked before a
 receives it and deleted once every destination has. The table holds at most `byteBound` bytes of
 encoded records, 5 MiB by default, with the oldest rows deleted to make room, and each drop is
 reported on `DatabaseStore.dropReports`. Records are encoded as `SegmentStore` encodes them, so
-only events of the types in `events`, which conform to `BinaryCodable`, are kept.
+only events of the types in `events`, which conform to `Codable`, are kept. Rows written by
+Traffluent 0.0.44 or earlier, in an earlier encoding, aren't read: each is deleted when the store
+opens and reported as `.undecodable`, or as `.versionMismatch` where its stored version differs
+from its type's.
 
 How durable a commit is against power loss is the database's choice, through its journal mode and
 `synchronous` setting. `DatabaseStore.synchronize()` checkpoints a database in WAL mode; call it

@@ -4,16 +4,17 @@ Derive an event's conformances, name and schema from its struct declaration, and
 
 ## Overview
 
-`@Event` makes a struct an event. It adds the `Event` and `BinaryCodable` conformances, the
-event's name, consent category and schema version when you give them, a `schema` describing each
-stored property in declaration order, and an encoding that writes each stored property under its
-name. `@Constrained` declares rules a plain `String`, number or array can't carry, such as a
-minimum length or a pattern; the macro checks each keyword as it expands, and a tracker rejects an
+`@Event` makes a struct an event. It adds the `Event` conformance, the event's name, consent
+category and schema version when you give them, a `schema` describing each stored property in
+declaration order, and `Encodable` and `Decodable` conformances that write each stored property
+under its name. `@Constrained` declares rules a plain `String`, number or array can't carry, such
+as a minimum length or a pattern; the macro checks each keyword as it expands, and a tracker rejects an
 event whose property breaks one.
 
-`import Traffluent` includes this module. It re-exports `Events` and `Persistence`, so a file that
-imports `EventMacros` alone can expand the macro too. The `Event` and `BinaryCodable` protocols'
-documentation, in those modules, shows the conformances written by hand. To export the schemas as
+`import Traffluent` includes this module. It re-exports `Events`, so a file that imports
+`EventMacros` alone can expand the macro too. The `Event` protocol's documentation, in that module,
+shows the conformance written by hand; any `Codable` conformance, Swift's synthesized one included,
+is one a store can write. To export the schemas as
 a JSON Schema tracking plan, pass them to `TrackingPlans`.
 
 ```swift

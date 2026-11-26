@@ -21,6 +21,7 @@ swift_library(
         "//Sources/LifecycleTracking",
         "//Sources/Events",
         "//Sources/Persistence",
+        "@swiftpkg_swift_cbor//:CBOR",
         "//Sources/Trackers",
         "//Sources/Destinations",
         "@swiftpkg_afluent//:Afluent",

@@ -24,29 +24,23 @@ struct PostHogSkippedRecordTests {
     }
 
     /// An event named as one of PostHog's own.
-    struct Identify: Event, BinaryCodable {
+    struct Identify: Event, Codable {
         static let name = "$identify"
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { _ in }
-        }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     /// Encodes as a bare integer rather than a map of its properties.
-    struct NotAMap: Event, BinaryCodable {
+    struct NotAMap: Event, Encodable {
         static let name = "not_a_map"
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encode(1)
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(1)
         }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     @Test("A record whose event the plan doesn't describe is left out as unknownEvent, and the records around it are sent")
@@ -83,14 +77,14 @@ struct PostHogSkippedRecordTests {
         #expect(actual == expected)
     }
 
-    @Test("A record whose event isn't BinaryCodable is left out as notBinaryCodable")
-    func notBinaryCodable() throws {
+    @Test("A record whose event isn't Encodable is left out as notEncodable")
+    func notEncodable() throws {
         let handWritten = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [handWritten]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "HandWritten", schemaVersion: 1, reason: .notBinaryCodable(name: "HandWritten"))]
+        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
 
         let actual = sut.batch(of: [record]).skippedRecords
 

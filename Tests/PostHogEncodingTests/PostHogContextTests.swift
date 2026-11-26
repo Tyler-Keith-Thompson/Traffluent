@@ -17,18 +17,19 @@ struct PostHogContextTests {
     }
 
     /// Writes a property named as one of PostHog's own, which no `@Event` property can be.
-    struct ClaimsTheOperatingSystem: Event, BinaryCodable {
+    struct ClaimsTheOperatingSystem: Event, Encodable {
         static let name = "claims_the_operating_system"
+
+        enum Key: String, CodingKey {
+            case operatingSystemName = "$os_name"
+        }
 
         init() {}
 
-        func encode(to encoder: inout BinaryEncoder) {
-            encoder.encodeMap { map in
-                map.encode("Event's own", forKey: "$os_name")
-            }
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            try container.encode("Event's own", forKey: .operatingSystemName)
         }
-
-        init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
     @Test("Each form factor is PostHog's $device_type, and a watch has none", arguments: [

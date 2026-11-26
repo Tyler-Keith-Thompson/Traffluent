@@ -149,8 +149,8 @@ struct SegmentStoreRecoveryTests {
         let location = Events.SourceLocation(file: "A", fileID: "A", function: "f", line: 1, column: 1)
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
         let newer = directory.appending("00000000000000000001.segment")
-        // Version 3, with a reserved byte set and bytes this version can't read.
-        let expected = Data([0x54, 0x52, 0x46, 0x4C, 3, 0, 7, 0, 0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3])
+        // Version 4, with a reserved byte set and bytes this version can't read.
+        let expected = Data([0x54, 0x52, 0x46, 0x4C, 4, 0, 7, 0, 0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3])
         try expected.write(to: URL(fileURLWithPath: newer.string))
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
@@ -164,7 +164,7 @@ struct SegmentStoreRecoveryTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.string) == ["00000000000000000001.segment"])
     }
 
-    @Test("A segment whose header has the wrong magic number, or names an earlier version than 2, version 1's records included, is discarded whole and reported")
+    @Test("A segment whose header has the wrong magic number, or names an earlier version than 3, version 1's and 2's records included, is discarded whole and reported")
     func unreadableHeader() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreRecoveryTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -175,18 +175,21 @@ struct SegmentStoreRecoveryTests {
         var magic = try #require(FileManager.default.contents(atPath: path.string))
         var version = magic
         var first = magic
+        var second = magic
         magic[0] = 0x55
         version[4] = 0
         first[4] = 1
+        second[4] = 2
         try magic.write(to: URL(fileURLWithPath: path.string))
         try version.write(to: URL(fileURLWithPath: directory.appending("00000000000000000002.segment").string))
         try first.write(to: URL(fileURLWithPath: directory.appending("00000000000000000003.segment").string))
-        let expected = [DropReport.corruption(byteCount: magic.count), .corruption(byteCount: version.count), .corruption(byteCount: first.count)]
+        try second.write(to: URL(fileURLWithPath: directory.appending("00000000000000000004.segment").string))
+        let expected = [DropReport.corruption(byteCount: magic.count), .corruption(byteCount: version.count), .corruption(byteCount: first.count), .corruption(byteCount: second.count)]
 
         let sut = try SegmentStore(events: [Tapped.self], directory: directory)
 
         var reports = sut.dropReports.makeAsyncIterator()
-        let actual = [try #require(await reports.next()), try #require(await reports.next()), try #require(await reports.next())]
+        let actual = [try #require(await reports.next()), try #require(await reports.next()), try #require(await reports.next()), try #require(await reports.next())]
         #expect(actual == expected)
         #expect(sut.takeRecoveredRecords().isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.string).isEmpty)
@@ -198,7 +201,7 @@ struct SegmentStoreRecoveryTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         try FileManager.default.createDirectory(atPath: directory.string, withIntermediateDirectories: true)
         try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000001.segment").string, contents: Data()))
-        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0])))
+        try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000002.segment").string, contents: Data([0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0])))
         // A short third segment, the only one recovery reports.
         try #require(FileManager.default.createFile(atPath: directory.appending("00000000000000000003.segment").string, contents: Data([0x54, 0x52, 0x46])))
         let expected = DropReport.corruption(byteCount: 3)
@@ -345,25 +348,6 @@ struct SegmentStoreRecoveryTests {
     }
 }
 
-extension SegmentStoreRecoveryTests.Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-        }
-    }
+extension SegmentStoreRecoveryTests.Tapped: Codable {}
 
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-    }
-}
-
-extension SegmentStoreRecoveryTests.Other: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { _ in }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        _ = try decoder.decodeMap()
-    }
-}
+extension SegmentStoreRecoveryTests.Other: Codable {}

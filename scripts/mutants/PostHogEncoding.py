@@ -54,7 +54,7 @@ MUTANTS = [
     Mutant("emptybatchnobody", B, "!events.isEmpty || batch.isEmpty", "!events.isEmpty"),
     Mutant("lastskipthrown", B, "throw encoded.skippedRecords[0].reason", "throw encoded.skippedRecords[encoded.skippedRecords.count - 1].reason", mode="stmt"),
     Mutant("propertyunnamed", B, ".unrepresentableValue(event: event, property: property)", '.unrepresentableValue(event: event, property: "")'),
-    Mutant("notbinarycodableasunknown", B, ".notBinaryCodable(name: name)", "PostHogEncodingError.unknownEvent(name: name, version: 1)"),
+    Mutant("notencodableasunknown", B, ".notEncodable(name: name)", "PostHogEncodingError.unknownEvent(name: name, version: 1)"),
     # Context.
     Mutant("nobundleidentifier", C, 'properties["$app_namespace"] = .string(bundleIdentifier)', "", mode="stmt"),
     Mutant("versionasbuild", C, 'properties["$app_version"] = .string(version)', 'properties["$app_build"] = .string(version)', mode="stmt"),

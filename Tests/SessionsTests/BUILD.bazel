@@ -21,6 +21,7 @@ swift_library(
         "//Sources/Sessions",
         "//Sources/Events",
         "//Sources/Persistence",
+        "@swiftpkg_swift_cbor//:CBOR",
         "//Sources/Trackers",
         "//Sources/LifecycleTracking",
         "@swiftpkg_swift_clocks//:Clocks",

@@ -1,13 +1,12 @@
 public import Events
-public import Persistence
 
 /// Someone activated the control named ``control``, such as by tapping a button or flipping a
 /// switch: what `trackControlsAutomatically(_:)` tracks for each activation it discovers.
 ///
-/// It is `BinaryCodable`, so a store keeps it once its `events` list `ControlActivated.self`, and
+/// It is `Codable`, so a store keeps it once its `events` list `ControlActivated.self`, and
 /// its ``schema`` goes in a tracking plan beside the app's own events. It builds on every
 /// platform, so a tracking plan or a collector off Apple platforms can name it too.
-public struct ControlActivated: Event, BinaryCodable, Hashable {
+public struct ControlActivated: Event, Codable, Hashable {
     /// The activated control's name: its accessibility identifier, unless the predicate given to
     /// `trackControlsAutomatically(_:)` named it otherwise.
     public var control: String
@@ -36,25 +35,5 @@ public struct ControlActivated: Event, BinaryCodable, Hashable {
     public init(control: String, kind: String) {
         self.control = control
         self.kind = kind
-    }
-
-    /// Writes a map of the control's name (`control`) and its kind (`kind`) to `encoder`.
-    ///
-    /// - Parameter encoder: Where the bytes go.
-    public func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(control, forKey: "control")
-            map.encode(kind, forKey: "kind")
-        }
-    }
-
-    /// Reads the control's name and its kind from `decoder`.
-    ///
-    /// - Parameter decoder: Where the bytes come from.
-    /// - Throws: `BinaryDecodingError` when the bytes don't hold a map with a name and a kind.
-    public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        control = try map.decode(forKey: "control")
-        kind = try map.decode(forKey: "kind")
     }
 }

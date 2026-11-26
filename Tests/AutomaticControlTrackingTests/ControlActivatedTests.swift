@@ -1,48 +1,45 @@
 import AutomaticControlTracking
+import CBOR
 import Events
-import Persistence
 import PropertyBased
 import Testing
 
 @Suite("ControlActivated")
 struct ControlActivatedTests {
-    @Test("A control activation's bytes decode to the same activation, with none left over")
+    @Test("A control activation's CBOR decodes to the same activation")
     func roundTrip() throws {
         let expected = ControlActivated(control: "checkout-button", kind: "UIButton")
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(expected)
 
-        let actual = try ControlActivated(from: &decoder)
+        let actual = try CBORDecoder().decode(ControlActivated.self, from: bytes)
 
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
     @Test("An activation of empty names round-trips too")
     func emptyRoundTrip() throws {
         let expected = ControlActivated(control: "", kind: "")
-        var encoder = BinaryEncoder()
-        expected.encode(to: &encoder)
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = try CBOREncoder().encode(expected)
 
-        let actual = try ControlActivated(from: &decoder)
+        let actual = try CBORDecoder().decode(ControlActivated.self, from: bytes)
 
         #expect(actual == expected)
-        #expect(decoder.isAtEnd)
     }
 
-    @Test("A map holding a name but no kind doesn't decode")
+    @Test("A map holding a name but no kind doesn't decode: keyNotFound names kind")
     func truncated() {
-        var encoder = BinaryEncoder()
-        encoder.encodeMap { map in
-            map.encode("checkout-button", forKey: "control")
-        }
-        var decoder = BinaryDecoder(encoder.bytes)
+        let bytes = CBOR.map([.textString("control"): .textString("checkout-button")]).encode()
+        let expectedKey = "kind"
 
-        #expect(throws: BinaryDecodingError.keyNotFound) {
-            try ControlActivated(from: &decoder)
+        let error = #expect(throws: DecodingError.self) {
+            try CBORDecoder().decode(ControlActivated.self, from: bytes)
         }
+
+        guard case .keyNotFound(let key, _) = error else {
+            Issue.record("Expected keyNotFound, got \(String(describing: error))")
+            return
+        }
+        #expect(key.stringValue == expectedKey)
     }
 
     @Test("Its schema names the event, version 1 for analytics, with the control's name and kind as required Strings")
@@ -62,26 +59,19 @@ struct ControlActivatedTests {
         #expect(actual == expected)
     }
 
-    @Test("An activation encodes as a map of its name then its kind, and decodes back, for any two strings")
+    @Test("An activation encodes as the map of its name and its kind CBOR's value model writes, and decodes back, for any two strings")
     func encodingProperty() async {
         await propertyCheck(count: 300, input: Gen.uint8().array(of: 0...24), Gen.uint8().array(of: 0...24)) { controlBytes, kindBytes in
             let control = String(decoding: controlBytes, as: UTF8.self)
             let kind = String(decoding: kindBytes, as: UTF8.self)
             let activation = ControlActivated(control: control, kind: kind)
-            var reference = BinaryEncoder()
-            reference.encodeMap { map in
-                map.encode(control, forKey: "control")
-                map.encode(kind, forKey: "kind")
-            }
+            let reference = CBOR.map([.textString("control"): .textString(control), .textString("kind"): .textString(kind)]).encode()
 
-            var encoder = BinaryEncoder()
-            activation.encode(to: &encoder)
-            var decoder = BinaryDecoder(encoder.bytes)
-            let decoded = try? ControlActivated(from: &decoder)
+            let bytes = try? CBOREncoder().encode(activation)
+            let decoded = try? CBORDecoder().decode(ControlActivated.self, from: reference)
 
-            #expect(encoder.bytes == reference.bytes)
+            #expect(bytes == reference)
             #expect(decoded == activation)
-            #expect(decoder.isAtEnd)
         }
     }
 }

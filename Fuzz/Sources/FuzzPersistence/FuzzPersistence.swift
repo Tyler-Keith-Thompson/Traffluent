@@ -9,8 +9,8 @@
 // can is rewritten to the decodable frames, renumbered, then one mark of their new numbers; a
 // second store opened on it recovers the same records and reports nothing.
 // A segment whose header names a later version is left as it is, and nothing is read from it.
-// Record payloads are written here as the model's own CBOR (RFC 8949), not through the library's
-// encoder: a record with its keys in another order or with keys the store doesn't know must still
+// Record payloads are written here as the model's own CBOR (RFC 8949), not through the CBOR
+// package's encoder: a record with its keys in another order or with keys the store doesn't know must still
 // decode, and so must one without a version, read by name like one at its type's version; one
 // missing a required key,
 // holding a value of another type, an unknown event type, bytes past its map or a version other
@@ -28,26 +28,14 @@ struct Tapped: Event, Hashable {
     var label: String
 }
 
-extension Tapped: BinaryCodable {
-    func encode(to encoder: inout BinaryEncoder) {
-        encoder.encodeMap { map in
-            map.encode(number, forKey: "number")
-            map.encode(label, forKey: "label")
-        }
-    }
-
-    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        var map = try decoder.decodeMap()
-        number = try map.decode(forKey: "number")
-        label = try map.decode(forKey: "label")
-    }
-}
+// Swift's synthesized conformance, as an app's own event type has.
+extension Tapped: Codable {}
 
 @main
 enum FuzzPersistence {
     static func main() { runFuzzer(fuzz) }
 
-    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 2, 0, 0, 0]
+    static let header: [UInt8] = [0x54, 0x52, 0x46, 0x4C, 3, 0, 0, 0]
 
     /// A frame of `payload`: its length and CRC-32, little-endian, then the payload.
     static func frame(_ payload: [UInt8]) -> [UInt8] {
@@ -92,10 +80,9 @@ enum FuzzPersistence {
     /// timestamp, event name, version (left out when `nil`, a record with no version to compare),
     /// call site and event, with `extra` entries after them.
     static func recordPayload(id: UUID, name: String, version: Int? = 1, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
-        let identifier = withUnsafeBytes(of: id.uuid) { Array($0) }
         let location = map([("fileID", text("App/File.swift")), ("function", text("f()")), ("line", integer(1)), ("column", integer(1))])
         var entries: [(key: String, value: [UInt8])] = [
-            ("id", head(6, 37) + head(2, 16) + identifier),
+            ("id", text(id.uuidString)),
             // 0.0 as a double-precision float.
             ("timestamp", [0xFB, 0, 0, 0, 0, 0, 0, 0, 0]),
             ("name", text(name)),
@@ -129,7 +116,7 @@ enum FuzzPersistence {
         /// Each intact record frame's number and payload, in order.
         var records: [(index: UInt32, payload: [UInt8])] = []
         var marked: Set<UInt32> = []
-        /// Whether the header names a later version than 2, which recovery leaves alone.
+        /// Whether the header names a later version than 3, which recovery leaves alone.
         var isNewerVersion = false
     }
 
@@ -137,7 +124,7 @@ enum FuzzPersistence {
     static func read(_ bytes: [UInt8]) -> Reading {
         var reading = Reading()
         guard bytes.count >= 8, Array(bytes[0 ..< 4]) == Array(header[0 ..< 4]) else { return reading }
-        if Int(bytes[4]) | Int(bytes[5]) << 8 > 2 {
+        if Int(bytes[4]) | Int(bytes[5]) << 8 > 3 {
             reading.isNewerVersion = true
             return reading
         }
@@ -175,7 +162,7 @@ enum FuzzPersistence {
             bytes = []
             while !input.isEmpty { bytes.append(UInt8(input.byte())) }
         } else {
-            bytes = input.int(below: 16) == 0 ? [0x54, 0x52, 0x46, 0x4C, UInt8(input.int(below: 4)), 0, 0, 0] : header
+            bytes = input.int(below: 16) == 0 ? [0x54, 0x52, 0x46, 0x4C, UInt8(input.int(below: 5)), 0, 0, 0] : header
             var records: UInt32 = 0
             while !input.isEmpty {
                 switch input.int(below: 8) {
