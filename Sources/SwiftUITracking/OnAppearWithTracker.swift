@@ -20,10 +20,13 @@ extension View {
 /// content is in its window and the tracker isn't `Tracker.noOp`.
 // Why the wait: a view a `NavigationStack` pushes on iOS appears in a hosting controller of its
 // own, before the controller joins its window. The trait bridge reads the controller's traits
-// over the environment, so the environment's tracker is then the scene's (`Tracker.noOp` when
-// the scene has none), not a tracker set on the window nor one set with `tracker(_:)` around the
-// stack. Once the controller joins the window, its traits, and the environment, hold the
-// window's; an appearance tracked at once would reach the scene's tracker, or be dropped.
+// over the environment, so the environment's tracker is then the scene's (the never-set default
+// when the scene has none), not a tracker set on the window nor one set with `tracker(_:)` around
+// the stack. Once the controller joins the window, its traits, and the environment, hold the
+// window's; an appearance tracked at once would reach the scene's tracker, or the bootstrapped
+// one. A never-set tracker isn't waited past once the view is in its window: it tracks as
+// `Tracker.current` does, so a forgotten tracker warns rather than leaving the view waiting
+// silently for ever.
 struct OnAppearWithTracker: ViewModifier {
     let tracker: Tracker
     let action: (Tracker) -> Void

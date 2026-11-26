@@ -15,8 +15,9 @@ sent to the first responder finds its target. `NSView.tracker` asks the view's r
 chain (the view, its superviews and their view controllers, its window and window controller),
 then the window's delegate and the application's delegate, and takes the tracker of the first one
 that conforms to `TrackerProviding`. It looks again each time it is read, so a view moved to
-another window tracks through that window's tracker. A view below no provider gets `Tracker.noOp`,
-which drops every event.
+another window tracks through that window's tracker. A view below no provider tracks through the
+tracker `Tracker.bootstrap` made the process's default, and with none it drops each event, warning
+once per call site.
 
 `NSControl.track(_:)` tracks an event each time a
 control sends its action, just before the action:

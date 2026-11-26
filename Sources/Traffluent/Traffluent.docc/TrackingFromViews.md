@@ -61,8 +61,7 @@ is applied as the call site:
   screen's actions and modifiers carry its name.
 
 Apply `trackScreen(_:)` where the screen's view is placed, as above. A view's own `@Environment`
-reads the environment around the view, which the modifiers in its own body don't change. Until a
-tracker is set, the environment's tracker is `Tracker.noOp`, so a preview tracks nothing.
+reads the environment around the view, which the modifiers in its own body don't change.
 
 ### UIKit
 
@@ -134,6 +133,24 @@ share.track(ShareTapped())  // through the tracker of the window it is in when i
 An `NSControl` has one target and action, so `track(_:)` puts its own in their place and sends the
 control's action on to its target, or up the responder chain when it had none. Call it after
 setting them.
+
+### Views without a tracker
+
+A view whose tracker was never set (no `tracker(_:)` above it in SwiftUI, no trait in UIKit, no
+provider in AppKit) tracks the way `Tracker.current` does with nothing bound. If the app gave
+`Tracker.bootstrap` its tracker, the view tracks through that one, along with whatever
+`trackScreen(_:)` adds. The lookup happens at the moment the view tracks, so a view that read its
+environment before the app bootstrapped still gets the bootstrapped tracker. Otherwise the view's
+events are dropped, and the first one from each call site is logged at warning level, so a
+forgotten `tracker(_:)` shows up in the logs. Code inside `withTracker` given such a tracker tracks
+through the tracker already bound around it, if there is one, and otherwise through the
+bootstrapped tracker.
+
+Two cases track nothing and stay quiet: a SwiftUI preview, where the default is `Tracker.noOp`, and
+a view you give `Tracker.noOp` yourself. A view that appears while its tracker is `Tracker.noOp`
+waits, and tracks its appearance once another tracker reaches it while it is still on screen. To
+make views wait for a tracker you set later, such as while the app restores consent, give them
+`Tracker.noOp` until then.
 
 ### Mixing frameworks
 

@@ -101,7 +101,10 @@ let upload = Task.detached { [tracker] in
 }
 ```
 
-In SwiftUI, read the tracker from the environment instead (<doc:TrackingFromViews>).
+In SwiftUI, read the tracker from the environment instead (<doc:TrackingFromViews>). A view whose
+tracker was never set tracks through the bootstrapped tracker too, and warns as `Tracker.current`
+does when there is none. Passed to `withTracker`, such a tracker doesn't replace a binding already
+in place, so a test's binding still reaches the code inside.
 
 ### Context and enrichers
 

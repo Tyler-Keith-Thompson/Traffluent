@@ -28,8 +28,9 @@ SITE = "track(event, file: file, fileID: fileID, function: function, line: line,
 
 MUTANTS = [
     # The trait.
-    # The first two `.noOp`s are the doc comments'.
-    Mutant("defaulttracks", T, ".noOp", "Tracker()", nth=2),
+    # The default: a tracker that records, or the explicit no-op one, for the never-set default.
+    Mutant("defaulttracks", T, ".viewDefault", "Tracker()"),
+    Mutant("defaultnoop", T, ".viewDefault", ".noOp"),
     # The first is UITraitCollection's getter, the second UIMutableTraits's.
     Mutant("collectiondefault", T, "self[TrackerTrait.self]", "TrackerTrait.defaultValue", nth=0),
     Mutant("overridesdefault", T, "self[TrackerTrait.self]", "TrackerTrait.defaultValue", nth=1),

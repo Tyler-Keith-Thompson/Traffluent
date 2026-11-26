@@ -194,7 +194,7 @@ struct TrackScreenTests {
         }
     }
 
-    @Test("A screen that appears before a tracker reaches it tracks ScreenViewed once one does, carrying its ScreenKey")
+    @Test("A screen that appears while its tracker is Tracker.noOp tracks ScreenViewed once another reaches it, carrying its ScreenKey")
     func trackerArrivesLater() async throws {
         let tracker = Tracker()
         let arrival = Arrival()

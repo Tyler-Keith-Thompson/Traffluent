@@ -1,4 +1,5 @@
 import Events
+import Instrumentation
 import Testing
 import TrackerTesting
 import Trackers
@@ -14,6 +15,26 @@ struct WithRecordingTrackerTests {
     }
 
     struct Failed: Error, Equatable {}
+
+    enum ScreenKey: ServiceContextKey {
+        typealias Value = String
+    }
+
+    @Test("A view whose tracker was never set, binding it with withTracker as a button's action does, tracks into the recording tracker, with the screen its copy adds")
+    func neverSetViewTrackerRecorded() async {
+        let viewTracker = Tracker.viewDefault(environment: [:]).enriched(by: Enricher { $0[ScreenKey.self] = "Checkout" })
+        let expected = [SignedUp(plan: "pro")]
+        let expectedScreens: [String?] = ["Checkout"]
+
+        let actual = await withRecordingTracker {
+            withTracker(viewTracker) {
+                Tracker.current.track(SignedUp(plan: "pro"))
+            }
+        }
+
+        #expect(actual.events(of: SignedUp.self) == expected)
+        #expect(actual.records.map { $0.context[ScreenKey.self] } == expectedScreens)
+    }
 
     @Test("A sync body's events, tracked through Tracker.current, are recorded in the order tracked")
     func syncBody() async {

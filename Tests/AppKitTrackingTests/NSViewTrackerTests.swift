@@ -55,7 +55,24 @@ struct NSViewTrackerTests {
         }
     }
 
-    @Test("A view in no window, below no provider, tracks through Tracker.noOp, which drops every event")
+    @Test("A view below no provider gets a tracker that isn't Tracker.noOp, as a provider's explicit one is")
+    func noProviderIsNotNoOp() {
+        let delegate = TrackingDelegate(tracker: .noOp)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.delegate = delegate
+        let provided = NSView()
+        window.contentView?.addSubview(provided)
+
+        let actual = NSView().tracker.isNoOp
+        let actualProvided = provided.tracker.isNoOp
+
+        #expect(!actual)
+        #expect(actualProvided)
+    }
+
+    @Test("A view in no window, below no provider, with no tracker bootstrapped, drops every event")
     func noProvider() async {
         let sut = NSView().tracker
         let expected = 0

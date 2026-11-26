@@ -29,11 +29,19 @@ public import UIKit
 /// below it, such as a tracker enriched with a screen's name. Each scene keeps its own, so an app
 /// with two windows can track each through a tracker of its own. SwiftUI views hosted in UIKit
 /// read the same tracker from `@Environment(\.tracker)`, and UIKit views hosted in SwiftUI read
-/// the environment's. Until a tracker is set it is `Tracker.noOp`, which drops every event and logs
-/// it at debug level.
+/// the environment's.
+///
+/// Until a tracker is set, it tracks as `Tracker.current` does with nothing bound: through the
+/// tracker `Tracker.bootstrap(_:)` made the process's default, looked up as each event is tracked,
+/// so a view that reads it before the app bootstraps still reaches it. With none bootstrapped it
+/// drops each event, logging the first from each call site at warning level, so a scene whose
+/// tracker was forgotten shows up in the logs. In an Xcode preview it is `Tracker.noOp` instead,
+/// which drops every event quietly.
 public struct TrackerTrait: UITraitDefinition {
-    /// `Tracker.noOp`, the tracker of a trait collection no tracker was set in.
-    public static let defaultValue: Tracker = .noOp
+    /// The tracker of a trait collection no tracker was set in: one that tracks through the
+    /// bootstrapped tracker, looked up as each event is tracked, and warns of each call site's
+    /// first drop when none is bootstrapped (`Tracker.noOp` in an Xcode preview).
+    public static let defaultValue: Tracker = .viewDefault
 }
 
 extension UITraitCollection {

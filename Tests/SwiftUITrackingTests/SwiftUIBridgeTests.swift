@@ -124,12 +124,13 @@ extension SerializedSuites {
             }
         }
 
-        @Test("A stack's root covered by a pushed view before a tracker reaches them tracks nothing once one does; the pushed view does")
+        @Test("A stack's root covered by a pushed view while their tracker is Tracker.noOp tracks nothing once another reaches them; the pushed view does")
         func coveredBeforeTracker() async throws {
             let tracker = Tracker()
             var records = tracker.records.makeAsyncIterator()
             let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
             let window = UIWindow(windowScene: scene)
+            window.traitOverrides.tracker = .noOp
             let navigation = CoveredNavigation()
             let host = UIHostingController(rootView: CoveredStack(navigation: navigation))
             window.rootViewController = host
@@ -153,6 +154,65 @@ extension SerializedSuites {
             let expected = [CartOpened.name]
 
             window.traitOverrides.tracker = tracker
+            var actual = [type(of: try #require(await records.next()?.event)).name]
+            await tracker.finish()
+            while let record = await records.next() {
+                actual.append(type(of: record.event).name)
+            }
+
+            #expect(actual == expected)
+        }
+
+        @Observable
+        final class ShownNavigation {
+            var path: [Int] = []
+            var isRootShown = false
+        }
+
+        struct ShownStack: View {
+            @Bindable var navigation: ShownNavigation
+
+            var body: some View {
+                NavigationStack(path: $navigation.path) {
+                    Text("Home")
+                        .trackOnAppear(HomeOpened())
+                        .onAppear { navigation.isRootShown = true }
+                        .navigationDestination(for: Int.self) { _ in
+                            Text("Cart").trackOnAppear(CartOpened())
+                        }
+                }
+            }
+        }
+
+        @Test("A stack's root whose tracker was never set tracks as it appears in its window rather than wait, as one given Tracker.noOp does: a tracker set later gets only what appears after")
+        func neverSetDoesNotWait() async throws {
+            let tracker = Tracker()
+            var records = tracker.records.makeAsyncIterator()
+            let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+            let window = UIWindow(windowScene: scene)
+            let navigation = ShownNavigation()
+            let host = UIHostingController(rootView: ShownStack(navigation: navigation))
+            window.rootViewController = host
+            window.isHidden = false
+            defer { window.isHidden = true }
+            // Turns of the main run loop until the stack's root is on screen, in its window, and
+            // two more, for the appearance its window brings to be tracked.
+            repeat {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            } while !navigation.isRootShown || host.children.first?.children.first?.viewIfLoaded?.window == nil
+            for _ in 0 ..< 2 {
+                await withCheckedContinuation { (turned: CheckedContinuation<Void, Never>) in
+                    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, CFIndex.max) { _, _ in turned.resume() }
+                    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+                }
+            }
+            let expected = [CartOpened.name]
+
+            window.traitOverrides.tracker = tracker
+            navigation.path.append(1)
             var actual = [type(of: try #require(await records.next()?.event)).name]
             await tracker.finish()
             while let record = await records.next() {

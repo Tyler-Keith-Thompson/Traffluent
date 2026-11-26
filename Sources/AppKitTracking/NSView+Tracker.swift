@@ -10,8 +10,13 @@ extension NSView {
     /// controllers, its window and the window's controller), the window's delegate and the
     /// application's delegate: the objects an action sent to the first responder of the view's
     /// window reaches. It is read anew each time, so a view moved to
-    /// another window tracks through that window's tracker. A view in no window, below no
-    /// provider, gets `Tracker.noOp`, which drops every event and logs it at debug level.
+    /// another window tracks through that window's tracker.
+    ///
+    /// A view below no provider tracks as `Tracker.current` does with nothing bound: through the
+    /// tracker `Tracker.bootstrap(_:)` made the process's default, looked up as each event is
+    /// tracked. With none bootstrapped it drops each event, logging the first from each call site
+    /// at warning level, so a missing provider shows up in the logs. In an Xcode preview it gets
+    /// `Tracker.noOp` instead, which drops every event quietly.
     ///
     /// ```swift
     /// @IBAction func checkOut(_ sender: NSButton) {
@@ -27,7 +32,7 @@ extension NSView {
             .first
             ?? window?.delegate as? TrackerProviding
             ?? NSApp?.delegate as? TrackerProviding
-        return provider?.tracker ?? .noOp
+        return provider?.tracker ?? .viewDefault
     }
 }
 #endif

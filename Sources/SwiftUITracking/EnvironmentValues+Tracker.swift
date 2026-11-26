@@ -29,8 +29,15 @@ extension EnvironmentValues {
     /// The environment reaches a button's action, where a `withTracker` binding doesn't: SwiftUI
     /// runs actions on tasks of its own. Inside a view given `trackScreen(_:)`, the tracker is
     /// one enriched with the screen, so every event tracked through it carries the screen's
-    /// ``ScreenKey``. Until a tracker is set it is `Tracker.noOp`, which drops every event and
-    /// logs it at debug level, so a view shown without one, such as in a preview, is safe.
+    /// ``ScreenKey``.
+    ///
+    /// Until a tracker is set, it tracks as `Tracker.current` does with nothing bound: through the
+    /// tracker `Tracker.bootstrap(_:)` made the process's default, looked up as each event is
+    /// tracked, so a view that reads it before the app bootstraps still reaches it. With none
+    /// bootstrapped it drops each event, logging the first from each call site at warning level,
+    /// so a forgotten `tracker(_:)` shows up in the logs. In a SwiftUI preview it is
+    /// `Tracker.noOp` instead, which drops every event quietly. Set `Tracker.noOp` yourself for
+    /// views that should track nothing.
     ///
     /// Where UIKit has traits (iOS, iPadOS, tvOS, visionOS and Mac Catalyst), it is the same
     /// value as UIKit's `TrackerTrait` (module `UIKitTracking`): SwiftUI views hosted in UIKit read
@@ -42,10 +49,11 @@ extension EnvironmentValues {
     }
 }
 
-/// The environment's tracker, `Tracker.noOp` until one is set.
+/// The environment's tracker: until one is set, the bootstrapped tracker, looked up as each event
+/// is tracked (`Tracker.noOp` in a preview).
 // A key of its own rather than `@Entry`'s, so that it can be bridged to UIKit's trait below.
 struct TrackerKey: EnvironmentKey {
-    static let defaultValue: Tracker = .noOp
+    static let defaultValue: Tracker = .viewDefault
 }
 
 #if canImport(UIKit) && !os(watchOS)

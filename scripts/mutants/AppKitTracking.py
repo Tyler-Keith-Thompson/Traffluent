@@ -22,7 +22,7 @@ SITE = "track(event, file: file, fileID: fileID, function: function, line: line,
 CHAIN = "sequence(first: self as NSResponder, next: \\.nextResponder)\n            .lazy\n            .compactMap { $0 as? TrackerProviding }\n            .first"
 WINDOW = "window?.delegate as? TrackerProviding"
 APPLICATION = "NSApp?.delegate as? TrackerProviding"
-RETURN = "\n        return provider?.tracker ?? .noOp"
+RETURN = "\n        return provider?.tracker ?? .viewDefault"
 LOOKUP = f"let provider = {CHAIN}\n            ?? {WINDOW}\n            ?? {APPLICATION}{RETURN}"
 # The tracking action's body: track, then send the control's own action.
 SEND = "        track(sender)\n        if let action {\n            sender.sendAction(action, to: target)\n        }"
@@ -35,7 +35,8 @@ MUTANTS = [
     Mutant("viewonly", V, "sequence(first: self as NSResponder, next: \\.nextResponder)", "sequence(first: self as NSResponder, next: { _ in nil })", nth=2),
     Mutant("nowindowdelegate", V, WINDOW, "nil as (any TrackerProviding)?", nth=2),
     Mutant("noapplicationdelegate", V, APPLICATION, "nil as (any TrackerProviding)?", nth=2),
-    Mutant("defaulttracks", V, "provider?.tracker ?? .noOp", "provider?.tracker ?? Tracker()", nth=2),
+    Mutant("defaulttracks", V, "provider?.tracker ?? .viewDefault", "provider?.tracker ?? Tracker()", nth=2),
+    Mutant("defaultnoop", V, "provider?.tracker ?? .viewDefault", "provider?.tracker ?? .noOp", nth=2),
     # NSControl.track(_:).
     Mutant("nottracked", C, "control.tracker." + SITE, "", mode="stmt"),
     Mutant("sitecolumn", C, "control.tracker." + SITE, "control.tracker." + SITE.replace("line: line,", "line: column,")),

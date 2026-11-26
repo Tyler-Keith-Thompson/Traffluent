@@ -124,7 +124,7 @@ struct TrackOnAppearTests {
         }
     }
 
-    @Test("A view that appears before a tracker reaches it tracks its event once one does")
+    @Test("A view that appears while its tracker is Tracker.noOp tracks its event once another reaches it")
     func trackerArrivesLater() async {
         let tracker = Tracker()
         let arrival = Arrival()
@@ -135,6 +135,34 @@ struct TrackOnAppearTests {
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         let expected = [CartOpened(items: 3)]
+
+        arrival.tracker = tracker
+        host.layoutSubtreeIfNeeded()
+        await tracker.finish()
+
+        var actual: [CartOpened] = []
+        for await record in tracker.records {
+            if let event = record.event as? CartOpened {
+                actual.append(event)
+            }
+        }
+        #expect(actual == expected)
+    }
+
+    @Test("A view whose tracker was never set tracks as it appears rather than wait, as one given Tracker.noOp does: a tracker set later gets nothing")
+    func neverSetDoesNotWait() async {
+        let tracker = Tracker()
+        let arrival = Arrival()
+        // The environment's own default, as a view with no tracker(_:) above it reads it; set as
+        // a value so that the test can replace it later without changing the view's identity.
+        arrival.tracker = EnvironmentValues().tracker
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: LateCart(model: Model(), arrival: arrival))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        let expected: [CartOpened] = []
 
         arrival.tracker = tracker
         host.layoutSubtreeIfNeeded()

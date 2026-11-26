@@ -15,8 +15,9 @@ The tracker is a UIKit trait, `TrackerTrait`. Set it on a window scene's `traitO
 scene connects, and every view controller and view in the scene's windows inherits it, the way
 SwiftUI views inherit their environment. Read it in any of them as `traitCollection.tracker`. A
 view controller or view can set its own for everything below it, and each scene keeps its own, so
-two windows can track through two trackers. Until a tracker is set, the trait holds
-`Tracker.noOp`, which drops every event.
+two windows can track through two trackers. Until a tracker is set, the trait's tracker tracks
+through the one `Tracker.bootstrap` made the process's default, and with none it drops each event,
+warning once per call site.
 
 `UIControl.track(_:for:)` tracks an event each time a control sends the given control events
 (`.primaryActionTriggered` by default), through the tracker the control's traits hold at that
@@ -68,7 +69,8 @@ covers all three frameworks.
 The documentation site is built on Linux, where the module is empty, so its symbols have no pages
 of their own here. Their doc comments are in the sources, and Xcode shows them for an iOS target.
 
-- `TrackerTrait`: the trait holding the tracker, `Tracker.noOp` until one is set.
+- `TrackerTrait`: the trait holding the tracker. Until one is set, it holds a stand-in that
+  resolves when it tracks: to the bootstrapped tracker, or, with none, to a drop and a warning.
 - `UITraitCollection.tracker`: reads the trait.
 - `UIMutableTraits.tracker`: sets the trait on a window scene's, view controller's or view's
   `traitOverrides`.

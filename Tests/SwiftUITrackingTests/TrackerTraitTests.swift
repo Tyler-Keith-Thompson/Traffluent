@@ -28,7 +28,19 @@ extension SerializedSuites {
             }
         }
 
-        @Test("Without a tracker set, a trait collection's tracker drops every event")
+        @Test("Without a tracker set, a trait collection's tracker isn't Tracker.noOp, as an explicit one is")
+        func defaultIsNotNoOp() {
+            let sut = UITraitCollection().tracker
+            let explicit = UITraitCollection(mutations: { $0.tracker = .noOp })
+
+            let actual = sut.isNoOp
+            let actualExplicit = explicit.tracker.isNoOp
+
+            #expect(!actual)
+            #expect(actualExplicit)
+        }
+
+        @Test("Without a tracker set or bootstrapped, a trait collection's tracker drops every event")
         func defaultDrops() async {
             let sut = UITraitCollection().tracker
             let expected = 0

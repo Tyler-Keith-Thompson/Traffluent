@@ -26,7 +26,20 @@ struct EnvironmentTrackerTests {
         }
     }
 
-    @Test("Without a tracker set, the environment's tracker drops every event")
+    @Test("Without a tracker set, the environment's tracker isn't Tracker.noOp, as an explicit one is")
+    func defaultIsNotNoOp() {
+        let sut = EnvironmentValues().tracker
+        var explicit = EnvironmentValues()
+        explicit.tracker = .noOp
+
+        let actual = sut.isNoOp
+        let actualExplicit = explicit.tracker.isNoOp
+
+        #expect(!actual)
+        #expect(actualExplicit)
+    }
+
+    @Test("Without a tracker set or bootstrapped, the environment's tracker drops every event")
     func defaultDrops() async {
         let sut = EnvironmentValues().tracker
         let expected = 0

@@ -56,10 +56,14 @@ public struct Tracker: Sendable {
     // intake that every call checks. `unbound` drops like `none` but warns: it is what
     // `Tracker.current` gives with nothing bound, where a drop means a binding that doesn't reach
     // the task, while `noOp` is also a deliberate default (a SwiftUI preview's environment).
+    // `unset` is a view's tracker that was never set: it stands for the bootstrapped tracker, or
+    // `unbound` without one, looked up each time it is used rather than when the view reads it,
+    // as a view can read its environment before the app bootstraps.
     enum Backing: Sendable {
         case intake(Intake)
         case none
         case unbound
+        case unset
     }
 
     let backing: Backing
@@ -170,6 +174,37 @@ public struct Tracker: Sendable {
     /// empty.
     public static let noOp = Tracker(backing: .none, now: { Date.now })
 
+    /// The tracker of a view whose tracker was never set: SwiftUI's environment without
+    /// `tracker(_:)`, a UIKit trait collection without one, an AppKit view below no provider.
+    ///
+    /// Package-wide, for the UI modules' defaults: ``viewDefault(environment:)`` of the process's
+    /// environment variables, read once.
+    package static let viewDefault = viewDefault(environment: ProcessInfo.processInfo.environment)
+
+    /// The tracker of a view whose tracker was never set, in a process whose environment
+    /// variables are `environment`.
+    ///
+    /// In a SwiftUI preview (`XCODE_RUNNING_FOR_PREVIEWS` is `1`) it is ``noOp``, so a preview
+    /// shown without a tracker drops what it tracks quietly. Anywhere else it behaves as
+    /// ``current`` does with nothing bound, deciding each time it is used rather than now: it
+    /// tracks through the tracker ``bootstrap(_:)`` made the process's default, and without one
+    /// drops each event, logging the first from each call site at warning level. Its copies made
+    /// by ``enriched(by:)`` reach the bootstrapped tracker too, adding what they enrich. Code
+    /// inside `withTracker` given it tracks through the tracker already bound around that call, if
+    /// any, and otherwise through the bootstrapped tracker.
+    ///
+    /// Package-wide, so the UI modules share one default, which their tests can make for a
+    /// preview's environment.
+    ///
+    /// - Parameter environment: The process's environment variables.
+    /// - Returns: ``noOp`` in a preview, and otherwise a tracker standing for the bootstrapped one.
+    package static func viewDefault(environment: [String: String]) -> Tracker {
+        // The preview check is in the default rather than in the warning: a preview's view
+        // behaves as a view given `noOp` does (it waits for a tracker, quietly), and the warning
+        // stays `current`'s alone, knowing nothing of previews.
+        environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" ? .noOp : unset
+    }
+
     /// The tracker bound to the current task by the nearest enclosing `withTracker`; with none
     /// bound, the one ``bootstrap(_:)`` made the process's default; and with neither, one that
     /// drops every event, as ``noOp`` does.
@@ -225,6 +260,47 @@ public struct Tracker: Sendable {
     /// What ``current`` gives with no tracker bound: a no-op tracker whose drops warn.
     private static let unbound = Tracker(backing: .unbound, now: { Date.now })
 
+    /// A view's tracker that was never set, outside a preview: the bootstrapped tracker, looked up
+    /// each time it is used.
+    private static let unset = Tracker(backing: .unset, now: { Date.now })
+
+    /// What an `unset` tracker stands for now: the bootstrapped tracker, or ``unbound`` without
+    /// one, with this copy's enrichers run after the bootstrapped tracker's copy's own.
+    private var resolved: Tracker {
+        guard let target = Self.bootstrapped.withLock({ $0 }) else {
+            return Tracker(backing: .unbound, now: now, scopedEnrichers: scopedEnrichers)
+        }
+        switch target.backing {
+        case .intake, .none:
+            return Tracker(backing: target.backing, now: target.now, scopedEnrichers: Self.enrichers(target.scopedEnrichers, then: scopedEnrichers))
+        case .unbound, .unset:
+            // A view's default bootstrapped as the process's stands for nothing but itself, so it
+            // drops as `current` does with nothing bootstrapped, rather than look itself up again.
+            return Tracker(backing: .unbound, now: now, scopedEnrichers: scopedEnrichers)
+        }
+    }
+
+    /// `first`, then `second`: the enrichers of the tracker an `unset` copy stands for, then the
+    /// copy's own.
+    // Runs on every event tracked through an `unset` tracker, so it hands back one side as it is
+    // when the other is empty, as one nearly always is, rather than allocate an array per event.
+    private static func enrichers(_ first: [Enricher], then second: [Enricher]) -> [Enricher] {
+        if first.isEmpty { return second }
+        if second.isEmpty { return first }
+        return first + second
+    }
+
+    /// What `withTracker` binds for this tracker: this tracker, except that an `unset` one given
+    /// inside another binding stands for the bound tracker, with its own enrichers after the bound
+    /// tracker's, so a view whose tracker was never set doesn't hide a test's or a caller's binding.
+    ///
+    /// - Parameter bound: The tracker bound where `withTracker` is called, if any.
+    /// - Returns: The tracker to bind.
+    func binding(over bound: Tracker?) -> Tracker {
+        guard case .unset = backing, let bound else { return self }
+        return Tracker(backing: bound.backing, now: bound.now, scopedEnrichers: Self.enrichers(bound.scopedEnrichers, then: scopedEnrichers))
+    }
+
     private static let logger = Logger(label: "Trackers.Tracker")
 
     // The call sites that have warned of an event tracked with no tracker bound, so a loop
@@ -236,12 +312,17 @@ public struct Tracker: Sendable {
     private static let warnedUnboundCallSites = Mutex<Set<UnboundCallSite>>([])
 
     /// The records of the events this tracker tracks, for a delivery to read.
+    ///
+    /// A view's tracker that was never set gives the records of the tracker bootstrapped when this
+    /// is read, and none without one.
     public var records: Records {
         switch backing {
         case .intake(let intake):
             Records(subscription: intake.subscription)
         case .none, .unbound:
             Records(subscription: nil)
+        case .unset:
+            resolved.records
         }
     }
 
@@ -256,6 +337,8 @@ public struct Tracker: Sendable {
             intake.store
         case .none, .unbound:
             nil
+        case .unset:
+            resolved.store
         }
     }
 
@@ -278,6 +361,8 @@ public struct Tracker: Sendable {
             intake.rejectionReports
         case .none, .unbound:
             AsyncStream { $0.finish() }
+        case .unset:
+            resolved.rejectionReports
         }
     }
 
@@ -298,6 +383,8 @@ public struct Tracker: Sendable {
             intake.samplingDropReports
         case .none, .unbound:
             AsyncStream { $0.finish() }
+        case .unset:
+            resolved.samplingDropReports
         }
     }
 
@@ -312,7 +399,9 @@ public struct Tracker: Sendable {
     /// ``finish()`` is dropped and logged at debug level. A ``noOp`` tracker drops the event and
     /// logs it at debug level. So does ``current`` with no tracker bound or bootstrapped, except
     /// that the first event it drops at each call site is logged at warning level, so a missing
-    /// `withTracker` shows up in the logs rather than passing silently.
+    /// `withTracker` shows up in the logs rather than passing silently. A view whose tracker was
+    /// never set tracks as ``current`` does with nothing bound, through the tracker bootstrapped by
+    /// the time it tracks.
     ///
     /// - Parameters:
     ///   - event: The event to track.
@@ -356,21 +445,40 @@ public struct Tracker: Sendable {
             let callSite = UnboundCallSite(fileID: fileID, line: line, column: column)
             let isFirst = Self.warnedUnboundCallSites.withLock { $0.insert(callSite).inserted }
             if isFirst {
-                Self.logger.warning("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound to this task and none is bootstrapped. withTracker doesn't reach a detached task or a framework's callback; pass it a tracker, or bootstrap the app's with Tracker.bootstrap")
+                Self.logger.warning("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound to this task or set on the view it was tracked from, and none is bootstrapped. withTracker doesn't reach a detached task or a framework's callback; pass it a tracker, set one at the root of the views, or bootstrap the app's with Tracker.bootstrap")
             } else {
                 Self.logger.debug("Dropped \(E.name) tracked at \(fileID):\(line): no tracker is bound")
             }
+        case .unset:
+            // Looked up now, not when the view read its tracker, so a view that read it before the
+            // app bootstrapped still reaches the bootstrapped tracker; without one this takes the
+            // `unbound` path above, warning once per call site.
+            resolved.track(event, file: file, fileID: fileID, function: function, line: line, column: column)
         }
     }
 
-    /// Whether this tracker drops every event: ``noOp``, ``current`` with no tracker bound or
-    /// bootstrapped, or a copy of either made by ``enriched(by:)``.
+    /// Whether this tracker drops every event wherever it is used: ``noOp``, ``current`` with no
+    /// tracker bound or bootstrapped, or a copy of either made by ``enriched(by:)``.
+    ///
+    /// ``viewDefault`` outside a preview isn't, even with nothing bootstrapped or with ``noOp``
+    /// bootstrapped: it tracks through the tracker bootstrapped by the time it is used, and without
+    /// one warns of what it drops.
     ///
     /// Package-wide, so a UI module whose views can appear before their tracker reaches them can
-    /// wait for it rather than track the appearance into nothing.
+    /// wait for it rather than track the appearance into nothing. A view whose tracker was never
+    /// set doesn't wait: it tracks as ``current`` does, so a forgotten tracker shows up in the
+    /// logs rather than as a view that never tracks.
     package var isNoOp: Bool {
-        if case .intake = backing { return false }
-        return true
+        switch backing {
+        case .intake:
+            return false
+        case .unset:
+            // Even with nothing bootstrapped yet: the app may bootstrap before the view tracks,
+            // and without a bootstrap the view should warn as it tracks, not wait in silence.
+            return false
+        case .none, .unbound:
+            return true
+        }
     }
 
     /// Waits until the tracker's worker has handled every event tracked, and every consent
@@ -380,8 +488,14 @@ public struct Tracker: Sendable {
     /// Call it where the app must know its records are durable, such as as it moves to the
     /// background, before the store's `synchronize()`. Returns at once for a ``noOp`` tracker.
     public func flush() async {
-        guard case .intake(let intake) = backing else { return }
-        await intake.flush()
+        switch backing {
+        case .intake(let intake):
+            await intake.flush()
+        case .none, .unbound:
+            return
+        case .unset:
+            await resolved.flush()
+        }
     }
 
     /// Ends tracking: waits for the worker to handle every event already tracked, then ends
@@ -392,9 +506,18 @@ public struct Tracker: Sendable {
     /// held in memory only are dropped and reported on ``Consent/dropReports``; those a store
     /// keeps stay there for a later launch. A tracker whose every copy is released finishes the
     /// same way, without anyone waiting.
+    ///
+    /// A view's tracker that was never set stands for the tracker bootstrapped when this is called,
+    /// so finishing it ends the bootstrapped tracker.
     public func finish() async {
-        guard case .intake(let intake) = backing else { return }
-        await intake.finish()
+        switch backing {
+        case .intake(let intake):
+            await intake.finish()
+        case .none, .unbound:
+            return
+        case .unset:
+            await resolved.finish()
+        }
     }
 }
 

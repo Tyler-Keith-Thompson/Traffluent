@@ -29,8 +29,10 @@ extension View {
     /// only redraws it. Where UIKit hosts the view, it tracks once the view is in its window,
     /// through that window's tracker: a view a `NavigationStack` pushes appears before its
     /// hosting controller joins the window, holding the scene's tracker until then, or none. A
-    /// view that appears before any tracker reaches it tracks once one does, while it is still on
-    /// screen. The record's call site is where the modifier is applied.
+    /// view that appears while its tracker is `Tracker.noOp` tracks once another reaches it, while
+    /// it is still on screen. One whose tracker was never set tracks without waiting for a
+    /// tracker, as `Tracker.current` does with nothing bound. The record's call site is where the
+    /// modifier is applied.
     ///
     /// - Parameters:
     ///   - screen: The screen's name.

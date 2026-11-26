@@ -25,7 +25,8 @@ events. The body may be sync or async, and may return a value, read as `tracked.
 `tracked.names` lists every event's name and `tracked.records` every record.
 
 Most code needs nothing more: it tracks through `Tracker.current`, which falls back to the tracker
-the app bootstrapped, and the test's binding wins over that one. Pass a tracker instead where the
+the app bootstrapped, and the test's binding wins over that one. A view whose tracker was never set
+that binds its tracker with `withTracker` reaches the test's tracker too. Pass a tracker instead where the
 code reads one set for a single view tree. A tracker given to a SwiftUI view with `tracker(_:)`, such as a preview's,
 reaches the view's environment but not code that reads `Tracker.current`. Such a test takes the
 tracker the body is given and sets it on the view: `withRecordingTracker { tracker in … }`.

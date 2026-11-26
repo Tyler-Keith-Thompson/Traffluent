@@ -46,6 +46,14 @@ O = "SamplingDropReport.swift"
 # - Waiters taking the turn last in, first out (`removeLast()` for `removeFirst()` in ReadLock's
 #   release): not equivalent, but no test can queue two waiters in a known order without a hook
 #   saying a reader has started to wait, and the house rules add none for tests.
+# - A never-set view tracker resolving to a bootstrapped `noOp` as the warning `unbound` rather
+#   than `none`: only the log's level differs.
+# - The enrichers' join with either early return removed: it then concatenates, the same array
+#   with an allocation more.
+# - The fallback with nothing bootstrapped given the bootstrapped clock or `Self.unbound`'s: a
+#   tracker that drops reads no clock.
+# - `Tracker.viewDefault` made from an empty environment rather than the process's: the test
+#   processes aren't previews, so the two agree; `viewDefault(environment:)` is tested directly.
 #
 # Sampling mutants left out as equivalent:
 # - Dropping the group decision's cache of the latest group (`latest = Decided(...)`): every record
@@ -61,12 +69,23 @@ LOCATION = "SourceLocation(file: file, fileID: fileID, function: function, line:
 CURRENT = "bound ?? bootstrapped.withLock { $0 } ?? .unbound"
 # The enriched copy enriched(by:) returns, swapped whole as LOCATION is.
 COPY = "Tracker(backing: backing, now: now, scopedEnrichers: scopedEnrichers + [enricher])"
+# Tracker.viewDefault(environment:)'s answer, and the preview check inside it.
+VIEW_DEFAULT = 'environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" ? .noOp : unset'
+PREVIEW = 'environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"'
+# The tracker a never-set view tracker resolves to, and its track's call to it.
+RESOLVED = "Tracker(backing: target.backing, now: target.now, scopedEnrichers: Self.enrichers(target.scopedEnrichers, then: scopedEnrichers))"
+# The fallback with nothing bootstrapped; its second copy is the bootstrapped `unset` tracker's.
+UNBOUND_FALLBACK = "return Tracker(backing: .unbound, now: now, scopedEnrichers: scopedEnrichers)"
+# What withTracker binds for an `unset` tracker given inside another binding.
+BINDING = "Tracker(backing: bound.backing, now: bound.now, scopedEnrichers: Self.enrichers(bound.scopedEnrichers, then: scopedEnrichers))"
+UNSET_TRACK = "resolved.track(event, file: file, fileID: fileID, function: function, line: line, column: column)"
 WORKER = "Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)"
 
 MUTANTS = [
-    # isNoOp.
+    # isNoOp. The first `return false` is an intake's, the second a never-set view tracker's.
     Mutant("isnoopalwaysfalse", T, "return true", "return false", mode="stmt"),
-    Mutant("isnoopalwaystrue", T, "if case .intake = backing { return false }", "", mode="stmt"),
+    Mutant("intakeisnoop", T, "return false", "return true", mode="stmt", nth=0),
+    Mutant("unsetisnoop", T, "return false", "return true", mode="stmt", nth=1),
     Mutant("currentignoresbinding", T, CURRENT, "bootstrapped.withLock { $0 } ?? .unbound"),
     # Tracker.current with nothing bound or bootstrapped: a tracker that records into nothing
     # (TRAF-81).
@@ -81,8 +100,11 @@ MUTANTS = [
     Mutant("bootstrapsilent", T, "throw TrackerAlreadyBootstrapped()", "return", mode="stmt"),
     # The binding, nothing rather than the tracker: the sync spelling's, then the async one's,
     # after the first leaves one copy of the original.
-    Mutant("syncunbound", W, "Optional(tracker)", "nil", nth=0),
-    Mutant("asyncunbound", W, "Optional(tracker)", "nil", nth=1),
+    Mutant("syncunbound", W, "Optional(tracker.binding(over: Tracker.bound))", "nil", nth=0),
+    Mutant("asyncunbound", W, "Optional(tracker.binding(over: Tracker.bound))", "nil", nth=1),
+    # An `unset` tracker shadowing the binding around it (TRAF-94), in each spelling.
+    Mutant("syncunsetshadows", W, "Optional(tracker.binding(over: Tracker.bound))", "Optional(tracker)", nth=0),
+    Mutant("asyncunsetshadows", W, "Optional(tracker.binding(over: Tracker.bound))", "Optional(tracker)", nth=1),
     Mutant("defaultnow", T, "Date.now", "Date.distantPast", nth=0),
     Mutant("fixedtimestamp", T, "now()", "Date(timeIntervalSince1970: 0)"),
     Mutant("constanttrackid", K, "UUID()", "UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))"),
@@ -113,7 +135,7 @@ MUTANTS = [
     # Tracker.enriched(by:): the copy's enrichers, carried with each record to the worker.
     Mutant("scopedskipped", K, "enrich(record, scopedEnrichers, from: 0, into: &enriched)", "enrich(record, scopedEnrichers, from: scopedEnrichers.count, into: &enriched)", mode="stmt"),
     # The last `scopedEnrichers`: the one track's entry carries.
-    Mutant("scopednotcarried", T, "scopedEnrichers", "[]", nth=6),
+    Mutant("scopednotcarried", T, "scopedEnrichers", "[]", nth=16),
     Mutant("scopedreplaced", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher]")),
     Mutant("scopedreversed", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "[enricher] + scopedEnrichers")),
     Mutant("scopedignored", T, COPY, COPY.replace("scopedEnrichers + [enricher]", "scopedEnrichers")),
@@ -238,4 +260,34 @@ MUTANTS = [
     Mutant("mergeddropcountlost", O, "merged.recordCount + report.recordCount", "merged.recordCount"),
     Mutant("mergeddroplowerlatest", O, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
     Mutant("rejectiondescribed", J, '"\\(eventName): \\(violation) (\\(recordCount) rejected)"', '"\\(eventName): \\(violation)"'),
+    # A view's tracker that was never set (TRAF-94): the preview check, whole, then its test.
+    Mutant("previewignored", T, VIEW_DEFAULT, "unset"),
+    Mutant("alwayspreview", T, VIEW_DEFAULT, ".noOp"),
+    Mutant("previewanyvalue", T, PREVIEW, 'environment["XCODE_RUNNING_FOR_PREVIEWS"] != nil'),
+    # What it resolves to as it is used, whose tests bootstrap, so are exit tests: the
+    # bootstrapped tracker, its enrichers then the copy's, its clock; never itself again.
+    Mutant("unsetignoresbootstrap", T, "Self.bootstrapped.withLock({ $0 })", "nil as Tracker?"),
+    Mutant("unsetresolvesitself", T, UNBOUND_FALLBACK, UNBOUND_FALLBACK.replace(".unbound", ".unset"), mode="stmt", nth=1),
+    Mutant("unsetdropsintake", T, RESOLVED, RESOLVED.replace("backing: target.backing", "backing: .unbound")),
+    Mutant("unsetenrichersreversed", T, RESOLVED, RESOLVED.replace("Self.enrichers(target.scopedEnrichers, then: scopedEnrichers)", "Self.enrichers(scopedEnrichers, then: target.scopedEnrichers)")),
+    Mutant("unsetlosestargetenrichers", T, RESOLVED, RESOLVED.replace("Self.enrichers(target.scopedEnrichers, then: scopedEnrichers)", "scopedEnrichers")),
+    Mutant("unsetlosesownenrichers", T, RESOLVED, RESOLVED.replace("Self.enrichers(target.scopedEnrichers, then: scopedEnrichers)", "target.scopedEnrichers")),
+    Mutant("unsetlosesnow", T, RESOLVED, RESOLVED.replace("now: target.now,", "now: { Date.distantPast },")),
+    # Its members, each the resolved tracker's.
+    Mutant("unsetnottracked", T, UNSET_TRACK, "", mode="stmt"),
+    Mutant("unsetlosescallsite", T, UNSET_TRACK, "resolved.track(event)", mode="stmt"),
+    Mutant("unsetrecordsempty", T, "resolved.records", "Records(subscription: nil)"),
+    Mutant("unsetnostore", T, "resolved.store", "nil"),
+    Mutant("unsetrejectionsempty", T, "resolved.rejectionReports", "AsyncStream { $0.finish() }"),
+    Mutant("unsetsamplingdropsempty", T, "resolved.samplingDropReports", "AsyncStream { $0.finish() }"),
+    Mutant("unsetflushreturns", T, "await resolved.flush()", "", mode="stmt"),
+    Mutant("unsetfinishreturns", T, "await resolved.finish()", "", mode="stmt"),
+    # The enrichers' join, which hands back one side when the other is empty.
+    Mutant("joinfirstemptywrong", T, "if first.isEmpty { return second }", "if first.isEmpty { return first }", mode="stmt"),
+    Mutant("joinsecondemptywrong", T, "if second.isEmpty { return first }", "if second.isEmpty { return second }", mode="stmt"),
+    # withTracker's binding of an `unset` tracker inside another: keeping the `unset` backing, or
+    # the enrichers reversed. Shadowing the binding is syncunsetshadows and asyncunsetshadows: a
+    # statement mutant of binding(over:)'s guard would scope its unwrapped `bound` to a branch.
+    Mutant("bindingkeepsunset", T, BINDING, BINDING.replace("backing: bound.backing", "backing: backing")),
+    Mutant("bindingreversed", T, BINDING, BINDING.replace("Self.enrichers(bound.scopedEnrichers, then: scopedEnrichers)", "Self.enrichers(scopedEnrichers, then: bound.scopedEnrichers)")),
 ]

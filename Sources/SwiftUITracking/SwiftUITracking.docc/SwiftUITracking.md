@@ -8,7 +8,9 @@ Use this module to track events from SwiftUI views on Apple platforms; elsewhere
 Set a tracker once, at the root of the views, with `tracker(_:)`, and read it in any view below
 with `@Environment(\.tracker)`. A button's action can track through it, which a `withTracker`
 binding can't reach, since SwiftUI runs actions on tasks of its own. Until a tracker is set, the
-environment holds `Tracker.noOp`, so a preview tracks nothing.
+environment's tracker tracks through the one `Tracker.bootstrap` made the process's default, and
+with none it drops each event, warning once per call site. In a preview it is `Tracker.noOp`, so
+a preview tracks nothing.
 
 The modifiers track through the environment's tracker, once per trigger, and record the place
 they are applied as the call site. `trackOnAppear(_:)` tracks each time a view appears,

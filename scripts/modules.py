@@ -281,7 +281,7 @@ TEST_TARGETS = [
     ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-cbor/CBOR", "Trackers", "Destinations", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
-    ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),

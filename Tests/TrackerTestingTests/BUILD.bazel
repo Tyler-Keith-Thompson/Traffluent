@@ -22,6 +22,7 @@ swift_library(
         "//Sources/Trackers",
         "//Sources/Events",
         "@swiftpkg_swift_property_based//:PropertyBased",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "//Tests/TraffluentTestSupport",
     ],
 )
