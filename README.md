@@ -1,111 +1,63 @@
 # Traffluent
 
-Traffluent is a vendor-neutral analytics library for Swift. Each event is a Swift type, so its
-name and properties are checked by the compiler instead of living in a string and a
-`[String: Any]` bag. A tracker records the events, and a delivery sends each batch of them to as
-many destinations as you like. Traffluent also batches, persists records on disk, retries failed
-sends to a server with backoff until they arrive, holds events until the user consents, enforces
-each event's schema and tracks screens, controls and the app's lifecycle automatically. It is
-built for Swift 6 strict concurrency, has no singletons, and runs on Apple platforms and Linux.
-Apps that would otherwise write their own typed event layer can use it instead, with vendor SDKs
-as plain destinations.
-
-[Documentation](https://tyler-keith-thompson.github.io/Traffluent/documentation/)
+Traffluent is an analytics library for Swift whose events are types, so the compiler checks every
+name and property. It batches events, keeps them on disk and delivers them to the destinations you
+choose, sending again until they arrive. It holds back what the user hasn't consented to and
+redacts sensitive values, on Apple platforms and Linux.
 
 ## Installation
 
-Traffluent requires Swift 6.4 and supports macOS 15, iOS 18, tvOS 18, watchOS 11 and visionOS 2
-or later, and Linux.
-
 ```swift
-dependencies: [
-    .package(url: "https://github.com/Tyler-Keith-Thompson/Traffluent", from: "0.0.1"),
-],
+.package(url: "https://github.com/Tyler-Keith-Thompson/Traffluent", from: "0.0.1"),
 ```
 
-Then add a product to your target, either the umbrella or individual modules:
+Add the `Traffluent` product to your target, and `TrackingPlans` for the plan below. Traffluent
+requires Swift 6.4 and supports macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2 and Linux.
 
-```swift
-.target(name: "MyApp", dependencies: [
-    .product(name: "Traffluent", package: "Traffluent"),
-    // or, for example:
-    // .product(name: "Trackers", package: "Traffluent"),
-]),
-```
-
-## Example
+## Quick start
 
 ```swift
 import Traffluent
+import TrackingPlans
 
-@Event
-struct SignedUp {
-    var plan: String
+@Event(name: "product_added_to_cart")
+struct ProductAddedToCart {
+    var productID: String
+    @Constrained(.minimum(1), .maximum(10))
+    var quantity: Int
 }
 
-let tracker = Tracker()
-let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
-tracker.track(SignedUp(plan: "pro"))
-await tracker.finish()
-try await delivery.execute()  // prints: SignedUp SignedUp(plan: "pro")
+func startAnalytics() throws {
+    let plan = try TrackingPlan(
+        schemas: [ProductAddedToCart.schema, SessionStarted.schema, SessionEnded.schema])
+    // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
+    let tracker = Tracker(
+        enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()])
+    let collector = HTTPDestination(
+        endpoint: collectorURL,
+        headerFields: [.authorization: "Bearer \(apiKey)"],
+        encoder: CollectorBatchEncoder(plan: plan))
+    // Analytics events only, with sensitive values left out, 20 at a time or every 30 seconds.
+    let delivery = tracker.records.batch().deliver(
+        to: collector.accepting(.analytics).redactingSensitiveValues())
+    Task { try? await delivery.execute() }  // for the life of the app
+    try Tracker.bootstrap(tracker)  // what `Tracker.current` falls back to, anywhere in the app
+}
+
+// Once, as the app launches; then track from any code.
+try startAnalytics()
+Tracker.current.track(ProductAddedToCart(productID: "canvas-tote", quantity: 1))
 ```
 
-`track` returns at once, from any thread. A worker the tracker owns records the event, and the
-delivery batches the records and hands each batch to its destinations when `execute()` runs.
+## Next steps
 
-## Guides
+- [Getting Started](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/gettingstarted): from adding the package to testing what you track, step by step
+- [Track from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews)
+- [Keep events when the app goes offline or quits](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/persistingrecords)
+- [Ask for consent and gate events by it](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/consentgating)
+- [Send to PostHog, your own server, logs or traces](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations)
+- [Catch breaking event changes in CI](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow)
 
-New to Traffluent? [Getting Started](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/gettingstarted)
-walks from an empty app to events delivered to a server and tested, with the code of the store app
-in [`Examples/`](Examples).
-
-- [Getting Started](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/gettingstarted): declaring events, building the tracker, delivering to a server, watching drops and testing, step by step
-- [Tracking Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingevents): trackers, batching, enrichers and what a delivery guarantees
-- [Choosing Destinations](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations): logs, traces, a server, memory, and redacting what a destination sees
-- [Tracking from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews): the tracker in the environment, a trait or the responder chain
-- [Testing What Your Code Tracks](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/testingwhatyoutrack): `withRecordingTracker`
-- [Automatic Tracking](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/automatictracking): screen views, control activations and the app's lifecycle
-- [Sessions and Standard Context](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/sessionsandstandardcontext): the session, app, device, system, locale and network on every event
-- [Sampling Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/samplingevents): a seeded fraction of events or sessions
-- [Consent Gating](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/consentgating): holding, delivering and dropping events by consent category
-- [Persisting Records](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/persistingrecords): the on-disk log, its bounds and recovery, and GRDB
-- [Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents): `@Event` and constrained properties
-- [Exporting and Checking a Tracking Plan](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow): a committed JSON Schema of every event, which the people who read your data can review in pull requests, and a check that names the changes that would break data from released apps
-- [Logging, Tracing, Metrics and Analytics](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/whatgoeswhere): which facts go to which signal
-- [Changing an Event](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/changingevents): which changes need a new version
-- [Identifying People](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/identifyingpeople): identifiers that outlive a session
-- [Privacy Manifests](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/privacymanifests): what each module collects, for your app's manifest
-
-## Modules
-
-- [`Events`](https://tyler-keith-thompson.github.io/Traffluent/documentation/events): `Event`, `Sensitive`, `Refined`, `EventSchema`, `EventRecord` and `Enricher`
-- [`Trackers`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackers): `Tracker`, `Consent` and `Sampler`
-- [`Destinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/destinations): `Destination`, `ConsoleDestination`, `InMemoryDestination`, `batch()`, `deliver(to:)` and `BufferDropReport`
-- [`LoggingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/loggingdestinations): `LoggerDestination`, which writes events to a swift-log `Logger`
-- [`TracingDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/tracingdestinations): `SpanEventDestination`, which adds events to the active span
-- [`HTTPDestinations`](https://tyler-keith-thompson.github.io/Traffluent/documentation/httpdestinations): `HTTPDestination`, which posts each batch to an HTTP endpoint and retries it until it arrives
-- [`CollectorEncoding`](https://tyler-keith-thompson.github.io/Traffluent/documentation/collectorencoding): `CollectorBatchEncoder`, TraffluentCollector's ingest format
-- [`PostHogEncoding`](https://tyler-keith-thompson.github.io/Traffluent/documentation/posthogencoding): `PostHogBatchEncoder`, PostHog's batch capture API (not in `import Traffluent`)
-- [`PropertyJSON`](https://tyler-keith-thompson.github.io/Traffluent/documentation/propertyjson): an event's properties as JSON, the reading the two encoders share; no public API (not in `import Traffluent`)
-- [`SwiftUITracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/swiftuitracking): The environment's `tracker` and the `trackOnAppear`, `trackOnTap`, `trackChange` and `trackScreen` modifiers
-- [`UIKitTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/uikittracking): `TrackerTrait` and `UIControl.track(_:for:)`
-- [`AppKitTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/appkittracking): `TrackerProviding`, `NSView.tracker` and `NSControl.track(_:)`
-- [`AutomaticScreenTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/automaticscreentracking): `trackScreensAutomatically`: opt-in screen views, without swizzling
-- [`AutomaticControlTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/automaticcontroltracking): `trackControlsAutomatically`: opt-in UIKit control activations, without swizzling
-- [`LifecycleTracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/lifecycletracking): `trackLifecycle`: installs, updates, opens, backgrounding and termination
-- [`Sessions`](https://tyler-keith-thompson.github.io/Traffluent/documentation/sessions): `Enricher.sessions`: a session identifier held in memory only
-- [`StandardContext`](https://tyler-keith-thompson.github.io/Traffluent/documentation/standardcontext): Enrichers for the app, device, operating system, locale, network and identifier for vendor
-- [`Checksums`](https://tyler-keith-thompson.github.io/Traffluent/documentation/checksums): `CRC32`
-- [`Persistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/persistence): `RecordStore` and `SegmentStore`
-- [`GRDBPersistence`](https://tyler-keith-thompson.github.io/Traffluent/documentation/grdbpersistence): `DatabaseStore`, a store in the app's GRDB database (not in `import Traffluent`)
-- [`EventMacros`](https://tyler-keith-thompson.github.io/Traffluent/documentation/eventmacros): `@Event` and `@Constrained`
-- [`TrackingPlans`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackingplans): `TrackingPlan`, its check and `TrackingPlanCommand` (not in `import Traffluent`)
-- [`TrackingPlanTesting`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackingplantesting): `expectTrackingPlan(_:matches:)`, for test targets (not in `import Traffluent`)
-- [`TrackerTesting`](https://tyler-keith-thompson.github.io/Traffluent/documentation/trackertesting): `withRecordingTracker`, for test targets (not in `import Traffluent`)
-
-[`Examples/`](Examples) holds an example app for each platform, a command-line tool and a server
-(`Examples/README.md`). `AGENTS.md` describes how to build and test Traffluent.
-
-## License
-
-Apache 2.0. See `LICENSE`.
+The [documentation](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent)
+lists every guide and module, and [`Examples/`](Examples) holds a store app for each platform, a
+command-line tool and a server. Traffluent is licensed under Apache 2.0 (`LICENSE`).
