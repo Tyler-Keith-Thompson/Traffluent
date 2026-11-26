@@ -20,6 +20,7 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/AutomaticScreenTracking",
+        "//Sources/AutomaticControlTracking",
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",
         "//Sources/AppKitTracking",
@@ -70,6 +71,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:ios"],
     deps = [
         "//Sources/AutomaticScreenTracking",
+        "//Sources/AutomaticControlTracking",
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",
         "//Sources/AppKitTracking",

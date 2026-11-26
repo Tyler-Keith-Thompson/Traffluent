@@ -1,0 +1,67 @@
+// The example of the Persistence module's landing article
+// (Sources/Persistence/Persistence.docc/Persistence.md), verbatim, so the article cannot drift from
+// the code. Its conformance is the extension at the end of this file, on the suite's SignedUp.
+
+import Foundation
+import Persistence
+import SystemPackage
+import Testing
+import Trackers
+import Traffluent
+
+@Suite("Persistence module examples", .timeLimit(.minutes(1)))
+struct PersistenceModuleExamplesTests {
+    struct SignedUp: Event {
+        var plan: String
+        var seats: Int
+    }
+
+    @Test("Keeping records in a segment store")
+    func segmentStore() async throws {
+        let directory = FilePath(NSTemporaryDirectory()).appending("PersistenceModuleExamplesTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let vendor = InMemoryDestination()
+
+        let store = try SegmentStore(events: [SignedUp.self], directory: directory, byteBound: 1024 * 1024)
+        let tracker = Tracker(store: store)
+        let delivery = tracker.records.batch().deliver(to: vendor)
+        tracker.track(SignedUp(plan: "pro", seats: 3))
+
+        await tracker.finish()
+        try await delivery.execute()
+        let expectedSeats = [3]
+        let expectedPendingRecordCount = 0
+
+        #expect(vendor.events(of: SignedUp.self).map(\.seats) == expectedSeats)
+        #expect(store.pendingRecordCount == expectedPendingRecordCount)
+    }
+
+    @Test("A record written without seats reads the default")
+    func seatsDefault() throws {
+        var encoder = BinaryEncoder()
+        encoder.encodeMap { map in
+            map.encode("pro", forKey: "plan")
+        }
+        var decoder = BinaryDecoder(encoder.bytes)
+        let expectedSeats = 1
+
+        let actual = try SignedUp(from: &decoder)
+
+        #expect(actual.seats == expectedSeats)
+    }
+}
+
+extension PersistenceModuleExamplesTests.SignedUp: BinaryCodable {
+    func encode(to encoder: inout BinaryEncoder) {
+        encoder.encodeMap { map in
+            map.encode(plan, forKey: "plan")
+            map.encode(seats, forKey: "seats")
+        }
+    }
+
+    init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
+        var map = try decoder.decodeMap()
+        plan = try map.decode(forKey: "plan")
+        seats = try map.decode(forKey: "seats", default: 1)
+    }
+}

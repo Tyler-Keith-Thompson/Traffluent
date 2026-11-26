@@ -20,7 +20,9 @@ swift_library(
     deps = [
         "//Sources/Traffluent",
         "//Sources/EventMacros",
+        "//Sources/GRDBPersistence",
         "//Sources/TrackingPlans",
+        "//Sources/TrackingPlanTesting",
         "//Sources/TrackerTesting",
         "//Sources/PostHogEncoding",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",

@@ -283,7 +283,7 @@ TEST_TARGETS = [
     ("TrackersTests", ["Trackers", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees", TEST_SUPPORT]),
     ("SwiftUITrackingTests", ["SwiftUITracking", "UIKitTracking", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
-    ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "AutomaticControlTracking", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("AutomaticControlTrackingTests", ["AutomaticControlTracking", "Events", "Persistence", "swift-property-based/PropertyBased"]),
     ("LifecycleTrackingTests", ["LifecycleTracking", "Events", "Persistence", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased"]),
     ("SessionsTests", ["Sessions", "Events", "Persistence", "Trackers", "LifecycleTracking", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
@@ -292,7 +292,7 @@ TEST_TARGETS = [
     ("PersistenceTests", ["Persistence", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     ("PropertyJSONTests", ["PropertyJSON", "EventMacros", "Events", "Persistence", "TrackingPlans"]),
     ("PostHogEncodingTests", ["PostHogEncoding", "PropertyJSON", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "TrackingPlans", "TrackerTesting", "PostHogEncoding", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
+    (f"{PROJECT}Tests", [PROJECT, "EventMacros", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
 ]
 
 # The modules the test-support target depends on (fixtures are usually written against the
