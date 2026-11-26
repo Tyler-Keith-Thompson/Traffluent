@@ -15,7 +15,7 @@ bad row in a dashboard.
   app, session, user identity), filtering, sampling and transformation.
 - Multiplexing to any number of destinations behind one public destination protocol. Anyone can
   write a destination in their own package.
-- One first-party destination (D1), plus test, console or logging destinations.
+- The first-party destinations (D1), plus test, console or logging destinations.
 - The hard parts: batching, on-disk persistence across launches, retry with backoff, flushing on
   lifecycle events, consent gating (per destination and per purpose), schema enforcement and
   versioning, and identity as pseudonymous session IDs only (D4).
@@ -86,12 +86,15 @@ bad row in a dashboard.
 - No labels are defined yet.
 
 ## Decisions
-- D1. The first-party destination is PostHog, written against its HTTP capture API and not its
-  SDK. It is open source and self-hostable, so even the default destination isn't a lock-in, and
-  plain HTTP runs on Linux too. Rejected: Segment (another pipeline, so it would duplicate
-  this one), Firebase or Amplitude (vendor SDKs, Apple- or vendor-bound), and OpenTelemetry as
-  the only destination (built for traces, not product analytics). The owner said "provider of
-  your choice", so this was picked at setup and the owner may change it.
+- D1. The first-party destination is `HTTPDestination` with `CollectorEncoding`, which sends
+  batches to the self-hosted TraffluentCollector (N5). PostHog is a second first-party
+  destination, `PostHogEncoding` over the same `HTTPDestination`, written against PostHog's HTTP
+  capture API and not its SDK; it is open source and self-hostable, so neither is a lock-in, and
+  plain HTTP runs on Linux too. The owner amended D1 on 2026-11-25 (TRAF-63): it had named only
+  PostHog, picked at setup, while what shipped first was the collector path. Rejected: Segment
+  (another pipeline, so it would duplicate this one), Firebase or Amplitude (vendor SDKs, Apple- or
+  vendor-bound), and OpenTelemetry as the only destination (built for traces, not product
+  analytics).
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage.
