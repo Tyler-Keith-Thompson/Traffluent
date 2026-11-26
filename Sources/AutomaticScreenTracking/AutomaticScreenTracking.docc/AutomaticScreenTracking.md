@@ -17,7 +17,7 @@ A screen is a view controller on screen none of whose children is: the one a nav
 controller shows, a tab's, one presented. It tracks `ScreenViewed` once as it appears, and again
 when it reappears after being covered or hidden. The screen is named after its controller's type,
 or for a hosting controller after the type of the SwiftUI view it shows. The closure gets each
-``DiscoveredScreen`` and returns the event to track, renamed, or `nil` to skip the screen:
+`DiscoveredScreen` and returns the event to track, renamed, or `nil` to skip the screen:
 
 ```swift
 // In the scene delegate's scene(_:willConnectTo:options:), beside the scene's tracker:
@@ -72,14 +72,18 @@ The guide
 [Automatic Tracking](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/automatictracking)
 also covers control activations and the app's lifecycle.
 
-## Topics
+## API
+
+The documentation site is built on Linux, where this module's API isn't there, so its symbols
+have no pages of their own here. Their doc comments are in the sources, and Xcode shows them
+for an Apple target.
 
 ### Tracking a window's screens
 
-- ``AppKit/NSWindow/trackScreensAutomatically(kinds:file:fileID:function:line:column:_:)``
-- ``AppKit/NSWindow/stopTrackingScreensAutomatically()``
+- `NSWindow.trackScreensAutomatically(kinds:_:)`
+- `NSWindow.stopTrackingScreensAutomatically()`
 
 ### Naming screens
 
-- ``DiscoveredScreen``
-- ``DiscoveredScreen/Kind``
+- `DiscoveredScreen`
+- `DiscoveredScreen.Kind`

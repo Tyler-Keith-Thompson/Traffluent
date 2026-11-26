@@ -13,8 +13,8 @@ environment holds `Tracker.noOp`, so a preview tracks nothing.
 The modifiers track through the environment's tracker, once per trigger, and record the place
 they are applied as the call site. `trackOnAppear(_:)` tracks each time a view appears,
 `trackOnTap(_:)` each tap beside the view's own action, and `trackChange(of:_:)` each new value.
-`trackScreen(_:)` tracks ``ScreenViewed`` each time the view appears, and puts a tracker enriched
-with the screen's ``ScreenKey`` in the environment inside it, so every event tracked from the
+`trackScreen(_:)` tracks `ScreenViewed` each time the view appears, and puts a tracker enriched
+with the screen's `ScreenKey` in the environment inside it, so every event tracked from the
 screen carries its name:
 
 ```swift
@@ -59,21 +59,25 @@ The guide
 [Tracking from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews)
 covers all three frameworks.
 
-## Topics
+## API
+
+The documentation site is built on Linux, where this module's API isn't there, so its symbols
+have no pages of their own here. Their doc comments are in the sources, and Xcode shows them
+for an Apple target.
 
 ### Setting the tracker
 
-- ``SwiftUICore/EnvironmentValues/tracker``
-- ``SwiftUICore/View/tracker(_:)``
+- `EnvironmentValues.tracker`
+- `View.tracker(_:)`
 
 ### Tracking from views
 
-- ``SwiftUICore/View/trackOnAppear(_:file:fileID:function:line:column:)``
-- ``SwiftUICore/View/trackOnTap(_:file:fileID:function:line:column:)``
-- ``SwiftUICore/View/trackChange(of:_:file:fileID:function:line:column:)``
+- `View.trackOnAppear(_:)`
+- `View.trackOnTap(_:)`
+- `View.trackChange(of:_:)`
 
 ### Screens
 
-- ``SwiftUICore/View/trackScreen(_:file:fileID:function:line:column:)``
-- ``ScreenViewed``
-- ``ScreenKey``
+- `View.trackScreen(_:)`
+- `ScreenViewed`
+- `ScreenKey`

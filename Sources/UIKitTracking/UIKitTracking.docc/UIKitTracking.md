@@ -62,8 +62,8 @@ covers all three frameworks.
 
 ## API
 
-This documentation is built on macOS, where the module is empty, so its symbols have no pages of
-their own here. Their doc comments are in the sources, and Xcode shows them for an iOS target.
+The documentation site is built on Linux, where the module is empty, so its symbols have no pages
+of their own here. Their doc comments are in the sources, and Xcode shows them for an iOS target.
 
 - `TrackerTrait`: the trait holding the tracker, `Tracker.noOp` until one is set.
 - `UITraitCollection.tracker`: reads the trait.

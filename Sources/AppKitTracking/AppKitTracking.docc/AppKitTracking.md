@@ -11,14 +11,14 @@ and SwiftUI views use
 [`SwiftUITracking`](https://tyler-keith-thompson.github.io/Traffluent/documentation/swiftuitracking).
 
 AppKit has no environment for views to inherit, so a view finds its tracker the way an action
-sent to the first responder finds its target. ``AppKit/NSView/tracker`` asks the view's responder
+sent to the first responder finds its target. `NSView.tracker` asks the view's responder
 chain (the view, its superviews and their view controllers, its window and window controller),
 then the window's delegate and the application's delegate, and takes the tracker of the first one
-that conforms to ``TrackerProviding``. It looks again each time it is read, so a view moved to
+that conforms to `TrackerProviding`. It looks again each time it is read, so a view moved to
 another window tracks through that window's tracker. A view below no provider gets `Tracker.noOp`,
 which drops every event.
 
-``AppKit/NSControl/track(_:file:fileID:function:line:column:)`` tracks an event each time a
+`NSControl.track(_:)` tracks an event each time a
 control sends its action, just before the action:
 
 ```swift
@@ -63,13 +63,17 @@ The guide
 [Tracking from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews)
 covers all three frameworks.
 
-## Topics
+## API
+
+The documentation site is built on Linux, where this module's API isn't there, so its symbols
+have no pages of their own here. Their doc comments are in the sources, and Xcode shows them
+for an Apple target.
 
 ### Finding the tracker
 
-- ``TrackerProviding``
-- ``AppKit/NSView/tracker``
+- `TrackerProviding`
+- `NSView.tracker`
 
 ### Tracking controls
 
-- ``AppKit/NSControl/track(_:file:fileID:function:line:column:)``
+- `NSControl.track(_:)`
