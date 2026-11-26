@@ -13,7 +13,7 @@ public import Events
 ///     var coupon: String?
 /// }
 ///
-/// let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+/// let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
 /// plan.files.map(\.path)
 /// // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 /// ```
@@ -80,31 +80,20 @@ public struct TrackingPlan: Sendable, Hashable {
     /// The plan's event schemas, ordered by the UTF-8 bytes of their names and then by version.
     public let schemas: [EventSchema]
 
-    /// The plan of the events `schemas` describe, in any order.
-    ///
-    /// - Parameter schemas: The schemas of the events the plan describes.
-    /// - Precondition: No two schemas share a file, and every schema has a name and properties
-    ///   with distinct names; ``init(checkedSchemas:)`` throws instead.
-    public init(schemas: [EventSchema]) {
-        do {
-            try self.init(checkedSchemas: schemas)
-        } catch {
-            preconditionFailure("TrackingPlan(schemas:): \(error)")
-        }
-    }
-
     /// The plan of the events `schemas` describe, in any order, or an error naming the first rule
     /// they break.
     ///
     /// - Parameter schemas: The schemas of the events the plan describes.
     /// - Throws: ``TrackingPlanError/emptyEventName`` for a schema with an empty name,
     ///   ``TrackingPlanError/duplicateProperty`` for one that lists two properties of the same
-    ///   name, and ``TrackingPlanError/duplicateEvent`` for two schemas whose files would have the
-    ///   same name on a case-insensitive file system.
-    public init(checkedSchemas schemas: [EventSchema]) throws(TrackingPlanError) {
+    ///   name, ``TrackingPlanError/invalidKeyword`` for one with a keyword no JSON Schema can
+    ///   state, and ``TrackingPlanError/duplicateEvent`` for two schemas whose files would have
+    ///   the same name on a case-insensitive file system.
+    public init(schemas: [EventSchema]) throws(TrackingPlanError) {
         for schema in schemas {
             guard !schema.name.isEmpty else { throw .emptyEventName }
             guard schema.hasDistinctPropertyNames else { throw .duplicateProperty }
+            guard schema.properties.allSatisfy({ !$0.hasInvalidConstraint && $0.keywords.allSatisfy(\.isStatable) }) else { throw .invalidKeyword }
         }
         let sorted = schemas.sorted(by: EventSchema.precedesInPlan)
         // Neighbours after sorting by name are enough for exact duplicates, but names that differ
@@ -163,7 +152,24 @@ extension EventSchema {
     fileprivate var hasDistinctPropertyNames: Bool {
         Set(properties.map(\.name)).count == properties.count
     }
+}
 
+extension ValidationKeyword {
+    /// Whether a JSON Schema can state the keyword: a length or count that isn't negative, a
+    /// finite bound, a pattern that is a valid regular expression and matches its example.
+    fileprivate var isStatable: Bool {
+        switch self {
+        case .minLength(let count), .maxLength(let count), .minItems(let count), .maxItems(let count):
+            count >= 0
+        case .minimum(let bound), .maximum(let bound):
+            bound.isFinite
+        case .pattern(let pattern, let example):
+            (try? Regex(pattern)).map { example.contains($0) } ?? false
+        }
+    }
+}
+
+extension EventSchema {
     fileprivate var indexEntry: JSON {
         .object([
             "name": .string(name),

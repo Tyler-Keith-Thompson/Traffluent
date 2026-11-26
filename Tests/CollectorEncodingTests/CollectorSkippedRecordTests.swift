@@ -41,7 +41,7 @@ struct CollectorSkippedRecordTests {
 
     @Test("A record whose event the plan doesn't describe is left out, and the records around it are sent in order")
     func unknownEventInTheMiddle() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
         let skippedID = try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000002"))
         let batch = [
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
@@ -63,7 +63,7 @@ struct CollectorSkippedRecordTests {
 
     @Test("encode sends the other records of a batch with an unknown event, the same bytes as a batch without it")
     func encodeLeavesTheRecordOut() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
         let first = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let unknown = EventRecord(event: ScreenViewed(screen: "Home"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)
         let last = EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil)
@@ -77,7 +77,7 @@ struct CollectorSkippedRecordTests {
     @Test("A record whose event isn't BinaryCodable is left out as notBinaryCodable, not the batch")
     func notBinaryCodableInTheMiddle() throws {
         let handWritten = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [CheckoutStarted.schema, handWritten]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema, handWritten]), instrument: NoOpInstrument())
         let skipped = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)
         let batch = [
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
@@ -95,7 +95,7 @@ struct CollectorSkippedRecordTests {
 
     @Test("A record holding a value JSON can't hold is left out as unrepresentableValue, not the batch")
     func unrepresentableValueInTheMiddle() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [CheckoutStarted.schema, Measured.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema, Measured.schema]), instrument: NoOpInstrument())
         let skipped = EventRecord(event: Measured(value: .nan), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)
         let batch = [
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
@@ -112,8 +112,8 @@ struct CollectorSkippedRecordTests {
     }
 
     @Test("A batch whose every record is skipped has no body, and encode throws the first record's reason")
-    func everyRecordSkipped() {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: []), instrument: NoOpInstrument())
+    func everyRecordSkipped() throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let batch = [
             EventRecord(event: ScreenViewed(screen: "Home"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil),
@@ -133,8 +133,8 @@ struct CollectorSkippedRecordTests {
     }
 
     @Test("An empty batch has a body of no records and skips nothing")
-    func emptyBatch() {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: []), instrument: NoOpInstrument())
+    func emptyBatch() throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let expected = #"{"records":[]}"#
 
         let actual = sut.batch(of: [])
@@ -145,7 +145,7 @@ struct CollectorSkippedRecordTests {
 
     @Test("HTTPDestination sends nothing for a batch whose every record is skipped")
     func nothingSent() async throws {
-        let encoder = CollectorBatchEncoder(plan: TrackingPlan(schemas: []), instrument: NoOpInstrument())
+        let encoder = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let transport = TransportDouble()
         let sut = HTTPDestination(
             endpoint: try #require(URL(string: "https://collector.example.com/v1/batches")),

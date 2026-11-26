@@ -46,3 +46,4 @@ for an Apple target.
 ### Keeping records in a database
 
 - `DatabaseStore`
+- `DatabaseStoreError`

@@ -20,7 +20,7 @@ struct CollectorSensitiveValueTests {
 
     @Test("A record that reveals its sensitive values sends them as their values")
     func revealed() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!)
         var record = EventRecord(
@@ -40,7 +40,7 @@ struct CollectorSensitiveValueTests {
 
     @Test("A redacted record leaves its sensitive properties and vendor identifier out, and an array's sensitive elements null")
     func redacted() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!)
         // EventRecord's initializer makes a record whose sensitive values stay redacted, as a
@@ -61,7 +61,7 @@ struct CollectorSensitiveValueTests {
 
     @Test("Through redactingSensitiveValues(), the value never reaches the body")
     func throughRedactingDestination() async throws {
-        let encoder = CollectorBatchEncoder(plan: TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
+        let encoder = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [SignedUp.schema]), instrument: NoOpInstrument())
         let sink = InMemoryDestination.unbounded()
         let sut = sink.redactingSensitiveValues()
         var record = EventRecord(

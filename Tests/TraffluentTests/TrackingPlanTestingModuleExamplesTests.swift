@@ -18,21 +18,25 @@ struct TrackingPlanTestingModuleExamplesTests {
     }
 
     enum AppTrackingPlan {
-        static let trackingPlan = TrackingPlan(schemas: [SignedUp.schema])
+        static var trackingPlan: TrackingPlan {
+            get throws(TrackingPlanError) {
+                try TrackingPlan(schemas: [SignedUp.schema])
+            }
+        }
     }
 
     // The example's test, verbatim but for its @Test attribute, which the test below stands in for.
-    func eventsMatchTheTrackingPlan() {
+    func eventsMatchTheTrackingPlan() throws {
         let directory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("TrackingPlan")
-        expectTrackingPlan(AppTrackingPlan.trackingPlan, matches: directory)
+        expectTrackingPlan(try AppTrackingPlan.trackingPlan, matches: directory)
     }
 
     @Test("With no plan committed beside the test, it records an issue")
-    func missingPlanRecordsAnIssue() {
+    func missingPlanRecordsAnIssue() throws {
         withKnownIssue {
-            eventsMatchTheTrackingPlan()
+            try eventsMatchTheTrackingPlan()
         }
     }
 
@@ -44,7 +48,7 @@ struct TrackingPlanTestingModuleExamplesTests {
         defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
         try AppTrackingPlan.trackingPlan.write(to: directory)
 
-        let actual = expectTrackingPlan(AppTrackingPlan.trackingPlan, matches: directory)
+        let actual = expectTrackingPlan(try AppTrackingPlan.trackingPlan, matches: directory)
 
         #expect(actual == .matches)
     }

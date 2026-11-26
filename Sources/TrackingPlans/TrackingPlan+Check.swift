@@ -1,3 +1,4 @@
+import Events
 public import Foundation
 
 extension TrackingPlan {
@@ -21,7 +22,8 @@ extension TrackingPlan {
         let committedFiles = Dictionary(committed.filter { TrackingPlan.isPlanFile($0.path) }.map { ($0.path, $0.contents) }) { first, _ in first }
         let differences = semanticDifferences(from: committedFiles)
         guard differences.isEmpty else { return TrackingPlanCheck(differences: differences) }
-        let currentFiles = Dictionary(uniqueKeysWithValues: files(carryingForward: committed).map { ($0.path, $0.contents) })
+        // Unique: a plan's initializer rejects two schemas that share a file.
+        let currentFiles = Dictionary(files(carryingForward: committed).map { ($0.path, $0.contents) }) { first, _ in first }
         let outOfDate = Set(committedFiles.keys).union(currentFiles.keys)
             .filter { committedFiles[$0] != currentFiles[$0] }
             .sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
@@ -54,10 +56,7 @@ extension TrackingPlan {
             }
             committedEvents.append(event)
         }
-        // The current plan's documents always have the shape EventContract reads: it is the shape
-        // EventSchema.document writes, so the force unwrap can't fail, and a failure would be a bug
-        // in this module that no caller could handle.
-        let currentEvents = schemas.map { EventContract(document: $0.document(keepingRemovedFrom: nil))! }
+        let currentEvents = schemas.map(EventContract.init(schema:))
         return differences + EventContract.differences(from: committedEvents, to: currentEvents)
     }
 }
@@ -86,6 +85,18 @@ private struct EventContract {
     let version: Int
     let consentCategory: String
     let properties: [String: PropertyContract]
+
+    /// The contract of the event `schema` describes: the one its document states, read from the
+    /// schema rather than the JSON.
+    init(schema: EventSchema) {
+        name = schema.name
+        version = schema.version
+        consentCategory = schema.consentCategory.name
+        // Unique: a plan's initializer rejects a schema with two properties of one name.
+        properties = Dictionary(schema.properties.map { property in
+            (property.name, PropertyContract(schema: property.schema, isRequired: property.isRequired))
+        }) { first, _ in first }
+    }
 
     /// The contract of the event `document` describes, or `nil` when it isn't a document of the
     /// shape a plan writes.
@@ -353,7 +364,7 @@ private struct ConstraintContract {
     }
 
     private static func text(_ bound: Double) -> String {
-        JSON.number(exactly: bound).compact
+        JSON.number(exactly: bound)?.compact ?? String(bound)
     }
 
     /// The patterns as JSON, one string, or an array of several; `nil` for none.

@@ -30,7 +30,7 @@ neither module knows about the other.
 import Sessions
 import Trackers
 
-let tracker = Tracker(enrichers: [.sessions(timeout: .seconds(15 * 60), kinds: [.started])])
+let tracker = Tracker(enrichers: [try .sessions(timeout: .seconds(15 * 60), kinds: [.started])])
 tracker.track(SignedUp(plan: "pro"))  // tracks SessionStarted, then SignedUp, both with the same SessionKey
 ```
 
@@ -43,8 +43,8 @@ covers sampling.
 
 ### Putting events in sessions
 
+- ``Events/Enricher/sessions(kinds:file:fileID:function:line:column:)``
 - ``Events/Enricher/sessions(timeout:kinds:file:fileID:function:line:column:)``
-- ``Events/Enricher/sessions(checkedTimeout:kinds:file:fileID:function:line:column:)``
 - ``SessionEventKind``
 - ``NonPositiveSessionTimeout``
 

@@ -89,7 +89,7 @@ like every PostHog client's, so no header is needed. The destination retries and
 it does for any server, and a record sent again keeps its `uuid`.
 
 ```swift
-let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
 let postHog = HTTPDestination(
     endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
     instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields

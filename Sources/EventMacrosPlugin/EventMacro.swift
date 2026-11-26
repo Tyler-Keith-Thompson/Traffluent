@@ -57,7 +57,7 @@ public struct EventMacro: ExtensionMacro {
     private static func schema(of properties: [StoredProperty], access: String) -> String {
         let entries = properties.map {
             let defaultValue = $0.hasDefaultValue ? "hasDefaultValue: true, " : ""
-            return "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)keywords: \($0.keywords)),"
+            return "        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\($0.identifier)), keywords: \($0.keywords)),"
         }
         let list = entries.isEmpty ? "[]" : "[\n" + entries.joined(separator: "\n") + "\n    ]"
         return """
@@ -70,16 +70,33 @@ public struct EventMacro: ExtensionMacro {
     /// `constraintViolation()`, checking each property's declared constraints in declaration order,
     /// or `nil` when no property declares one, which leaves `Event`'s default.
     ///
-    /// The constraints are copied into a typed context, `[Events.Constraint<T>]` for a property of
-    /// type `T`, so one that doesn't apply to the type is a compile error. An optional property is
+    /// Each constraint is built in a typed context, `Events.Constraint<T>` for a property of type
+    /// `T`, so one that doesn't apply to the type is a compile error. An optional property is
     /// checked only when it holds a value.
+    ///
+    /// Building a constraint throws `InvalidConstraint` for an argument no schema can hold. The
+    /// macro diagnoses every such literal it can read against the property's type: a negative
+    /// count, a pattern that doesn't compile or match its example, an integer bound a `Double`
+    /// can't hold exactly, a bound that overflows its floating-point type. Past those (a type the
+    /// macro doesn't know, such as a typealias of `Int`), a constraint that throws makes every
+    /// event a violation naming the declaration and its error, so the tracker rejects and reports
+    /// it rather than track it unchecked.
     private static func constraintViolation(of properties: [StoredProperty], access: String) -> String? {
-        let checks = properties.filter { !$0.constraints.isEmpty }.map { property in
+        let checks = properties.compactMap { property -> String? in
+            guard !property.constraints.isEmpty else { return nil }
             let value = property.isOptional ? "value" : "self.\(property.identifier)"
-            let loop = "for constraint: Events.Constraint<\(property.typeName)> in \(property.constraintList) where !constraint.isSatisfied(by: \(value)) {\n"
-                + "    return Events.ConstraintViolation(property: \"\(property.name)\", keyword: constraint.keyword)\n}"
-            guard property.isOptional else { return loop }
-            return "if let value = self.\(property.identifier) {\n\(loop)\n}"
+            let checks = property.constraints.map { constraint in
+                "do throws(Events.InvalidConstraint) {\n"
+                    + "    let constraint: Events.Constraint<\(property.typeName)> = try \(constraint.source)\n"
+                    + "    if !constraint.isSatisfied(by: \(value)) {\n"
+                    + "        return Events.ConstraintViolation(property: \"\(property.name)\", keyword: constraint.keyword)\n"
+                    + "    }\n"
+                    + "} catch {\n"
+                    + "    return Events.ConstraintViolation(property: \"\(property.name)\", invalidConstraint: \(constraint.source.stringLiteral), error: error)\n"
+                    + "}"
+            }.joined(separator: "\n")
+            guard property.isOptional else { return checks }
+            return "if let value = self.\(property.identifier) {\n\(checks)\n}"
         }
         guard !checks.isEmpty else { return nil }
         return "\(access)func constraintViolation() -> Events.ConstraintViolation? {\n" + checks.map { $0 + "\n" }.joined() + "return nil\n}"
@@ -120,5 +137,24 @@ public struct EventMacro: ExtensionMacro {
         }
         let calls = properties.map { "    requireBinaryCodable(\($0.label): \\.\($0.identifier))\n" }.joined()
         return functions + ["private static var binaryCodableRequirements: Void {\n\(calls)}"]
+    }
+}
+
+extension String {
+    /// The string as a Swift string literal: quoted, with its backslashes, quotes and line breaks
+    /// escaped.
+    fileprivate var stringLiteral: String {
+        // By scalar: "\r\n" is one Character, which neither "\r" nor "\n" would match.
+        var escaped = ""
+        for scalar in unicodeScalars {
+            switch scalar {
+            case "\\": escaped += "\\\\"
+            case "\"": escaped += "\\\""
+            case "\n": escaped += "\\n"
+            case "\r": escaped += "\\r"
+            default: escaped.unicodeScalars.append(scalar)
+            }
+        }
+        return "\"" + escaped + "\""
     }
 }

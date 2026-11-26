@@ -96,8 +96,11 @@ MUTANTS = [
     # After boundoffbyone, its condition holds two copies; the second is the original's.
     Mutant("headernotbounded", L, "(state.hasActive ? 0 : SegmentFormat.header.count)", "0", nth=1),
     Mutant("fullignored", L, "guard state.byteCount + frameByteCount + (state.hasActive ? 0 : SegmentFormat.header.count) <= byteBound else { return .full }", "", mode="stmt"),
-    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=0),
-    Mutant("fullnotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=1),
+    # The first report, of a frame larger than a frame can be (over 4 GiB), has no mutant: no test
+    # can build a record that large. The three after it are a failed write's, a full log's and an
+    # exhausted log's.
+    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=1),
+    Mutant("fullnotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=2),
     Mutant("partialwritekept", L, "try? state.segments[active].file.descriptor.resize(to: Int64(state.segments[active].byteCount))", "", mode="stmt"),
     Mutant("partialheaderkept", L, "try? path.removeFile()", "", mode="stmt"),
     Mutant("undeletedforgotten", L, "state.undeleted.insert(segment.number)", "", mode="stmt"),
@@ -139,14 +142,20 @@ MUTANTS = [
     Mutant("numberingrestarts", L, "(numbers.last ?? 0) + 1", "1"),
     Mutant("undecodablenotreported", L, "reports.append(.undecodable(recordCount: undecodable))", "", mode="stmt"),
     Mutant("shortfilenames", L, 'String(repeating: "0", count: 20 - digits.count)', 'String(repeating: "0", count: 19 - digits.count)'),
+    # Segment numbers: the last is 2³² - 1, a file numbered past it isn't a segment, and a log
+    # that has used them all keeps a new record in memory, reported as a failed write.
+    Mutant("segmentlimitraised", L, "1 << 32", "1 << 33"),
+    Mutant("numberpastlimitread", L, "$0 < segmentNumberLimit ? $0 : nil", "$0"),
+    Mutant("exhaustedunreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=3),
     Mutant("anyfilename", L, 'guard name.hasSuffix(".segment") else { return nil }', "", mode="stmt"),
     # The store.
     Mutant("defaultbound", S, "5 * 1024 * 1024", "5 * 1000 * 1000"),
     Mutant("defaultsegment", S, "max(byteBound / 8, 1)", "max(byteBound / 4, 1)"),
     Mutant("boundatheaderallowed", S, "byteBound > SegmentFormat.header.count", "byteBound >= SegmentFormat.header.count"),
     Mutant("zerosegmentallowed", S, "$0 > 0", "$0 >= 0"),
-    Mutant("duplicatenamesallowed", R, 'precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \\(registration.name): register one type per event name, and raise its Event.schemaVersion for a new shape rather than keeping the old type beside it")', "", mode="stmt"),
-    Mutant("repeatedtypetraps", R, "byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil", "byName[registration.name] == nil"),
+    Mutant("duplicatenamesallowed", R, "guard byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil else { throw DuplicateEventName() }", "", mode="stmt"),
+    Mutant("duplicatenamesmisnamed", S, "throw .duplicateEventName", "throw .byteBoundTooSmall", mode="stmt"),
+    Mutant("repeatedtyperefused", R, "byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil", "byName[registration.name] == nil"),
     Mutant("notfoundbyname", R, "byName[registration.name] = registration", "", mode="stmt"),
     # The binary encoding.
     Mutant("headwidth", E, "initial | 25", "initial | 26"),
@@ -193,7 +202,9 @@ MUTANTS = [
     Mutant("acknowledgedwhencancelled", "DestinationBuffer.swift", "guard !Task.isCancelled else { return }", "", mode="stmt", module="Destinations", nth=0),
     Mutant("nowilldeliver", "Deliver.swift", "store.acknowledger.willDeliver(store.positions)", "Set<UInt64>()", module="Destinations"),
     Mutant("withheldsent", "Deliver.swift", "return !held.contains(tag.position)", "return true", mode="stmt", module="Destinations"),
-    Mutant("emptybatchsent", "Deliver.swift", "guard !delivered.isEmpty else { return nil }", "", mode="stmt", module="Destinations"),
+    # The batch's timestamps, taken from every record rather than the ones delivered, so a batch
+    # whose records are all withheld is sent empty.
+    Mutant("emptybatchsent", "Deliver.swift", "delivered.map(\\.timestamp)", "batch.map(\\.timestamp)", module="Destinations"),
     Mutant("firstdestinationacknowledges", "Deliver.swift", "State(remaining: destinationCount, stores: stores)", "State(remaining: 1, stores: stores)", module="Destinations"),
     Mutant("nodestinationswait", "Deliver.swift", "destinationCount == 0", "destinationCount == -1", module="Destinations"),
     # A batch a full destination buffer dropped, read back from the store once that destination
@@ -270,7 +281,10 @@ MUTANTS = [
     Mutant("defaultalways", K, "        guard try find(key) else { return defaultValue }", "        return defaultValue", mode="stmt"),
     # The encoder's storage (TRAF-45): bytes written into room kept past them, which grows by
     # copying them, and is cut off where the bytes end.
-    Mutant("roomnotcopied", E, "base.copyMemory(from: old.baseAddress.unsafelyUnwrapped, byteCount: written)", "", mode="stmt"),
+    # No mutant for write(byteCount:)'s `if wrote`: makeRoom leaves the storage non-empty, so its
+    # base address is never nil and the branch can't be reached. Nor for FileSystem's Int(exactly:)
+    # on a file's size, which only a file past 2 GiB on a 32-bit Int would reach.
+    Mutant("roomnotcopied", E, "storage.append(contentsOf: repeatElement(0, count: grown - storage.count))", "storage = [UInt8](repeating: 0, count: grown)", mode="stmt"),
     Mutant("writtennotcounted", E, "byteCount += count", "", mode="stmt"),
     Mutant("widennotcounted", E, "byteCount += head.byteCount - 1", "", mode="stmt"),
     Mutant("insertnotcounted", E, "        byteCount += 1", "", mode="stmt"),

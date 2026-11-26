@@ -27,8 +27,7 @@ extension SerializedSuites {
 
             func constraintViolation() -> ConstraintViolation? {
                 gate.wait()
-                let minimum = Constraint<Int>.minimum(2)
-                return minimum.isSatisfied(by: number) ? nil : ConstraintViolation(property: "number", keyword: minimum.keyword)
+                return number >= 2 ? nil : ConstraintViolation(property: "number", keyword: .minimum(2))
             }
         }
 

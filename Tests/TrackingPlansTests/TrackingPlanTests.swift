@@ -37,14 +37,14 @@ struct TrackingPlanTests {
     }
 
     @Test("A plan's files are its index, then each event's document and example, ordered by name")
-    func paths() {
+    func paths() throws {
         let expected = [
             "tracking-plan.json",
             "checkout_started.v2.schema.json", "checkout_started.v2.example.json",
             "order_completed.v1.schema.json", "order_completed.v1.example.json",
             "signed_up.v1.schema.json", "signed_up.v1.example.json",
         ]
-        let sut = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
+        let sut = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
 
         let actual = sut.files.map(\.path)
 
@@ -81,7 +81,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
+        let sut = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
 
         let actual = try #require(sut.files.first { $0.path == "tracking-plan.json" })
 
@@ -116,7 +116,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema])
 
         let actual = try #require(sut.files.first { $0.path == "checkout_started.v2.schema.json" })
 
@@ -172,7 +172,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [OrderCompleted.schema])
+        let sut = try TrackingPlan(schemas: [OrderCompleted.schema])
 
         let actual = try #require(sut.files.first { $0.path == "order_completed.v1.schema.json" })
 
@@ -211,7 +211,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [SignedUp.schema])
+        let sut = try TrackingPlan(schemas: [SignedUp.schema])
 
         let actual = try #require(sut.files.first { $0.path == "signed_up.v1.schema.json" })
 
@@ -219,9 +219,9 @@ struct TrackingPlanTests {
     }
 
     @Test("The same schemas in any order make the same bytes, every time")
-    func deterministic() {
-        let first = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
-        let second = TrackingPlan(schemas: [OrderCompleted.schema, SignedUp.schema, CheckoutStarted.schema])
+    func deterministic() throws {
+        let first = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema, OrderCompleted.schema])
+        let second = try TrackingPlan(schemas: [OrderCompleted.schema, SignedUp.schema, CheckoutStarted.schema])
 
         let expected = first.files
         let actual = second.files
@@ -231,10 +231,10 @@ struct TrackingPlanTests {
     }
 
     @Test("A plan with no events has an index with no events and no documents")
-    func empty() {
+    func empty() throws {
         let expectedPaths = ["tracking-plan.json"]
         let expectedIndex = "{\n  \"events\": []\n}\n"
-        let sut = TrackingPlan(schemas: [])
+        let sut = try TrackingPlan(schemas: [])
 
         let actual = sut.files
 
@@ -270,7 +270,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [CartViewed.schema])
+        let sut = try TrackingPlan(schemas: [CartViewed.schema])
 
         let actual = try #require(sut.files.first { $0.path == "cart_viewed.v3.schema.json" })
 
@@ -293,7 +293,7 @@ struct TrackingPlanTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [EventSchema(name: "app_opened", version: 1, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "app_opened", version: 1, consentCategory: .analytics, properties: [])])
 
         let actual = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
 
@@ -301,9 +301,9 @@ struct TrackingPlanTests {
     }
 
     @Test("Two versions of one event are two documents, the lower version first")
-    func versions() {
+    func versions() throws {
         let expected = ["tracking-plan.json", "searched.v1.schema.json", "searched.v2.schema.json", "searched.v10.schema.json"]
-        let sut = TrackingPlan(schemas: [
+        let sut = try TrackingPlan(schemas: [
             EventSchema(name: "searched", version: 2, consentCategory: .analytics, properties: []),
             EventSchema(name: "searched", version: 10, consentCategory: .analytics, properties: []),
             EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: []),
@@ -315,9 +315,9 @@ struct TrackingPlanTests {
     }
 
     @Test("Schemas are ordered by their names' UTF-8 bytes, so uppercase comes before lowercase")
-    func byteOrder() {
+    func byteOrder() throws {
         let expected = ["Zulu", "apple", "zebra", "é"]
-        let sut = TrackingPlan(schemas: ["é", "zebra", "Zulu", "apple"].map {
+        let sut = try TrackingPlan(schemas: ["é", "zebra", "Zulu", "apple"].map {
             EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: [])
         })
 
@@ -327,7 +327,7 @@ struct TrackingPlanTests {
     }
 
     @Test("A name's bytes other than ASCII letters, digits, _ and - are percent-encoded in its file names")
-    func fileNames() {
+    func fileNames() throws {
         let expected = [
             "tracking-plan.json",
             "Box%3CString%3E.v1.schema.json", "Box%3CString%3E.v1.example.json",
@@ -336,7 +336,7 @@ struct TrackingPlanTests {
             "ok_name-1.v1.schema.json", "ok_name-1.v1.example.json",
             "tab%09.v1.schema.json", "tab%09.v1.example.json",
         ]
-        let sut = TrackingPlan(schemas: ["Box<String>", "a/b c", "café", "ok_name-1", "tab\t"].map {
+        let sut = try TrackingPlan(schemas: ["Box<String>", "a/b c", "café", "ok_name-1", "tab\t"].map {
             EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: [])
         })
 
@@ -348,63 +348,106 @@ struct TrackingPlanTests {
     @Test("Quotes, backslashes and control characters in a name are escaped, and other characters kept")
     func escaping() throws {
         let expectedTitle = #"  "title": "say \"hi\" \\ to\n\r\t\b\f\u0001\u001Fé","#
-        let sut = TrackingPlan(schemas: [EventSchema(name: "say \"hi\" \\ to\n\r\t\u{08}\u{0C}\u{01}\u{1F}é", version: 1, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "say \"hi\" \\ to\n\r\t\u{08}\u{0C}\u{01}\u{1F}é", version: 1, consentCategory: .analytics, properties: [])])
 
         let actual = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
 
         #expect(String(decoding: actual.contents, as: UTF8.self).split(separator: "\n").contains { $0 == expectedTitle })
     }
 
-    @Test("The checked spelling throws emptyEventName for a schema with no name")
-    func checkedEmptyName() {
+    @Test("The initializer throws emptyEventName for a schema with no name")
+    func emptyName() {
         let schemas = [EventSchema(name: "", version: 1, consentCategory: .analytics, properties: [])]
 
         #expect(throws: TrackingPlanError.emptyEventName) {
-            try TrackingPlan(checkedSchemas: schemas)
+            try TrackingPlan(schemas: schemas)
         }
     }
 
-    @Test("The checked spelling throws duplicateProperty for a schema listing a property twice")
-    func checkedDuplicateProperty() {
+    @Test("The initializer throws duplicateProperty for a schema listing a property twice")
+    func duplicateProperty() {
         let property = EventSchema.Property(name: "plan", typeName: "String", isOptional: false)
         let schemas = [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [property, property])]
 
         #expect(throws: TrackingPlanError.duplicateProperty) {
-            try TrackingPlan(checkedSchemas: schemas)
+            try TrackingPlan(schemas: schemas)
         }
     }
 
-    @Test("The checked spelling throws duplicateEvent for two schemas of one name and version")
-    func checkedDuplicateEvent() {
+    @Test("The initializer throws duplicateEvent for two schemas of one name and version")
+    func duplicateEvent() {
         let schemas = [
             EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: []),
             EventSchema(name: "signed_up", version: 1, consentCategory: .advertising, properties: []),
         ]
 
         #expect(throws: TrackingPlanError.duplicateEvent) {
-            try TrackingPlan(checkedSchemas: schemas)
+            try TrackingPlan(schemas: schemas)
         }
     }
 
-    @Test("The checked spelling throws duplicateEvent for names that differ only in case, even with names between them")
-    func checkedCaseOnly() {
+    @Test("The initializer throws duplicateEvent for names that differ only in case, even with names between them")
+    func caseOnly() {
         let schemas = ["SignedUp", "Search", "signedUp"].map {
             EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: [])
         }
 
         #expect(throws: TrackingPlanError.duplicateEvent) {
-            try TrackingPlan(checkedSchemas: schemas)
+            try TrackingPlan(schemas: schemas)
         }
     }
 
-    @Test("The checked spelling makes the plain spelling's plan from valid schemas")
-    func checkedValid() throws {
+    @Test("The initializer throws invalidKeyword for a keyword no constraint could state", arguments: [
+        ValidationKeyword.minLength(-1), .maxLength(-1), .minItems(-1), .maxItems(-1),
+        .minimum(.nan), .maximum(.infinity), .minimum(-.infinity),
+        .pattern("(", example: "("), .pattern("^[0-9]+$", example: "abc"),
+    ])
+    func invalidKeyword(_ keyword: ValidationKeyword) {
+        let property = EventSchema.Property(name: "plan", typeName: "String", isOptional: false, keywords: [keyword])
+        let schemas = [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [property])]
+
+        #expect(throws: TrackingPlanError.invalidKeyword) {
+            try TrackingPlan(schemas: schemas)
+        }
+    }
+
+    @Test("The initializer throws invalidKeyword for a property whose Refined type's rule throws, optional or not, rather than export it as unconstrained")
+    func invalidRefinedRule() {
+        enum Broken: Refinement {
+            static var constraints: [Constraint<String>] {
+                get throws(InvalidConstraint) { try [.maxLength(-1)] }
+            }
+        }
+        let optional = EventSchema.Property(
+            name: "plan", typeName: "Refined<String, Broken>", isOptional: true,
+            hasInvalidConstraint: ValidationKeyword.hasInvalidConstraint(of: \Optional<Refined<String, Broken>>.self),
+            keywords: ValidationKeyword.keywords(of: Optional<Refined<String, Broken>>.self)
+        )
+        let schemas = [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [optional])]
+
+        #expect(optional.hasInvalidConstraint)
+        #expect(throws: TrackingPlanError.invalidKeyword) {
+            try TrackingPlan(schemas: schemas)
+        }
+    }
+
+    @Test("The initializer accepts the boundary keywords: counts of 0, finite bounds, a pattern its example matches")
+    func boundaryKeywords() throws {
+        let expected: [ValidationKeyword] = [.minLength(0), .maxItems(0), .minimum(-.greatestFiniteMagnitude), .maximum(.greatestFiniteMagnitude), .pattern("^[0-9]+$", example: "12")]
+        let property = EventSchema.Property(name: "plan", typeName: "String", isOptional: false, keywords: expected)
+
+        let actual = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [property])])
+
+        #expect(actual.schemas.first?.properties.first?.keywords == expected)
+    }
+
+    @Test("The initializer makes a plan of valid schemas, ordered by name")
+    func valid() throws {
         let schemas = [SignedUp.schema, CheckoutStarted.schema]
-        let expected = TrackingPlan(schemas: schemas)
+        let expected = [CheckoutStarted.schema, SignedUp.schema]
 
-        let actual = try TrackingPlan(checkedSchemas: schemas)
+        let actual = try TrackingPlan(schemas: schemas)
 
-        #expect(actual == expected)
-        #expect(actual.schemas == [CheckoutStarted.schema, SignedUp.schema])
+        #expect(actual.schemas == expected)
     }
 }

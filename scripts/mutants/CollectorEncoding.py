@@ -44,7 +44,7 @@ MUTANTS = [
     Mutant("padasphone", C, '"pad"', '"phone"'),
     Mutant("ethernetrenamed", C, '"wiredEthernet"', '"ethernet"'),
     Mutant("localeidentifier", C, "locale.identifier(.bcp47)", "locale.identifier"),
-    Mutant("nosamplerate", C, 'members["sampleRate"] = .number(exactly: sampleRate.value)', "", mode="stmt"),
+    Mutant("nosamplerate", C, 'members["sampleRate"] = rate', "", mode="stmt"),
     Mutant("nosession", C, 'members["session"] = .string(session.uuidString)', "", mode="stmt"),
     Mutant("vendoridentifierunredacted", C, "context[VendorIdentifierKey.self].flatMap(reveal)", "context[VendorIdentifierKey.self]?.value"),
     Mutant("emptytrace", C, "!trace.isEmpty", "true"),

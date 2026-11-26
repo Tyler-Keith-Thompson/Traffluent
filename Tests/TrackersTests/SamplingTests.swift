@@ -55,8 +55,8 @@ struct SamplingTests {
     }
 
     @Test("With seed 42, an event sampler at 0.5 keeps exactly the pinned events")
-    func pinnedEvents() async {
-        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.5)], samplingSeed: 42)
+    func pinnedEvents() async throws {
+        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.5))], samplingSeed: 42)
         let expected = [0, 4, 5, 7, 9, 15]
 
         for number in 0 ..< 16 {
@@ -74,9 +74,9 @@ struct SamplingTests {
     }
 
     @Test("With seed 42, a grouped sampler at 0.5 keeps exactly the pinned groups, every record of a group alike")
-    func pinnedGroups() async {
+    func pinnedGroups() async throws {
         let cohorts = ["a", "b", "c", "d", "e", "f", "g", "h"]
-        let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: 0.5)], samplingSeed: 42)
+        let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: try SampleRate(0.5))], samplingSeed: 42)
         let expected = ["c", "f", "h"]
         let expectedDropped = 15
 
@@ -103,8 +103,8 @@ struct SamplingTests {
     }
 
     @Test("A sampler at rate 0 keeps none of its events, each reported")
-    func rateZero() async {
-        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: 0)], samplingSeed: 1)
+    func rateZero() async throws {
+        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0))], samplingSeed: 1)
         let expectedCount = 0
         let expectedDropped = 20
 
@@ -123,10 +123,10 @@ struct SamplingTests {
     }
 
     @Test("A sampler at rate 1 keeps every one of its events, each carrying rate 1")
-    func rateOne() async {
-        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: 1)], samplingSeed: 1)
+    func rateOne() async throws {
+        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(1))], samplingSeed: 1)
         let expected = Array(0 ..< 20)
-        let expectedRate: SampleRate = 1
+        let expectedRate: SampleRate = try SampleRate(1)
 
         for number in 0 ..< 20 {
             sut.track(Scrolled(number: number))
@@ -146,9 +146,9 @@ struct SamplingTests {
     }
 
     @Test("A kept record carries its sampler's rate; an event no sampler applies to is kept and carries no rate")
-    func rateCarried() async {
-        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.5)], samplingSeed: 3)
-        let expectedRate: SampleRate = 0.5
+    func rateCarried() async throws {
+        let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.5))], samplingSeed: 3)
+        let expectedRate: SampleRate = try SampleRate(0.5)
 
         for number in 0 ..< 10 {
             sut.track(Scrolled(number: number))
@@ -174,12 +174,12 @@ struct SamplingTests {
     }
 
     @Test("A record two samplers keep carries the product of their rates; one either drops is dropped")
-    func ratesMultiply() async {
+    func ratesMultiply() async throws {
         let sut = Tracker(
-            samplers: [.events(of: Scrolled.self, rate: 0.5), .events(where: { $0.event is Scrolled }, rate: 0.5)],
+            samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.5)), .events(where: { $0.event is Scrolled }, rate: try SampleRate(0.5))],
             samplingSeed: 5
         )
-        let expectedRate: SampleRate = 0.25
+        let expectedRate: SampleRate = try SampleRate(0.25)
 
         for number in 0 ..< 200 {
             sut.track(Scrolled(number: number))
@@ -197,8 +197,8 @@ struct SamplingTests {
     }
 
     @Test("Appending a sampler changes no decision of the samplers before it")
-    func samplersIndependent() async {
-        func kept(_ samplers: [Sampler]) async -> [Int] {
+    func samplersIndependent() async throws {
+        func kept(_ samplers: [Sampler]) async throws -> [Int] {
             let tracker = Tracker(samplers: samplers, samplingSeed: 9)
             for number in 0 ..< 64 {
                 tracker.track(Scrolled(number: number))
@@ -213,17 +213,17 @@ struct SamplingTests {
             }
             return numbers
         }
-        let expected = await kept([.events(of: Scrolled.self, rate: 0.5)])
+        let expected = try await kept([.events(of: Scrolled.self, rate: try SampleRate(0.5))])
 
-        let actual = await kept([.events(of: Scrolled.self, rate: 0.5), .events(of: Tapped.self, rate: 0.5)])
+        let actual = try await kept([.events(of: Scrolled.self, rate: try SampleRate(0.5)), .events(of: Tapped.self, rate: try SampleRate(0.5))])
 
         #expect(actual == expected)
     }
 
     @Test("A predicate sampler sees the context the enrichers set")
-    func predicateSeesEnrichedContext() async {
+    func predicateSeesEnrichedContext() async throws {
         let cohort = Enricher { $0[CohortKey.self] = "beta" }
-        let sut = Tracker(enrichers: [cohort], samplers: [.events(where: { $0.context[CohortKey.self] == "beta" }, rate: 0)], samplingSeed: 1)
+        let sut = Tracker(enrichers: [cohort], samplers: [.events(where: { $0.context[CohortKey.self] == "beta" }, rate: try SampleRate(0))], samplingSeed: 1)
         let expectedCount = 0
 
         sut.track(Tapped(number: 0))
@@ -237,8 +237,8 @@ struct SamplingTests {
     }
 
     @Test("A grouped sampler leaves a record with no value of its key alone")
-    func ungroupedKept() async {
-        let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: 0)], samplingSeed: 1)
+    func ungroupedKept() async throws {
+        let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: try SampleRate(0))], samplingSeed: 1)
         let expected = [Tapped(number: 0)]
 
         sut.track(Tapped(number: 0))
@@ -255,9 +255,9 @@ struct SamplingTests {
     }
 
     @Test("A sampled-out event is never written to the store; the kept ones are")
-    func sampledOutNotWritten() async {
+    func sampledOutNotWritten() async throws {
         let store = ListingStore()
-        let sut = Tracker(store: store, samplers: [.events(of: Scrolled.self, rate: 0)], samplingSeed: 1)
+        let sut = Tracker(store: store, samplers: [.events(of: Scrolled.self, rate: try SampleRate(0))], samplingSeed: 1)
         let expected = ["Tapped(number: 1)"]
 
         sut.track(Scrolled(number: 0))
@@ -270,9 +270,9 @@ struct SamplingTests {
     }
 
     @Test("A sampled-out event of an undecided category is dropped rather than held")
-    func sampledOutNotHeld() async {
+    func sampledOutNotHeld() async throws {
         let consent = Consent()
-        let sut = Tracker(consent: consent, samplers: [.events(of: AdViewed.self, rate: 0)], samplingSeed: 1)
+        let sut = Tracker(consent: consent, samplers: [.events(of: AdViewed.self, rate: try SampleRate(0))], samplingSeed: 1)
         let expected = 0
 
         sut.track(AdViewed(number: 0))
@@ -282,9 +282,9 @@ struct SamplingTests {
     }
 
     @Test("Drops of one event merge while unread: one report per event, counting all, across their times")
-    func dropsReported() async {
+    func dropsReported() async throws {
         let ticker = Ticker()
-        let sut = Tracker(samplers: [.events(where: { _ in true }, rate: 0)], samplingSeed: 1, now: ticker.now)
+        let sut = Tracker(samplers: [.events(where: { _ in true }, rate: try SampleRate(0))], samplingSeed: 1, now: ticker.now)
         let expected = [
             SamplingDropReport(eventName: "Scrolled", recordCount: 2, timestamps: Date(timeIntervalSince1970: 1) ... Date(timeIntervalSince1970: 3)),
             SamplingDropReport(eventName: "Tapped", recordCount: 1, timestamps: Date(timeIntervalSince1970: 2) ... Date(timeIntervalSince1970: 2)),
@@ -313,8 +313,8 @@ struct SamplingTests {
     }
 
     @Test("Two trackers seeded by default decide differently")
-    func defaultSeedRandom() async {
-        func kept(_ tracker: Tracker) async -> [Int] {
+    func defaultSeedRandom() async throws {
+        func kept(_ tracker: Tracker) async throws -> [Int] {
             for number in 0 ..< 128 {
                 tracker.track(Scrolled(number: number))
             }
@@ -325,9 +325,9 @@ struct SamplingTests {
             }
             return numbers
         }
-        let first = await kept(Tracker(samplers: [.events(of: Scrolled.self, rate: 0.5)]))
+        let first = try await kept(Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.5))]))
 
-        let actual = await kept(Tracker(samplers: [.events(of: Scrolled.self, rate: 0.5)]))
+        let actual = try await kept(Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.5))]))
 
         // Equal by chance with probability 2^-128.
         #expect(actual != first)
@@ -342,31 +342,19 @@ struct SamplingTests {
         #expect(await reports.next() == nil)
     }
 
-    @Test("A rate in 0 ... 1 is made by the checked spelling, with its value")
-    func checkedAccepts() throws {
+    @Test("A rate in 0 ... 1 is made, with its value, both ends included")
+    func accepts() throws {
         let expected = [0, 0.25, 1]
 
-        let actual = try expected.map { try SampleRate(checked: $0).value }
+        let actual = try expected.map { try SampleRate($0).value }
 
         #expect(actual == expected)
     }
 
-    @Test("The checked spelling throws InvalidSampleRate below 0, above 1 and for NaN", arguments: [-0.000_1, 1.000_1, Double.nan, -Double.infinity, Double.infinity])
-    func checkedThrows(_ value: Double) {
+    @Test("The initializer throws InvalidSampleRate below 0, above 1 and for NaN", arguments: [-0.000_1, 1.000_1, Double.nan, -Double.infinity, Double.infinity])
+    func invalidRate(_ value: Double) {
         #expect(throws: InvalidSampleRate()) {
-            try SampleRate(checked: value)
+            try SampleRate(value)
         }
-    }
-
-    @Test("Literals make rates: 0 and 1 as integers, fractions as floating point")
-    func literals() {
-        let zero: SampleRate = 0
-        let one: SampleRate = 1
-        let tenth: SampleRate = 0.1
-        let expected = [0, 1, 0.1]
-
-        let actual = [zero.value, one.value, tenth.value]
-
-        #expect(actual == expected)
     }
 }

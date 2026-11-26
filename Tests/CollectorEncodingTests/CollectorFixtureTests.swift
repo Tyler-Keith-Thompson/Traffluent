@@ -57,7 +57,7 @@ struct CollectorFixtureTests {
     func fixture() throws {
         let fixture = try #require(Bundle.module.url(forResource: "collector-batch", withExtension: "json", subdirectory: "Fixtures"))
         let expected = try Data(contentsOf: fixture)
-        let plan = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: TraceParentInstrument())
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
@@ -65,7 +65,7 @@ struct CollectorFixtureTests {
         context[LocaleKey.self] = Locale(identifier: "en_US")
         context[NetworkKey.self] = .wifi
         context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
-        context[SampleRateKey.self] = 0.5
+        context[SampleRateKey.self] = try SampleRate(0.5)
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!)
         context[TraceParentKey.self] = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"

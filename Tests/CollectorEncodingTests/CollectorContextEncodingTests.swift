@@ -40,7 +40,7 @@ struct CollectorContextEncodingTests {
 
     @Test("A record tracked in the top-level context, with no instrument, has an empty context")
     func emptyContext() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
@@ -51,7 +51,7 @@ struct CollectorContextEncodingTests {
 
     @Test("An application's nil values are left out of its object")
     func applicationWithoutValues() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: nil, version: "1.0", build: nil)
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -69,7 +69,7 @@ struct CollectorContextEncodingTests {
         ]
     )
     func formFactors(formFactor: DeviceKey.Value.FormFactor, name: String) throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[DeviceKey.self] = DeviceKey.Value(model: "Model1,1", formFactor: formFactor)
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -87,7 +87,7 @@ struct CollectorContextEncodingTests {
         ]
     )
     func networks(network: NetworkKey.Value, name: String) throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[NetworkKey.self] = network
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -100,7 +100,7 @@ struct CollectorContextEncodingTests {
 
     @Test("A locale is its BCP 47 identifier")
     func locale() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: NoOpInstrument())
         var context = ServiceContext.topLevel
         context[LocaleKey.self] = Locale(identifier: "pt_BR")
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -114,10 +114,10 @@ struct CollectorContextEncodingTests {
     @Test("Every field the instrument injects is in trace, and a key the encoder doesn't know is left out")
     func traceAndUnknownKeys() throws {
         let instrument = FixedInstrument(values: [(key: "traceparent", value: "00-a-b-01"), (key: "tracestate", value: "vendor=1")])
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: instrument)
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: instrument)
         var context = ServiceContext.topLevel
         context[ExperimentKey.self] = "new-checkout"
-        context[SampleRateKey.self] = 0.125
+        context[SampleRateKey.self] = try SampleRate(0.125)
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"sampleRate":0.125,"session":"00000000-0000-4000-8000-00000000000A","trace":{"traceparent":"00-a-b-01","tracestate":"vendor=1"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
@@ -129,9 +129,9 @@ struct CollectorContextEncodingTests {
 
     @Test("Each record's own trace context is written, not only the first's")
     func eachRecordsTrace() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Opened.schema]), instrument: FixedInstrument(values: []))
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Opened.schema]), instrument: FixedInstrument(values: []))
         var context = ServiceContext.topLevel
-        context[SampleRateKey.self] = 1
+        context[SampleRateKey.self] = try SampleRate(1)
         let first = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let second = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = #"{"records":[{"context":{"sampleRate":1},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#

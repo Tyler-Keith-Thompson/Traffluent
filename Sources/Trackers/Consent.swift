@@ -45,29 +45,25 @@ public struct Consent: Sendable {
 
     let gate: ConsentGate
 
-    /// A consent with the categories in `statuses` decided, and every other undecided.
+    /// A consent with the categories in `statuses` decided, and every other undecided, holding
+    /// at most ``defaultHeldRecordLimit`` records while undecided.
+    ///
+    /// - Parameter statuses: Each category's status as the app last saved it.
+    public init(_ statuses: [ConsentCategory: ConsentStatus] = [:]) {
+        gate = ConsentGate(statuses: statuses, heldRecordLimit: Consent.defaultHeldRecordLimit)
+    }
+
+    /// A consent with the categories in `statuses` decided, and every other undecided, holding
+    /// at most `heldRecordLimit` records while undecided.
     ///
     /// - Parameters:
     ///   - statuses: Each category's status as the app last saved it.
     ///   - heldRecordLimit: The most records held while undecided, across every category; 0
     ///     drops every undecided event.
-    /// - Precondition: `heldRecordLimit` is not negative.
-    public init(_ statuses: [ConsentCategory: ConsentStatus] = [:], heldRecordLimit: Int = Consent.defaultHeldRecordLimit) {
-        precondition(heldRecordLimit >= 0, "A consent's held record limit can't be negative, not \(heldRecordLimit)")
+    /// - Throws: ``NegativeHeldRecordLimit`` when `heldRecordLimit` is negative.
+    public init(_ statuses: [ConsentCategory: ConsentStatus] = [:], heldRecordLimit: Int) throws(NegativeHeldRecordLimit) {
+        guard heldRecordLimit >= 0 else { throw NegativeHeldRecordLimit() }
         gate = ConsentGate(statuses: statuses, heldRecordLimit: heldRecordLimit)
-    }
-
-    /// A consent with the categories in `statuses` decided, and every other undecided, holding
-    /// at most `checkedHeldRecordLimit` records while undecided.
-    ///
-    /// - Parameters:
-    ///   - statuses: Each category's status as the app last saved it.
-    ///   - checkedHeldRecordLimit: The most records held while undecided, across every category;
-    ///     0 drops every undecided event.
-    /// - Throws: ``NegativeHeldRecordLimit`` when `checkedHeldRecordLimit` is negative.
-    public init(_ statuses: [ConsentCategory: ConsentStatus] = [:], checkedHeldRecordLimit: Int) throws(NegativeHeldRecordLimit) {
-        guard checkedHeldRecordLimit >= 0 else { throw NegativeHeldRecordLimit() }
-        self.init(statuses, heldRecordLimit: checkedHeldRecordLimit)
     }
 
     /// Grants `categories`: their held events are delivered, oldest first, and later ones as they

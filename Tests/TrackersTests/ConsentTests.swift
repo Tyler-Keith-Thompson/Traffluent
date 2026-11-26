@@ -260,7 +260,7 @@ struct ConsentTests {
     @Test("When the hold is full its oldest record is dropped, and a grant delivers the rest")
     func holdBound() async throws {
         let recorder = InMemoryDestination()
-        let consent = Consent(heldRecordLimit: 2)
+        let consent = try Consent(heldRecordLimit: 2)
         let sut = Tracker(consent: consent)
         let expected = [3, 4]
         for number in 1 ... 4 {
@@ -278,8 +278,8 @@ struct ConsentTests {
     }
 
     @Test("A record dropped for room is reported as it is dropped, while the category is still undecided")
-    func overflowReportedAtOnce() async {
-        let consent = Consent(heldRecordLimit: 2)
+    func overflowReportedAtOnce() async throws {
+        let consent = try Consent(heldRecordLimit: 2)
         let ticker = Ticker()
         let sut = Tracker(consent: consent, now: ticker.now)
         let expected = ConsentDropReport.heldRecordLimit(
@@ -297,8 +297,8 @@ struct ConsentTests {
     }
 
     @Test("Overflow reports no one has read merge into one: many records dropped for room wait as one report counting them all")
-    func overflowReportsMerge() async {
-        let consent = Consent(heldRecordLimit: 1)
+    func overflowReportsMerge() async throws {
+        let consent = try Consent(heldRecordLimit: 1)
         let ticker = Ticker()
         let sut = Tracker(consent: consent, now: ticker.now)
         let expected: [ConsentDropReport] = [
@@ -317,8 +317,8 @@ struct ConsentTests {
     }
 
     @Test("Overflow reports merge only with the one waiting right before them, so they stay in order with denials")
-    func overflowMergesInOrder() async {
-        let consent = Consent(heldRecordLimit: 1)
+    func overflowMergesInOrder() async throws {
+        let consent = try Consent(heldRecordLimit: 1)
         let ticker = Ticker()
         let sut = Tracker(consent: consent, now: ticker.now)
         let expected: [ConsentDropReport] = [
@@ -344,7 +344,7 @@ struct ConsentTests {
     @Test("The hold's bound is across categories: the oldest record of any is dropped first")
     func holdBoundAcrossCategories() async throws {
         let recorder = InMemoryDestination()
-        let consent = Consent(heldRecordLimit: 2)
+        let consent = try Consent(heldRecordLimit: 2)
         let sut = Tracker(consent: consent)
         let expected = [2, 3]
         sut.track(AdClicked(number: 1))
@@ -382,7 +382,7 @@ struct ConsentTests {
     @Test("A hold of 0 drops every undecided event, reported")
     func zeroHold() async throws {
         let recorder = InMemoryDestination()
-        let consent = Consent(heldRecordLimit: 0)
+        let consent = try Consent(heldRecordLimit: 0)
         let ticker = Ticker()
         let sut = Tracker(consent: consent, now: ticker.now)
         // Read after the tracker finished, so the two drops wait, merged, as one report.
@@ -467,8 +467,8 @@ struct ConsentTests {
     }
 
     @Test("An overflow drop is reported before a later denial's")
-    func overflowReportedFirst() async {
-        let consent = Consent(heldRecordLimit: 1)
+    func overflowReportedFirst() async throws {
+        let consent = try Consent(heldRecordLimit: 1)
         let ticker = Ticker()
         let sut = Tracker(consent: consent, now: ticker.now)
         let expected: [ConsentDropReport] = [
@@ -527,9 +527,9 @@ struct ConsentTests {
         }
     }
 
-    @Test("The checked spelling makes a consent holding up to the limit it is given")
-    func checkedLimit() async throws {
-        let consent = try Consent(checkedHeldRecordLimit: 1)
+    @Test("A consent given a limit holds up to it")
+    func limit() async throws {
+        let consent = try Consent(heldRecordLimit: 1)
         let sut = Tracker(consent: consent)
         let expected = 1
         sut.track(Viewed(number: 1))
@@ -541,19 +541,19 @@ struct ConsentTests {
         await sut.finish()
     }
 
-    @Test("The checked spelling accepts a limit of 0")
-    func checkedZeroLimit() throws {
-        let sut = try Consent([.analytics: .granted], checkedHeldRecordLimit: 0)
+    @Test("The initializer accepts a limit of 0")
+    func zeroLimit() throws {
+        let sut = try Consent([.analytics: .granted], heldRecordLimit: 0)
 
         #expect(sut.status(of: .analytics) == .granted)
     }
 
-    @Test("The checked spelling throws NegativeHeldRecordLimit for a negative limit", arguments: [-1, Int.min])
-    func checkedNegativeLimit(limit: Int) {
+    @Test("The initializer throws NegativeHeldRecordLimit for a negative limit", arguments: [-1, Int.min])
+    func negativeLimit(limit: Int) {
         let expected = NegativeHeldRecordLimit()
 
         #expect(throws: expected) {
-            _ = try Consent(checkedHeldRecordLimit: limit)
+            _ = try Consent(heldRecordLimit: limit)
         }
     }
 

@@ -25,7 +25,7 @@ struct TrackingEventsExamplesTests {
     @Test("Batching")
     func batching() async throws {
         let tracker = Tracker()
-        let delivery = tracker.records
+        let delivery = try tracker.records
             .batch(strategy: .either(.count(50), .time(interval: .seconds(10), clock: ContinuousClock())))
             .deliver(to: ConsoleDestination(), batchBufferLimit: 10)
         await tracker.finish()

@@ -14,10 +14,8 @@ struct RejectionTests {
         var count: Int
 
         func constraintViolation() -> ConstraintViolation? {
-            let minLength = Constraint<String>.minLength(1)
-            if !minLength.isSatisfied(by: query) { return ConstraintViolation(property: "query", keyword: minLength.keyword) }
-            let maximum = Constraint<Int>.maximum(10)
-            if !maximum.isSatisfied(by: count) { return ConstraintViolation(property: "count", keyword: maximum.keyword) }
+            if query.unicodeScalars.isEmpty { return ConstraintViolation(property: "query", keyword: .minLength(1)) }
+            if count > 10 { return ConstraintViolation(property: "count", keyword: .maximum(10)) }
             return nil
         }
     }

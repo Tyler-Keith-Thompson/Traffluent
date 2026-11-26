@@ -207,18 +207,24 @@ public struct BinaryEncoder: Sendable {
     }
 
     /// Writes `count` bytes after those written so far, which `body` initializes from the
-    /// address it is given.
-    ///
-    /// - Precondition: `count` is positive.
+    /// address it is given; nothing for a `count` of 0 or less, without calling `body`.
     @inlinable
     mutating func write(byteCount count: Int, _ body: (UnsafeMutableRawPointer) -> Void) {
+        guard count > 0 else { return }
         if storage.count - byteCount < count {
             makeRoom(for: count)
         }
         let start = byteCount
-        // Not empty: the room just made holds `count` bytes, and `count` is positive.
-        storage.withUnsafeMutableBytes { body($0.baseAddress.unsafelyUnwrapped + start) }
-        byteCount += count
+        // The address is never nil: the storage holds at least `count` positive bytes of room.
+        // Were it nil, nothing is counted as written, so the bytes and the count still agree.
+        let wrote = storage.withUnsafeMutableBytes { bytes -> Bool in
+            guard let base = bytes.baseAddress else { return false }
+            body(base + start)
+            return true
+        }
+        if wrote {
+            byteCount += count
+        }
     }
 
     /// Grows `storage` to hold `count` more bytes than are written, at least doubling it, so
@@ -226,17 +232,8 @@ public struct BinaryEncoder: Sendable {
     @usableFromInline @inline(never)
     mutating func makeRoom(for count: Int) {
         let grown = max(byteCount + count, storage.count * 2, 64)
-        let written = byteCount
-        storage = storage.withUnsafeBytes { old in
-            [UInt8](unsafeUninitializedCapacity: grown) { new, initializedCount in
-                // The bytes written are kept, and the room past them is zeros.
-                let base = UnsafeMutableRawPointer(new.baseAddress.unsafelyUnwrapped)
-                if written > 0 {
-                    base.copyMemory(from: old.baseAddress.unsafelyUnwrapped, byteCount: written)
-                }
-                (base + written).initializeMemory(as: UInt8.self, repeating: 0, count: grown - written)
-                initializedCount = grown
-            }
-        }
+        // Appended rather than copied through pointers: no address can be missing, so the bytes
+        // written are always kept, and the room past them is zeros.
+        storage.append(contentsOf: repeatElement(0, count: grown - storage.count))
     }
 }

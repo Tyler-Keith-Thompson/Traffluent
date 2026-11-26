@@ -129,7 +129,7 @@ struct InMemoryDestinationTests {
 
     @Test("Below its capacity it keeps every record", arguments: [(capacity: 3, tracked: 2), (capacity: 3, tracked: 3)])
     func belowCapacity(capacity: Int, tracked: Int) async throws {
-        let sut = InMemoryDestination(capacity: capacity)
+        let sut = try InMemoryDestination(capacity: capacity)
         let tracker = Tracker()
         let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: sut)
         let expected = Array(1...tracked)
@@ -146,7 +146,7 @@ struct InMemoryDestinationTests {
 
     @Test("One record past its capacity drops the oldest")
     func pastCapacity() async throws {
-        let sut = InMemoryDestination(capacity: 3)
+        let sut = try InMemoryDestination(capacity: 3)
         let tracker = Tracker()
         let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: sut)
         let expectedRecords = [2, 3, 4]
@@ -166,7 +166,7 @@ struct InMemoryDestinationTests {
 
     @Test("Across batches it keeps the newest records, and the oldest kept batch holds only the newest of its records")
     func acrossBatches() async throws {
-        let sut = InMemoryDestination(capacity: 5)
+        let sut = try InMemoryDestination(capacity: 5)
         let tracker = Tracker()
         let delivery = tracker.records.batch(strategy: .count(3)).deliver(to: sut)
         let expectedRecords = [3, 4, 5, 6, 7]
@@ -185,8 +185,8 @@ struct InMemoryDestinationTests {
     }
 
     @Test("A batch that drops several older batches whole and part of the next keeps the rest in order")
-    func dropsSeveralBatches() async {
-        let sut = InMemoryDestination(capacity: 4)
+    func dropsSeveralBatches() async throws {
+        let sut = try InMemoryDestination(capacity: 4)
         let location = SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1)
         let received = [[1], [2], [3, 4, 5], [6, 7]].map { numbers in
             numbers.map { EventRecord(event: Tapped(number: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location) }
@@ -202,8 +202,8 @@ struct InMemoryDestinationTests {
     }
 
     @Test("A batch larger than the capacity keeps only its newest records")
-    func batchLargerThanCapacity() async {
-        let sut = InMemoryDestination(capacity: 2)
+    func batchLargerThanCapacity() async throws {
+        let sut = try InMemoryDestination(capacity: 2)
         let location = SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1)
         let received = [[1], [2, 3, 4, 5]].map { numbers in
             numbers.map { EventRecord(event: Tapped(number: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location) }
@@ -255,7 +255,7 @@ struct InMemoryDestinationTests {
 
     @Test("deliveries buffers the newest capacity batches while nobody reads, dropping the oldest")
     func deliveriesBounded() async throws {
-        let sut = InMemoryDestination(capacity: 2)
+        let sut = try InMemoryDestination(capacity: 2)
         let location = SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1)
         let received = [[1], [2], [3]].map { numbers in
             numbers.map { EventRecord(event: Tapped(number: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location) }
@@ -273,16 +273,16 @@ struct InMemoryDestinationTests {
         #expect(actual == expected)
     }
 
-    @Test("The checked spelling throws InvalidCapacity for a capacity below 1", arguments: [0, -1, Int.min])
-    func checkedThrows(capacity: Int) {
+    @Test("The initializer throws InvalidCapacity for a capacity below 1", arguments: [0, -1, Int.min])
+    func invalidCapacity(capacity: Int) {
         #expect(throws: InvalidCapacity()) {
-            _ = try InMemoryDestination(checkedCapacity: capacity)
+            _ = try InMemoryDestination(capacity: capacity)
         }
     }
 
-    @Test("The checked spelling keeps the newest checkedCapacity records, down to 1")
-    func checkedKeeps() async throws {
-        let sut = try InMemoryDestination(checkedCapacity: 1)
+    @Test("A destination keeps the newest capacity records, down to 1")
+    func keeps() async throws {
+        let sut = try InMemoryDestination(capacity: 1)
         let location = SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1)
         let received = [1, 2].map { EventRecord(event: Tapped(number: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: location) }
         let expected = [Tapped(number: 2)]

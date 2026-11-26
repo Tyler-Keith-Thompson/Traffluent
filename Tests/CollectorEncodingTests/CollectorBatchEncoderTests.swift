@@ -72,7 +72,7 @@ struct CollectorBatchEncoderTests {
     // tests decode: CollectorFixtureTests checks the file holds them.
     @Test("A hand-worked batch encodes every member of each record, keys sorted and no whitespace")
     func handWorkedBatch() throws {
-        let plan = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: TraceParentInstrument())
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
@@ -80,7 +80,7 @@ struct CollectorBatchEncoderTests {
         context[LocaleKey.self] = Locale(identifier: "en_US")
         context[NetworkKey.self] = .wifi
         context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
-        context[SampleRateKey.self] = 0.5
+        context[SampleRateKey.self] = try SampleRate(0.5)
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!)
         context[TraceParentKey.self] = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -119,7 +119,7 @@ struct CollectorBatchEncoderTests {
 
     @Test("A redelivered record encodes with the identifier it was first sent with and isRedelivered true")
     func redelivered() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let id = UUID(uuidString: "2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E")!
         let firstDelivery = EventRecord(
@@ -145,7 +145,7 @@ struct CollectorBatchEncoderTests {
 
     @Test("Records are encoded in the batch's order, oldest first")
     func order() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let batch = [3, 1, 2].map { size in
             EventRecord(event: CheckoutStarted(cartSize: size, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
@@ -162,7 +162,7 @@ struct CollectorBatchEncoderTests {
 
     @Test("An empty batch is an empty records array")
     func emptyBatch() throws {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: []), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let expected = #"{"records":[]}"#
 
         let actual = try sut.encode([])
@@ -172,7 +172,7 @@ struct CollectorBatchEncoderTests {
 
     @Test("A timestamp is ISO 8601 in UTC with milliseconds, whole seconds included")
     func timestamp() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let record = EventRecord(
             id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
@@ -189,7 +189,7 @@ struct CollectorBatchEncoderTests {
 
     @Test("HTTPDestination sends the encoder's body with its content type")
     func throughHTTPDestination() async throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 4, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = try encoder.encode([record])

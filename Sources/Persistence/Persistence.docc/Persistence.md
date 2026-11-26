@@ -51,6 +51,7 @@ covers which changes to an event's type its stored records can be read through.
 
 - ``RecordStore``
 - ``SegmentStore``
+- ``SegmentStoreError``
 - ``DropReport``
 
 ### The binary encoding

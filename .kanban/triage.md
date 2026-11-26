@@ -168,6 +168,14 @@ bad row in a dashboard.
   BASELINE in the EventMacros benchmarks). The Persistence benchmarks' positional BASELINEs are a
   floor for the store's append and recovery, without a ratio budget. Rejected: the positional encoding (breaks on any field
   change), SwiftCBOR (an allocation per item), and Codable-based CBOR packages (D7).
+- D10. Throw, don't trap (the owner, 2026-11-26, TRAF-86): "Trap/checked only makes sense for high
+  performance libs where fatalError is a reasonable thing to do. An analytics library doesn't make
+  sense. `checked` should be removed and EVERYTHING that can throw, should throw. No trapping."
+  Every precondition on an argument is a typed throw on the plain spelling, one error type per
+  invariant; there are no `checked:` spellings. A limit reached inside the pipeline drops the
+  record with a drop report. Library code has no force unwrap, `as!` or `try!`. The one trap left
+  is Afluent's: a second task reading a tracker's records while another read waits. An item that
+  adds a trap or a `checked:` spelling is turned down, pointing here.
 
 ## Open questions
 - Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its

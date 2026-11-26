@@ -68,6 +68,7 @@ MUTANTS = [
     Mutant("defaultbound", S, "5 * 1024 * 1024", "5 * 1000 * 1000"),
     Mutant("defaulttable", S, '"traffluentRecord"', '"traffluentRecords"'),
     Mutant("zeroboundallowed", S, "byteBound > 0", "byteBound >= 0"),
+    Mutant("duplicatenamesmisnamed", S, "throw .duplicateEventName", "throw .nonPositiveByteBound", mode="stmt"),
     # Rows stored at another schema version (TRAF-18): deleted and reported.
     Mutant("mismatchedkept", L, "undecodable + mismatched", "undecodable"),
     Mutant("mismatchonlynotdeleted", L, "!undecodable.isEmpty || !mismatched.isEmpty", "!undecodable.isEmpty"),

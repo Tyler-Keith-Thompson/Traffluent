@@ -34,15 +34,19 @@ struct TransientFailureRetry<BackoffClock: Clock<Duration>>: RetryStrategy {
     /// Retries with the waits of `backoff`, measured on `clock`.
     init(_ backoff: ExponentialBackoff, clock: BackoffClock) {
         self.backoff = RetryByBackoffStrategy(
-            ExponentialBackoffStrategy(base: 2, maxDelay: backoff.maximumDelay),
+            // A count below Int32.max, not Afluent's default of UInt.max: past Int.max it traps
+            // converting the count on a 32-bit Int (AFLU-69, fixed after Afluent 1.1.46). Over
+            // two billion retries of one batch is never in practice.
+            ExponentialBackoffStrategy(base: 2, maxCount: UInt(Int32.max) - 1, maxDelay: backoff.maximumDelay),
             clock: clock,
             // Afluent's nth wait is the duration of 2ⁿ, counting n from 1, so the exponent is
-            // the retry's number (AFLU-68: it has no spelling for an initial delay). Once 2ⁿ
+            // the retry's number, one more than the doublings of the initial delay (AFLU-68: it
+            // has no spelling for an initial delay). Once 2ⁿ
             // doesn't fit in Int, from retry 31 on a 32-bit Int (watchOS arm64_32) or 63 on a
             // 64-bit one, Afluent waits its maxDelay instead. So with maximumDelay more than 2³⁰
             // times initialDelay, a watch reaches the longest wait early: harmless, as the wait
             // only grows and never passes the maximum.
-            durationUnit: { power in backoff.delay(beforeRetry: power.trailingZeroBitCount) })
+            durationUnit: { power in backoff.delay(afterDoubling: power.trailingZeroBitCount - 1) })
     }
 
     func handle(error: any Error, beforeRetry: @Sendable (any Error) async throws -> Void) async throws -> Bool {

@@ -15,14 +15,14 @@ struct TrackingPlanCheckPropertyTests {
     static let typeNames = ["String", "Int", "Double", "UInt8", "Bool", "Int32", "Date", "UUID", "[String]", "[Int?]", "Coordinate"]
 
     @Test("Any plan checks clean against its own files", .tags(.randomized))
-    func clean() async {
+    func clean() async throws {
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 10).array(of: 0 ... 6).array(of: 0 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 1 ... 3)) { events, optionals, version in
             let schemas = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: version + event, consentCategory: .analytics, properties: types.enumerated().map { index, type in
                     EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
                 })
             }
-            let sut = TrackingPlan(schemas: schemas)
+            let sut = try TrackingPlan(schemas: schemas)
 
             let actual = sut.check(against: sut.files)
 
@@ -31,7 +31,7 @@ struct TrackingPlanCheckPropertyTests {
     }
 
     @Test("Any one breaking edit is reported as its difference, and breaks the plan", .tags(.randomized))
-    func breakingEdit() async {
+    func breakingEdit() async throws {
         await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 5), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
@@ -73,9 +73,9 @@ struct TrackingPlanCheckPropertyTests {
                 current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: false))
                 expectedPrefix = TrackingPlanDifference.requiredPropertyAdded(event: name, version: 1, property: "added").description
             }
-            let committedFiles = TrackingPlan(schemas: committed).files
+            let committedFiles = try TrackingPlan(schemas: committed).files
 
-            let actual = TrackingPlan(schemas: current).check(against: committedFiles)
+            let actual = try TrackingPlan(schemas: current).check(against: committedFiles)
 
             let breaking = actual.differences.filter(\.isBreaking)
             #expect(breaking.count == 1)
@@ -85,7 +85,7 @@ struct TrackingPlanCheckPropertyTests {
     }
 
     @Test("Any one breaking edit with the event's version raised breaks nothing: the check reports the raise", .tags(.randomized))
-    func breakingEditWithRaisedVersion() async {
+    func breakingEditWithRaisedVersion() async throws {
         await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
@@ -116,16 +116,16 @@ struct TrackingPlanCheckPropertyTests {
             }
             current[event].version = 2
             let expected = TrackingPlanDifference.versionRaised(event: committed[event].name, committed: 1, current: 2)
-            let committedFiles = TrackingPlan(schemas: committed).files
+            let committedFiles = try TrackingPlan(schemas: committed).files
 
-            let actual = TrackingPlan(schemas: current).check(against: committedFiles)
+            let actual = try TrackingPlan(schemas: current).check(against: committedFiles)
 
             #expect(actual == .outOfDate([expected]))
         }
     }
 
     @Test("Any one compatible edit keeps the version and breaks nothing: the check reports it as the difference it is", .tags(.randomized))
-    func compatibleEdit() async {
+    func compatibleEdit() async throws {
         await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
@@ -160,9 +160,9 @@ struct TrackingPlanCheckPropertyTests {
                 current[event].properties[property].hasDefaultValue = true
                 expected = .defaultValueAdded(event: name, version: 1, property: propertyName)
             }
-            let committedFiles = TrackingPlan(schemas: committed).files
+            let committedFiles = try TrackingPlan(schemas: committed).files
 
-            let actual = TrackingPlan(schemas: current).check(against: committedFiles)
+            let actual = try TrackingPlan(schemas: current).check(against: committedFiles)
 
             #expect(actual == .outOfDate([expected]))
         }

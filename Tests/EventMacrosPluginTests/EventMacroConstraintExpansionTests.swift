@@ -34,19 +34,45 @@ struct EventMacroConstraintExpansionTests {
                 extension Searched: Events.Event, Persistence.BinaryCodable {
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
-                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.Constraint<String>]).map(\.keyword)),
-                            Events.EventSchema.Property(name: "ratio", typeName: "Double", isOptional: true, keywords: Events.ValidationKeyword.keywords(of: \Self.ratio) + ([.minimum(-1.5), .maximum(10)] as [Events.Constraint<Double>]).map(\.keyword)),
-                            Events.EventSchema.Property(name: "page", typeName: "Int", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.page)),
+                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.ValidationKeyword])),
+                            Events.EventSchema.Property(name: "ratio", typeName: "Double", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.ratio), keywords: Events.ValidationKeyword.keywords(of: \Self.ratio) + ([.minimum(-1.5), .maximum(10)] as [Events.ValidationKeyword])),
+                            Events.EventSchema.Property(name: "page", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.page), keywords: Events.ValidationKeyword.keywords(of: \Self.page)),
                         ])
                     }
 
                     public func constraintViolation() -> Events.ConstraintViolation? {
-                        for constraint: Events.Constraint<String> in [.minLength(1), .maxLength(8)] where !constraint.isSatisfied(by: self.query) {
-                            return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .minLength(1)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".minLength(1)", error: error)
+                        }
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .maxLength(8)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".maxLength(8)", error: error)
                         }
                         if let value = self.ratio {
-                            for constraint: Events.Constraint<Double> in [.minimum(-1.5), .maximum(10)] where !constraint.isSatisfied(by: value) {
-                                return Events.ConstraintViolation(property: "ratio", keyword: constraint.keyword)
+                            do throws(Events.InvalidConstraint) {
+                                let constraint: Events.Constraint<Double> = try .minimum(-1.5)
+                                if !constraint.isSatisfied(by: value) {
+                                    return Events.ConstraintViolation(property: "ratio", keyword: constraint.keyword)
+                                }
+                            } catch {
+                                return Events.ConstraintViolation(property: "ratio", invalidConstraint: ".minimum(-1.5)", error: error)
+                            }
+                            do throws(Events.InvalidConstraint) {
+                                let constraint: Events.Constraint<Double> = try .maximum(10)
+                                if !constraint.isSatisfied(by: value) {
+                                    return Events.ConstraintViolation(property: "ratio", keyword: constraint.keyword)
+                                }
+                            } catch {
+                                return Events.ConstraintViolation(property: "ratio", invalidConstraint: ".maximum(10)", error: error)
                             }
                         }
                         return nil
@@ -169,6 +195,36 @@ struct EventMacroConstraintExpansionTests {
         )
     }
 
+    @Test("A bound its property's type can't state as written is an error at the bound", arguments: [
+        ("Int", ".maximum(9_007_199_254_740_993)", "@Constrained's .maximum(9_007_199_254_740_993) on Int can't be stated exactly in a schema, whose numbers are Doubles; use a bound of at most 2^53 in magnitude"),
+        ("UInt64", ".minimum(18446744073709551615)", "@Constrained's .minimum(18446744073709551615) on UInt64 can't be stated exactly in a schema, whose numbers are Doubles; use a bound of at most 2^53 in magnitude"),
+        ("Int64", ".minimum(-9007199254740993)", "@Constrained's .minimum(-9007199254740993) on Int64 can't be stated exactly in a schema, whose numbers are Doubles; use a bound of at most 2^53 in magnitude"),
+        ("Float", ".maximum(1e39)", "@Constrained's .maximum(1e39) overflows Float to infinity"),
+        ("Double", ".minimum(-1e309)", "@Constrained's .minimum(-1e309) overflows Double to infinity"),
+        ("Float", ".maximum(0.1000000001)", "@Constrained's .maximum(0.1000000001) is 0.1 as a Float; write that bound"),
+        ("Float", ".minimum(-16777217)", "@Constrained's .minimum(-16777217) is -16777216.0 as a Float; write that bound"),
+    ])
+    func unstatableBound(type: String, argument: String, message: String) {
+        assertMacroExpansion(
+            """
+            @Event
+            struct Measured {
+                @Constrained(\(argument))
+                var value: \(type)
+            }
+            """,
+            expandedSource: """
+                struct Measured {
+                    @Constrained(\(argument))
+                    var value: \(type)
+                }
+                """,
+            diagnostics: [DiagnosticSpec(message: message, line: 3, column: 18)],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "BinaryCodable"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
     @Test("A lower bound above its upper bound is an error at the later of the two", arguments: [
         (".minLength(5), .maxLength(4)", "@Constrained's .minLength(5) and .maxLength(4) leave no value that satisfies both"),
         (".maximum(-2), .minimum(-1.5)", "@Constrained's .maximum(-2) and .minimum(-1.5) leave no value that satisfies both"),
@@ -215,13 +271,42 @@ struct EventMacroConstraintExpansionTests {
                 extension Searched {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
-                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \\Self.query) + ([.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] as [Events.Constraint<String>]).map(\\.keyword)),
+                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.query), keywords: Events.ValidationKeyword.keywords(of: \\Self.query) + ([.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] as [Events.ValidationKeyword])),
                         ])
                     }
 
                     func constraintViolation() -> Events.ConstraintViolation? {
-                        for constraint: Events.Constraint<String> in [.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] where !constraint.isSatisfied(by: self.query) {
-                            return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .minLength(3)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".minLength(3)", error: error)
+                        }
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .maxLength(3)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".maxLength(3)", error: error)
+                        }
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .minimum(1)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".minimum(1)", error: error)
+                        }
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .maxItems(0)
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".maxItems(0)", error: error)
                         }
                         return nil
                     }
@@ -294,13 +379,18 @@ struct EventMacroConstraintExpansionTests {
                 extension Searched {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
-                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.pattern(#"^\d+$"#, example: "12")] as [Events.Constraint<String>]).map(\.keyword)),
+                            Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.pattern(#"^\d+$"#, example: "12")] as [Events.ValidationKeyword])),
                         ])
                     }
 
                     func constraintViolation() -> Events.ConstraintViolation? {
-                        for constraint: Events.Constraint<String> in [.pattern(#"^\d+$"#, example: "12")] where !constraint.isSatisfied(by: self.query) {
-                            return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                        do throws(Events.InvalidConstraint) {
+                            let constraint: Events.Constraint<String> = try .pattern(#"^\d+$"#, example: "12")
+                            if !constraint.isSatisfied(by: self.query) {
+                                return Events.ConstraintViolation(property: "query", keyword: constraint.keyword)
+                            }
+                        } catch {
+                            return Events.ConstraintViolation(property: "query", invalidConstraint: ".pattern(#\"^\\d+$\"#, example: \"12\")", error: error)
                         }
                         return nil
                     }

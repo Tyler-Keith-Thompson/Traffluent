@@ -27,7 +27,7 @@ struct SamplingPropertyTests {
     }
 
     @Test("Any run of events keeps exactly what a model of an event sampler's stream and a group sampler's nodes keeps", .tags(.randomized))
-    func matchesModel() async {
+    func matchesModel() async throws {
         // Each operation is a number from 0 to 7: 0-3 track a Scrolled in cohort 0-3, 4-7 a Tapped.
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 7).array(of: 0 ... 60), Gen.uint64(), Gen.int(in: 0 ... 10).array(of: 3)) {
             operations, seed, tenths in
@@ -57,7 +57,7 @@ struct SamplingPropertyTests {
                 }
             }
 
-            let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: SampleRate(scrolledRate)), .grouped(by: CohortKey.self, rate: SampleRate(cohortRate)), .events(where: { _ in true }, rate: SampleRate(everyRate))], samplingSeed: seed)
+            let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(scrolledRate)), .grouped(by: CohortKey.self, rate: try SampleRate(cohortRate)), .events(where: { _ in true }, rate: try SampleRate(everyRate))], samplingSeed: seed)
             for (number, operation) in operations.enumerated() {
                 var context = ServiceContext.topLevel
                 context[CohortKey.self] = "cohort \(operation % 4)"
@@ -88,7 +88,7 @@ struct SamplingPropertyTests {
     @Test("Over any seed, an event sampler at 0.3 keeps about 30% of 1,000 events: within six standard deviations", .tags(.randomized))
     func eventFraction() async {
         await propertyCheck(count: 50, input: Gen.uint64()) { seed in
-            let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.3)], samplingSeed: seed)
+            let sut = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.3))], samplingSeed: seed)
             // n p = 300, sqrt(n p (1 - p)) is about 14.5, so six deviations are 87.
             let expected = 213 ... 387
 
@@ -108,7 +108,7 @@ struct SamplingPropertyTests {
     @Test("Over any seed, a group sampler at 0.3 keeps about 30% of 1,000 groups: within six standard deviations", .tags(.randomized))
     func groupFraction() async {
         await propertyCheck(count: 50, input: Gen.uint64()) { seed in
-            let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: 0.3)], samplingSeed: seed)
+            let sut = Tracker(samplers: [.grouped(by: CohortKey.self, rate: try SampleRate(0.3))], samplingSeed: seed)
             let expected = 213 ... 387
 
             for number in 0 ..< 1_000 {

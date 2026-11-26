@@ -154,7 +154,7 @@ struct SegmentStoreTests {
         #expect(isDirectory.boolValue)
     }
 
-    @Test("A store whose directory can't be created throws")
+    @Test("A store whose directory can't be created throws the file system's error")
     func uncreatableDirectory() throws {
         let root = FilePath(NSTemporaryDirectory()).appending("SegmentStoreTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: root.string) }
@@ -162,7 +162,7 @@ struct SegmentStoreTests {
         let file = root.appending("file")
         try #require(FileManager.default.createFile(atPath: file.string, contents: Data([1])))
 
-        #expect(throws: Errno.self) {
+        #expect(throws: SegmentStoreError.fileSystem(.notDirectory)) {
             _ = try SegmentStore(events: [Tapped.self], directory: file.appending("log"))
         }
     }

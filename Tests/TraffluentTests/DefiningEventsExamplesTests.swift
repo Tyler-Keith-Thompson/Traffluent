@@ -26,7 +26,9 @@ struct DefiningEventsExamplesTests {
     }
 
     enum CouponCode: Refinement {
-        static let constraints: [Constraint<String>] = [.pattern("^[A-Z0-9]{6}$", example: "SPRING")]
+        static var constraints: [Constraint<String>] {
+            get throws(InvalidConstraint) { try [.pattern("^[A-Z0-9]{6}$", example: "SPRING")] }
+        }
     }
 
     @Event(name: "search_performed")
@@ -40,26 +42,26 @@ struct DefiningEventsExamplesTests {
 
     @Test("Constraining properties")
     func constrainingProperties() async throws {
-        let coupon = try? Refined<String, CouponCode>(checked: "spring")  // nil: UnsatisfiedConstraint.pattern
+        let coupon = try? Refined<String, CouponCode>("spring")  // nil: UnsatisfiedConstraint.pattern
         let tracker = Tracker()
-        tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: Refined("SPRING")))
+        tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: try Refined("SPRING")))
         await tracker.finish()
         for await report in tracker.rejectionReports {
             print(report)  // search_performed: "query" breaks minLength 1 (1 rejected)
         }
 
         #expect(coupon == nil)
-        #expect(throws: UnsatisfiedConstraint.pattern) { try Refined<String, CouponCode>(checked: "spring") }
+        #expect(throws: UnsatisfiedConstraint.pattern) { try Refined<String, CouponCode>("spring") }
         var reports = tracker.rejectionReports.makeAsyncIterator()
         #expect(await reports.next() == nil)
     }
 
     @Test("Constraining properties: the report")
-    func constrainingPropertiesReport() async {
+    func constrainingPropertiesReport() async throws {
         let tracker = Tracker()
         let expected = #"search_performed: "query" breaks minLength 1 (1 rejected)"#
 
-        tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: Refined("SPRING")))
+        tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: try Refined("SPRING")))
         await tracker.finish()
 
         var reports = tracker.rejectionReports.makeAsyncIterator()

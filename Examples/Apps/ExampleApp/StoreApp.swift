@@ -35,8 +35,15 @@ struct StoreApp: App {
         // shopper quits before answering.
         lifecycle = analytics.tracker.trackLifecycle(versionStore: FileVersionStore(directory: directory))
 
-        // Runs for the life of the app: nothing cancels it, so it never throws.
-        Task { [analytics] in try? await analytics.deliver() }
+        // Runs for the life of the app: nothing cancels it, so it throws only when the store's
+        // tracking plan is invalid, after which nothing is delivered; that is logged.
+        Task { [analytics] in
+            do {
+                try await analytics.deliver()
+            } catch {
+                Self.logger.error("Delivery stopped: \(String(describing: error), privacy: .public)")
+            }
+        }
         let drops = analytics.drops
         Task {
             for await drop in drops {

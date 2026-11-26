@@ -55,7 +55,7 @@ struct TrackingPlanWorkflowExamplesTests {
             }
 
             """
-        let plan = TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
 
         let document = try #require(plan.files.first { $0.path == "signed_up.v1.schema.json" })
         let actual = String(decoding: document.contents, as: UTF8.self)
@@ -64,8 +64,8 @@ struct TrackingPlanWorkflowExamplesTests {
     }
 
     @Test("Exporting a tracking plan")
-    func exportingATrackingPlan() {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+    func exportingATrackingPlan() throws {
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let paths = plan.files.map(\.path)
         // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 

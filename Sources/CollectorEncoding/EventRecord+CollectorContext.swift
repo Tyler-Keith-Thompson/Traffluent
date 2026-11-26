@@ -30,8 +30,9 @@ extension EventRecord {
         if let operatingSystem = context[OperatingSystemKey.self] {
             members["operatingSystem"] = .object(["name": .string(operatingSystem.name), "version": .string(operatingSystem.version)])
         }
-        if let sampleRate = context[SampleRateKey.self] {
-            members["sampleRate"] = .number(exactly: sampleRate.value)
+        // Always a number: a rate is in 0 ... 1.
+        if let sampleRate = context[SampleRateKey.self], let rate = JSON.number(exactly: sampleRate.value) {
+            members["sampleRate"] = rate
         }
         if let session = context[SessionKey.self] {
             members["session"] = .string(session.uuidString)

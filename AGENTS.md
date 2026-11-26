@@ -254,8 +254,10 @@ dependencies as `"<identity>/<Product>"` (`"swiftprng/Generators"`), as the rows
 | [DependencyInjection](https://github.com/Tyler-Keith-Thompson/DependencyInjection) | Swift 6 dependency injection: `Factory` values on `Container`, `@Injected` / `@LazyInjected` / `@ConstructorInjected`, unique, cached and shared scopes, hierarchical containers, and `withTestContainer` so concurrent tests never share state | Any seam a test needs to replace (clocks, network, storage). Tests wrap their body in `withTestContainer { }` and register doubles there. Product `"dependencyinjection/DependencyInjection"`. |
 | [Afluent](https://github.com/Tyler-Keith-Thompson/Afluent) | Reactive operators over async/await: `DeferredTask` (a unit of work that yields one value) and `AsyncSequence` extensions with Combine's names (`map`, `flatMap`, `catch`, `retry`, `debounce`, `share`, …), plus `AfluentTesting` | Pipelines over async work where Combine would once have been used; a Combine replacement in new code. Products `"afluent/Afluent"` and, for test targets, `"afluent/AfluentTesting"`. |
 
-Their conventions carry over: value types, typed errors, `checked:` spellings that throw where
-the plain spelling traps, tests with Swift Testing.
+Their conventions carry over: value types, typed errors, tests with Swift Testing. Their
+`checked:` spellings, which throw where the plain spelling traps, don't: those libraries are built
+for speed, where a trap is a fair price, and Traffluent throws on the plain spelling instead (API
+conventions, Errors).
 
 ## Workflow
 
@@ -270,8 +272,8 @@ have.
 2. **Tests** in `Tests/<Module>Tests`:
    - hand-worked cases;
    - edge cases: empty input, one element, the boundaries of every range;
-   - `checked:` spellings and their errors;
-   - exit tests for every trap;
+   - every error each spelling throws, at the boundaries of what it accepts (the last value that
+     throws and the first that doesn't);
    - a property test against a naive reference (`swift-property-based`).
    - planted bugs in `scripts/mutants/<Module>.py` for the new code, then `just mutate <Module>`:
      every mutant caught, or a note in the spec on why a survivor is equivalent. A new module
@@ -409,8 +411,9 @@ library with none of that can skip this section.
 - **Isolation states its reason.** Mutable state reached from async callers lives in an actor, or
   behind `Mutex` where the hops would cost too much; a comment says which and when to switch.
 - **Literals checked at compile time.** A literal URL is `#URL("…")` (the URL macro), not
-  `URL(string:)!`. A force unwrap or trap that remains has a comment proving it can't fire and
-  why a crash beats a thrown error no caller could handle.
+  `URL(string:)!`. Library code has no force unwrap, `as!`, `try!` or `precondition`: restructure
+  so the type system proves the case (a `guard let` that falls back, a total `switch`), or throw.
+  One that can't be removed (a dependency's own) has a comment saying why.
 - **Logging.** A type that logs has one `private static let logger`: swift-log's
   `Logger(label: "<module>.<Type>")`, or `os.Logger(subsystem:category:)` in Apple-only code, where
   every interpolation of user data stays private. Levels mean something: `debug` for a path taken,
@@ -424,7 +427,7 @@ library with none of that can skip this section.
 - Each test is self-contained and portable: no assertion or setup helpers, not DRY; a test
   copied to another file still works. Shared fixture data in `TraffluentTestSupport` is tolerated;
   shared assertions are not.
-- Test names state the rule they pin ("The checked spelling throws EmptyName for an empty name").
+- Test names state the rule they pin ("The initializer throws EmptyName for an empty name").
 - **Sociable.** A test runs the real code under test and its real collaborators wherever they are
   fast and deterministic, and mocks only the seams that reach out (network, disk, clock) or that
   it must steer. Inside `withTestContainer { }`, `Container.x.useProduction()` resolves the real
@@ -455,8 +458,8 @@ library with none of that can skip this section.
 - Describe the current API. No history ("previously", "renamed"), design debates, comparisons
   with other libraries, or benchmark numbers in doc comments or READMEs. Complexity bounds are
   fine.
-- Doc comments: a one-line summary, then parameters, return value, complexity, and what traps or
-  throws.
+- Doc comments: a one-line summary, then parameters, return value, complexity, and what each
+  error thrown means (`- Throws:`).
 - `//` comments say why, where the code makes a choice a reader would question: the data
   structure, an actor over a `Mutex`, deliberate duplication, a force unwrap, the package rejected
   and when it would become the right one. Doc comments describe the API; these record decisions. A
@@ -481,14 +484,26 @@ library with none of that can skip this section.
 
 ### Errors
 
-- **Plain spellings trap** on a precondition failure, like an `Array` subscript. They are the
-  fast path.
-- **`checked:` spellings throw** a typed, payload-free error (`Greeting(checkedName:)` throws
-  `EmptyName`). There are no nil-returning variants; `try?` gives `nil`.
-- **Invariant-breaking mutations throw on the plain spelling** and change nothing, with one typed
-  error per invariant whose cases make a single `catch` exhaustive.
+An analytics library has no fast path worth a crash in the app it is measuring (D10 in
+`.kanban/triage.md`).
+
+- **Everything that can fail throws, on the plain spelling.** A precondition on an argument (a
+  negative count, a rate outside 0 ... 1, two event types of one name) is a typed throw, never a
+  trap. There are no `checked:` spellings and no nil-returning variants; `try?` gives `nil`.
+- **One typed error per invariant**, payload-free (`InvalidSampleRate`), or an enum whose cases
+  make a single `catch` exhaustive (`InvalidConstraint`, `TrackingPlanError`). A case may carry
+  the error of a layer below that the caller can act on (`SegmentStoreError.fileSystem(Errno)`).
+- **A defaulted argument doesn't make a call throw.** Where the default can't fail, offer the
+  spelling without the argument as a non-throwing overload (`InMemoryDestination()`,
+  `Enricher.sessions()`), beside the throwing one that takes it.
+- **Failures inside the pipeline are reports, not throws or traps.** What goes wrong after
+  `track` (a full buffer, a failed write, an exhausted log) drops the record and yields a drop
+  report, and the app carries on.
+- **Invariant-breaking mutations throw** and change nothing.
 - **Queries whose failure is the answer return a witness** (`findCycle() -> Cycle?`), not an
   error.
+- **Exit tests** pin only what must stop a process (a dependency's trap, a crash the store
+  recovers from); a rule that throws is tested with `#expect(throws:)` at its boundaries.
 
 ### Shapes
 

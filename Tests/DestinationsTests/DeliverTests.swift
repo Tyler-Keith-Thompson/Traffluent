@@ -361,7 +361,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let recorder = InMemoryDestination()
         let tracker = Tracker()
-        let sut = tracker.records.batch(strategy: .count(1)).deliver(to: stuck, recorder, batchBufferLimit: 1)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: stuck, recorder, batchBufferLimit: 1)
         let expected = [[1], [4]]
         let running = Task { try await sut.execute() }
         tracker.track(Tapped(number: 1))
@@ -417,7 +417,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
         let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = batches.deliver(to: recorder, stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: recorder, stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
         let expected = BufferDropReport(destinationIndex: 1, recordCount: 2, timestamps: start + 2 ... start + 3, storedRecordCount: 0)
         let expectedReceived = [[1], [4]]
         let running = Task { try await sut.execute() }
@@ -467,7 +467,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
         let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
         let expectedReport = BufferDropReport(destinationIndex: 0, recordCount: 1, timestamps: timestamp ... timestamp, storedRecordCount: 1)
         let expectedReceived = [[1], [3]]
         let expectedAcknowledged: [UInt64] = [1, 3]
@@ -601,7 +601,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
         let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
         let expectedReceived = [[1], [3], [2]]
         let expectedScreen: String? = "Checkout"
         let running = Task { try await sut.execute() }
@@ -655,7 +655,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
         let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
         let expectedReceived = [[1], [3]]
         let expectedAcknowledged: [UInt64] = [1, 3]
         let running = Task { try await sut.execute() }
@@ -683,7 +683,7 @@ struct DeliverTests {
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
         let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
         // 1 is received, 2 to 12 dropped in turn, 13 waits; 10 dropped batches are kept.
         let dropCount = 11
         let expectedReceived = [[1], [13]] + (3 ... 12).map { [$0] }

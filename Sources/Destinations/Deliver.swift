@@ -1,5 +1,6 @@
 public import Afluent
 public import Events
+import Foundation
 import Synchronization
 
 extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
@@ -55,14 +56,41 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
     ///     reporter can serve the deliveries that replace one another.
     /// - Returns: A unit of work that completes once the last batch is delivered, and throws what
     ///   the sequence throws, or `CancellationError` when cancelled.
-    /// - Precondition: `batchBufferLimit` is at least 1.
+    /// - Throws: ``InvalidBatchBufferLimit`` when `batchBufferLimit` is below 1.
     public func deliver(
         to destinations: any Destination...,
-        batchBufferLimit: Int = 100,
+        batchBufferLimit: Int,
+        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation? = nil
+    ) throws(InvalidBatchBufferLimit) -> some AsynchronousUnitOfWork<Void> {
+        guard batchBufferLimit >= 1 else { throw InvalidBatchBufferLimit() }
+        return delivery(to: destinations, batchBufferLimit: batchBufferLimit, bufferDropReporter: bufferDropReporter)
+    }
+
+    /// The work of delivering each batch of this sequence to every destination, until the
+    /// sequence ends, as `deliver(to:batchBufferLimit:bufferDropReporter:)` does, with a buffer of
+    /// 100 batches for each destination.
+    ///
+    /// - Parameters:
+    ///   - destinations: Where each batch goes.
+    ///   - bufferDropReporter: Where a report of each batch a destination's full buffer drops is
+    ///     yielded, as it is dropped; none by default.
+    /// - Returns: A unit of work that completes once the last batch is delivered, and throws what
+    ///   the sequence throws, or `CancellationError` when cancelled.
+    public func deliver(
+        to destinations: any Destination...,
         bufferDropReporter: AsyncStream<BufferDropReport>.Continuation? = nil
     ) -> some AsynchronousUnitOfWork<Void> {
-        precondition(batchBufferLimit >= 1, "A destination's batch buffer must hold at least 1 batch, not \(batchBufferLimit)")
-        return DeferredTask { [self] in
+        delivery(to: destinations, batchBufferLimit: 100, bufferDropReporter: bufferDropReporter)
+    }
+
+    /// The delivery to `destinations`, each with a buffer of `batchBufferLimit` batches, at least
+    /// 1.
+    private func delivery(
+        to destinations: [any Destination],
+        batchBufferLimit: Int,
+        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation?
+    ) -> some AsynchronousUnitOfWork<Void> {
+        DeferredTask { [self] in
             try await withThrowingDiscardingTaskGroup { group in
                 // The bound is the caller's, 100 batches by default: at 20 events a batch, 2,000
                 // events. DestinationBuffer says why the oldest is the one dropped.
@@ -91,6 +119,8 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
 /// A batch on its way to one destination, with the acknowledgement it counts towards.
 struct Delivery: Sendable {
     let batch: [EventRecord]
+    /// The earliest and the latest of the batch's timestamps.
+    let timestamps: ClosedRange<Date>
     let acknowledgement: BatchAcknowledgement?
 
     /// `batch` on its way to `destinationCount` destinations, its stores told, without the
@@ -107,8 +137,10 @@ struct Delivery: Sendable {
             guard let tag = record.deliveryTag, let held = withheld[ObjectIdentifier(tag.acknowledger)] else { return true }
             return !held.contains(tag.position)
         }
-        guard !delivered.isEmpty else { return nil }
+        let times = delivered.map(\.timestamp)
+        guard let earliest = times.min(), let latest = times.max() else { return nil }
         self.batch = delivered
+        timestamps = earliest...latest
         acknowledgement = BatchAcknowledgement(of: delivered, destinationCount: destinationCount)
         if destinationCount == 0 {
             acknowledgement?.acknowledge()

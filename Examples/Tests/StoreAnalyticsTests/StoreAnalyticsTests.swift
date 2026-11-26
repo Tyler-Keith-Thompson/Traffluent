@@ -64,6 +64,36 @@ struct StoreAnalyticsTests {
         #expect(!String(decoding: body, as: UTF8.self).contains("shopper@example.com"))
     }
 
+    @Test("With a tracking plan that throws, deliver() throws its error and nothing is sent")
+    func invalidPlan() async throws {
+        let directory = FilePath(NSTemporaryDirectory()).appending("StoreAnalyticsTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let endpoint = try #require(URL(string: "http://127.0.0.1:8080/v1/batches"))
+        let (bodies, received) = AsyncStream.makeStream(of: Data.self)
+        let sut = StoreAnalytics(
+            collector: endpoint,
+            consent: Consent([.analytics: .granted, .functional: .granted]),
+            directory: directory,
+            transport: RecordingTransport(status: .noContent, bodies: received),
+            trackingPlan: { () throws(TrackingPlanError) in
+                try TrackingPlan(schemas: [EventSchema(name: "", version: 1, consentCategory: .analytics, properties: [])])
+            }
+        )
+
+        sut.tracker.track(SignedUp(plan: "plus", email: Sensitive("shopper@example.com"), referrer: nil))
+        await sut.tracker.finish()
+
+        await #expect(throws: TrackingPlanError.emptyEventName) {
+            try await sut.deliver()
+        }
+        received.finish()
+        var batches: [Data] = []
+        for await body in bodies {
+            batches.append(body)
+        }
+        #expect(batches.isEmpty)
+    }
+
     @Test("An event that breaks a constraint is reported as rejected and never sent")
     func rejected() async throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("StoreAnalyticsTests-\(UUID().uuidString)")
@@ -205,8 +235,8 @@ struct StoreAnalyticsTests {
     }
 
     @Test("The store keeps every event the tracking plan lists, and no other")
-    func storedEventsMatchThePlan() {
-        let expected = TrackingPlan.store.schemas.map(\.name).sorted()
+    func storedEventsMatchThePlan() throws {
+        let expected = try TrackingPlan.store.schemas.map(\.name).sorted()
 
         let actual = StoreAnalytics.storedEvents.map { $0.name }.sorted()
 

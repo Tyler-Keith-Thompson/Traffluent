@@ -1,4 +1,5 @@
 #if canImport(SwiftUI)
+    import Events
     import StoreModel
     import SwiftUI
     import SwiftUITracking

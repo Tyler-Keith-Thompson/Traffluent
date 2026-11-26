@@ -39,11 +39,12 @@ MUTANTS = [
     Mutant("unqualifieddateonly", P, '["Foundation", "FoundationEssentials"]', '["FoundationEssentials"]'),
     Mutant("refinedopaque", P, 'if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .value(arguments[0]) }', "", mode="stmt"),
     Mutant("sensitiveopaque", P, 'if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .value(arguments[0]) }', "", mode="stmt"),
-    Mutant("floatwidened", P, "Double(number.description)!", "Double(number)"),
+    Mutant("floatwidened", P, "Double(number.description)", "Optional(Double(number))"),
     Mutant("negativeoffbyone", P, "~$0", "-$0"),
     Mutant("largeunsignedclamped", P, "Double(head.argument)", "Double(UInt64(Int64.max))", nth=0),
     Mutant("uuidlowercased", P, "UUID(uuid: uuid).uuidString", "UUID(uuid: uuid).uuidString.lowercased()"),
-    Mutant("nonfiniteaccepted", P, "guard number.isFinite else { throw .invalidValue }", "", mode="stmt"),
+    # The guard binds the number, so a non-finite one becomes null rather than the guard dropped.
+    Mutant("nonfiniteaccepted", P, "JSON.number(exactly: number)", "Optional(JSON.number(exactly: number) ?? .null)"),
     Mutant("nonfinitedateaccepted", P, "guard seconds.isFinite else { throw .invalidValue }", "", mode="stmt"),
     Mutant("notamapaccepted", P, "count = try decoder.readCount(of: .map, elementSize: 2)", "count = 0", mode="stmt"),
 ]

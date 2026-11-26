@@ -85,7 +85,7 @@ let store = try SegmentStore(events: [
 let tracker = Tracker(
     store: store,
     consent: consent,
-    enrichers: [.sessions(timeout: .seconds(30 * 60)), .application(), .device(), .operatingSystem(), .locale(), .network()]
+    enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()]
 )
 ```
 
@@ -207,7 +207,7 @@ email address off this destination:
 ```swift
 import TrackingPlans
 
-let plan = TrackingPlan(schemas: [
+let plan = try TrackingPlan(schemas: [
     ProductAddedToCart.schema,
     SignedUp.schema,
     ScreenViewed.schema,

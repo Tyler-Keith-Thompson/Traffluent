@@ -17,6 +17,9 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case invalidPattern(pattern: String)
     case exampleBreaksKeyword(example: String, keyword: String)
     case unsatisfiable(lower: String, upper: String)
+    case inexactBound(keyword: String, type: String)
+    case boundOverflows(keyword: String, type: String)
+    case boundRounds(keyword: String, type: String, rounded: String)
     case constrainedNotStoredProperty
 
     var message: String {
@@ -49,6 +52,12 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
             "@Constrained's example \"\(example)\" breaks \(keyword); give an example every constraint on the property accepts"
         case .unsatisfiable(let lower, let upper):
             "@Constrained's \(lower) and \(upper) leave no value that satisfies both"
+        case .inexactBound(let keyword, let type):
+            "@Constrained's \(keyword) on \(type) can't be stated exactly in a schema, whose numbers are Doubles; use a bound of at most 2^53 in magnitude"
+        case .boundOverflows(let keyword, let type):
+            "@Constrained's \(keyword) overflows \(type) to infinity"
+        case .boundRounds(let keyword, let type, let rounded):
+            "@Constrained's \(keyword) is \(rounded) as a \(type); write that bound"
         case .constrainedNotStoredProperty:
             "@Constrained applies only to a stored instance property of an @Event struct"
         }
@@ -70,6 +79,9 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .invalidPattern: "invalidPattern"
         case .exampleBreaksKeyword: "exampleBreaksKeyword"
         case .unsatisfiable: "unsatisfiable"
+        case .inexactBound: "inexactBound"
+        case .boundOverflows: "boundOverflows"
+        case .boundRounds: "boundRounds"
         case .constrainedNotStoredProperty: "constrainedNotStoredProperty"
         }
         return MessageID(domain: "EventMacros", id: id)

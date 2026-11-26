@@ -30,6 +30,10 @@ public struct EventSchema: Sendable, Hashable {
         /// The validation keywords the property's value satisfies, when it has one: its
         /// ``Refined`` type's rule's, then those declared beside it, in order.
         public var keywords: [ValidationKeyword]
+        /// Whether the property's type has a rule whose constraints throw as they are built, so
+        /// ``keywords`` can't state it and no value of the type can be made. A tracking plan
+        /// refuses such a property rather than export it as unconstrained.
+        public var hasInvalidConstraint: Bool
 
         /// The property `name` of type `typeName`, optional when `isOptional` is set, with a
         /// default value when `hasDefaultValue` is set, whose value satisfies `keywords`.
@@ -40,12 +44,15 @@ public struct EventSchema: Sendable, Hashable {
         ///   - isOptional: Whether the property is optional.
         ///   - hasDefaultValue: Whether the declaration gives the property an initial value; `false`
         ///     by default.
+        ///   - hasInvalidConstraint: Whether the type's rule has a constraint that throws as it is
+        ///     built; `false` by default.
         ///   - keywords: The keywords the property's value satisfies; none by default.
-        public init(name: String, typeName: String, isOptional: Bool, hasDefaultValue: Bool = false, keywords: [ValidationKeyword] = []) {
+        public init(name: String, typeName: String, isOptional: Bool, hasDefaultValue: Bool = false, hasInvalidConstraint: Bool = false, keywords: [ValidationKeyword] = []) {
             self.name = name
             self.typeName = typeName
             self.isOptional = isOptional
             self.hasDefaultValue = hasDefaultValue
+            self.hasInvalidConstraint = hasInvalidConstraint
             self.keywords = keywords
         }
     }

@@ -17,11 +17,16 @@ struct StoredProperty {
     let constraints: [DeclaredConstraint]
 
     /// The schema's keywords for it: its type's, which a `Refined` type's rule gives, then the
-    /// declared ones, typed by the property's type.
+    /// declared ones.
+    ///
+    /// The declared ones are written as `Events.ValidationKeyword`s, whose cases are spelled as the
+    /// constraints are, rather than built as constraints, which throw: the macro has checked their
+    /// arguments, and `constraintViolation()` builds them in a context typed by the property's
+    /// type.
     var keywords: String {
         let typed = "Events.ValidationKeyword.keywords(of: \\Self.\(identifier))"
         guard !constraints.isEmpty else { return typed }
-        return "\(typed) + (\(constraintList) as [Events.Constraint<\(typeName)>]).map(\\.keyword)"
+        return "\(typed) + (\(constraintList) as [Events.ValidationKeyword])"
     }
 
     /// The declared constraints as an array literal, as written.
@@ -53,6 +58,7 @@ struct StoredProperty {
             let (constraints, constraintDiagnostics) = DeclaredConstraint.constraints(of: variable)
             diagnostics += constraintDiagnostics
             let bindings = Array(variable.bindings)
+            var boundsDiagnosed = false
             for (index, binding) in bindings.enumerated() where !binding.isComputed {
                 if isLet && binding.initializer != nil { continue }
                 guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else {
@@ -65,10 +71,18 @@ struct StoredProperty {
                 }
                 let identifier = pattern.identifier.text
                 let wrapped = type.wrappedInOptional
+                let typeName = (wrapped ?? type).trimmedDescription
+                // Once per declaration: an attribute applies to every binding of it alike.
+                if !boundsDiagnosed {
+                    boundsDiagnosed = true
+                    diagnostics += constraints.compactMap { constraint in
+                        constraint.boundDiagnostic(forType: typeName).map { Diagnostic(node: constraint.expression, message: $0) }
+                    }
+                }
                 properties.append(StoredProperty(
                     identifier: identifier,
                     name: pattern.identifier.identifier?.name ?? identifier,
-                    typeName: (wrapped ?? type).trimmedDescription,
+                    typeName: typeName,
                     isOptional: wrapped != nil,
                     // A `let` with one was skipped above, so this is a `var`'s.
                     hasDefaultValue: binding.initializer != nil,

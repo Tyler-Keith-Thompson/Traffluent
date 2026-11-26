@@ -146,4 +146,21 @@ struct SpanEventDestinationTests {
         let actual = try #require(tracer.finishedSpans.first?.events.first).nanosecondsSinceEpoch
         #expect(actual == expected)
     }
+
+    @Test("A time that isn't finite is stamped as the epoch", arguments: [Double.nan, .infinity, -.infinity])
+    func nonFiniteTime(seconds: Double) async throws {
+        let tracer = InMemoryTracer()
+        let sut = SpanEventDestination(tracer: tracer)
+        let tracker = Tracker(now: { Date(timeIntervalSince1970: seconds) })
+        let span = tracer.startSpan("checkout")
+        let expected: UInt64 = 0
+
+        ServiceContext.withValue(span.context) { tracker.track(SignedUp(plan: "pro")) }
+        await tracker.finish()
+        try await tracker.records.batch().deliver(to: sut).execute()
+        span.end()
+
+        let actual = try #require(tracer.finishedSpans.first?.events.first).nanosecondsSinceEpoch
+        #expect(actual == expected)
+    }
 }

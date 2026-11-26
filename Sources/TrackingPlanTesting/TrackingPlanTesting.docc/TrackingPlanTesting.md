@@ -25,11 +25,11 @@ import Foundation
 import Testing
 import TrackingPlanTesting
 
-@Test func eventsMatchTheTrackingPlan() {
+@Test func eventsMatchTheTrackingPlan() throws {
     let directory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .appendingPathComponent("TrackingPlan")
-    expectTrackingPlan(AppTrackingPlan.trackingPlan, matches: directory)
+    expectTrackingPlan(try AppTrackingPlan.trackingPlan, matches: directory)
 }
 ```
 

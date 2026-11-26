@@ -117,7 +117,7 @@ struct ConsentPropertyTests {
     /// each operation, and the consent's drop reports, which end as the consent goes away when
     /// this returns.
     func run(_ operations: [Int], limit: Int) async throws -> ([Int], [Int], AsyncStream<ConsentDropReport>) {
-        let consent = Consent(heldRecordLimit: limit)
+        let consent = try Consent(heldRecordLimit: limit)
         let tracker = Tracker(consent: consent, now: { Date(timeIntervalSince1970: Double(Clock.number)) })
         let recorder = InMemoryDestination()
         var held: [Int] = []

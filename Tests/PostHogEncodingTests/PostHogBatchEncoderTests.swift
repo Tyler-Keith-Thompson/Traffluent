@@ -37,7 +37,7 @@ struct PostHogBatchEncoderTests {
     // still isn't sent.
     @Test("A hand-worked batch encodes to PostHog's batch capture request, byte for byte, without its Sensitive email")
     func handWorkedBatch() throws {
-        let plan = TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: plan)
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
@@ -45,7 +45,7 @@ struct PostHogBatchEncoderTests {
         context[LocaleKey.self] = Locale(identifier: "en_US")
         context[NetworkKey.self] = .wifi
         context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
-        context[SampleRateKey.self] = 0.5
+        context[SampleRateKey.self] = try SampleRate(0.5)
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!)
         context[TraceParentKey.self] = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -87,7 +87,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("A redelivered record encodes with the uuid it was first sent with")
     func redelivered() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: plan)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
@@ -116,7 +116,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("Events are encoded in the batch's order, oldest first")
     func order() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: plan)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
@@ -135,7 +135,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("An empty batch is the project token and an empty batch array")
     func emptyBatch() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: []))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: []))
         let expected = #"{"api_key":"phc_test","batch":[]}"#
 
         let actual = try sut.encode([])
@@ -145,7 +145,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("The project token is written as given, escaped as a JSON string")
     func projectTokenEscaped() throws {
-        let sut = PostHogBatchEncoder(projectToken: #"phc_"quoted"\"#, plan: TrackingPlan(schemas: []))
+        let sut = PostHogBatchEncoder(projectToken: #"phc_"quoted"\"#, plan: try TrackingPlan(schemas: []))
         let expected = #"{"api_key":"phc_\"quoted\"\\","batch":[]}"#
 
         let actual = try sut.encode([])
@@ -155,7 +155,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("A timestamp is ISO 8601 in UTC with milliseconds and a Z, whole seconds included")
     func timestamp() throws {
-        let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: plan)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
@@ -175,7 +175,7 @@ struct PostHogBatchEncoderTests {
 
     @Test("A Sensitive property is left out, whether or not the record reveals it", arguments: [true, false])
     func sensitiveNeverSent(reveals: Bool) throws {
-        let plan = TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: plan)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()

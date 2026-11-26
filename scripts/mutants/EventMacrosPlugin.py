@@ -30,7 +30,7 @@ DECODE_LINES = r'''properties.map {
             return "    self.\($0.identifier) = try map.decode(forKey: \"\($0.name)\"\(fallback))\n"
         }'''
 # A schema property's entry, as EventMacro.swift writes it.
-PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)keywords: \($0.keywords)),"'
+PROPERTY = r'"        Events.EventSchema.Property(name: \"\($0.name)\", typeName: \"\($0.typeName)\", isOptional: \($0.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\($0.identifier)), keywords: \($0.keywords)),"'
 
 MUTANTS = [
     # EventMacro: the extension.
@@ -70,8 +70,9 @@ MUTANTS = [
     Mutant("interpolationallowed", A, "literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) })", "true"),
     Mutant("emptyallowed", A, "isEmpty ? .emptyName : nil", "nil"),
     # StoredProperty: which properties are encoded, and how they are described. getterstored comes
-    # first: the file's only `true`, before the mutants below write more.
-    Mutant("getterstored", P, "true", "false"),
+    # first: the file's second `true` (the first marks a declaration's bounds diagnosed), before the
+    # mutants below write more.
+    Mutant("getterstored", P, "true", "false", nth=1),
     Mutant("staticincluded", P, "!variable.isStatic", "true"),
     Mutant("lazyallowed", P, "variable.isLazy", "false"),
     Mutant("letwithvalueincluded", P, "isLet && binding.initializer != nil", "false"),
@@ -95,7 +96,17 @@ MUTANTS = [
     Mutant("warningsonly", D, "        .error", "        .warning", mode="stmt"),
     # @Constrained: what @Event generates from it.
     Mutant("noconstraintviolation", M, "constraintViolation(of: properties, access: access),", "nil,"),
-    Mutant("optionalunwrapped", M, "guard property.isOptional else { return loop }", "return loop", mode="stmt"),
+    # Constraints that throw as they are built: the event breaks the first, rather than passing.
+    Mutant("invalidconstraintpasses", M, r'"    return Events.ConstraintViolation(property: \"\(property.name)\", invalidConstraint: \(constraint.source.stringLiteral), error: error)\n"', r'"    return nil\n"'),
+    Mutant("backslashunescaped", M, r'"\\\\"', r'"\\"'),
+    Mutant("quoteunescaped", M, r'"\\\""', r'"\""'),
+    # Bounds a schema can't state as written: diagnosed, rather than left to throw at run time.
+    Mutant("inexactboundaccepted", C, "Double(exactly: magnitude) == nil", "false"),
+    Mutant("doubleoverflowaccepted", C, "!value.isFinite", "false"),
+    Mutant("floatoverflowaccepted", C, "value.isFinite", "true", nth=1),
+    Mutant("floatroundingaccepted", C, "Double(value.description) == written", "true"),
+    Mutant("roundedsignlost", C, '(literal.isNegative ? "-" : "")', '""'),
+    Mutant("optionalunwrapped", M, "guard property.isOptional else { return checks }", "return checks", mode="stmt"),
     Mutant("schemadeclaredkeywordsdropped", P, "guard !constraints.isEmpty else { return typed }", "return typed", mode="stmt"),
     Mutant("constraintsunread", P, "DeclaredConstraint.constraints(of: variable)", "([DeclaredConstraint](), [Diagnostic]())"),
     # @Constrained: what @Event reads, and the errors it reports.

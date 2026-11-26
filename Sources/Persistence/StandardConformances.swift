@@ -307,11 +307,11 @@ extension Refined: BinaryCodable where Value: BinaryCodable {
     ///   (a later release tightened it), or what reading the value throws.
     @inlinable
     public init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {
-        // A decoding error rather than the plain initializer's trap: the bytes come from disk,
-        // which a release with another rule may have written, and a store reports a record it
-        // can't decode rather than deliver a value that breaks its type's rule.
+        // A decoding error rather than the initializer's UnsatisfiedConstraint: the bytes come
+        // from disk, which a release with another rule may have written, and a store reports a
+        // record it can't decode rather than deliver a value that breaks its type's rule.
         let value = try decoder.decode(Value.self)
-        guard let refined = try? Refined(checked: value) else { throw .invalidValue }
+        guard let refined = try? Refined(value) else { throw .invalidValue }
         self = refined
     }
 }

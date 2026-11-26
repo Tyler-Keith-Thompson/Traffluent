@@ -39,7 +39,7 @@ struct SignedUp {
     var plan: String
 }
 
-let plan = TrackingPlan(schemas: [SignedUp.schema])
+let plan = try TrackingPlan(schemas: [SignedUp.schema])
 let check = plan.check(against: plan.files)  // .matches
 let paths = plan.files.map(\.path)
 // ["tracking-plan.json", "signed_up.v1.schema.json", "signed_up.v1.example.json"]

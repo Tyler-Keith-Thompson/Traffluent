@@ -9,7 +9,7 @@ extension Sampler {
     /// tracker's enrichers, which run before its samplers:
     ///
     /// ```swift
-    /// let tracker = Tracker(enrichers: [.sessions()], samplers: [.sessions(rate: 0.1)])
+    /// let tracker = Tracker(enrichers: [.sessions()], samplers: [.sessions(rate: try SampleRate(0.1))])
     /// ```
     ///
     /// A session's decision is made from the tracker's sampling seed and the session's identifier,

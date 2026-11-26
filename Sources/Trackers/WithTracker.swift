@@ -12,13 +12,16 @@ public func withTracker<Result, Failure: Error>(
     _ tracker: Tracker,
     _ operation: () throws(Failure) -> Result
 ) throws(Failure) -> Result {
-    do {
-        return try Tracker.$bound.withValue(tracker, operation: operation)
-    } catch {
-        // `withValue` is `rethrows` without typed throws, so the error it rethrows is the one
-        // `operation` threw, a `Failure`; the cast cannot fail.
-        throw error as! Failure
+    // `withValue` is `rethrows` without typed throws, so `operation`'s error is carried out of it
+    // as a value, keeping its type, rather than thrown through it.
+    let outcome: Swift.Result<Result, Failure> = Tracker.$bound.withValue(Optional(tracker)) {
+        do throws(Failure) {
+            return .success(try operation())
+        } catch {
+            return .failure(error)
+        }
     }
+    return try outcome.get()
 }
 
 /// Runs `operation` with `tracker` bound to the current task, so ``Tracker/current`` inside it,
@@ -35,11 +38,14 @@ public nonisolated(nonsending) func withTracker<Result, Failure: Error>(
     _ tracker: Tracker,
     _ operation: nonisolated(nonsending) () async throws(Failure) -> Result
 ) async throws(Failure) -> Result {
-    do {
-        return try await Tracker.$bound.withValue(tracker, operation: operation)
-    } catch {
-        // `withValue` is `rethrows` without typed throws, so the error it rethrows is the one
-        // `operation` threw, a `Failure`; the cast cannot fail.
-        throw error as! Failure
+    // `withValue` is `rethrows` without typed throws, so `operation`'s error is carried out of it
+    // as a value, keeping its type, rather than thrown through it.
+    let outcome: Swift.Result<Result, Failure> = await Tracker.$bound.withValue(Optional(tracker)) { () async -> Swift.Result<Result, Failure> in
+        do throws(Failure) {
+            return .success(try await operation())
+        } catch {
+            return .failure(error)
+        }
     }
+    return try outcome.get()
 }

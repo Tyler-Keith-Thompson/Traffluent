@@ -9,7 +9,7 @@ import Synchronization
 /// a SwiftUI preview fed sample events, or a test checking what its code tracked.
 ///
 /// ```swift
-/// let destination = InMemoryDestination(capacity: 500)
+/// let destination = try InMemoryDestination(capacity: 500)
 /// let tracker = Tracker()
 /// tracker.track(SignedUp(plan: "pro"))
 /// await tracker.finish()
@@ -30,23 +30,18 @@ public struct InMemoryDestination: Destination {
 
     private let log: Log
 
+    /// A destination that keeps the newest ``defaultCapacity`` records it receives.
+    public init() {
+        log = Log(capacity: InMemoryDestination.defaultCapacity)
+    }
+
     /// A destination that keeps the newest `capacity` records it receives.
     ///
     /// - Parameter capacity: The most records kept, across batches; the oldest are dropped first.
-    /// - Precondition: `capacity` is at least 1; ``init(checkedCapacity:)`` throws instead.
-    public init(capacity: Int = InMemoryDestination.defaultCapacity) {
-        precondition(capacity >= 1, "An in-memory destination must keep at least 1 record, not \(capacity)")
+    /// - Throws: ``InvalidCapacity`` when `capacity` is below 1.
+    public init(capacity: Int) throws(InvalidCapacity) {
+        guard capacity >= 1 else { throw InvalidCapacity() }
         log = Log(capacity: capacity)
-    }
-
-    /// A destination that keeps the newest `checkedCapacity` records it receives.
-    ///
-    /// - Parameter checkedCapacity: The most records kept, across batches; the oldest are dropped
-    ///   first.
-    /// - Throws: ``InvalidCapacity`` when `checkedCapacity` is below 1.
-    public init(checkedCapacity: Int) throws(InvalidCapacity) {
-        guard checkedCapacity >= 1 else { throw InvalidCapacity() }
-        self.init(capacity: checkedCapacity)
     }
 
     private init(log: Log) {

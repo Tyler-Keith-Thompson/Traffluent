@@ -8,11 +8,11 @@ import TrackingPlans
 @Suite("TrackingPlan: sensitivity check")
 struct TrackingPlanSensitivityCheckTests {
     @Test("Making a required property Sensitive only dates the plan: the payloads that hold it still validate")
-    func madeSensitive() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func madeSensitive() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.outOfDate([
@@ -25,11 +25,11 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A property neither optional nor defaulted that stops being Sensitive is required now, which breaks the plan: the payloads that redacted it lack it")
-    func madeRequired() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func madeRequired() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -42,12 +42,12 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("An optional or defaulted property that stops being Sensitive only dates the plan, as it still isn't required")
-    func optionalNoLongerSensitive() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func optionalNoLongerSensitive() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: true),
             EventSchema.Property(name: "seats", typeName: "Sensitive<Int>", isOptional: false, hasDefaultValue: true),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: true),
             EventSchema.Property(name: "seats", typeName: "Int", isOptional: false, hasDefaultValue: true),
         ])])
@@ -62,11 +62,11 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A Sensitive property neither optional nor defaulted that stops being Sensitive and is made optional only dates the plan")
-    func madeOptionalAndNotSensitive() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func madeOptionalAndNotSensitive() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: true),
         ])])
         let expected = TrackingPlanCheck.outOfDate([
@@ -80,12 +80,12 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A Sensitive property made required and not Sensitive at once breaks the plan once, as the optionality or default it lost")
-    func madeRequiredAndNotSensitive() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func madeRequiredAndNotSensitive() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: true),
             EventSchema.Property(name: "seats", typeName: "Sensitive<Int>", isOptional: false, hasDefaultValue: true),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: false),
             EventSchema.Property(name: "seats", typeName: "Int", isOptional: false),
         ])])
@@ -102,12 +102,12 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A Sensitive type the plan can't map reads as optional, so stopping being Sensitive makes it required, and becoming Sensitive changes sensitivity alone")
-    func unmappedType() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "paid", version: 1, consentCategory: .analytics, properties: [
+    func unmappedType() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "paid", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "billing", typeName: "Coordinate", isOptional: true),
             EventSchema.Property(name: "shipping", typeName: "Sensitive<Coordinate>", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "paid", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "paid", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "billing", typeName: "Sensitive<Coordinate>", isOptional: true),
             EventSchema.Property(name: "shipping", typeName: "Coordinate", isOptional: false),
         ])])
@@ -123,16 +123,16 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A deprecated Sensitive property declared again as required and not Sensitive is a required property added, once")
-    func deprecatedRestored() {
-        let released = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func deprecatedRestored() throws {
+        let released = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
         ])])
-        let removed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let removed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
         ])])
         let committed = removed.files(carryingForward: released.files)
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
             EventSchema.Property(name: "email", typeName: "String", isOptional: false),
         ])])
@@ -147,11 +147,11 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("An array whose elements, not Sensitive, stop allowing null is retyped, which breaks the plan")
-    func elementsMadeRequired() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func elementsMadeRequired() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "codes", typeName: "[Int?]", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "codes", typeName: "[Int]", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -164,8 +164,8 @@ struct TrackingPlanSensitivityCheckTests {
     }
 
     @Test("A plan exported when a Sensitive property was required and a Sensitive element couldn't be null is only out of date")
-    func earlierExport() {
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func earlierExport() throws {
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
             EventSchema.Property(name: "recoveryCodes", typeName: "[Sensitive<String>]", isOptional: false),
             EventSchema.Property(name: "nested", typeName: "[[Sensitive<Int>]]", isOptional: false),

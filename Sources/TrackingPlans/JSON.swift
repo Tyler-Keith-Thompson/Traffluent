@@ -46,11 +46,9 @@ package indirect enum JSON: Hashable, Sendable {
     }
 
     /// `value` as JSON: an ``integer(_:)`` when it is a whole number in `Int64`'s range, a
-    /// ``number(_:)`` otherwise.
-    ///
-    /// - Precondition: `value` is finite, as every JSON number is.
-    package static func number(exactly value: Double) -> JSON {
-        precondition(value.isFinite, "A JSON number is finite, not \(value)")
+    /// ``number(_:)`` otherwise, or `nil` when it is NaN or infinite, which no JSON number is.
+    package static func number(exactly value: Double) -> JSON? {
+        guard value.isFinite else { return nil }
         // -2^63 ..< 2^63: every whole Double in it converts to Int64 exactly.
         if value.rounded() == value, value >= -9_223_372_036_854_775_808, value < 9_223_372_036_854_775_808 {
             return .integer(Int64(value))
@@ -170,8 +168,8 @@ extension JSON: Decodable {
             self = .boolean(boolean)
         } else if let integer = try? container.decode(Int64.self) {
             self = .integer(integer)
-        } else if let number = try? container.decode(Double.self) {
-            self = .number(exactly: number)
+        } else if let number = try? container.decode(Double.self), let json = JSON.number(exactly: number) {
+            self = json
         } else if let string = try? container.decode(String.self) {
             self = .string(string)
         } else if let elements = try? container.decode([JSON].self) {

@@ -45,8 +45,8 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("An event the plan doesn't describe throws unknownEvent with its name and version")
-    func unknownEvent() {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: []), instrument: NoOpInstrument())
+    func unknownEvent() throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unknownEvent(name: "checkout_started", version: 2)
 
@@ -56,9 +56,9 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("An event whose version the plan doesn't describe throws unknownEvent, though the plan has its name")
-    func unknownVersion() {
+    func unknownVersion() throws {
         let earlier = EventSchema(name: "checkout_started", version: 1, consentCategory: .analytics, properties: [])
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [earlier]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [earlier]), instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unknownEvent(name: "checkout_started", version: 2)
 
@@ -68,9 +68,9 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("An event that isn't BinaryCodable throws notBinaryCodable")
-    func notBinaryCodable() {
+    func notBinaryCodable() throws {
         let schema = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.notBinaryCodable(name: "HandWritten")
 
@@ -80,8 +80,8 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("A NaN or infinite Double throws unrepresentableValue naming the property", arguments: [Double.nan, .infinity, -.infinity])
-    func nonFiniteDouble(value: Double) {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Measured.schema]), instrument: NoOpInstrument())
+    func nonFiniteDouble(value: Double) throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Measured.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: Measured(value: value), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "measured", property: "value")
 
@@ -91,8 +91,8 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("A NaN or infinite Float throws unrepresentableValue naming the property", arguments: [Float.nan, .infinity])
-    func nonFiniteFloat(value: Float) {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [MeasuredOnce.schema]), instrument: NoOpInstrument())
+    func nonFiniteFloat(value: Float) throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [MeasuredOnce.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: MeasuredOnce(value: value), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "measured_once", property: "value")
 
@@ -102,8 +102,8 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("A Date of NaN or infinite seconds throws unrepresentableValue naming the property", arguments: [Double.nan, .infinity])
-    func nonFiniteDate(seconds: Double) {
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Scheduled.schema]), instrument: NoOpInstrument())
+    func nonFiniteDate(seconds: Double) throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Scheduled.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: Scheduled(at: Date(timeIntervalSinceReferenceDate: seconds)), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "scheduled", property: "at")
 
@@ -113,9 +113,9 @@ struct CollectorEncodingErrorTests {
     }
 
     @Test("An event whose encoding isn't a map throws unrepresentableValue with no property")
-    func notAMap() {
+    func notAMap() throws {
         let schema = EventSchema(name: "not_a_map", version: 1, consentCategory: .analytics, properties: [])
-        let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: NotAMap(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "not_a_map", property: "")
 

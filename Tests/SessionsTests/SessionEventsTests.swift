@@ -76,16 +76,16 @@ struct SessionEventsTests {
         #expect(actualEnded == expectedEnded)
     }
 
-    @Test("The checked spelling throws NonPositiveSessionTimeout for a timeout of zero or less", arguments: [Duration.zero, .seconds(-1), .nanoseconds(-1)])
-    func checkedThrows(timeout: Duration) {
+    @Test("sessions(timeout:) throws NonPositiveSessionTimeout for a timeout of zero or less", arguments: [Duration.zero, .seconds(-1), .nanoseconds(-1)])
+    func invalidTimeout(timeout: Duration) {
         #expect(throws: NonPositiveSessionTimeout()) {
-            _ = try Enricher.sessions(checkedTimeout: timeout)
+            _ = try Enricher.sessions(timeout: timeout)
         }
     }
 
-    @Test("The checked spelling makes an enricher for the smallest positive timeout")
-    func checkedAccepts() async throws {
-        let sut = Tracker(enrichers: [try .sessions(checkedTimeout: .nanoseconds(1), kinds: [])])
+    @Test("sessions(timeout:) makes an enricher for the smallest positive timeout")
+    func accepts() async throws {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .nanoseconds(1), kinds: [])])
 
         sut.track(SessionStarted())
         await sut.finish()

@@ -69,7 +69,7 @@ struct TrackingPlanExampleTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema])
 
         let actual = try #require(sut.files.first { $0.path == "checkout_started.v2.example.json" })
 
@@ -91,7 +91,7 @@ struct TrackingPlanExampleTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [OrderCompleted.schema])
+        let sut = try TrackingPlan(schemas: [OrderCompleted.schema])
 
         let actual = try #require(sut.files.first { $0.path == "order_completed.v1.example.json" })
 
@@ -108,7 +108,7 @@ struct TrackingPlanExampleTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [SignedUp.schema])
+        let sut = try TrackingPlan(schemas: [SignedUp.schema])
 
         let actual = try #require(sut.files.first { $0.path == "signed_up.v1.example.json" })
 
@@ -135,7 +135,7 @@ struct TrackingPlanExampleTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [Everything.schema])
+        let sut = try TrackingPlan(schemas: [Everything.schema])
 
         let actual = try #require(sut.files.first { $0.path == "everything.v1.example.json" })
 
@@ -145,7 +145,7 @@ struct TrackingPlanExampleTests {
     @Test("An event with no properties has an empty object as its example")
     func noProperties() throws {
         let expected = "{}\n"
-        let sut = TrackingPlan(schemas: [EventSchema(name: "app_opened", version: 1, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "app_opened", version: 1, consentCategory: .analytics, properties: [])])
 
         let actual = try #require(sut.files.first { $0.path == "app_opened.v1.example.json" })
 
@@ -154,7 +154,7 @@ struct TrackingPlanExampleTests {
 
     @Test("Every fixture event's example is valid against its own document")
     func validates() throws {
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema, OrderCompleted.schema, SignedUp.schema, Everything.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema, OrderCompleted.schema, SignedUp.schema, Everything.schema])
         let files = Dictionary(uniqueKeysWithValues: sut.files.map { ($0.path, String(decoding: $0.contents, as: UTF8.self)) })
 
         for schema in sut.schemas {
@@ -168,13 +168,13 @@ struct TrackingPlanExampleTests {
     }
 
     @Test("Any schema's example is valid against its document", .tags(.randomized))
-    func anyValidates() async {
+    func anyValidates() async throws {
         let typeNames = ["String", "Int", "UInt8", "Int32", "Int8", "UInt64", "Double", "Float", "Bool", "Date", "UUID", "[String]", "[[Int]?]", "Sensitive<Int>", "Coordinate", "[Int: Int]"]
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 15).array(of: 0 ... 10), Gen.bool.array(of: 10 ... 10)) { types, optionals in
             let properties = types.enumerated().map { index, type in
                 EventSchema.Property(name: "p\(index)", typeName: typeNames[type], isOptional: optionals[index])
             }
-            let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: properties)])
+            let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: properties)])
             let document = String(decoding: sut.files.first { $0.path == "event.v1.schema.json" }?.contents ?? [], as: UTF8.self)
             let example = String(decoding: sut.files.first { $0.path == "event.v1.example.json" }?.contents ?? [], as: UTF8.self)
 

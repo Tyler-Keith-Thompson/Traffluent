@@ -35,8 +35,7 @@ extension Enricher {
     /// The enricher's sessions are its own, created by this call: give each tracker its own call.
     ///
     /// - Parameters:
-    ///   - timeout: The inactivity after which the next event starts a new session; 30 minutes by
-    ///     default.
+    ///   - timeout: The inactivity after which the next event starts a new session.
     ///   - kinds: The session events to track; both by default. Leaving one out, or both, tracks
     ///     none of that kind, and every record still carries its session's key.
     ///   - file: The caller's file; leave it to its default.
@@ -45,40 +44,9 @@ extension Enricher {
     ///   - line: The caller's line; leave it to its default.
     ///   - column: The caller's column; leave it to its default.
     /// - Returns: The enricher, which runs on the tracker's worker like any other.
-    /// - Precondition: `timeout` is more than zero.
+    /// - Throws: ``NonPositiveSessionTimeout`` when `timeout` is zero or less.
     public static func sessions(
-        timeout: Duration = .seconds(30 * 60),
-        kinds: Set<SessionEventKind> = Set(SessionEventKind.allCases),
-        file: String = #file,
-        fileID: String = #fileID,
-        function: String = #function,
-        line: Int = #line,
-        column: Int = #column
-    ) -> Enricher {
-        precondition(timeout > .zero, "A session's timeout must be more than zero, not \(timeout)")
-        let rotation = SessionRotation(
-            timeout: timeout,
-            kinds: kinds,
-            callSite: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)
-        )
-        return Enricher(records: rotation.enrich)
-    }
-
-    /// An enricher that puts every event in a session, as `sessions(timeout:kinds:)` does,
-    /// throwing rather than trapping for a timeout of zero or less.
-    ///
-    /// - Parameters:
-    ///   - checkedTimeout: The inactivity after which the next event starts a new session.
-    ///   - kinds: The session events to track; both by default.
-    ///   - file: The caller's file; leave it to its default.
-    ///   - fileID: The caller's module and file name; leave it to its default.
-    ///   - function: The caller's enclosing declaration; leave it to its default.
-    ///   - line: The caller's line; leave it to its default.
-    ///   - column: The caller's column; leave it to its default.
-    /// - Returns: The enricher.
-    /// - Throws: ``NonPositiveSessionTimeout`` when `checkedTimeout` is zero or less.
-    public static func sessions(
-        checkedTimeout: Duration,
+        timeout: Duration,
         kinds: Set<SessionEventKind> = Set(SessionEventKind.allCases),
         file: String = #file,
         fileID: String = #fileID,
@@ -86,7 +54,42 @@ extension Enricher {
         line: Int = #line,
         column: Int = #column
     ) throws(NonPositiveSessionTimeout) -> Enricher {
-        guard checkedTimeout > .zero else { throw NonPositiveSessionTimeout() }
-        return sessions(timeout: checkedTimeout, kinds: kinds, file: file, fileID: fileID, function: function, line: line, column: column)
+        guard timeout > .zero else { throw NonPositiveSessionTimeout() }
+        return sessions(
+            positiveTimeout: timeout,
+            kinds: kinds,
+            callSite: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)
+        )
+    }
+
+    /// An enricher that puts every event in a session, as `sessions(timeout:kinds:)` does, with a
+    /// timeout of 30 minutes.
+    ///
+    /// - Parameters:
+    ///   - kinds: The session events to track; both by default. Leaving one out, or both, tracks
+    ///     none of that kind, and every record still carries its session's key.
+    ///   - file: The caller's file; leave it to its default.
+    ///   - fileID: The caller's module and file name; leave it to its default.
+    ///   - function: The caller's enclosing declaration; leave it to its default.
+    ///   - line: The caller's line; leave it to its default.
+    ///   - column: The caller's column; leave it to its default.
+    /// - Returns: The enricher, which runs on the tracker's worker like any other.
+    public static func sessions(
+        kinds: Set<SessionEventKind> = Set(SessionEventKind.allCases),
+        file: String = #file,
+        fileID: String = #fileID,
+        function: String = #function,
+        line: Int = #line,
+        column: Int = #column
+    ) -> Enricher {
+        sessions(
+            positiveTimeout: .seconds(30 * 60),
+            kinds: kinds,
+            callSite: SourceLocation(file: file, fileID: fileID, function: function, line: line, column: column)
+        )
+    }
+
+    private static func sessions(positiveTimeout timeout: Duration, kinds: Set<SessionEventKind>, callSite: SourceLocation) -> Enricher {
+        Enricher(records: SessionRotation(timeout: timeout, kinds: kinds, callSite: callSite).enrich)
     }
 }

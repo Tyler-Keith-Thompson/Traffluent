@@ -113,7 +113,8 @@ struct PropertyReader {
             // 0.1 rather than the Double nearest the Float, 0.10000000149011612. A Float's
             // description always parses as a Double, `nan` and `inf` included, which `finite`
             // rejects.
-            return try .finite(Double(number.description)!)
+            guard let value = Double(number.description) else { throw .invalidValue }
+            return try .finite(value)
         default:
             break
         }
@@ -189,8 +190,8 @@ extension JSON {
     /// - Throws: ``BinaryDecodingError/invalidValue`` for a NaN or an infinity, which JSON can't
     ///   hold.
     fileprivate static func finite(_ number: Double) throws(BinaryDecodingError) -> JSON {
-        guard number.isFinite else { throw .invalidValue }
-        return .number(exactly: number)
+        guard let json = JSON.number(exactly: number) else { throw .invalidValue }
+        return json
     }
 }
 

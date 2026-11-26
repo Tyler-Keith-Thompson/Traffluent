@@ -107,7 +107,7 @@ turns schemas into the plan's files, one document per event and an index, as val
 ```swift
 import TrackingPlans
 
-let plan = TrackingPlan(schemas: [CheckoutStarted.schema])
+let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
 let paths = plan.files.map(\.path)
 // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 ```
@@ -161,7 +161,9 @@ import TrackingPlans
 /// Examples/TrackingPlan, and `swift package check-tracking-plan` checks the events against it.
 @main
 struct StoreTrackingPlan: TrackingPlanCommand {
-    static let trackingPlan = TrackingPlan.store
+    static var trackingPlan: TrackingPlan {
+        get throws(TrackingPlanError) { try .store }
+    }
 }
 ```
 
@@ -216,7 +218,10 @@ The check compares the events with the plan in the same tree, and exporting writ
 events say. So once a breaking change has been exported, the check passes, and the change reaches
 review as a diff of the plan. To have CI fail it as breaking, run the executable against the plan
 from the base branch, `swift run AppTrackingPlan check <directory>`, and fail the job on exit
-status 1 alone: 1 means a breaking difference, and 2 means the plan is only out of date.
+status 1 alone: 1 means a breaking difference, and 2 means the plan is only out of date. The
+executable exits 64 when its arguments are wrong, 65 when its events' schemas can't make a tracking
+plan (two events of one name, say, or a constraint no schema can state), and 73 when it can't
+write the plan.
 
 ### Checking from a test
 
@@ -233,11 +238,11 @@ import TrackingPlanTesting
 @Suite("StoreTrackingPlan")
 struct StoreTrackingPlanTests {
     @Test("The store app's events match its committed tracking plan")
-    func eventsMatchTheTrackingPlan() {
+    func eventsMatchTheTrackingPlan() throws {
         let plan = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("TrackingPlan")
-        expectTrackingPlan(StoreTrackingPlan.trackingPlan, matches: plan)
+        expectTrackingPlan(try StoreTrackingPlan.trackingPlan, matches: plan)
     }
 }
 ```

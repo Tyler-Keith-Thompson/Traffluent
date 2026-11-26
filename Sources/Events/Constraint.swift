@@ -6,9 +6,13 @@
 /// ``maxItems(_:)``. Any other spelling for a type is a compile error:
 ///
 /// ```swift
-/// let constraints: [Constraint<String>] = [.minLength(1), .maxLength(64)]
+/// let constraints: [Constraint<String>] = try [.minLength(1), .maxLength(64)]
 /// constraints.allSatisfy { $0.isSatisfied(by: "pro") }  // true
 /// ```
+///
+/// Each spelling throws ``InvalidConstraint`` for an argument no schema can hold: a negative
+/// count, a bound that isn't finite or that a `Double` can't hold exactly, or a pattern that
+/// doesn't compile or doesn't match its example.
 ///
 /// A ``Refinement`` lists the constraints a ``Refined`` value satisfies; `@Constrained` (module
 /// `EventMacros`) declares them beside an event's property.
@@ -49,18 +53,18 @@ extension Constraint where Value == String {
     /// A string holds at least `length` Unicode scalars: ``ValidationKeyword/minLength(_:)``.
     ///
     /// - Parameter length: The fewest scalars.
-    /// - Precondition: `length` is not negative.
-    public static func minLength(_ length: Int) -> Constraint {
-        precondition(length >= 0, "minLength can't be negative, not \(length)")
+    /// - Throws: ``InvalidConstraint/negativeCount`` when `length` is negative.
+    public static func minLength(_ length: Int) throws(InvalidConstraint) -> Constraint {
+        guard length >= 0 else { throw .negativeCount }
         return Constraint(.minLength(length)) { $0.unicodeScalars.count >= length }
     }
 
     /// A string holds at most `length` Unicode scalars: ``ValidationKeyword/maxLength(_:)``.
     ///
     /// - Parameter length: The most scalars.
-    /// - Precondition: `length` is not negative.
-    public static func maxLength(_ length: Int) -> Constraint {
-        precondition(length >= 0, "maxLength can't be negative, not \(length)")
+    /// - Throws: ``InvalidConstraint/negativeCount`` when `length` is negative.
+    public static func maxLength(_ length: Int) throws(InvalidConstraint) -> Constraint {
+        guard length >= 0 else { throw .negativeCount }
         return Constraint(.maxLength(length)) { $0.unicodeScalars.count <= length }
     }
 
@@ -74,14 +78,11 @@ extension Constraint where Value == String {
     /// - Parameters:
     ///   - pattern: The regular expression.
     ///   - example: A string the pattern matches, for a tracking plan's example payload.
-    /// - Precondition: `pattern` is a valid regular expression, and `example` matches it.
-    public static func pattern(_ pattern: String, example: String) -> Constraint {
-        // A trap rather than an error: a pattern is written in source, and one that doesn't
-        // compile is a programming mistake no caller could handle.
-        guard let regex = try? Regex(pattern) else {
-            preconditionFailure("The pattern \(pattern) isn't a valid regular expression")
-        }
-        precondition(example.contains(regex), "The pattern \(pattern) doesn't match its example \(example)")
+    /// - Throws: ``InvalidConstraint/invalidPattern`` when `pattern` isn't a valid regular
+    ///   expression, and ``InvalidConstraint/exampleMismatch`` when `example` doesn't match it.
+    public static func pattern(_ pattern: String, example: String) throws(InvalidConstraint) -> Constraint {
+        guard let regex = try? Regex(pattern) else { throw .invalidPattern }
+        guard example.contains(regex) else { throw .exampleMismatch }
         // Compiled again on every check: Regex isn't Sendable, so the closure can't keep it, and a
         // shared cache would be global mutable state. A check runs on a tracker's worker, never on
         // the caller, so the microseconds it costs block no one.
@@ -96,35 +97,47 @@ extension Constraint where Value: BinaryInteger {
     /// An integer is at least `bound`: ``ValidationKeyword/minimum(_:)``.
     ///
     /// - Parameter bound: The smallest value.
-    public static func minimum(_ bound: Value) -> Constraint {
-        Constraint(.minimum(Double(bound))) { $0 >= bound }
+    /// - Throws: ``InvalidConstraint/inexactBound`` when a `Double` can't hold `bound` exactly,
+    ///   as a schema states it.
+    public static func minimum(_ bound: Value) throws(InvalidConstraint) -> Constraint {
+        guard let exact = Double(exactly: bound) else { throw .inexactBound }
+        return Constraint(.minimum(exact)) { $0 >= bound }
     }
 
     /// An integer is at most `bound`: ``ValidationKeyword/maximum(_:)``.
     ///
     /// - Parameter bound: The largest value.
-    public static func maximum(_ bound: Value) -> Constraint {
-        Constraint(.maximum(Double(bound))) { $0 <= bound }
+    /// - Throws: ``InvalidConstraint/inexactBound`` when a `Double` can't hold `bound` exactly,
+    ///   as a schema states it.
+    public static func maximum(_ bound: Value) throws(InvalidConstraint) -> Constraint {
+        guard let exact = Double(exactly: bound) else { throw .inexactBound }
+        return Constraint(.maximum(exact)) { $0 <= bound }
     }
 }
 
 extension Constraint where Value: BinaryFloatingPoint {
     /// A number is at least `bound`: ``ValidationKeyword/minimum(_:)``. NaN satisfies no bound.
     ///
+    /// The keyword states the bound as its description reads, as a property's value is sent: a
+    /// `Float`'s 0.1 is 0.1, not the 0.10000000149011612 it widens to.
+    ///
     /// - Parameter bound: The smallest value.
-    /// - Precondition: `bound` is finite, as a JSON number is.
-    public static func minimum(_ bound: Value) -> Constraint {
-        precondition(bound.isFinite, "minimum must be finite, not \(bound)")
-        return Constraint(.minimum(Double(bound))) { $0 >= bound }
+    /// - Throws: ``InvalidConstraint/nonFiniteBound`` when `bound` is NaN or infinite, which a
+    ///   JSON number can't be.
+    public static func minimum(_ bound: Value) throws(InvalidConstraint) -> Constraint {
+        Constraint(.minimum(try bound.statedDouble())) { $0 >= bound }
     }
 
     /// A number is at most `bound`: ``ValidationKeyword/maximum(_:)``. NaN satisfies no bound.
     ///
+    /// The keyword states the bound as its description reads, as a property's value is sent: a
+    /// `Float`'s 0.1 is 0.1, not the 0.10000000149011612 it widens to.
+    ///
     /// - Parameter bound: The largest value.
-    /// - Precondition: `bound` is finite, as a JSON number is.
-    public static func maximum(_ bound: Value) -> Constraint {
-        precondition(bound.isFinite, "maximum must be finite, not \(bound)")
-        return Constraint(.maximum(Double(bound))) { $0 <= bound }
+    /// - Throws: ``InvalidConstraint/nonFiniteBound`` when `bound` is NaN or infinite, which a
+    ///   JSON number can't be.
+    public static func maximum(_ bound: Value) throws(InvalidConstraint) -> Constraint {
+        Constraint(.maximum(try bound.statedDouble())) { $0 <= bound }
     }
 }
 
@@ -132,18 +145,29 @@ extension Constraint {
     /// An array holds at least `count` elements: ``ValidationKeyword/minItems(_:)``.
     ///
     /// - Parameter count: The fewest elements.
-    /// - Precondition: `count` is not negative.
-    public static func minItems<Element>(_ count: Int) -> Constraint where Value == [Element] {
-        precondition(count >= 0, "minItems can't be negative, not \(count)")
+    /// - Throws: ``InvalidConstraint/negativeCount`` when `count` is negative.
+    public static func minItems<Element>(_ count: Int) throws(InvalidConstraint) -> Constraint where Value == [Element] {
+        guard count >= 0 else { throw .negativeCount }
         return Constraint(.minItems(count)) { $0.count >= count }
     }
 
     /// An array holds at most `count` elements: ``ValidationKeyword/maxItems(_:)``.
     ///
     /// - Parameter count: The most elements.
-    /// - Precondition: `count` is not negative.
-    public static func maxItems<Element>(_ count: Int) -> Constraint where Value == [Element] {
-        precondition(count >= 0, "maxItems can't be negative, not \(count)")
+    /// - Throws: ``InvalidConstraint/negativeCount`` when `count` is negative.
+    public static func maxItems<Element>(_ count: Int) throws(InvalidConstraint) -> Constraint where Value == [Element] {
+        guard count >= 0 else { throw .negativeCount }
         return Constraint(.maxItems(count)) { $0.count <= count }
+    }
+}
+
+extension BinaryFloatingPoint {
+    /// The bound as a schema states it: the `Double` its description reads as, which is how
+    /// PropertyReader sends a value of the type and how `@Constrained` states a literal.
+    fileprivate func statedDouble() throws(InvalidConstraint) -> Double {
+        guard isFinite else { throw .nonFiniteBound }
+        // A finite value's description always reads back; widening is the fallback for a type
+        // whose description doesn't.
+        return Double(String(describing: self)) ?? Double(self)
     }
 }

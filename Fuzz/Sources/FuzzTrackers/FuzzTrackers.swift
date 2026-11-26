@@ -151,7 +151,14 @@ func sameReports(_ actual: [ConsentDropReport], _ expected: [ConsentDropReport])
 
 /// Runs `input`'s operations and checks them against the model; returns the consent's reports.
 func run(_ input: inout FuzzInput, model: inout Model) -> AsyncStream<ConsentDropReport> {
-    let consent = Consent(heldRecordLimit: model.limit)
+    let consent: Consent
+    do {
+        consent = try Consent(heldRecordLimit: model.limit)
+    } catch {
+        // The model's limit is in 0 ... 4, every one of which the initializer accepts.
+        check(false, "Consent refused the limit \(model.limit)")
+        consent = Consent()
+    }
     let reports = consent.dropReports
     let clock = Shared(0)
     let trackers = (0 ..< 2).map { _ in Tracker(consent: consent, now: { Date(timeIntervalSince1970: Double(clock.value.withLock { $0 })) }) }

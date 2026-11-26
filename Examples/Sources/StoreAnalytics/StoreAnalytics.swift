@@ -14,7 +14,7 @@ import StoreEvents
 import SwiftUITracking
 public import SystemPackage
 public import Trackers
-import TrackingPlans
+public import TrackingPlans
 
 /// The store app's analytics: one tracker, which checks each event's constraints, stamps it with
 /// the session and the device, gates it by the shopper's consent, keeps it on disk, and delivers
@@ -69,7 +69,7 @@ public struct StoreAnalytics: Sendable {
     /// What every record's context gains: its session, and the app, device, operating system,
     /// locale and network it was tracked on.
     public static var enrichers: [Enricher] {
-        [.sessions(timeout: .seconds(30 * 60)), .application(), .device(), .operatingSystem(), .locale(), .network()]
+        [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()]
     }
 
     /// The store's analytics, delivering to the collector at `endpoint`.
@@ -85,6 +85,9 @@ public struct StoreAnalytics: Sendable {
     ///   - backoff: How long to wait before sending a batch again after a transient failure; 1
     ///     second, doubling up to 60, by default.
     ///   - clock: The clock batches are timed and failed sends are retried on.
+    ///   - trackingPlan: The plan the collector encodes each record through; the store's,
+    ///     `TrackingPlan.store`, by default. When it throws, nothing is delivered,
+    ///     and ``deliver()`` throws its error.
     public init(
         collector endpoint: URL,
         consent: Consent,
@@ -92,21 +95,25 @@ public struct StoreAnalytics: Sendable {
         enrichers: [Enricher] = StoreAnalytics.enrichers,
         transport: some HTTPTransport = URLSessionTransport(),
         backoff: ExponentialBackoff = ExponentialBackoff(),
-        clock: some Clock<Duration> = ContinuousClock()
+        clock: some Clock<Duration> = ContinuousClock(),
+        trackingPlan: () throws(TrackingPlanError) -> TrackingPlan = { () throws(TrackingPlanError) in try .store }
     ) {
         let store = Self.store(in: directory)
         let tracker = Self.tracker(store: store, consent: consent, enrichers: enrichers)
-        let collector = Self.collector(at: endpoint, transport: transport, backoff: backoff, clock: clock)
         let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
         self.tracker = tracker
-        delivery = Self.delivery(of: tracker, to: collector, clock: clock, bufferDropReporter: bufferDropReporter)
-        drops = AsyncStream(
-            merging: tracker.rejectionReports,
-            consent.dropReports,
-            store?.dropReports,
-            collector.dropReports,
-            bufferDrops
-        )
+        do throws(TrackingPlanError) {
+            let collector = try Self.collector(at: endpoint, plan: trackingPlan(), transport: transport, backoff: backoff, clock: clock)
+            delivery = Self.delivery(of: tracker, to: collector, clock: clock, bufferDropReporter: bufferDropReporter)
+            drops = AsyncStream(merging: tracker.rejectionReports, consent.dropReports, store?.dropReports, collector.dropReports, bufferDrops)
+        } catch {
+            // The store's plan is built from this app's own schemas, so this is a bug in the release. The
+            // tracker still keeps every record in the store, for a release with a valid plan to
+            // deliver, and deliver() throws the plan's error rather than sending nothing silently.
+            Self.logger.error("Not delivering: the store's tracking plan is invalid (\(error))")
+            delivery = { throw error }
+            drops = AsyncStream(merging: tracker.rejectionReports, consent.dropReports, store?.dropReports, nil, bufferDrops)
+        }
     }
 
     /// Delivers the tracker's records, those the store kept from earlier launches first, until
@@ -115,7 +122,8 @@ public struct StoreAnalytics: Sendable {
     /// Each call starts a new delivery, so one that was cancelled can be followed by another.
     /// Only one may run at a time: the tracker's records have one reader.
     ///
-    /// - Throws: `CancellationError` when the task is cancelled.
+    /// - Throws: `CancellationError` when the task is cancelled, or the ``TrackingPlanError``
+    ///   of a store tracking plan that is invalid, in which case nothing is delivered.
     public func deliver() async throws {
         try await delivery()
     }
@@ -150,11 +158,12 @@ extension StoreAnalytics {
     /// and reported.
     fileprivate static func collector<Transport: HTTPTransport>(
         at endpoint: URL,
+        plan: TrackingPlan,
         transport: Transport,
         backoff: ExponentialBackoff,
         clock: some Clock<Duration>
     ) -> HTTPDestination<Transport, CollectorBatchEncoder> {
-        HTTPDestination(endpoint: endpoint, transport: transport, encoder: CollectorBatchEncoder(plan: .store), backoff: backoff, clock: clock)
+        HTTPDestination(endpoint: endpoint, transport: transport, encoder: CollectorBatchEncoder(plan: plan), backoff: backoff, clock: clock)
     }
 
     /// Step 4: the delivery, a new one each time it runs: batches of 20, every 30 seconds, and
@@ -185,7 +194,7 @@ extension AsyncStream where Element == AnalyticsDrop {
         merging rejections: AsyncStream<RejectionReport>,
         _ consentDrops: AsyncStream<ConsentDropReport>,
         _ storeDrops: AsyncStream<DropReport>?,
-        _ collectorDrops: AsyncStream<HTTPDropReport<CollectorEncodingError>>,
+        _ collectorDrops: AsyncStream<HTTPDropReport<CollectorEncodingError>>?,
         _ bufferDrops: AsyncStream<BufferDropReport>
     ) {
         let (drops, continuation) = AsyncStream.makeStream(of: AnalyticsDrop.self)
@@ -196,7 +205,9 @@ extension AsyncStream where Element == AnalyticsDrop {
                 if let storeDrops {
                     group.addTask { for await report in storeDrops { continuation.yield(.notStored(report)) } }
                 }
-                group.addTask { for await report in collectorDrops { continuation.yield(.notSent(report)) } }
+                if let collectorDrops {
+                    group.addTask { for await report in collectorDrops { continuation.yield(.notSent(report)) } }
+                }
                 group.addTask { for await report in bufferDrops { continuation.yield(.bufferFull(report)) } }
             }
             continuation.finish()

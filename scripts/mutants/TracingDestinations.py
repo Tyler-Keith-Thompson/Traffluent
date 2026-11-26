@@ -12,6 +12,7 @@ TESTS = ["TracingDestinationsTests"]
 S = "SpanEventDestination.swift"
 
 MUTANTS = [
+    Mutant("nonfinitetraps", S, "guard seconds.isFinite else { return 0 }", "", mode="stmt"),
     Mutant("deliverytimespan", S, "tracer.activeSpan(identifiedBy: record.context)?.addEvent(record.spanEvent)", "tracer.activeSpan(identifiedBy: ServiceContext.current ?? .topLevel)?.addEvent(record.spanEvent)", mode="stmt"),
     Mutant("noevent", S, "tracer.activeSpan(identifiedBy: record.context)?.addEvent(record.spanEvent)", "", mode="stmt"),
     Mutant("nodescription", S, 'attributes["event"] = String(describing: event)', "", mode="stmt"),

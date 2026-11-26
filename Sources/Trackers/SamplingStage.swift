@@ -49,7 +49,7 @@ struct SamplingStage {
         for index in samplers.indices where samplers[index].selects(record) {
             guard let decision = decide(index, record) else { continue }
             keeps = keeps && decision
-            rate = SampleRate((rate?.value ?? 1) * samplers[index].rate.value)
+            rate = rate?.multiplied(by: samplers[index].rate) ?? samplers[index].rate
         }
         if keeps, let rate {
             record.context[SampleRateKey.self] = rate

@@ -13,11 +13,11 @@ public import TrackingPlans
 /// import TrackingPlanTesting
 /// @testable import AppTrackingPlan
 ///
-/// @Test func eventsMatchTheTrackingPlan() {
+/// @Test func eventsMatchTheTrackingPlan() throws {
 ///     let plan = URL(fileURLWithPath: #filePath)
 ///         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 ///         .appendingPathComponent("TrackingPlan")
-///     expectTrackingPlan(AppTrackingPlan.trackingPlan, matches: plan)
+///     expectTrackingPlan(try AppTrackingPlan.trackingPlan, matches: plan)
 /// }
 /// ```
 ///

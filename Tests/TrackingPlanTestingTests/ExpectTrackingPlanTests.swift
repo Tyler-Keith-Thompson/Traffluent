@@ -9,11 +9,15 @@ import TrackingPlans
 
 @Suite("expectTrackingPlan")
 struct ExpectTrackingPlanTests {
-    static let plan = TrackingPlan(schemas: [
-        EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
-            EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
-        ]),
-    ])
+    static var plan: TrackingPlan {
+        get throws(TrackingPlanError) {
+            try TrackingPlan(schemas: [
+                EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+                    EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
+                ]),
+            ])
+        }
+    }
 
     @Test("A plan that matches the committed one records no issue and returns the match")
     func matches() throws {
@@ -22,7 +26,7 @@ struct ExpectTrackingPlanTests {
         try ExpectTrackingPlanTests.plan.write(to: directory)
         let expected = TrackingPlanCheck.matches
 
-        let actual = expectTrackingPlan(ExpectTrackingPlanTests.plan, matches: directory)
+        let actual = expectTrackingPlan(try ExpectTrackingPlanTests.plan, matches: directory)
 
         #expect(actual == expected)
     }
@@ -31,7 +35,7 @@ struct ExpectTrackingPlanTests {
     func breaking() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let committed = TrackingPlan(schemas: [
+        let committed = try TrackingPlan(schemas: [
             EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
                 EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: true),
             ]),
@@ -41,8 +45,8 @@ struct ExpectTrackingPlanTests {
         let expected = directory.path + ": " + expectedCheck.description
         var actual: TrackingPlanCheck?
 
-        withKnownIssue {
-            actual = expectTrackingPlan(ExpectTrackingPlanTests.plan, matches: directory)
+        try withKnownIssue {
+            actual = expectTrackingPlan(try ExpectTrackingPlanTests.plan, matches: directory)
         } matching: { issue in
             issue.comments.map(\.rawValue) == [expected]
         }
@@ -55,22 +59,22 @@ struct ExpectTrackingPlanTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try TrackingPlan(schemas: []).write(to: directory)
-        let expected = directory.path + ": " + ExpectTrackingPlanTests.plan.check(againstDirectory: directory).description
+        let expected = try directory.path + ": " + ExpectTrackingPlanTests.plan.check(againstDirectory: directory).description
 
-        withKnownIssue {
-            expectTrackingPlan(ExpectTrackingPlanTests.plan, matches: directory)
+        try withKnownIssue {
+            expectTrackingPlan(try ExpectTrackingPlanTests.plan, matches: directory)
         } matching: { issue in
             issue.comments.map(\.rawValue) == [expected]
         }
     }
 
     @Test("The issue is recorded at the call's source location")
-    func sourceLocation() {
+    func sourceLocation() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let expected = #_sourceLocation
 
-        withKnownIssue {
-            expectTrackingPlan(ExpectTrackingPlanTests.plan, matches: directory, sourceLocation: expected)
+        try withKnownIssue {
+            expectTrackingPlan(try ExpectTrackingPlanTests.plan, matches: directory, sourceLocation: expected)
         } matching: { issue in
             issue.sourceLocation == expected
         }

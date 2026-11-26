@@ -111,12 +111,17 @@ struct DatabaseStoreTests {
         #expect(sut.pendingRecordCount == 0)
     }
 
-    @Test("A table name holding a double quote throws DatabaseError: GRDB doesn't escape it in the migration")
+    @Test("A table name holding a double quote throws the database's DatabaseError: GRDB doesn't escape it in the migration")
     func doubleQuoteInTable() throws {
         let database = try DatabaseQueue()
 
-        #expect(throws: DatabaseError.self) {
+        let actual = #expect(throws: DatabaseStoreError.self) {
             _ = try DatabaseStore(events: [Tapped.self], database: database, table: "analytics \"records\"")
+        }
+
+        guard case .database = actual else {
+            Issue.record("Expected the database's error, not \(String(describing: actual))")
+            return
         }
     }
 
@@ -326,7 +331,7 @@ struct DatabaseStoreTests {
         #expect(next.takeRecoveredRecords().map(\.isRedelivered) == [true])
     }
 
-    @Test("A store on a database it can't write throws DatabaseError")
+    @Test("A store on a database it can't write throws the database's DatabaseError")
     func readOnlyDatabase() throws {
         let directory = FilePath(NSTemporaryDirectory()).appending("DatabaseStoreTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -337,8 +342,13 @@ struct DatabaseStoreTests {
         configuration.readonly = true
         let database = try DatabaseQueue(path: path, configuration: configuration)
 
-        #expect(throws: DatabaseError.self) {
+        let actual = #expect(throws: DatabaseStoreError.self) {
             _ = try DatabaseStore(events: [Tapped.self], database: database)
+        }
+
+        guard case .database = actual else {
+            Issue.record("Expected the database's error, not \(String(describing: actual))")
+            return
         }
     }
 

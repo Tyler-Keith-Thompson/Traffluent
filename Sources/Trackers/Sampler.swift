@@ -10,8 +10,8 @@ internal import SeedTrees
 ///
 /// ```swift
 /// let tracker = Tracker(samplers: [
-///     .events(of: Scrolled.self, rate: 0.1),
-///     .events(where: { $0.consentCategory == .performance }, rate: 0.5),
+///     .events(of: Scrolled.self, rate: try SampleRate(0.1)),
+///     .events(where: { $0.consentCategory == .performance }, rate: try SampleRate(0.5)),
 /// ])
 /// ```
 ///
@@ -68,7 +68,7 @@ public struct Sampler: Sendable {
     /// apply to it.
     ///
     /// ```swift
-    /// let tracker = Tracker(enrichers: [experiment], samplers: [.grouped(by: ExperimentKey.self, rate: 0.5)])
+    /// let tracker = Tracker(enrichers: [experiment], samplers: [.grouped(by: ExperimentKey.self, rate: try SampleRate(0.5))])
     /// ```
     ///
     /// - Parameters:

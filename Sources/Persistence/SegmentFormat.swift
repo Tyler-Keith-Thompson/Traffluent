@@ -114,21 +114,23 @@ enum SegmentFormat {
     }
 
     /// The frame of `record`, whose event `registration` encodes, written over `buffer`: one
-    /// kept from an earlier frame, so a record's frame needs no allocation of its own.
-    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration, reusing buffer: consuming [UInt8]) -> Frame {
+    /// kept from an earlier frame, so a record's frame needs no allocation of its own; `nil` when
+    /// its payload is over `UInt32.max` bytes, which a frame's length can't state.
+    static func recordFrame(of record: EventRecord, registration: EventRegistry.Registration, reusing buffer: consuming [UInt8]) -> Frame? {
         var encoder = frameEncoder(of: .record, reusing: buffer)
         RecordEncoding.encode(record, registration: registration, to: &encoder)
-        seal(&encoder)
+        guard seal(&encoder) else { return nil }
         return Frame(buffer: encoder.buffer, byteCount: encoder.byteCount)
     }
 
-    /// The frame of a delivery mark naming records `indices`.
-    static func deliveryMarkFrame(of indices: [UInt32]) -> [UInt8] {
+    /// The frame of a delivery mark naming records `indices`; `nil` when its payload is over
+    /// `UInt32.max` bytes, which a frame's length can't state.
+    static func deliveryMarkFrame(of indices: [UInt32]) -> [UInt8]? {
         var encoder = frameEncoder(of: .deliveryMark, reusing: [])
         for index in indices {
             encoder.writeLittleEndian(index)
         }
-        seal(&encoder)
+        guard seal(&encoder) else { return nil }
         return encoder.takeBytes()
     }
 
@@ -136,17 +138,19 @@ enum SegmentFormat {
     /// 0 in their order, then a delivery mark naming `marked`, their new numbers, when it isn't
     /// empty.
     ///
-    /// Each frame's bytes are copied as they are, so its checksum still holds.
+    /// Each frame's bytes are copied as they are, so its checksum still holds. `nil` when the
+    /// delivery mark would be larger than a frame can be.
     ///
     /// - Complexity: O(*n*), where *n* is the number of bytes the frames take.
-    static func compacted(_ bytes: [UInt8], keeping frames: [RecordFrame], marking marked: [UInt32]) -> [UInt8] {
+    static func compacted(_ bytes: [UInt8], keeping frames: [RecordFrame], marking marked: [UInt32]) -> [UInt8]? {
         var compacted = header
         for frame in frames {
             // The payload range starts after the kind byte, which follows the frame's header.
             compacted += bytes[frame.payload.lowerBound - 1 - frameHeaderByteCount..<frame.payload.upperBound]
         }
         if !marked.isEmpty {
-            compacted += deliveryMarkFrame(of: marked)
+            guard let mark = deliveryMarkFrame(of: marked) else { return nil }
+            compacted += mark
         }
         return compacted
     }
@@ -161,16 +165,16 @@ enum SegmentFormat {
     }
 
     /// Fills in the length and checksum of the frame `encoder` holds.
-    private static func seal(_ encoder: inout BinaryEncoder) {
+    ///
+    /// - Returns: Whether it could: `false`, leaving them unset, for a payload over `UInt32.max`
+    ///   bytes (a single event of 4 GiB), whose length a frame can't state.
+    private static func seal(_ encoder: inout BinaryEncoder) -> Bool {
         encoder.withWrittenBytes { frame in
-            let payloadCount = frame.count - frameHeaderByteCount
-            // A payload over UInt32.max bytes would need a single event of 4 GiB.
-            guard let length = UInt32(exactly: payloadCount) else {
-                preconditionFailure("A record's frame holds at most \(UInt32.max) bytes, not \(payloadCount)")
-            }
+            guard let length = UInt32(exactly: frame.count - frameHeaderByteCount) else { return false }
             let checksum = CRC32.checksum(of: UnsafeRawBufferPointer(rebasing: frame[frameHeaderByteCount...]))
             frame.storeBytes(of: length.littleEndian, toByteOffset: 0, as: UInt32.self)
             frame.storeBytes(of: checksum.littleEndian, toByteOffset: 4, as: UInt32.self)
+            return true
         }
     }
 }

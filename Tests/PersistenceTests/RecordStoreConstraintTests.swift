@@ -35,8 +35,7 @@ struct RecordStoreConstraintTests {
         var count: Int
 
         func constraintViolation() -> ConstraintViolation? {
-            let minimum = Constraint<Int>.minimum(0)
-            return minimum.isSatisfied(by: count) ? nil : ConstraintViolation(property: "count", keyword: minimum.keyword)
+            count >= 0 ? nil : ConstraintViolation(property: "count", keyword: .minimum(0))
         }
 
         func encode(to encoder: inout BinaryEncoder) {
@@ -56,7 +55,9 @@ struct RecordStoreConstraintTests {
     }
 
     enum Positive: Refinement {
-        static let constraints: [Constraint<Int>] = [.minimum(1)]
+        static var constraints: [Constraint<Int>] {
+            get throws(InvalidConstraint) { try [.minimum(1)] }
+        }
     }
 
     @Test("A violating event is never written to the store", arguments: StoreKind.all)
@@ -111,7 +112,7 @@ struct RecordStoreConstraintTests {
 
     @Test("A refined value is written as its value and reads back the same")
     func refinedRoundTrip() throws {
-        let expected = Refined<Int, Positive>(7)
+        let expected = try Refined<Int, Positive>(7)
         var encoder = BinaryEncoder()
         encoder.encode(expected)
         var plain = BinaryEncoder()

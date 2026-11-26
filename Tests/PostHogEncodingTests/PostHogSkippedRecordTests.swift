@@ -51,7 +51,7 @@ struct PostHogSkippedRecordTests {
 
     @Test("A record whose event the plan doesn't describe is left out as unknownEvent, and the records around it are sent")
     func unknownEvent() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let skipped = EventRecord(event: Measured(value: 1), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil, context: context)
@@ -70,9 +70,9 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A record whose version the plan doesn't describe is left out as unknownEvent with its version, though the plan has its name")
-    func unknownVersion() {
+    func unknownVersion() throws {
         let earlier = EventSchema(name: "checkout_started", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [earlier]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [earlier]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -84,9 +84,9 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A record whose event isn't BinaryCodable is left out as notBinaryCodable")
-    func notBinaryCodable() {
+    func notBinaryCodable() throws {
         let handWritten = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [handWritten]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [handWritten]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -98,8 +98,8 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A record holding a NaN is left out as unrepresentableValue, naming the property")
-    func unrepresentableValue() {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Measured.schema]))
+    func unrepresentableValue() throws {
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Measured.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: Measured(value: .nan), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -111,9 +111,9 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A record whose encoding isn't a map is left out as unrepresentableValue with no property")
-    func notAMap() {
+    func notAMap() throws {
         let schema = EventSchema(name: "not_a_map", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: NotAMap(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -127,7 +127,7 @@ struct PostHogSkippedRecordTests {
     @Test("A record whose event name starts with $ is left out as reservedEventName, and the records around it are sent")
     func reservedEventName() throws {
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let skipped = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil, context: context)
@@ -146,8 +146,8 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A record the plan doesn't describe is left out as unknownEvent even when its name starts with $")
-    func unknownBeforeReserved() {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: []))
+    func unknownBeforeReserved() throws {
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: []))
         let record = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "$identify", schemaVersion: 1, reason: .unknownEvent(name: "$identify", version: 1))]
 
@@ -157,9 +157,9 @@ struct PostHogSkippedRecordTests {
     }
 
     @Test("A batch whose every record is skipped has no body, and encode throws the first record's reason")
-    func everyRecordSkipped() {
+    func everyRecordSkipped() throws {
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let batch = [

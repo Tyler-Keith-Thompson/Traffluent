@@ -39,7 +39,7 @@ struct BatchIngestionTests {
         try await sut.test(.live) { client in
             let port = try #require(client.port)
             let endpoint = try #require(URL(string: "http://localhost:\(port)/v1/batches"))
-            let app = HTTPDestination(endpoint: endpoint, instrument: appTracer, encoder: CollectorBatchEncoder(plan: .store))
+            let app = HTTPDestination(endpoint: endpoint, instrument: appTracer, encoder: CollectorBatchEncoder(plan: try .store))
             try await tracker.records.batch().deliver(to: app).execute()
         }
 
@@ -63,7 +63,7 @@ struct BatchIngestionTests {
         try await sut.test(.live) { client in
             let port = try #require(client.port)
             let endpoint = try #require(URL(string: "http://localhost:\(port)/v1/batches"))
-            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: CollectorBatchEncoder(plan: .store))
+            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: CollectorBatchEncoder(plan: try .store))
             try await tracker.records.batch().deliver(to: app, memory).execute()
         }
 
@@ -91,7 +91,7 @@ struct BatchIngestionTests {
         try await sut.test(.live) { client in
             let port = try #require(client.port)
             let endpoint = try #require(URL(string: "http://localhost:\(port)/v1/batches"))
-            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: CollectorBatchEncoder(plan: .store))
+            let app = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), encoder: CollectorBatchEncoder(plan: try .store))
             try await tracker.records.batch().deliver(to: app).execute()
         }
 
@@ -119,7 +119,7 @@ struct BatchIngestionTests {
                 enrichers: [],
                 // A send that fails for now is retried at once, so a hiccup on localhost can't
                 // hold the test up for real seconds.
-                backoff: try ExponentialBackoff(checkedInitialDelay: .milliseconds(1), maximumDelay: .milliseconds(1))
+                backoff: try ExponentialBackoff(initialDelay: .milliseconds(1), maximumDelay: .milliseconds(1))
             )
             var cart = Cart()
             try cart.add(tote, trackingWith: analytics.tracker)

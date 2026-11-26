@@ -58,6 +58,18 @@ public enum ValidationKeyword: Sendable, Hashable, CustomStringConvertible {
         keywords(of: Value.self)
     }
 
+    /// Whether the type at `keyPath` is a ``Refined`` type, also through `Optional` and
+    /// ``Sensitive``, whose rule's constraints throw as they are built, so `keywords(of:)`
+    /// gives none and no value of it can be made.
+    ///
+    /// `@Event` reads this for its schema, whose tracking plan refuses such a property.
+    ///
+    /// - Parameter keyPath: A property of an event.
+    /// - Returns: Whether its type's rule throws.
+    public static func hasInvalidConstraint<Root, Value>(of keyPath: KeyPath<Root, Value>) -> Bool {
+        (Value.self as? any RefinedKeywords.Type)?.hasInvalidConstraint ?? false
+    }
+
     /// The keyword's case, without its value.
     var unsatisfied: UnsatisfiedConstraint {
         switch self {
@@ -78,17 +90,26 @@ public enum ValidationKeyword: Sendable, Hashable, CustomStringConvertible {
 /// `Sensitive` forward their wrapped type's without a public protocol adopters would see.
 protocol RefinedKeywords {
     static var keywords: [ValidationKeyword] { get }
+    static var hasInvalidConstraint: Bool { get }
 }
 
 extension Optional: RefinedKeywords where Wrapped: RefinedKeywords {
     static var keywords: [ValidationKeyword] {
         Wrapped.keywords
     }
+
+    static var hasInvalidConstraint: Bool {
+        Wrapped.hasInvalidConstraint
+    }
 }
 
 extension Sensitive: RefinedKeywords where Value: RefinedKeywords {
     static var keywords: [ValidationKeyword] {
         Value.keywords
+    }
+
+    static var hasInvalidConstraint: Bool {
+        Value.hasInvalidConstraint
     }
 }
 

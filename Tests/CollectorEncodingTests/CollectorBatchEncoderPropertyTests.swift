@@ -22,7 +22,7 @@ struct CollectorBatchEncoderPropertyTests {
     }
 
     @Test("Foundation's JSON parser reads back every value of any generated event", .tags(.randomized))
-    func readsBack() async {
+    func readsBack() async throws {
         await propertyCheck(count: 300, input: Gen.uint32().array(of: 0...12), Gen.int(in: .min ... .max), Gen.int(in: -1_000_000...1_000_000), Gen.uint8().array(of: 0...6).array(of: 0...4), Gen.uint8().array(of: 0...6).optional) { scalars, count, ratio, tags, coupon in
             // Any Unicode scalar, control characters and quotes included; surrogates are skipped.
             let text = String(String.UnicodeScalarView(scalars.compactMap { Unicode.Scalar($0 % 0x11_0000) }))
@@ -33,7 +33,7 @@ struct CollectorBatchEncoderPropertyTests {
                 tags: tags.map { String(decoding: $0.map { $0 % 128 }, as: UTF8.self) },
                 coupon: coupon.map { String(decoding: $0.map { $0 % 128 }, as: UTF8.self) }
             )
-            let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
+            let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
             let record = EventRecord(event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
 
             let body = try? sut.encode([record]).body
@@ -59,9 +59,9 @@ struct CollectorBatchEncoderPropertyTests {
     }
 
     @Test("Any mix of listed and unlisted records encodes as the listed ones alone, the unlisted skipped in order", .tags(.randomized))
-    func skipsUnlisted() async {
+    func skipsUnlisted() async throws {
         await propertyCheck(count: 300, input: Gen.bool().array(of: 0...16)) { listed in
-            let sut = CollectorBatchEncoder(plan: TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
+            let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
             let batch = listed.enumerated().map { index, isListed in
                 let event: any Event = isListed
                     ? Generated(text: "\(index)", count: index, ratio: 0, tags: [], coupon: nil)

@@ -40,7 +40,7 @@ struct PostHogContextTests {
         (.watch, nil),
     ])
     func deviceType(formFactor: DeviceKey.Value.FormFactor, expected: String?) throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Opened.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Opened.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         context[DeviceKey.self] = DeviceKey.Value(model: "Model1,1", formFactor: formFactor)
@@ -65,7 +65,7 @@ struct PostHogContextTests {
         (.offline, false, false),
     ])
     func network(network: NetworkKey.Value, expectedWifi: Bool, expectedCellular: Bool) throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Opened.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Opened.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         context[NetworkKey.self] = network
@@ -83,7 +83,7 @@ struct PostHogContextTests {
 
     @Test("An application's nil bundle identifier, version or build is left out")
     func applicationNilsLeftOut() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Opened.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Opened.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: nil, version: "1.0", build: nil)
@@ -97,10 +97,10 @@ struct PostHogContextTests {
 
     @Test("A context with only a session adds only $geoip_disable and $process_person_profile; the sample rate isn't sent")
     func sessionOnly() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Opened.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Opened.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
-        context[SampleRateKey.self] = 0.5
+        context[SampleRateKey.self] = try SampleRate(0.5)
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = ["$geoip_disable", "$process_person_profile", "$session_id", "count"]
 
@@ -115,7 +115,7 @@ struct PostHogContextTests {
     @Test("An event's own $os_name is left out, and the context's is sent")
     func contextWins() throws {
         let schema = EventSchema(name: "claims_the_operating_system", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
@@ -132,7 +132,7 @@ struct PostHogContextTests {
 
     @Test("A locale is its BCP 47 identifier")
     func locale() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Opened.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Opened.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         context[LocaleKey.self] = Locale(identifier: "pt_BR")

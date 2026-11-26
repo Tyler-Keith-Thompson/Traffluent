@@ -10,7 +10,9 @@ import Trackers
 @Suite("@Constrained", .timeLimit(.minutes(1)))
 struct EventMacroConstraintTests {
     enum PlanName: Refinement {
-        static let constraints: [Constraint<String>] = [.minLength(1), .maxLength(16)]
+        static var constraints: [Constraint<String>] {
+            get throws(InvalidConstraint) { try [.minLength(1), .maxLength(16)] }
+        }
     }
 
     @Event(name: "search_performed")
@@ -40,6 +42,21 @@ struct EventMacroConstraintTests {
         var screen: String
     }
 
+    enum Tenth: Refinement {
+        static var constraints: [Constraint<Float>] {
+            get throws(InvalidConstraint) { try [.maximum(0.1)] }
+        }
+    }
+
+    @Event
+    struct Measured {
+        @Constrained(.maximum(0.1))
+        var declared: Float
+        var refined: Refined<Float, Tenth>
+        @Constrained(.maximum(9_007_199_254_740_992))
+        var largest: Int
+    }
+
     static let valid = SearchPerformed(query: "shoes", locale: "en-GB", resultCount: 10, ratio: 1, filters: ["red"], page: 1)
 
     @Test("The schema lists each property's declared keywords, in order, and none for the rest")
@@ -56,6 +73,17 @@ struct EventMacroConstraintTests {
         let actual = SearchPerformed.schema.properties.map(\.keywords)
 
         #expect(actual == expected)
+    }
+
+    @Test("A Float bound reaches the schema as 0.1 whether @Constrained declares it or a Refined type's rule does, and 2^53 is an integer's largest bound")
+    func floatKeywordsAgree() throws {
+        let expected: [[ValidationKeyword]] = [[.maximum(0.1)], [.maximum(0.1)], [.maximum(9_007_199_254_740_992)]]
+        let event = Measured(declared: 0.1, refined: try Refined(0.1), largest: 9_007_199_254_740_992)
+
+        let actual = Measured.schema.properties.map(\.keywords)
+
+        #expect(actual == expected)
+        #expect(event.constraintViolation() == nil)
     }
 
     @Test("The schema lists a refined property's rule, through Optional and Sensitive too")

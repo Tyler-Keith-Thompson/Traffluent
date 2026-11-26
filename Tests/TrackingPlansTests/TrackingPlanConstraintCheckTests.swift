@@ -17,12 +17,12 @@ struct TrackingPlanConstraintCheckTests {
         ([.minItems(1)], [.minItems(3)], "minItems", "1", "3"),
         ([.maxItems(3)], [.maxItems(1)], "maxItems", "3", "1"),
     ])
-    func tightened(committed: [ValidationKeyword], current: [ValidationKeyword], keyword: String, before: String, after: String) {
+    func tightened(committed: [ValidationKeyword], current: [ValidationKeyword], keyword: String, before: String, after: String) throws {
         let typeName = keyword.hasSuffix("Items") ? "[String]" : keyword.hasSuffix("Length") ? "String" : "Double"
-        let committedPlan = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let committedPlan = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "query", typeName: typeName, isOptional: false, keywords: committed),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "query", typeName: typeName, isOptional: false, keywords: current),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -42,12 +42,12 @@ struct TrackingPlanConstraintCheckTests {
         ([.minItems(3)], [], "minItems", "3", nil),
         ([.maxItems(1)], [.maxItems(3)], "maxItems", "1", "3"),
     ])
-    func loosened(committed: [ValidationKeyword], current: [ValidationKeyword], keyword: String, before: String?, after: String?) {
+    func loosened(committed: [ValidationKeyword], current: [ValidationKeyword], keyword: String, before: String?, after: String?) throws {
         let typeName = keyword.hasSuffix("Items") ? "[String]" : keyword.hasSuffix("Length") ? "String" : "Double"
-        let committedPlan = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let committedPlan = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "query", typeName: typeName, isOptional: false, keywords: committed),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "query", typeName: typeName, isOptional: false, keywords: current),
         ])])
         let expected = TrackingPlanCheck.outOfDate([
@@ -60,9 +60,9 @@ struct TrackingPlanConstraintCheckTests {
     }
 
     @Test("A pattern added or changed is breaking, one removed only out of date, and a changed example alone leaves the file out of date")
-    func patterns() {
-        func plan(_ keywords: [ValidationKeyword]) -> TrackingPlan {
-            TrackingPlan(schemas: [EventSchema(name: "applied", version: 1, consentCategory: .analytics, properties: [
+    func patterns() throws {
+        func plan(_ keywords: [ValidationKeyword]) throws -> TrackingPlan {
+            try TrackingPlan(schemas: [EventSchema(name: "applied", version: 1, consentCategory: .analytics, properties: [
                 EventSchema.Property(name: "code", typeName: "String", isOptional: false, keywords: keywords),
             ])])
         }
@@ -79,10 +79,10 @@ struct TrackingPlanConstraintCheckTests {
         ])
         let expectedExample = TrackingPlanCheck.outOfDate([.fileOutOfDate(path: "applied.v1.example.json"), .fileOutOfDate(path: "applied.v1.schema.json")])
 
-        let added = plan([first]).check(against: plan([]).files)
-        let changed = plan([second]).check(against: plan([first]).files)
-        let removed = plan([second]).check(against: plan([first, second]).files)
-        let example = plan([.pattern("^[A-Z]+$", example: "B")]).check(against: plan([first]).files)
+        let added = try plan([first]).check(against: try plan([]).files)
+        let changed = try plan([second]).check(against: try plan([first]).files)
+        let removed = try plan([second]).check(against: try plan([first, second]).files)
+        let example = try plan([.pattern("^[A-Z]+$", example: "B")]).check(against: try plan([first]).files)
 
         #expect(added == expectedAdded)
         #expect(changed == expectedChanged)
@@ -91,11 +91,11 @@ struct TrackingPlanConstraintCheckTests {
     }
 
     @Test("A retyped property reports the retyping alone, not its bounds")
-    func retypedHidesBounds() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+    func retypedHidesBounds() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "count", typeName: "UInt8", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "count", typeName: "String", isOptional: false, keywords: [.minLength(1)]),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -108,9 +108,9 @@ struct TrackingPlanConstraintCheckTests {
     }
 
     @Test("Widening an integer type loosens its bounds, and narrowing one tightens them")
-    func integerWidths() {
-        func plan(_ typeName: String) -> TrackingPlan {
-            TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+    func integerWidths() throws {
+        func plan(_ typeName: String) throws -> TrackingPlan {
+            try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
                 EventSchema.Property(name: "count", typeName: typeName, isOptional: false),
             ])])
         }
@@ -122,8 +122,8 @@ struct TrackingPlanConstraintCheckTests {
             .constraintTightened(event: "searched", version: 1, property: "count", keyword: "maximum", committed: nil, current: "255"),
         ])
 
-        let widened = plan("UInt16").check(against: plan("UInt8").files)
-        let narrowed = plan("UInt8").check(against: plan("Int").files)
+        let widened = try plan("UInt16").check(against: try plan("UInt8").files)
+        let narrowed = try plan("UInt8").check(against: try plan("Int").files)
 
         #expect(widened == expectedWidened)
         #expect(narrowed == expectedNarrowed)
@@ -165,8 +165,8 @@ struct TrackingPlanConstraintCheckTests {
                 default: [.maximum(Double(value))]
                 }
             }
-            func plan(_ value: Int) -> TrackingPlan {
-                TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
+            func plan(_ value: Int) throws -> TrackingPlan {
+                try TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
                     EventSchema.Property(name: "p", typeName: name.hasSuffix("Items") ? "[Int]" : name.hasSuffix("Length") ? "String" : "Double", isOptional: false, keywords: keyword(value)),
                 ])])
             }
@@ -176,7 +176,7 @@ struct TrackingPlanConstraintCheckTests {
                 : after < 0 ? false
                 : isLower ? after > before : after < before
 
-            let actual = plan(after).check(against: plan(before).files).differences.first
+            let actual = try plan(after).check(against: try plan(before).files).differences.first
 
             switch (expectedTightened, actual) {
             case (nil, nil): break

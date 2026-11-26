@@ -16,7 +16,7 @@ public import TrackingPlans
 /// import PostHogEncoding
 /// import TrackingPlans
 ///
-/// let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+/// let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
 /// let postHog = HTTPDestination(
 ///     endpoint: batchURL,  // https://us.i.posthog.com/batch/, or your instance's
 ///     instrument: NoOpInstrument(),  // no trace context in the request's header fields

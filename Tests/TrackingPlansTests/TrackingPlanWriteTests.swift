@@ -8,18 +8,22 @@ import TrackingPlans
 @Suite("TrackingPlan: writing")
 struct TrackingPlanWriteTests {
     struct ExampleCommand: TrackingPlanCommand {
-        static let trackingPlan = TrackingPlan(schemas: [
-            EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
-                EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
-            ]),
-        ])
+        static var trackingPlan: TrackingPlan {
+            get throws(TrackingPlanError) {
+                try TrackingPlan(schemas: [
+                    EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+                        EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
+                    ]),
+                ])
+            }
+        }
     }
 
     @Test("Writing creates the directory and writes every file's bytes")
     func writes() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("plan")
         defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
-        let sut = ExampleCommand.trackingPlan
+        let sut = try ExampleCommand.trackingPlan
         let expected = sut.files.map { Data($0.contents) }
 
         try sut.write(to: directory)
@@ -40,7 +44,7 @@ struct TrackingPlanWriteTests {
         #expect(FileManager.default.createFile(atPath: staleExample.path, contents: Data("{}".utf8)))
         #expect(FileManager.default.createFile(atPath: kept.path, contents: Data("notes".utf8)))
         let expected = ["README.md", "signed_up.v1.example.json", "signed_up.v1.schema.json", "tracking-plan.json"]
-        let sut = ExampleCommand.trackingPlan
+        let sut = try ExampleCommand.trackingPlan
 
         try sut.write(to: directory)
 
@@ -52,7 +56,7 @@ struct TrackingPlanWriteTests {
     func unchanged() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let sut = ExampleCommand.trackingPlan
+        let sut = try ExampleCommand.trackingPlan
         try sut.write(to: directory)
         let paths = sut.files.map { directory.appendingPathComponent($0.path).path }
         let expected = Date(timeIntervalSince1970: 1_000_000_000)
@@ -70,7 +74,7 @@ struct TrackingPlanWriteTests {
     func changed() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let sut = ExampleCommand.trackingPlan
+        let sut = try ExampleCommand.trackingPlan
         try sut.write(to: directory)
         let document = directory.appendingPathComponent("signed_up.v1.schema.json")
         try Data("{}".utf8).write(to: document)
@@ -86,7 +90,7 @@ struct TrackingPlanWriteTests {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: file) }
         #expect(FileManager.default.createFile(atPath: file.path, contents: Data("not a directory".utf8)))
-        let sut = ExampleCommand.trackingPlan
+        let sut = try ExampleCommand.trackingPlan
 
         #expect(throws: CocoaError.self) {
             try sut.write(to: file)
@@ -94,11 +98,11 @@ struct TrackingPlanWriteTests {
     }
 
     @Test("The command writes its plan into the directory it is given and exits 0")
-    func command() {
+    func command() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let expectedStatus: Int32 = 0
-        let expectedIndex = ExampleCommand.trackingPlan.files.first.map { Data($0.contents) }
+        let expectedIndex = try ExampleCommand.trackingPlan.files.first.map { Data($0.contents) }
 
         let actual = ExampleCommand.run(arguments: [directory.path])
 
@@ -115,6 +119,28 @@ struct TrackingPlanWriteTests {
         let actual = ExampleCommand.run(arguments: arguments)
 
         #expect(actual == expected)
+    }
+
+    struct InvalidCommand: TrackingPlanCommand {
+        static var trackingPlan: TrackingPlan {
+            get throws(TrackingPlanError) {
+                try TrackingPlan(schemas: [EventSchema(name: "", version: 1, consentCategory: .analytics, properties: [])])
+            }
+        }
+    }
+
+    @Test("The command exits 65 and writes nothing when its plan throws, whether writing or checking")
+    func invalidPlan() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let expected: Int32 = 65
+
+        let written = InvalidCommand.run(arguments: [directory.path])
+        let checked = InvalidCommand.run(arguments: ["check", directory.path])
+
+        #expect(written == expected)
+        #expect(checked == expected)
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
 
     @Test("The command exits 73 when it can't write the plan")

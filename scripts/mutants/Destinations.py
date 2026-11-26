@@ -37,8 +37,9 @@ MUTANTS = [
 
     Mutant("linewithoutname", C, '"\\(record.name) \\(record.event)"', '"\\(record.event)"'),
     Mutant("linewithoutspace", C, '"\\(record.name) \\(record.event)"', '"\\(record.name)\\(record.event)"'),
-    # The parameter's default; a comment in the body names 100 again.
-    Mutant("defaultbufferlimit", D, "100", "99", nth=0),
+    # The default the overload without a limit passes; the first 100 is its doc comment's, and a
+    # comment in the body names 100 again.
+    Mutant("defaultbufferlimit", D, "100", "99", nth=1),
     Mutant("bufferlimitzeroallowed", D, "batchBufferLimit >= 1", "batchBufferLimit >= 0"),
     Mutant("bufferonemore", U, ".bufferingNewest(limit)", ".bufferingNewest(limit + 1)"),
     Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(delivery) }", "buffers.first?.yield(delivery)", mode="stmt"),
@@ -49,9 +50,9 @@ MUTANTS = [
     Mutant("dropindexfixed", U, "self.index = index", "self.index = 0", mode="stmt"),
     # The first is the stored records' count; the second is the report's.
     Mutant("droprecordcountone", U, "dropped.batch.count", "1", nth=1),
-    Mutant("dropearliestislatest", U, "timestamps.min()!", "timestamps.max()!"),
-    # After dropearliestislatest's, the text holds two copies; the second is the original's.
-    Mutant("droplatestisearliest", U, "timestamps.max()!", "timestamps.min()!", nth=1),
+    Mutant("dropearliestislatest", D, "earliest...latest", "latest...latest"),
+    # The first leaves one copy of the original, in its unmutated branch.
+    Mutant("droplatestisearliest", D, "earliest...latest", "earliest...earliest"),
     Mutant("dropstorednotcounted", U, "dropped.batch.count { $0.deliveryTag != nil }", "0"),
     # A dropped batch's stored records: never acknowledged unless read back and received.
     Mutant("dropcountsasreceived", U, "state.dropped.append(dropped)", "dropped.acknowledgement.received()", mode="stmt"),
@@ -83,7 +84,6 @@ MUTANTS = [
     Mutant("eventsfirstbatch", M, "log.kept.withLock { $0.records.compactMap { $0.event as? E } }", "log.kept.withLock { ($0.batches.first ?? []).compactMap { $0.event as? E } }"),
     # InMemoryDestination's capacity.
     Mutant("capacityzeroallowed", M, "capacity >= 1", "capacity >= 0"),
-    Mutant("checkedcapacityzeroallowed", M, "checkedCapacity >= 1", "checkedCapacity >= 0"),
     Mutant("defaultcapacity", M, "1_000", "999"),
     Mutant("evictsonelate", M, "records.count > capacity", "records.count > capacity + 1"),
     Mutant("evictsonetoomany", M, "records.count - capacity", "records.count - capacity + 1"),

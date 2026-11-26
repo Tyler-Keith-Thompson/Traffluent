@@ -182,7 +182,7 @@ struct HTTPDestinationRetryTests {
     func givenBackoffCapped() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
-        let backoff = ExponentialBackoff(initialDelay: .milliseconds(300), maximumDelay: .seconds(1))
+        let backoff = try ExponentialBackoff(initialDelay: .milliseconds(300), maximumDelay: .seconds(1))
         let expectedWaits: [Duration] = [.milliseconds(300), .milliseconds(600), .seconds(1), .seconds(1)]
         let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.success(HTTPResponse(status: .serviceUnavailable)), count: expectedWaits.count)
         let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)

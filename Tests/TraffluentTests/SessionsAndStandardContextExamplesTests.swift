@@ -15,7 +15,7 @@ struct SessionsAndStandardContextExamplesTests {
 
     @Test("Sessions")
     func sessions() async throws {
-        let tracker = Tracker(enrichers: [.sessions(timeout: .seconds(30 * 60))])
+        let tracker = Tracker(enrichers: [.sessions()])
         tracker.track(SignedUp(plan: "pro"))  // its record's context[SessionKey.self] is the session's UUID
         await tracker.finish()
 

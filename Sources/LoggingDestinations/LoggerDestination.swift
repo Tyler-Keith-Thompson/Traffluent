@@ -33,7 +33,8 @@ public struct LoggerDestination: Destination {
 
     private func write(_ record: EventRecord) {
         // A record whose call site was dropped is logged with empty names and line 0 rather
-        // than this file's, which would point at the wrong code.
+        // than this file's, which would point at the wrong code. So is a negative line, which
+        // no source has and `UInt` can't hold.
         let location = record.sourceLocation
         logger.log(
             level: level,
@@ -42,7 +43,7 @@ public struct LoggerDestination: Destination {
             source: location?.moduleName,
             file: location?.fileID ?? "",
             function: location?.function ?? "",
-            line: UInt(location?.line ?? 0))
+            line: location.flatMap { UInt(exactly: $0.line) } ?? 0)
     }
 }
 

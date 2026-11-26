@@ -31,7 +31,7 @@ struct HTTPDestinationsModuleExamplesTests {
             endpoint: endpointURL,
             headerFields: [.authorization: "Bearer \(token)"],
             encoder: PlansEncoder(),
-            backoff: ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(120)))
+            backoff: try ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(120)))
         let drops = server.dropReports
         let watching = Task {
             for await drop in drops {

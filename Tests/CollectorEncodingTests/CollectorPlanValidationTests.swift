@@ -23,7 +23,7 @@ struct CollectorPlanValidationTests {
 
     @Test("A record whose Sensitive values redactingSensitiveValues() redacted validates against its event's document")
     func redacted() async throws {
-        let plan = TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let document = try #require(plan.files.first { $0.path == "signed_up.v1.schema.json" })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))
@@ -48,7 +48,7 @@ struct CollectorPlanValidationTests {
 
     @Test("A record that reveals its Sensitive values validates against its event's document")
     func revealed() throws {
-        let plan = TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let document = try #require(plan.files.first { $0.path == "signed_up.v1.schema.json" })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))

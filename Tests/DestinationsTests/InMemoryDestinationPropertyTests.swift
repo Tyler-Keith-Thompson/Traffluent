@@ -16,9 +16,9 @@ struct InMemoryDestinationPropertyTests {
     }
 
     @Test("It keeps the newest capacity records, and each kept batch holds its newest records", .tags(.randomized))
-    func keepsNewest() async {
+    func keepsNewest() async throws {
         await propertyCheck(count: 300, input: Gen.int(in: 0 ... 6).array(of: 0 ... 12), Gen.int(in: 1 ... 10)) { sizes, capacity in
-            let sut = InMemoryDestination(capacity: capacity)
+            let sut = try InMemoryDestination(capacity: capacity)
             let location = SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1)
             var next = 0
             var received: [[Int]] = []

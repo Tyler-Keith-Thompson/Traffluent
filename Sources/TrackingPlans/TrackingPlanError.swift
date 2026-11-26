@@ -8,4 +8,8 @@ public enum TrackingPlanError: Error, Sendable, Hashable {
     /// names differ only in the case of their letters, which a case-insensitive file system
     /// doesn't tell apart.
     case duplicateEvent
+    /// A property's keyword states no rule a JSON Schema can: a negative length or count of
+    /// elements, a bound that is NaN or infinite, or a pattern that isn't a valid regular
+    /// expression or doesn't match its example.
+    case invalidKeyword
 }

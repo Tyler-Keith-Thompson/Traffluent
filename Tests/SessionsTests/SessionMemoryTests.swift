@@ -59,7 +59,7 @@ struct SessionMemoryTests {
         let events: [any (Event & BinaryCodable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
         let sessionStore = try SegmentStore(events: events, directory: FilePath(withSessions.path(percentEncoded: false)))
         let controlStore = try SegmentStore(events: events, directory: FilePath(without.path(percentEncoded: false)))
-        let sut = Tracker(store: sessionStore, enrichers: [.sessions(timeout: .seconds(60))], now: {
+        let sut = Tracker(store: sessionStore, enrichers: [try .sessions(timeout: .seconds(60))], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })

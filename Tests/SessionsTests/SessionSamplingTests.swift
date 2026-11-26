@@ -28,8 +28,8 @@ struct SessionSamplingTests {
     func wholeSessions() async throws {
         let sessions = 40
         let stamps = Stamps()
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60))], samplers: [.sessions(rate: 0.5)], samplingSeed: 7, now: stamps.next)
-        let expectedRate: SampleRate = 0.5
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60))], samplers: [.sessions(rate: try SampleRate(0.5))], samplingSeed: 7, now: stamps.next)
+        let expectedRate: SampleRate = try SampleRate(0.5)
 
         for number in 0 ..< sessions * 3 {
             sut.track(Tapped(number: number))
@@ -71,10 +71,10 @@ struct SessionSamplingTests {
     }
 
     @Test("Sampling sessions at 0 keeps none of their records; at 1, every one, carrying rate 1", arguments: [0.0, 1.0])
-    func boundaries(rate: Double) async {
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60))], samplers: [.sessions(rate: SampleRate(rate))], samplingSeed: 1, now: Stamps().next)
+    func boundaries(rate: Double) async throws {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60))], samplers: [.sessions(rate: try SampleRate(rate))], samplingSeed: 1, now: Stamps().next)
         let expected = rate == 0 ? 0 : 6 * 4 + 5
-        let expectedRates = rate == 0 ? [] : Array(repeating: SampleRate(1), count: expected)
+        let expectedRates = rate == 0 ? [] : Array(repeating: try SampleRate(1), count: expected)
 
         for number in 0 ..< 18 {
             sut.track(Tapped(number: number))
@@ -90,8 +90,8 @@ struct SessionSamplingTests {
     }
 
     @Test("A session sampler given a predicate drops only the records it selects, and keeps the session's others")
-    func predicate() async {
-        let sut = Tracker(enrichers: [.sessions()], samplers: [.sessions(where: { $0.event is Tapped }, rate: 0)], samplingSeed: 1)
+    func predicate() async throws {
+        let sut = Tracker(enrichers: [.sessions()], samplers: [.sessions(where: { $0.event is Tapped }, rate: try SampleRate(0))], samplingSeed: 1)
         let expected = ["SessionStarted()"]
 
         sut.track(Tapped(number: 0))
@@ -106,8 +106,8 @@ struct SessionSamplingTests {
     }
 
     @Test("A record with no session, the sessions enricher left out, is kept, with no rate")
-    func noSession() async {
-        let sut = Tracker(samplers: [.sessions(rate: 0)], samplingSeed: 1)
+    func noSession() async throws {
+        let sut = Tracker(samplers: [.sessions(rate: try SampleRate(0))], samplingSeed: 1)
         let expected: [SampleRate?] = [nil]
 
         sut.track(Tapped(number: 0))

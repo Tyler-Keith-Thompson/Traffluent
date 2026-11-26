@@ -82,28 +82,36 @@ public struct SegmentStore: RecordStore {
     ///   - byteBound: The most bytes the log may hold.
     ///   - segmentByteCount: The size at which a segment is closed and a new one started; an
     ///     eighth of `byteBound` when `nil`.
-    /// - Throws: `Errno` when the directory can't be created or read, or a segment in it can't
-    ///   be opened, read or truncated.
-    /// - Precondition: `byteBound` is over 8 bytes (a segment's header) and `segmentByteCount`,
-    ///   when given, is positive. No two of `events` share an `Event.name`.
+    /// - Throws: ``SegmentStoreError/byteBoundTooSmall`` when `byteBound` is no more than 8
+    ///   bytes (a segment's header), ``SegmentStoreError/nonPositiveSegmentByteCount`` when
+    ///   `segmentByteCount` is given and isn't positive, ``SegmentStoreError/duplicateEventName``
+    ///   when two of `events` share an `Event.name`, and ``SegmentStoreError/fileSystem(_:)`` when
+    ///   the directory can't be created or read, or a segment in it can't be opened, read or
+    ///   truncated.
     public init(
         events: [any (Event & BinaryCodable).Type],
         directory: FilePath = SegmentStore.defaultDirectory,
         byteBound: Int = SegmentStore.defaultByteBound,
         segmentByteCount: Int? = nil
-    ) throws(Errno) {
-        try self.init(opening: directory, events: events, byteBound: byteBound, segmentByteCount: segmentByteCount)
-    }
-
-    private init(opening directory: FilePath, events: [any (Event & BinaryCodable).Type], byteBound: Int, segmentByteCount: Int?) throws(Errno) {
-        precondition(byteBound > SegmentFormat.header.count, "A segment store's bound must be over \(SegmentFormat.header.count) bytes, not \(byteBound)")
-        precondition(segmentByteCount.map { $0 > 0 } ?? true, "A segment's size must be positive, not \(segmentByteCount ?? 0)")
-        log = try SegmentLog(
-            directory: directory,
-            registry: EventRegistry(events),
-            byteBound: byteBound,
-            segmentByteCount: segmentByteCount ?? max(byteBound / 8, 1)
-        )
+    ) throws(SegmentStoreError) {
+        guard byteBound > SegmentFormat.header.count else { throw .byteBoundTooSmall }
+        guard segmentByteCount.map({ $0 > 0 }) ?? true else { throw .nonPositiveSegmentByteCount }
+        let registry: EventRegistry
+        do {
+            registry = try EventRegistry(events)
+        } catch {
+            throw .duplicateEventName
+        }
+        do throws(Errno) {
+            log = try SegmentLog(
+                directory: directory,
+                registry: registry,
+                byteBound: byteBound,
+                segmentByteCount: segmentByteCount ?? max(byteBound / 8, 1)
+            )
+        } catch {
+            throw .fileSystem(error)
+        }
     }
 
     /// Where the store keeps its segments.

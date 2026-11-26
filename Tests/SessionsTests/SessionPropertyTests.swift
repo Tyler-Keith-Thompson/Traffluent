@@ -44,7 +44,7 @@ struct SessionPropertyTests {
             }
 
             let stamps = Stamps(times)
-            let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60))], now: { stamps.next() })
+            let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60))], now: { stamps.next() })
             for number in times.indices {
                 sut.track(Tapped(number: number))
             }

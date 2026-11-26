@@ -4,9 +4,10 @@ extension EventSchema {
     /// The event's example: a payload its document accepts, with every property present, each set
     /// to the example of its schema.
     var example: JSON {
-        .object(Dictionary(uniqueKeysWithValues: properties.map { property in
+        // Unique: TrackingPlan's initializer rejects a schema with two properties of one name.
+        .object(Dictionary(properties.map { property in
             (property.name, property.schema.example)
-        }))
+        }) { first, _ in first })
     }
 }
 
@@ -32,9 +33,9 @@ extension Dictionary where Key == String, Value == JSON {
         case "integer":
             // Every integer type a plan maps has 0 in its range; a bound with a fraction is met by
             // the whole number on its inner side.
-            .number(exactly: (self["minimum"]?.double.map { Swift.max(0, $0.rounded(.up)) } ?? 0).clamped(below: self["maximum"]?.double.map { $0.rounded(.down) }))
+            .number(exactly: (self["minimum"]?.double.map { Swift.max(0, $0.rounded(.up)) } ?? 0).clamped(below: self["maximum"]?.double.map { $0.rounded(.down) })) ?? .null
         case "number":
-            .number(exactly: (self["minimum"]?.double.map { Swift.max(0, $0) } ?? 0).clamped(below: self["maximum"]?.double))
+            .number(exactly: (self["minimum"]?.double.map { Swift.max(0, $0) } ?? 0).clamped(below: self["maximum"]?.double)) ?? .null
         case "boolean":
             .boolean(false)
         case "array":

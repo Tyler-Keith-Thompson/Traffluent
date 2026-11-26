@@ -29,7 +29,7 @@ import CollectorEncoding
 import HTTPDestinations
 import TrackingPlans
 
-let plan = TrackingPlan(schemas: [SignedUp.schema])
+let plan = try TrackingPlan(schemas: [SignedUp.schema])
 let encoder = CollectorBatchEncoder(plan: plan)
 let collector = HTTPDestination(
     endpoint: collectorURL,  // https://collector.example.com/v1/batches

@@ -81,17 +81,29 @@ public struct DatabaseStore: RecordStore {
     ///   - table: The table the records go in; ``defaultTable`` unless given. It may not hold a
     ///     double quote.
     ///   - byteBound: The most bytes of encoded records the table may hold.
-    /// - Throws: `DatabaseError` when the table can't be created (the database is read-only, or
-    ///   `table` holds a double quote) or read, or the rows recovery drops can't be deleted.
-    /// - Precondition: `byteBound` is positive. No two of `events` share an `Event.name`.
+    /// - Throws: ``DatabaseStoreError/nonPositiveByteBound`` when `byteBound` isn't positive,
+    ///   ``DatabaseStoreError/duplicateEventName`` when two of `events` share an `Event.name`,
+    ///   and ``DatabaseStoreError/database(_:)`` when the table can't be created (the database is
+    ///   read-only, or `table` holds a double quote) or read, or the rows recovery drops can't be
+    ///   deleted.
     public init(
         events: [any (Event & BinaryCodable).Type],
         database: some DatabaseWriter,
         table: String = DatabaseStore.defaultTable,
         byteBound: Int = DatabaseStore.defaultByteBound
-    ) throws(DatabaseError) {
-        precondition(byteBound > 0, "A database store's bound must be positive, not \(byteBound)")
-        log = try DatabaseLog(writer: database, table: table, registry: EventRegistry(events), byteBound: byteBound)
+    ) throws(DatabaseStoreError) {
+        guard byteBound > 0 else { throw .nonPositiveByteBound }
+        let registry: EventRegistry
+        do {
+            registry = try EventRegistry(events)
+        } catch {
+            throw .duplicateEventName
+        }
+        do throws(DatabaseError) {
+            log = try DatabaseLog(writer: database, table: table, registry: registry, byteBound: byteBound)
+        } catch {
+            throw .database(error)
+        }
     }
 
     /// The table the store keeps its records in.

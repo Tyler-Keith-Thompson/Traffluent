@@ -60,9 +60,9 @@ struct TrackingPlanVersioningTests {
     ]
 
     @Test("Each breaking change at the same version fails the check, its line naming the event, the property and the change", arguments: breakingChanges)
-    func breakingAtSameVersion(current: EventSchema, expectedLine: String) {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [current])
+    func breakingAtSameVersion(current: EventSchema, expectedLine: String) throws {
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [current])
 
         let actual = sut.check(against: committed)
 
@@ -71,9 +71,9 @@ struct TrackingPlanVersioningTests {
     }
 
     @Test("The same breaking change with the version raised passes the check, which reports only the raise")
-    func breakingWithRaisedVersion() {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [RetypedVersion2.schema])
+    func breakingWithRaisedVersion() throws {
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [RetypedVersion2.schema])
         let expected = TrackingPlanCheck.outOfDate([.versionRaised(event: "checkout_started", committed: 1, current: 2)])
 
         let actual = sut.check(against: committed)
@@ -82,9 +82,9 @@ struct TrackingPlanVersioningTests {
     }
 
     @Test("Compatible changes at the same version pass the check: an optional property added, one with a default value added, one removed")
-    func compatibleAtSameVersion() {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [Compatible.schema])
+    func compatibleAtSameVersion() throws {
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [Compatible.schema])
         let expected = TrackingPlanCheck.outOfDate([
             .defaultedPropertyAdded(event: "checkout_started", version: 1, property: "currency"),
             .optionalPropertyAdded(event: "checkout_started", version: 1, property: "referrer"),

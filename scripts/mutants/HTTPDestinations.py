@@ -37,6 +37,8 @@ S = "HTTPDestination+URLSessionTransport.swift"
 E = "ExponentialBackoff.swift"
 R = "TransientFailureRetry.swift"
 
+# TransientFailureRetry's maxCount below Int32.max (AFLU-69) has no mutant: only a 2^31st retry
+# would tell it from Afluent's default.
 MUTANTS = [
     Mutant("methodput", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .put, url: endpoint, headerFields: headerFields)", mode="stmt"),
     Mutant("noheaderfields", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .post, url: endpoint)", mode="stmt"),
@@ -103,17 +105,18 @@ MUTANTS = [
     Mutant("afluentcapsooner", R, "backoff.maximumDelay", "backoff.initialDelay", nth=1),
     Mutant("retryoffbyone", R, "power.trailingZeroBitCount", "power.trailingZeroBitCount + 1"),
     # ExponentialBackoff.
-    Mutant("noinitialprecondition", E, 'precondition(initialDelay > .zero, "A backoff\'s initial delay must be positive, not \\(initialDelay)")', "", mode="stmt"),
+    # The defaults: the first .seconds(1) is the doc comment's.
+    Mutant("defaultinitial", E, "initialDelay = .seconds(1)", "initialDelay = .seconds(2)", mode="stmt"),
+    Mutant("defaultmaximum", E, "maximumDelay = .seconds(60)", "maximumDelay = .seconds(61)", mode="stmt"),
+    Mutant("noguard", E, "guard initialDelay > .zero, maximumDelay >= initialDelay else { throw InvalidBackoff() }", "", mode="stmt"),
     Mutant("zeroinitialallowed", E, "initialDelay > .zero", "initialDelay >= .zero"),
-    Mutant("nomaximumprecondition", E, 'precondition(maximumDelay >= initialDelay, "A backoff\'s maximum delay, \\(maximumDelay), can\'t be less than its initial delay, \\(initialDelay)")', "", mode="stmt"),
     Mutant("maximumequalrefused", E, "maximumDelay >= initialDelay", "maximumDelay > initialDelay"),
-    Mutant("checkednoguard", E, "guard checkedInitialDelay > .zero, maximumDelay >= checkedInitialDelay else { throw InvalidBackoff() }", "", mode="stmt"),
-    Mutant("checkedzeroallowed", E, "checkedInitialDelay > .zero", "checkedInitialDelay >= .zero"),
-    Mutant("checkedmaximumequalrefused", E, "maximumDelay >= checkedInitialDelay", "maximumDelay > checkedInitialDelay"),
     Mutant("initialkeptasmaximum", E, "self.initialDelay = initialDelay", "self.initialDelay = maximumDelay", mode="stmt"),
     Mutant("maximumkeptasinitial", E, "self.maximumDelay = maximumDelay", "self.maximumDelay = initialDelay", mode="stmt"),
     Mutant("tripling", E, "delay *= 2", "delay *= 3", mode="stmt"),
-    Mutant("onedoublingtoomany", E, "1 ..< retry", "0 ..< retry"),
+    Mutant("onedoublingtoomany", E, "delay(afterDoubling: retry - 1)", "delay(afterDoubling: retry)"),
+    Mutant("retryzeroallowed", E, "retry >= 1", "retry >= 0"),
+    Mutant("doublingsnotcounted", E, "doublings -= 1", "doublings -= 2", mode="stmt"),
     Mutant("halfmaximum", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "guard delay < maximumDelay / 2 else { return maximumDelay }", mode="stmt"),
     Mutant("uncapped", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "", mode="stmt"),
     Mutant("capreturnsdelay", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "guard delay < maximumDelay - delay else { return delay }", mode="stmt"),

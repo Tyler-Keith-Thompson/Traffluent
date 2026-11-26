@@ -17,7 +17,7 @@ struct Scrolled {
 
 let tracker = Tracker(
     enrichers: [.sessions()],
-    samplers: [.events(of: Scrolled.self, rate: 0.1), .sessions(rate: 0.5)]
+    samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.1)), .sessions(rate: try SampleRate(0.5))]
 )
 tracker.track(Scrolled(offset: 120))  // if kept, its record's context[SampleRateKey.self]?.value is 0.05
 ```
@@ -31,8 +31,8 @@ tracker.track(Scrolled(offset: 120))  // if kept, its record's context[SampleRat
   `SessionEnded` with it.
 - `.grouped(by:rate:)` does the same for the groups that any context key's values make.
 
-A rate is in 0 ... 1. A literal outside that range, or `SampleRate(_:)` given one, traps;
-`SampleRate(checked:)` throws `InvalidSampleRate` instead. A record is kept only if every sampler
+A rate is in 0 ... 1: `SampleRate(_:)` throws `InvalidSampleRate` for a value outside that range,
+or NaN. A record is kept only if every sampler
 that applies to it keeps it. A kept record carries the product of their rates as its
 `SampleRateKey`, so a destination can count it as `1 / value` records. A record that no sampler
 applies to is always kept and carries no key.
@@ -49,7 +49,7 @@ generator once per tracker unless you pass one. They are the same on every platf
 release, so with the seed fixed, which events are kept is fixed too:
 
 ```swift
-let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.1)], samplingSeed: 42)
+let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.1))], samplingSeed: 42)
 for offset in 0 ..< 100 {
     tracker.track(Scrolled(offset: offset))
 }

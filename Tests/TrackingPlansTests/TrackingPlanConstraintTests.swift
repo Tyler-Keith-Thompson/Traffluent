@@ -13,14 +13,20 @@ import TraffluentTestSupport
 @Suite("TrackingPlan: constraints")
 struct TrackingPlanConstraintTests {
     enum CouponCode: Refinement {
-        static let constraints: [Constraint<String>] = [
-            .pattern("^[A-Z0-9]+$", example: "SPRING"),
-            .pattern("^.{6}$", example: "SPRING"),
-        ]
+        static var constraints: [Constraint<String>] {
+            get throws(InvalidConstraint) {
+                try [
+                    .pattern("^[A-Z0-9]+$", example: "SPRING"),
+                    .pattern("^.{6}$", example: "SPRING"),
+                ]
+            }
+        }
     }
 
     enum Seats: Refinement {
-        static let constraints: [Constraint<Int8>] = [.minimum(1), .maximum(100)]
+        static var constraints: [Constraint<Int8>] {
+            get throws(InvalidConstraint) { try [.minimum(1), .maximum(100)] }
+        }
     }
 
     @Event(name: "search_performed")
@@ -106,7 +112,7 @@ struct TrackingPlanConstraintTests {
 
     @Test("Declared keywords are written beside each property's type: lengths, bounds, fractional bounds and counts")
     func declaredDocument() throws {
-        let sut = TrackingPlan(schemas: [SearchPerformed.schema])
+        let sut = try TrackingPlan(schemas: [SearchPerformed.schema])
 
         let actual = try #require(sut.files.first { $0.path == "search_performed.v1.schema.json" })
 
@@ -153,7 +159,7 @@ struct TrackingPlanConstraintTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [CouponApplied.schema])
+        let sut = try TrackingPlan(schemas: [CouponApplied.schema])
 
         let actual = try #require(sut.files.first { $0.path == "coupon_applied.v1.schema.json" })
 
@@ -183,7 +189,7 @@ struct TrackingPlanConstraintTests {
             }
 
             """
-        let sut = TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
+        let sut = try TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
 
         let search = try #require(sut.files.first { $0.path == "search_performed.v1.example.json" })
         let coupon = try #require(sut.files.first { $0.path == "coupon_applied.v1.example.json" })
@@ -196,7 +202,7 @@ struct TrackingPlanConstraintTests {
     func mergedBounds() throws {
         let expectedDocument = #"{"maximum": 127, "minimum": 1, "type": "integer"}"#
         let expectedExample = #"{"p": 1, "q": 1}"#
-        let sut = TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "p", typeName: "Int8", isOptional: false, keywords: [.minimum(1), .maximum(200)]),
             EventSchema.Property(name: "q", typeName: "Int", isOptional: false, keywords: [.minimum(0.5), .maximum(1.5)]),
         ])])
@@ -214,7 +220,7 @@ struct TrackingPlanConstraintTests {
     @Test("Two keywords of one kind, a refined type's and a declared one, write the tighter: the larger minLength and the smaller maxLength")
     func repeatedKeywords() throws {
         let expected = try JSONValue.parse(#"{"maxLength": 5, "minLength": 3, "type": "string"}"#)
-        let sut = TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "p", typeName: "String", isOptional: false, keywords: [.minLength(1), .maxLength(5), .minLength(3), .maxLength(9)]),
         ])])
         let document = try #require(sut.files.first { $0.path == "e.v1.schema.json" })
@@ -227,7 +233,7 @@ struct TrackingPlanConstraintTests {
     @Test("A type the plan can't map, or can't parse, keeps its keywords beside the Swift type it records", arguments: ["CouponCode", "Box<String"])
     func unmappedTypeKeywords(typeName: String) throws {
         let expected: JSONValue = ["minLength": 2, "x-traffluent-swift-type": .string(typeName)]
-        let sut = TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "p", typeName: typeName, isOptional: false, keywords: [.minLength(2)]),
         ])])
         let document = try #require(sut.files.first { $0.path == "e.v1.schema.json" })
@@ -245,7 +251,7 @@ struct TrackingPlanConstraintTests {
             context: Context(dialect: .draft2020_12, remoteSchema: remotes),
             baseURI: try #require(URL(string: Draft202012MetaSchema.id))
         )
-        let sut = TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
+        let sut = try TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
         let documents = sut.files.filter { $0.path.hasSuffix(".schema.json") }
 
         for document in documents {
@@ -259,7 +265,7 @@ struct TrackingPlanConstraintTests {
 
     @Test("Each example is valid against its document")
     func examplesValidate() throws {
-        let sut = TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
+        let sut = try TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
         let files = Dictionary(uniqueKeysWithValues: sut.files.map { ($0.path, String(decoding: $0.contents, as: UTF8.self)) })
 
         for schema in sut.schemas {
@@ -279,7 +285,7 @@ struct TrackingPlanConstraintTests {
         #"{"code": "SPRING", "seats": 101}"#,
     ])
     func validatorRejects(payload: String) throws {
-        let sut = TrackingPlan(schemas: [CouponApplied.schema])
+        let sut = try TrackingPlan(schemas: [CouponApplied.schema])
         let document = String(decoding: try #require(sut.files.first { $0.path == "coupon_applied.v1.schema.json" }).contents, as: UTF8.self)
 
         let actual = try Schema(instance: document).validate(instance: payload)
@@ -288,8 +294,8 @@ struct TrackingPlanConstraintTests {
     }
 
     @Test("A plan with fractional bounds checks clean against its own files, which parse back to the same numbers")
-    func fractionalRoundTrip() {
-        let sut = TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
+    func fractionalRoundTrip() throws {
+        let sut = try TrackingPlan(schemas: [SearchPerformed.schema, CouponApplied.schema])
 
         let actual = sut.check(against: sut.files)
 
@@ -297,8 +303,8 @@ struct TrackingPlanConstraintTests {
     }
 
     @Test("A bound beyond Int64's range is written as a number and reads back equal", arguments: [1e20, -1e20, 0.1, 1e-5])
-    func largeBounds(bound: Double) {
-        let sut = TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
+    func largeBounds(bound: Double) throws {
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "e", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "p", typeName: "Double", isOptional: false, keywords: [.maximum(bound)]),
         ])])
 
@@ -308,7 +314,7 @@ struct TrackingPlanConstraintTests {
     }
 
     @Test("Any set of keywords on a string, integer, number or array gives an example its document accepts", .tags(.randomized))
-    func anyValidates() async {
+    func anyValidates() async throws {
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 12), Gen.int(in: 0 ... 12), Gen.int(in: -20 ... 20), Gen.int(in: 0 ... 20)) { kind, lower, span, bound, width in
             let (typeName, keywords): (String, [ValidationKeyword]) = switch kind {
             case 0: ("String", [.minLength(lower), .maxLength(lower + span)])
@@ -317,7 +323,7 @@ struct TrackingPlanConstraintTests {
             case 2: ("Double", [.minimum(Double(bound) / 4), .maximum(Double(bound) / 4 + Double(width) / 8)])
             default: ("[Int]", [.minItems(lower), .maxItems(lower + span)])
             }
-            let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
+            let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
                 EventSchema.Property(name: "p", typeName: typeName, isOptional: false, keywords: keywords),
             ])])
             let document = String(decoding: sut.files.first { $0.path == "event.v1.schema.json" }?.contents ?? [], as: UTF8.self)

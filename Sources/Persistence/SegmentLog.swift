@@ -57,6 +57,8 @@ final class SegmentLog: Acknowledger {
         case failed(Errno)
         /// Not written: segment files that couldn't be deleted leave no room within the bound.
         case full
+        /// Not written: the log has used every segment number.
+        case exhausted
     }
 
     /// Whether the active segment can take a frame.
@@ -68,6 +70,8 @@ final class SegmentLog: Acknowledger {
         case failed(Errno)
         /// Segment files that couldn't be deleted leave no room within the bound.
         case full
+        /// A new segment was needed, and the log has used every segment number.
+        case exhausted
     }
 
     /// The files, and whether the directory, to flush to storage.
@@ -100,12 +104,17 @@ final class SegmentLog: Acknowledger {
         return String(repeating: "0", count: 20 - digits.count) + digits + ".segment"
     }
 
-    /// The number a segment file's name holds, or `nil` for any other file.
+    /// The numbers a segment can have: below 2³², as a position is the segment's number above 32
+    /// bits of record number.
+    static let segmentNumberLimit: UInt64 = 1 << 32
+
+    /// The number a segment file's name holds, or `nil` for any other file, one whose number is
+    /// past every segment's included.
     static func number(inFileName name: String) -> UInt64? {
         guard name.hasSuffix(".segment") else { return nil }
         let digits = name.dropLast(".segment".count)
         guard digits.count == 20, digits.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
-        return UInt64(digits)
+        return UInt64(digits).flatMap { $0 < segmentNumberLimit ? $0 : nil }
     }
 
     /// The log in `directory`, recovered from the segments there.
@@ -155,7 +164,11 @@ final class SegmentLog: Acknowledger {
             swap(&spare, &state.spareFrameBuffer)
             return spare
         }
-        let frame = SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare)
+        guard let frame = SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare) else {
+            Self.logger.error("Kept a \(registration.name) record in memory only: its frame would be larger than a frame can be")
+            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            return record
+        }
         let appending: Appending = state.withLock { state in
             defer {
                 if frame.buffer.count <= Self.spareFrameBufferLimit {
@@ -167,6 +180,7 @@ final class SegmentLog: Acknowledger {
             case .tooLarge: return .tooLarge
             case .failed(let error): return .failed(error)
             case .full: return .full
+            case .exhausted: return .exhausted
             }
             let active = state.segments.count - 1
             do throws(Errno) {
@@ -194,6 +208,10 @@ final class SegmentLog: Acknowledger {
             return record
         case .full:
             Self.logger.error("Kept a \(registration.name) record in memory only: segments in \(directory) that couldn't be deleted fill its bound of \(byteBound) bytes")
+            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            return record
+        case .exhausted:
+            Self.logger.error("Kept a \(registration.name) record in memory only: the log in \(directory) has used every segment number")
             dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
@@ -229,21 +247,44 @@ final class SegmentLog: Acknowledger {
         // Segments whose files couldn't be deleted still take their bytes on disk.
         guard state.byteCount + frameByteCount + (state.hasActive ? 0 : SegmentFormat.header.count) <= byteBound else { return .full }
         if !state.hasActive {
-            do throws(Errno) {
+            do throws(SegmentStartFailure) {
                 try startSegment(in: &state)
             } catch {
-                return .failed(error)
+                switch error {
+                case .failed(let error): return .failed(error)
+                case .exhausted: return .exhausted
+                }
             }
         }
         return .ready
     }
 
+    /// Why a new segment wasn't created.
+    private enum SegmentStartFailure: Error {
+        /// Creating its file, or writing its header, failed.
+        case failed(Errno)
+        /// Every segment number is used.
+        case exhausted
+    }
+
     /// Creates the next segment, with its header, as the active one.
-    private func startSegment(in state: inout State) throws(Errno) {
+    ///
+    /// - Throws: ``SegmentStartFailure/exhausted`` once every number below 2³² is used, as a
+    ///   position is the segment's number above 32 bits of record number (a directory would need
+    ///   four billion segments), and ``SegmentStartFailure/failed(_:)`` when the file can't be
+    ///   created or its header written.
+    private func startSegment(in state: inout State) throws(SegmentStartFailure) {
         let number = state.nextNumber
-        // A position is the segment's number above 32 bits of record number; a directory would
-        // need four billion segments for this to fire.
-        precondition(number < 1 << 32, "The log in \(directory) has used every segment number")
+        guard number < Self.segmentNumberLimit else { throw .exhausted }
+        do throws(Errno) {
+            try createSegment(number, in: &state)
+        } catch {
+            throw .failed(error)
+        }
+    }
+
+    /// Creates segment `number`, with its header, as the active one.
+    private func createSegment(_ number: UInt64, in state: inout State) throws(Errno) {
         let path = directory.appending(Self.fileName(of: number))
         let descriptor = try withErrno {
             try FileDescriptor.open(path, .writeOnly, options: [.create, .exclusiveCreate, .append], permissions: [.ownerReadWrite])
@@ -292,7 +333,11 @@ final class SegmentLog: Acknowledger {
         var withheld: Set<UInt64> = []
         let pending: PendingSynchronization = state.withLock { state in
             for (number, indices) in Self.indicesBySegment(positions) {
-                let frame = SegmentFormat.deliveryMarkFrame(of: indices)
+                guard let frame = SegmentFormat.deliveryMarkFrame(of: indices) else {
+                    Self.logger.error("Held \(indices.count) records back from delivery until a later launch: their delivery mark would be larger than a frame can be")
+                    withheld.formUnion(indices.map { number << 32 | UInt64($0) })
+                    continue
+                }
                 while state.byteCount + frame.count > byteBound, !state.segments.isEmpty {
                     state.hasActive = state.hasActive && state.segments.count > 1
                     var reports: [DropReport] = []
@@ -335,7 +380,8 @@ final class SegmentLog: Acknowledger {
             var finished: Set<UInt64> = []
             for (number, indices) in Self.indicesBySegment(positions) {
                 guard let segment = state.segments.firstIndex(where: { $0.number == number }) else { continue }
-                for index in indices.map(Int.init) where index < state.segments[segment].acknowledged.count {
+                // An index past Int's range, on a 32-bit Int, is past every segment's records too.
+                for index in indices.compactMap({ Int(exactly: $0) }) where index < state.segments[segment].acknowledged.count {
                     guard !state.segments[segment].acknowledged[index] else { continue }
                     state.segments[segment].acknowledged[index] = true
                     state.segments[segment].pendingCount -= 1
@@ -602,10 +648,14 @@ final class SegmentLog: Acknowledger {
         of bytes: [UInt8],
         in directory: FilePath
     ) -> (Segment, [Recovered])? {
-        // `UInt32(_:)` can't trap: there are fewer records than the segment's frames, which a
-        // segment holds fewer of than UInt32.max.
-        let marked = records.indices.filter { records[$0].record.isRedelivered }.map { UInt32($0) }
-        let compacted = SegmentFormat.compacted(bytes, keeping: frames, marking: marked)
+        // Every index fits: there are fewer records than the segment's frames, which a segment
+        // holds fewer of than UInt32.max. Were one not to, the segment is kept as it was.
+        let redelivered = records.indices.filter { records[$0].record.isRedelivered }
+        let marked = redelivered.compactMap { UInt32(exactly: $0) }
+        guard marked.count == redelivered.count, let compacted = SegmentFormat.compacted(bytes, keeping: frames, marking: marked) else {
+            logger.error("Kept the dropped records in \(segment.file.path), to be reported again on the next launch: its rewrite would hold a frame larger than a frame can be")
+            return nil
+        }
         let temporary = FilePath(segment.file.path.string + rewritingSuffix)
         let file: SegmentFile
         do throws(Errno) {

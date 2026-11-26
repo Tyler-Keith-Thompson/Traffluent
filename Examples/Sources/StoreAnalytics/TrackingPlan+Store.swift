@@ -14,7 +14,11 @@ extension TrackingPlan {
     /// a record whose event isn't listed, so a feature turned on in ``StoreAnalytics`` needs its
     /// events listed too. `export-tracking-plan` writes this plan into `Examples/TrackingPlan`
     /// (`StoreTrackingPlan`), which is the document a collector validates against.
-    public static let store = TrackingPlan(schemas: storeSchemas + librarySchemas)
+    ///
+    /// - Throws: ``TrackingPlanError`` when two of the schemas share a name, or one is malformed.
+    public static var store: TrackingPlan {
+        get throws(TrackingPlanError) { try TrackingPlan(schemas: storeSchemas + librarySchemas) }
+    }
 
     private static let storeSchemas = [
         ProductAddedToCart.schema,

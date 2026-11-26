@@ -101,7 +101,7 @@ struct ChoosingDestinationsPostHogExamplesTests {
         let postHogBatchURL = try #require(URL(string: "https://posthog.example.com/batch/"))
         let projectToken = "phc_example"
 
-        let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+        let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
         let postHog = HTTPDestination(
             endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
             instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields

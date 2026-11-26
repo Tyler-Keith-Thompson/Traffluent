@@ -16,7 +16,7 @@ struct SamplingEventsExamplesTests {
     func sampling() async throws {
         let tracker = Tracker(
             enrichers: [.sessions()],
-            samplers: [.events(of: Scrolled.self, rate: 0.1), .sessions(rate: 0.5)]
+            samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.1)), .sessions(rate: try SampleRate(0.5))]
         )
         tracker.track(Scrolled(offset: 120))  // if kept, its record's context[SampleRateKey.self]?.value is 0.05
         await tracker.finish()
@@ -27,8 +27,8 @@ struct SamplingEventsExamplesTests {
     }
 
     @Test("Sampling: a fixed seed and the drops")
-    func samplingSeedAndDrops() async {
-        let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: 0.1)], samplingSeed: 42)
+    func samplingSeedAndDrops() async throws {
+        let tracker = Tracker(samplers: [.events(of: Scrolled.self, rate: try SampleRate(0.1))], samplingSeed: 42)
         for offset in 0 ..< 100 {
             tracker.track(Scrolled(offset: offset))
         }

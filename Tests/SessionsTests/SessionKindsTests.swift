@@ -15,7 +15,7 @@ struct SessionKindsTests {
     func noKindsKeepsTheKey() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60), kinds: [])], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60), kinds: [])], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -41,10 +41,10 @@ struct SessionKindsTests {
     }
 
     @Test("With only starts, SessionStarted is tracked and SessionEnded isn't")
-    func startsOnly() async {
+    func startsOnly() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60), kinds: [.started])], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60), kinds: [.started])], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -63,10 +63,10 @@ struct SessionKindsTests {
     }
 
     @Test("With only ends, SessionEnded is tracked and SessionStarted isn't")
-    func endsOnly() async {
+    func endsOnly() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60), kinds: [.ended])], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60), kinds: [.ended])], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })

@@ -55,8 +55,8 @@ struct TrackingPlanDeprecationTests {
 
     @Test("A removed property stays in its version's document with the schema it had, marked deprecated, and out of required")
     func removedKept() throws {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [Removed.schema])
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [Removed.schema])
         let expected = """
             {
               "$id": "checkout_started.v1.schema.json",
@@ -95,9 +95,9 @@ struct TrackingPlanDeprecationTests {
     }
 
     @Test("The check reports a removal as compatible, and a plan exported with it carried forward matches, and keeps matching on the next export")
-    func carriedForward() {
-        let released = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [Removed.schema])
+    func carriedForward() throws {
+        let released = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [Removed.schema])
         let expectedRemoval = TrackingPlanCheck.outOfDate([
             .propertyRemoved(event: "checkout_started", version: 1, property: "coupon"),
             .propertyRemoved(event: "checkout_started", version: 1, property: "screen"),
@@ -114,9 +114,9 @@ struct TrackingPlanDeprecationTests {
     }
 
     @Test("Declaring a deprecated property again with another type is breaking, reported as a retyping from the schema it had, and as required again")
-    func restoredRetyped() {
-        let committed = TrackingPlan(schemas: [Removed.schema]).files(carryingForward: TrackingPlan(schemas: [Released.schema]).files)
-        let sut = TrackingPlan(schemas: [ScreenRetyped.schema])
+    func restoredRetyped() throws {
+        let committed = try TrackingPlan(schemas: [Removed.schema]).files(carryingForward: try TrackingPlan(schemas: [Released.schema]).files)
+        let sut = try TrackingPlan(schemas: [ScreenRetyped.schema])
         let expected = TrackingPlanCheck.breaking([
             .propertyRetyped(event: "checkout_started", version: 1, property: "screen", committed: #"{"type": "string"}"#, current: #"{"type": "integer"}"#),
             .requiredPropertyAdded(event: "checkout_started", version: 1, property: "screen"),
@@ -128,9 +128,9 @@ struct TrackingPlanDeprecationTests {
     }
 
     @Test("Declaring a deprecated optional property again with the schema it had is compatible: the committed plan is only out of date")
-    func restoredSameSchema() {
-        let committed = TrackingPlan(schemas: [Removed.schema]).files(carryingForward: TrackingPlan(schemas: [Released.schema]).files)
-        let sut = TrackingPlan(schemas: [CouponRestored.schema])
+    func restoredSameSchema() throws {
+        let committed = try TrackingPlan(schemas: [Removed.schema]).files(carryingForward: try TrackingPlan(schemas: [Released.schema]).files)
+        let sut = try TrackingPlan(schemas: [CouponRestored.schema])
         let expected = TrackingPlanCheck.outOfDate([
             .fileOutOfDate(path: "checkout_started.v1.example.json"),
             .fileOutOfDate(path: "checkout_started.v1.schema.json"),
@@ -142,9 +142,9 @@ struct TrackingPlanDeprecationTests {
     }
 
     @Test("Declaring a deprecated property again as required, with the type it had, is breaking: records and payloads written while it was gone lack it")
-    func restoredRequired() {
-        let committed = TrackingPlan(schemas: [Removed.schema]).files(carryingForward: TrackingPlan(schemas: [Released.schema]).files)
-        let sut = TrackingPlan(schemas: [ScreenRestored.schema])
+    func restoredRequired() throws {
+        let committed = try TrackingPlan(schemas: [Removed.schema]).files(carryingForward: try TrackingPlan(schemas: [Released.schema]).files)
+        let sut = try TrackingPlan(schemas: [ScreenRestored.schema])
         let expected = TrackingPlanCheck.breaking([.requiredPropertyAdded(event: "checkout_started", version: 1, property: "screen")])
 
         let actual = sut.check(against: committed)
@@ -154,8 +154,8 @@ struct TrackingPlanDeprecationTests {
 
     @Test("An earlier release's payload, holding a property removed since and lacking one added with a default value, validates against the current document")
     func earlierPayloadValidates() throws {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [Compatible.schema])
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [Compatible.schema])
         let document = try #require(sut.files(carryingForward: committed).first { $0.path == "checkout_started.v1.schema.json" })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))
         let earlier = #"{"cartSize": 3, "coupon": null, "screen": "Cart"}"#
@@ -172,9 +172,9 @@ struct TrackingPlanDeprecationTests {
     }
 
     @Test("A raised version's document starts without the earlier version's removed properties: its files are the plan's own")
-    func raisedVersionNotCarried() {
-        let committed = TrackingPlan(schemas: [Released.schema]).files
-        let sut = TrackingPlan(schemas: [RemovedVersion2.schema])
+    func raisedVersionNotCarried() throws {
+        let committed = try TrackingPlan(schemas: [Released.schema]).files
+        let sut = try TrackingPlan(schemas: [RemovedVersion2.schema])
         let expected = sut.files
 
         let actual = sut.files(carryingForward: committed)
@@ -187,8 +187,8 @@ struct TrackingPlanDeprecationTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TrackingPlanDeprecationTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         try TrackingPlan(schemas: [Released.schema]).write(to: directory)
-        let sut = TrackingPlan(schemas: [Removed.schema])
-        let expected = sut.files(carryingForward: TrackingPlan(schemas: [Released.schema]).files).first { $0.path == "checkout_started.v1.schema.json" }?.contents
+        let sut = try TrackingPlan(schemas: [Removed.schema])
+        let expected = sut.files(carryingForward: try TrackingPlan(schemas: [Released.schema]).files).first { $0.path == "checkout_started.v1.schema.json" }?.contents
 
         try sut.write(to: directory)
 

@@ -67,7 +67,8 @@ extension FileDescriptor {
     /// Every byte of the file, from its start.
     func readAll() throws(Errno) -> [UInt8] {
         try withErrno {
-            let size = Int(try seek(offset: 0, from: .end))
+            // A file past Int.max bytes (2 GiB on watchOS arm64_32) can't be read into one array.
+            guard let size = Int(exactly: try seek(offset: 0, from: .end)) else { throw Errno.overflow }
             try seek(offset: 0, from: .start)
             var bytes = [UInt8](repeating: 0, count: size)
             let count = try bytes.withUnsafeMutableBytes { buffer in

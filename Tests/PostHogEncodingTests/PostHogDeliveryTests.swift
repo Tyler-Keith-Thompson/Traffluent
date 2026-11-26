@@ -87,7 +87,7 @@ struct PostHogDeliveryTests {
     @Test("A tracker's batch reaches the stub endpoint as one POST to /batch/ of the encoder's JSON, each event's distinct_id the session")
     func trackerToStub() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
-        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let stub = PostHogStub([.ok])
         let postHog = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder)
         let memory = InMemoryDestination()
@@ -128,7 +128,7 @@ struct PostHogDeliveryTests {
     @Test("With NoOpInstrument the request carries no traceparent, which an injecting instrument would add")
     func noTraceContextHeader() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
-        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let traceParent = try #require(HTTPField.Name("traceparent"))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
@@ -153,7 +153,7 @@ struct PostHogDeliveryTests {
     func unavailableRetried() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
         let clock = TestClock()
-        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let stub = PostHogStub([.serviceUnavailable, .ok])
         let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder, clock: clock)
         var context = ServiceContext.topLevel
@@ -175,7 +175,7 @@ struct PostHogDeliveryTests {
     @Test("A recovered record, with no context, is sent under its own id rather than dropped")
     func recoveredRecordSent() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
-        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let stub = PostHogStub([.ok])
         let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder)
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, isRedelivered: true)]
@@ -193,7 +193,7 @@ struct PostHogDeliveryTests {
     func reservedBatchReported() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [identify]))
+        let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [identify]))
         let stub = PostHogStub([.ok])
         let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder)
         let batch = [EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]

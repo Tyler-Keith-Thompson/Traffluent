@@ -1,7 +1,7 @@
-/// The constraint a value broke, by its keyword: thrown by ``Refined/init(checked:)``.
+/// The constraint a value broke, by its keyword: thrown by ``Refined/init(_:)``.
 ///
-/// One case per ``ValidationKeyword``, without its value, so a single `catch` handles every
-/// constraint a refinement can list.
+/// One case per ``ValidationKeyword``, without its value, and one for a rule whose constraints
+/// can't be built, so a single `catch` handles every way a value can fail to be refined.
 public enum UnsatisfiedConstraint: Error, Sendable, Hashable {
     /// A string is shorter than its ``ValidationKeyword/minLength(_:)``.
     case minLength
@@ -17,4 +17,7 @@ public enum UnsatisfiedConstraint: Error, Sendable, Hashable {
     case minItems
     /// An array holds more elements than its ``ValidationKeyword/maxItems(_:)``.
     case maxItems
+    /// The rule's ``Refinement/constraints`` threw ``InvalidConstraint``, so no value satisfies
+    /// it.
+    case invalidConstraint
 }

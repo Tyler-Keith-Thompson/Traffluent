@@ -14,6 +14,7 @@ TESTS = ["LoggingDestinationsTests"]
 L = "LoggerDestination.swift"
 
 MUTANTS = [
+    Mutant("negativelinetraps", L, "location.flatMap { UInt(exactly: $0.line) }", "location.map { UInt($0.line) }"),
     Mutant("defaultlevel", L, ".info", "Logger.Level.notice"),
     Mutant("levelignored", L, "self.level = level", "self.level = .info", mode="stmt"),
     Mutant("nolog", L, "batch.forEach(write)", "", mode="stmt"),

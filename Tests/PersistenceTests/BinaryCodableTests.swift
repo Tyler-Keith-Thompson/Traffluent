@@ -246,7 +246,7 @@ struct BinaryCodableTests {
 
     @Test("An optional Refined of an optional holding nil reads back as itself, not as nil")
     func optionalRefinedOfOptional() throws {
-        let values: [Refined<Int?, AnyCount>?] = [.none, .some(Refined(nil)), .some(Refined(3))]
+        let values: [Refined<Int?, AnyCount>?] = [.none, .some(try Refined(nil)), .some(try Refined(3))]
         var encoder = BinaryEncoder()
         for value in values {
             encoder.encode(value)

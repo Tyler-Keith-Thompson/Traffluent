@@ -69,7 +69,7 @@ struct TrackingPlanValidationTests {
             context: Context(dialect: .draft2020_12, remoteSchema: remotes),
             baseURI: try #require(URL(string: Draft202012MetaSchema.id))
         )
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema, OrderCompleted.schema, SignedUp.schema, Everything.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema, OrderCompleted.schema, SignedUp.schema, Everything.schema])
         let documents = sut.files.filter { $0.path.hasSuffix(".schema.json") }
 
         for document in documents {
@@ -98,7 +98,7 @@ struct TrackingPlanValidationTests {
 
     @Test("A document accepts the event it describes, with an optional property absent or null")
     func accepts() throws {
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let document = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))
         let instances = [
@@ -116,7 +116,7 @@ struct TrackingPlanValidationTests {
 
     @Test("A document rejects an event missing a required property, with an extra one, or with a value of the wrong type")
     func rejects() throws {
-        let sut = TrackingPlan(schemas: [CheckoutStarted.schema])
+        let sut = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let document = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))
         let instances = [
@@ -137,7 +137,7 @@ struct TrackingPlanValidationTests {
 
     @Test("A bounded integer's document rejects a value outside the type's range")
     func bounds() throws {
-        let sut = TrackingPlan(schemas: [OrderCompleted.schema])
+        let sut = try TrackingPlan(schemas: [OrderCompleted.schema])
         let document = try #require(sut.files.last { $0.path.hasSuffix(".schema.json") })
         let schema = try Schema(instance: String(decoding: document.contents, as: UTF8.self))
         let valid = #"{"orderID": "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", "total": 9.5, "itemCount": 65535, "items": ["lid"], "completedAt": "2026-11-22T10:00:00Z", "express": false}"#

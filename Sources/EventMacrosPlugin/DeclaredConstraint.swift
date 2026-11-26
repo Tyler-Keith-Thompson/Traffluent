@@ -140,6 +140,44 @@ extension DeclaredConstraint.Keyword {
     }
 }
 
+extension DeclaredConstraint {
+    /// The error of a bound a property of type `typeName` can't state as written, so building
+    /// the constraint would throw or a schema would state another bound: an integer bound past
+    /// what a `Double` holds exactly, for an integer type, and one that overflows to infinity, or
+    /// rounds to another value, for `Float` or `Double`. `nil` for any other keyword or type,
+    /// whose constraint is checked as it is built.
+    func boundDiagnostic(forType typeName: String) -> EventMacroDiagnostic? {
+        switch keyword {
+        case .minimum, .maximum: break
+        case .minLength, .maxLength, .pattern, .minItems, .maxItems: return nil
+        }
+        guard let call = expression.as(FunctionCallExprSyntax.self), let argument = call.arguments.first,
+            let literal = argument.expression.numberLiteral
+        else { return nil }
+        switch typeName {
+        case "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64":
+            // A Double holds every integer up to 2^53 exactly, and some past it; this asks of
+            // the literal's own digits, which no Double has rounded yet.
+            guard literal.isInteger, let magnitude = UInt64(literal.digits) else { return nil }
+            return Double(exactly: magnitude) == nil ? .inexactBound(keyword: source, type: typeName) : nil
+        case "Double", "Float64":
+            guard let value = Double(literal.digits), !value.isFinite else { return nil }
+            return .boundOverflows(keyword: source, type: typeName)
+        case "Float", "Float32":
+            guard let value = Float(literal.digits), let written = Double(literal.digits) else { return nil }
+            guard value.isFinite else { return .boundOverflows(keyword: source, type: typeName) }
+            // A Float bound is stated as its description, as a Float property's value is sent:
+            // 0.1, not the 0.10000000149011612 it widens to.
+            guard Double(value.description) == written else {
+                return .boundRounds(keyword: source, type: typeName, rounded: (literal.isNegative ? "-" : "") + value.description)
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+}
+
 extension AttributeSyntax {
     /// Whether the attribute is `@Constrained`, alone or qualified by its module.
     var isConstrained: Bool {
@@ -148,7 +186,30 @@ extension AttributeSyntax {
     }
 }
 
+/// A number literal as written: its digits without underscores, whether a `-` led it, and
+/// whether it is an integer literal.
+struct NumberLiteral {
+    let digits: String
+    let isNegative: Bool
+    let isInteger: Bool
+}
+
 extension ExprSyntax {
+    /// The literal, if the expression is an integer or floating-point literal, with or without a
+    /// leading `-`.
+    fileprivate var numberLiteral: NumberLiteral? {
+        if let prefix = self.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "-" {
+            return prefix.expression.numberLiteral.map { NumberLiteral(digits: $0.digits, isNegative: !$0.isNegative, isInteger: $0.isInteger) }
+        }
+        if let integer = self.as(IntegerLiteralExprSyntax.self) {
+            return NumberLiteral(digits: integer.literal.text.filter { $0 != "_" }, isNegative: false, isInteger: true)
+        }
+        if let float = self.as(FloatLiteralExprSyntax.self) {
+            return NumberLiteral(digits: float.literal.text.filter { $0 != "_" }, isNegative: false, isInteger: false)
+        }
+        return nil
+    }
+
     /// The value of an integer or floating-point literal, negated by a leading `-`; `nil` for any
     /// other expression.
     fileprivate var numberLiteralValue: Double? {

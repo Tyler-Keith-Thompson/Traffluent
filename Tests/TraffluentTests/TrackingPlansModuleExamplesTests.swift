@@ -14,8 +14,8 @@ struct TrackingPlansModuleExamplesTests {
     }
 
     @Test("A plan's files, checked against themselves")
-    func trackingPlans() {
-        let plan = TrackingPlan(schemas: [SignedUp.schema])
+    func trackingPlans() throws {
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
         let check = plan.check(against: plan.files)  // .matches
         let paths = plan.files.map(\.path)
         // ["tracking-plan.json", "signed_up.v1.schema.json", "signed_up.v1.example.json"]

@@ -32,16 +32,15 @@ package struct EventRegistry: Sendable {
 
     /// The registry of `types`.
     ///
-    /// - Precondition: No two of `types` share an `Event.name`: one type per event, at its current
-    ///   `Event.schemaVersion`.
-    package init(_ types: [any (Event & BinaryCodable).Type]) {
+    /// - Throws: ``DuplicateEventName`` when two of `types` share an `Event.name`, as recovery
+    ///   couldn't tell their records apart: one type per event, at its current
+    ///   `Event.schemaVersion`. A type listed twice is one type.
+    package init(_ types: [any (Event & BinaryCodable).Type]) throws(DuplicateEventName) {
         var byType: [ObjectIdentifier: Registration] = [:]
         var byName: [String: Registration] = [:]
         for type in types {
             let registration = Self.registration(of: type)
-            // A trap rather than an error: two types under one name is a programming mistake,
-            // and recovery couldn't tell their records apart.
-            precondition(byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil, "Two persisted event types share the name \(registration.name): register one type per event name, and raise its Event.schemaVersion for a new shape rather than keeping the old type beside it")
+            guard byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil else { throw DuplicateEventName() }
             byType[ObjectIdentifier(type)] = registration
             byName[registration.name] = registration
         }
@@ -65,11 +64,22 @@ package struct EventRegistry: Sendable {
             version: E.schemaVersion,
             encode: { event, encoder in
                 // The registry finds a registration by the event's own type, so the cast holds.
-                (event as! E).encode(to: &encoder)
+                // Were it to fail, the record's event is written as null, which recovery reports
+                // as undecodable, rather than trap in the app.
+                guard let event = event as? E else {
+                    encoder.write(BinarySimpleValue.null)
+                    return
+                }
+                event.encode(to: &encoder)
             },
             decode: { (decoder: inout BinaryDecoder) throws(BinaryDecodingError) -> any Event in
                 try E(from: &decoder)
             }
         )
     }
+}
+
+/// The error ``EventRegistry/init(_:)`` throws for two event types that share an `Event.name`.
+package struct DuplicateEventName: Error, Hashable, Sendable {
+    package init() {}
 }

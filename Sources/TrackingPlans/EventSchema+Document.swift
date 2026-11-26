@@ -31,7 +31,7 @@ extension EventSchema {
     /// longer declares: with its schema there, marked `deprecated`.
     func document(keepingRemovedFrom committed: JSON?) -> JSON {
         // Unique: TrackingPlan's initializer rejects a schema with two properties of one name.
-        let declared = Dictionary(uniqueKeysWithValues: properties.map { ($0.name, JSON.object($0.schema)) })
+        let declared = Dictionary(properties.map { ($0.name, JSON.object($0.schema)) }) { first, _ in first }
         let committedProperties = committed?.object?["properties"]?.object ?? [:]
         let deprecated = committedProperties.compactMapValues { $0.object.map { JSON.object($0.merging(["deprecated": .boolean(true)]) { $1 }) } }
         return .object([
@@ -54,7 +54,7 @@ extension EventSchema.Property {
     /// whichever destination sent it: one that is neither optional nor has a default value, which
     /// a release before it was added leaves out, nor `Sensitive`, which a destination that redacts
     /// it leaves out.
-    fileprivate var isRequired: Bool {
+    var isRequired: Bool {
         // Read from the schema's marker, as the plan's check reads it, so a document and the
         // check never disagree on what is sensitive.
         !isOptional && !hasDefaultValue && schema["x-traffluent-sensitive"] != .boolean(true)
@@ -105,7 +105,9 @@ extension Dictionary where Key == String, Value == JSON {
     /// `keepingLarger` is set (a lower bound), smaller otherwise.
     private mutating func tighten(_ keyword: String, to bound: Double, keepingLarger: Bool) {
         if let existing = self[keyword]?.double, keepingLarger ? existing >= bound : existing <= bound { return }
-        self[keyword] = .number(exactly: bound)
+        // Always a number: a plan's initializer rejects a bound that isn't finite.
+        guard let number = JSON.number(exactly: bound) else { return }
+        self[keyword] = number
     }
 }
 

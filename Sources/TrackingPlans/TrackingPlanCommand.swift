@@ -9,10 +9,14 @@ import Foundation
 ///
 /// @main
 /// struct AppTrackingPlan: TrackingPlanCommand {
-///     static let trackingPlan = TrackingPlan(schemas: [
-///         CheckoutStarted.schema,
-///         SignedUp.schema,
-///     ])
+///     static var trackingPlan: TrackingPlan {
+///         get throws(TrackingPlanError) {
+///             try TrackingPlan(schemas: [
+///                 CheckoutStarted.schema,
+///                 SignedUp.schema,
+///             ])
+///         }
+///     }
 /// }
 /// ```
 ///
@@ -29,7 +33,9 @@ import Foundation
 /// can read their schemas.
 public protocol TrackingPlanCommand {
     /// The plan the command writes.
-    static var trackingPlan: TrackingPlan { get }
+    ///
+    /// - Throws: ``TrackingPlanError`` when the events' schemas can't make a plan.
+    static var trackingPlan: TrackingPlan { get throws(TrackingPlanError) }
 }
 
 extension TrackingPlanCommand {
@@ -45,8 +51,8 @@ extension TrackingPlanCommand {
     /// the committed plan is only out of date.
     ///
     /// Given anything else, `check` alone included (write to `./check` for a directory of that
-    /// name), it exits with status 64 (`EX_USAGE`). Every failure is printed to
-    /// standard error.
+    /// name), it exits with status 64 (`EX_USAGE`). When ``trackingPlan`` throws, it exits with
+    /// status 65 (`EX_DATAERR`). Every failure is printed to standard error.
     public static func main() {
         exit(run(arguments: Array(CommandLine.arguments.dropFirst())))
     }
@@ -56,9 +62,9 @@ extension TrackingPlanCommand {
     package static func run(arguments: [String]) -> Int32 {
         switch arguments.count {
         case 1 where arguments[0] != "check":
-            return write(to: arguments[0])
+            return withPlan { write($0, to: arguments[0]) }
         case 2 where arguments[0] == "check":
-            return check(against: arguments[1])
+            return withPlan { check($0, against: arguments[1]) }
         default:
             let name = CommandLine.arguments.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "tracking-plan"
             printError("usage: \(name) <output-directory>\n       \(name) check <plan-directory>")
@@ -66,7 +72,19 @@ extension TrackingPlanCommand {
         }
     }
 
-    private static func write(to directory: String) -> Int32 {
+    /// What `body` returns for ``trackingPlan``, or 65 when it throws.
+    private static func withPlan(_ body: (TrackingPlan) -> Int32) -> Int32 {
+        let plan: TrackingPlan
+        do {
+            plan = try trackingPlan
+        } catch {
+            printError("error: the events' schemas can't make a tracking plan: \(error)")
+            return 65
+        }
+        return body(plan)
+    }
+
+    private static func write(_ trackingPlan: TrackingPlan, to directory: String) -> Int32 {
         do {
             try trackingPlan.write(to: URL(fileURLWithPath: directory, isDirectory: true))
             return 0
@@ -76,7 +94,7 @@ extension TrackingPlanCommand {
         }
     }
 
-    private static func check(against directory: String) -> Int32 {
+    private static func check(_ trackingPlan: TrackingPlan, against directory: String) -> Int32 {
         let check = trackingPlan.check(againstDirectory: URL(fileURLWithPath: directory, isDirectory: true))
         switch check {
         case .matches:

@@ -12,8 +12,8 @@ struct SessionsModuleExamplesTests {
     }
 
     @Test("Sessions: a timeout and one kind of session event")
-    func sessions() async {
-        let tracker = Tracker(enrichers: [.sessions(timeout: .seconds(15 * 60), kinds: [.started])])
+    func sessions() async throws {
+        let tracker = Tracker(enrichers: [try .sessions(timeout: .seconds(15 * 60), kinds: [.started])])
         tracker.track(SignedUp(plan: "pro"))  // tracks SessionStarted, then SignedUp, both with the same SessionKey
         await tracker.finish()
 

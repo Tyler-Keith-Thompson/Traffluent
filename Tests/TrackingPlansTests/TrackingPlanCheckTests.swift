@@ -9,17 +9,21 @@ import TrackingPlans
 @Suite("TrackingPlan: check")
 struct TrackingPlanCheckTests {
     struct CheckoutCommand: TrackingPlanCommand {
-        static let trackingPlan = TrackingPlan(schemas: [
-            EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
-                EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
-                EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
-            ]),
-        ])
+        static var trackingPlan: TrackingPlan {
+            get throws(TrackingPlanError) {
+                try TrackingPlan(schemas: [
+                    EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+                        EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
+                        EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
+                    ]),
+                ])
+            }
+        }
     }
 
     @Test("A plan checked against its own files matches")
-    func matches() {
-        let sut = CheckoutCommand.trackingPlan
+    func matches() throws {
+        let sut = try CheckoutCommand.trackingPlan
         let expected = TrackingPlanCheck.matches
 
         let actual = sut.check(against: sut.files)
@@ -30,9 +34,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A renamed event is the committed one removed, which breaks, and a new one")
-    func renamed() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_began", version: 2, consentCategory: .analytics, properties: [])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [])])
+    func renamed() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "checkout_began", version: 2, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [])])
         let expected = TrackingPlanCheck.breaking([
             .eventRemoved(event: "checkout_began", version: 2),
             .eventAdded(event: "checkout_started", version: 2),
@@ -44,12 +48,12 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A removed property only dates the plan: a stored record that holds it reads with it skipped")
-    func removedProperty() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+    func removedProperty() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
             EventSchema.Property(name: "currency", typeName: "String", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.outOfDate([.propertyRemoved(event: "checkout_started", version: 2, property: "currency")])
@@ -60,11 +64,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A retyped property breaks the plan, its schemas given on one line")
-    func retyped() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "order_completed", version: 1, consentCategory: .analytics, properties: [
+    func retyped() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "order_completed", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "itemCount", typeName: "UInt16", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "order_completed", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "order_completed", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "itemCount", typeName: "[Int]", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -77,11 +81,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("Retyping an optional property compares the types without the null it allows")
-    func retypedOptional() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+    func retypedOptional() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "Int", isOptional: true),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -94,11 +98,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An optional property made required breaks the plan, and is no retyping")
-    func madeRequired() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+    func madeRequired() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([.propertyMadeRequired(event: "checkout_started", version: 2, property: "coupon")])
@@ -109,11 +113,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A type the plan can't map made required is one difference, though its schema allows null either way")
-    func unknownMadeRequired() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "visited", version: 1, consentCategory: .analytics, properties: [
+    func unknownMadeRequired() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "visited", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "location", typeName: "Coordinate", isOptional: true),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "visited", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "visited", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "location", typeName: "Coordinate", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([.propertyMadeRequired(event: "visited", version: 1, property: "location")])
@@ -124,12 +128,12 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An added required property breaks the plan; an added optional one only dates it")
-    func added() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
-        let required = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func added() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
+        let required = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
         ])])
-        let optional = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let optional = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "referrer", typeName: "String", isOptional: true),
         ])])
         let expectedRequired = TrackingPlanCheck.breaking([.requiredPropertyAdded(event: "signed_up", version: 1, property: "plan")])
@@ -143,9 +147,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An added property with a default value only dates the plan, though it is required")
-    func addedWithDefault() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func addedWithDefault() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true),
         ])])
         let expected = TrackingPlanCheck.outOfDate([.defaultedPropertyAdded(event: "signed_up", version: 1, property: "currency")])
@@ -156,11 +160,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A required property that loses its default value breaks the plan; one that gains a default only dates it")
-    func defaultValueChanged() {
-        let withoutDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func defaultValueChanged() throws {
+        let withoutDefault = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "currency", typeName: "String", isOptional: false),
         ])])
-        let withDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let withDefault = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true),
         ])])
         let expectedLost = TrackingPlanCheck.breaking([.defaultValueRemoved(event: "signed_up", version: 1, property: "currency")])
@@ -174,11 +178,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An optional property's default value gained or lost is no difference of meaning, only of bytes")
-    func optionalDefaultValueChanged() {
-        let withoutDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func optionalDefaultValueChanged() throws {
+        let withoutDefault = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
         ])])
-        let withDefault = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+        let withDefault = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true, hasDefaultValue: true),
         ])])
         let expected = TrackingPlanCheck.outOfDate([.fileOutOfDate(path: "signed_up.v1.schema.json")])
@@ -191,12 +195,12 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A required property made optional, a changed consent category and a changed sensitivity only date the plan")
-    func nonBreaking() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func nonBreaking() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: true),
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .functional, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .functional, properties: [
             EventSchema.Property(name: "email", typeName: "String", isOptional: true),
             EventSchema.Property(name: "plan", typeName: "Sensitive<String>", isOptional: true),
         ])])
@@ -213,11 +217,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A raised version only dates the plan, and the two versions' properties aren't compared")
-    func versionRaised() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
+    func versionRaised() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 3, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 3, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "tier", typeName: "Int", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.outOfDate([.versionRaised(event: "signed_up", committed: 1, current: 3)])
@@ -228,9 +232,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A version raised past several committed ones supersedes each with the next current version")
-    func versionsRaised() {
-        let committed = TrackingPlan(schemas: [1, 2].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
-        let sut = TrackingPlan(schemas: [2, 4, 5].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
+    func versionsRaised() throws {
+        let committed = try TrackingPlan(schemas: [1, 2].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
+        let sut = try TrackingPlan(schemas: [2, 4, 5].map { EventSchema(name: "searched", version: $0, consentCategory: .analytics, properties: []) })
         let expected = TrackingPlanCheck.outOfDate([
             .versionRaised(event: "searched", committed: 1, current: 2),
             .eventAdded(event: "searched", version: 4),
@@ -243,9 +247,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A lowered version is the committed one removed, which breaks")
-    func versionLowered() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 2, consentCategory: .analytics, properties: [])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
+    func versionLowered() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 2, consentCategory: .analytics, properties: [])])
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [])])
         let expected = TrackingPlanCheck.breaking([
             .eventRemoved(event: "signed_up", version: 2),
             .eventAdded(event: "signed_up", version: 1),
@@ -257,9 +261,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A new event only dates the plan")
-    func eventAdded() {
-        let committed = TrackingPlan(schemas: [])
-        let sut = CheckoutCommand.trackingPlan
+    func eventAdded() throws {
+        let committed = try TrackingPlan(schemas: [])
+        let sut = try CheckoutCommand.trackingPlan
         let expected = TrackingPlanCheck.outOfDate([.eventAdded(event: "checkout_started", version: 2)])
 
         let actual = sut.check(against: committed.files)
@@ -268,13 +272,13 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("Differences are listed by the committed plan's events, then properties by name, then new events")
-    func order() {
-        let committed = TrackingPlan(schemas: ["a", "b"].map { name in
+    func order() throws {
+        let committed = try TrackingPlan(schemas: ["a", "b"].map { name in
             EventSchema(name: name, version: 1, consentCategory: .analytics, properties: ["y", "x"].map {
                 EventSchema.Property(name: $0, typeName: "Int", isOptional: false)
             })
         })
-        let sut = TrackingPlan(schemas: ["c", "b", "a"].map { EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: []) })
+        let sut = try TrackingPlan(schemas: ["c", "b", "a"].map { EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: []) })
         let expected: [TrackingPlanDifference] = [
             .propertyRemoved(event: "a", version: 1, property: "x"),
             .propertyRemoved(event: "a", version: 1, property: "y"),
@@ -290,7 +294,7 @@ struct TrackingPlanCheckTests {
 
     @Test("A committed file whose bytes differ, with the same meaning, dates the plan")
     func reformatted() throws {
-        let sut = CheckoutCommand.trackingPlan
+        let sut = try CheckoutCommand.trackingPlan
         let document = try #require(sut.files.first { $0.path == "checkout_started.v2.schema.json" })
         let reformatted = TrackingPlan.File(path: document.path, contents: Array(String(decoding: document.contents, as: UTF8.self).replacingOccurrences(of: "\n", with: " ").utf8))
         let committed = sut.files.map { $0.path == document.path ? reformatted : $0 }
@@ -302,8 +306,8 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A missing example and a document the index doesn't list date the plan; files a plan doesn't write are ignored")
-    func extraAndMissingFiles() {
-        let sut = CheckoutCommand.trackingPlan
+    func extraAndMissingFiles() throws {
+        let sut = try CheckoutCommand.trackingPlan
         let committed = sut.files.filter { $0.path != "checkout_started.v2.example.json" } + [
             TrackingPlan.File(path: "signed_in.v1.schema.json", contents: Array("{}\n".utf8)),
             TrackingPlan.File(path: "README.md", contents: Array("notes\n".utf8)),
@@ -319,8 +323,8 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("No committed index is an unreadable index, which breaks, and the report lists only it")
-    func noIndex() {
-        let sut = CheckoutCommand.trackingPlan
+    func noIndex() throws {
+        let sut = try CheckoutCommand.trackingPlan
         let expected = TrackingPlanCheck.breaking([.unreadableFile(path: "tracking-plan.json")])
         let expectedReport = """
             The events break the committed tracking plan: at the same version, a stored record or an already-released app's payload may no longer decode or validate.
@@ -335,11 +339,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A retyping's schemas show nested arrays and objects on one line")
-    func retypedNested() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+    func retypedNested() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "pages", typeName: "[Int]", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "searched", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "pages", typeName: "[Int?]", isOptional: false),
         ])])
         let expected = TrackingPlanCheck.breaking([
@@ -353,7 +357,7 @@ struct TrackingPlanCheckTests {
 
     @Test("A keyword a plan doesn't write, even a null one, is part of the committed property's schema")
     func committedKeyword() throws {
-        let sut = CheckoutCommand.trackingPlan
+        let sut = try CheckoutCommand.trackingPlan
         let path = "checkout_started.v2.schema.json"
         let document = try #require(sut.files.first { $0.path == path })
         let edited = String(decoding: document.contents, as: UTF8.self).replacingOccurrences(of: #""type": "integer""#, with: #""default": null, "type": "integer""#)
@@ -368,8 +372,8 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An index that isn't one is unreadable", arguments: ["not json", #"{"events": {}}"#, #"{"events": [{"name": "x"}]}"#, #"[]"#])
-    func malformedIndex(text: String) {
-        let sut = CheckoutCommand.trackingPlan
+    func malformedIndex(text: String) throws {
+        let sut = try CheckoutCommand.trackingPlan
         let committed = [TrackingPlan.File(path: "tracking-plan.json", contents: Array(text.utf8))]
         let expected = TrackingPlanCheck.breaking([.unreadableFile(path: "tracking-plan.json")])
 
@@ -385,8 +389,8 @@ struct TrackingPlanCheckTests {
         #"{"title": "checkout_started", "x-traffluent-version": 2, "x-traffluent-consent-category": "analytics", "properties": {"a": true}, "required": []}"#,
         #"{"title": "checkout_started", "x-traffluent-version": 2, "x-traffluent-consent-category": "analytics", "properties": {}, "required": [1]}"#,
     ])
-    func malformedDocument(text: String?) {
-        let sut = CheckoutCommand.trackingPlan
+    func malformedDocument(text: String?) throws {
+        let sut = try CheckoutCommand.trackingPlan
         let path = "checkout_started.v2.schema.json"
         let committed = sut.files.filter { $0.path != path } + (text.map { [TrackingPlan.File(path: path, contents: Array($0.utf8))] } ?? [])
 
@@ -397,11 +401,11 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("A breaking check's report lists the breaking differences first, then the others, and what to do")
-    func breakingReport() {
-        let committed = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+    func breakingReport() throws {
+        let committed = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
         ])])
-        let sut = TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "checkout_started", version: 2, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "cartSize", typeName: "String", isOptional: false),
             EventSchema.Property(name: "coupon", typeName: "String", isOptional: true),
         ])])
@@ -419,15 +423,15 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("An out-of-date check's report lists the differences and says to export again")
-    func outOfDateReport() {
-        let sut = CheckoutCommand.trackingPlan
+    func outOfDateReport() throws {
+        let sut = try CheckoutCommand.trackingPlan
         let expected = """
             The committed tracking plan is out of date:
               - checkout_started v2 is new
             Export it again: swift package --allow-writing-to-package-directory export-tracking-plan
             """
 
-        let actual = sut.check(against: TrackingPlan(schemas: []).files).description
+        let actual = sut.check(against: try TrackingPlan(schemas: []).files).description
 
         #expect(actual == expected)
     }
@@ -464,7 +468,7 @@ struct TrackingPlanCheckTests {
     func directory() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let sut = CheckoutCommand.trackingPlan
+        let sut = try CheckoutCommand.trackingPlan
         try sut.write(to: directory)
         try Data("notes".utf8).write(to: directory.appendingPathComponent("README.md"))
         let expected = TrackingPlanCheck.matches
@@ -475,9 +479,9 @@ struct TrackingPlanCheckTests {
     }
 
     @Test("Checking against a directory that doesn't exist finds no index")
-    func noDirectory() {
+    func noDirectory() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let sut = CheckoutCommand.trackingPlan
+        let sut = try CheckoutCommand.trackingPlan
         let expected = TrackingPlanCheck.breaking([.unreadableFile(path: "tracking-plan.json")])
 
         let actual = sut.check(againstDirectory: directory)
@@ -537,7 +541,7 @@ struct TrackingPlanCheckTests {
         let expectedLine = "  - \(expectedDifference)"
 
         let actual = CheckoutCommand.run(arguments: ["check", directory.path])
-        let report = CheckoutCommand.trackingPlan.check(againstDirectory: directory).description
+        let report = try CheckoutCommand.trackingPlan.check(againstDirectory: directory).description
 
         #expect(actual == expectedStatus)
         #expect(report.split(separator: "\n").contains { $0 == expectedLine })

@@ -169,7 +169,7 @@ struct DeliverPropertyTests {
             }
             let opens = tagged.map { _ in (0 ..< random.integer(in: 0 ... 2)).map { _ in (random.integer(in: 0 ... 1), random.integer(in: 0 ..< receiveBound)) } }
             let (input, continuation) = AsyncStream.makeStream(of: [EventRecord].self)
-            let sut = input.deliver(to: valves[0], valves[1], batchBufferLimit: limit)
+            let sut = try input.deliver(to: valves[0], valves[1], batchBufferLimit: limit)
             let kept = Set(stored.keys).subtracting(lost)
 
             let running = Task { try await sut.execute() }

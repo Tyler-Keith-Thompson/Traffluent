@@ -14,8 +14,9 @@ Two property types carry rules of their own. A ``Sensitive`` value, such as an e
 prints as `<redacted>` and has no public accessor: a destination reads it through
 ``EventRecord/reveal(_:)``, which gives `nil` once a delivery has redacted the record. A
 ``Refined`` value satisfies every ``Constraint`` its ``Refinement`` lists, checked once as it is
-made: the plain initializer traps on a value that breaks one, and ``Refined/init(checked:)``
-throws ``UnsatisfiedConstraint``.
+made: its initializer throws ``UnsatisfiedConstraint`` for a value that breaks one. Each
+``Constraint`` spelling throws ``InvalidConstraint`` for an argument no schema can hold, such as
+a negative length.
 
 A tracker (module `Trackers`) makes an ``EventRecord`` of each event it tracks: the event, its own
 random identifier, when and where it was tracked, and the `ServiceContext` it was tracked in.
@@ -31,7 +32,9 @@ conformance by hand instead, see ``Event``.
 import Traffluent
 
 enum PlanName: Refinement {
-    static let constraints: [Constraint<String>] = [.minLength(1), .maxLength(32)]
+    static var constraints: [Constraint<String>] {
+        get throws(InvalidConstraint) { try [.minLength(1), .maxLength(32)] }
+    }
 }
 
 @Event(consent: .functional)
@@ -40,11 +43,11 @@ struct SignedUp {
     var email: Sensitive<String>
 }
 
-let event = SignedUp(plan: Refined("pro"), email: Sensitive("ada@example.com"))
+let event = SignedUp(plan: try Refined("pro"), email: Sensitive("ada@example.com"))
 let record = EventRecord(event: event, timestamp: .now, sourceLocation: nil)
 let name = record.name  // "SignedUp"
 let email = record.reveal(event.email)  // nil: a record made by hand keeps its sensitive values redacted
-let empty = try? Refined<String, PlanName>(checked: "")  // nil: it throws UnsatisfiedConstraint.minLength
+let empty = try? Refined<String, PlanName>("")  // nil: it throws UnsatisfiedConstraint.minLength
 ```
 
 The umbrella guide on this area is
@@ -66,6 +69,7 @@ The umbrella guide on this area is
 - ``Constraint``
 - ``ValidationKeyword``
 - ``UnsatisfiedConstraint``
+- ``InvalidConstraint``
 - ``ConstraintViolation``
 
 ### Records

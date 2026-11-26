@@ -6,10 +6,10 @@ import TrackingPlanTesting
 @Suite("StoreTrackingPlan")
 struct StoreTrackingPlanTests {
     @Test("The store app's events match its committed tracking plan")
-    func eventsMatchTheTrackingPlan() {
+    func eventsMatchTheTrackingPlan() throws {
         let plan = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("TrackingPlan")
-        expectTrackingPlan(StoreTrackingPlan.trackingPlan, matches: plan)
+        expectTrackingPlan(try StoreTrackingPlan.trackingPlan, matches: plan)
     }
 }

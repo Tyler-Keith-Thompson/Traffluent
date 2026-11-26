@@ -244,7 +244,7 @@ struct RecordStoreConsentTests {
         defer { try? FileManager.default.removeItem(atPath: copy) }
         try FileManager.default.copyItem(atPath: path, toPath: copy)
         let next = try kind.open(at: copy, events: [Tapped.self]).store
-        let consent = Consent(heldRecordLimit: 0)
+        let consent = try Consent(heldRecordLimit: 0)
         let recorder = InMemoryDestination()
         let expected = [Tapped(number: 1), Tapped(number: 2)]
         let sut = Tracker(store: next, consent: consent)
@@ -278,7 +278,7 @@ struct RecordStoreConsentTests {
         let next = try kind.open(at: copy, events: [Tapped.self]).store
         let expected = [Tapped(number: 1), Tapped(number: 2), Tapped(number: 3)]
 
-        let sut = Tracker(store: next, consent: Consent(heldRecordLimit: 1))
+        let sut = Tracker(store: next, consent: try Consent(heldRecordLimit: 1))
         await sut.finish()
 
         #expect(next.pendingRecordCount == 3)
@@ -301,7 +301,7 @@ struct RecordStoreConsentTests {
         defer { try? FileManager.default.removeItem(atPath: copy) }
         try FileManager.default.copyItem(atPath: path, toPath: copy)
         let next = try kind.open(at: copy, events: [Tapped.self]).store
-        let consent = Consent(heldRecordLimit: 1)
+        let consent = try Consent(heldRecordLimit: 1)
         let recorder = InMemoryDestination()
         let expected = [Tapped(number: 1), Tapped(number: 3)]
         let expectedReport = ConsentDropReport.heldRecordLimit(

@@ -32,7 +32,7 @@ import Instrumentation
 import PostHogEncoding
 import TrackingPlans
 
-let plan = TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
 let encoder = PostHogBatchEncoder(projectToken: projectToken, plan: plan)
 let postHog = HTTPDestination(
     endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own

@@ -34,7 +34,7 @@ struct Uploader: Destination {
     }
 }
 
-let inspector = InMemoryDestination(capacity: 500)
+let inspector = try InMemoryDestination(capacity: 500)
 let tracker = Tracker()
 let delivery = tracker.records
     .batch(strategy: .count(20))
@@ -63,5 +63,7 @@ The umbrella guide on this area is
 ### Delivering
 
 - ``_Concurrency/AsyncSequence/batch(clock:)``
+- ``_Concurrency/AsyncSequence/deliver(to:bufferDropReporter:)``
 - ``_Concurrency/AsyncSequence/deliver(to:batchBufferLimit:bufferDropReporter:)``
+- ``InvalidBatchBufferLimit``
 - ``BufferDropReport``

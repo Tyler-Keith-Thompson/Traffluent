@@ -30,7 +30,7 @@ struct PostHogBatchEncoderPropertyTests {
         func check(sessions: [UInt8?], scalars: [UInt32]) throws {
             // Any Unicode scalar, control characters and quotes included; surrogates are skipped.
             let text = String(String.UnicodeScalarView(scalars.compactMap { Unicode.Scalar($0 % 0x11_0000) }))
-            let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [Generated.schema]))
+            let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [Generated.schema]))
             let batch = sessions.enumerated().map { index, session in
                 var context = ServiceContext.topLevel
                 // A few sessions, so records share one as a tracker's do.

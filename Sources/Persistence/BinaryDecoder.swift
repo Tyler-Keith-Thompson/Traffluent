@@ -119,8 +119,7 @@ public struct BinaryDecoder: Sendable {
     @inlinable
     package mutating func readHead() throws(BinaryDecodingError) -> DataItemHead {
         let initial = try readByte()
-        // Three bits always name one of the eight major types.
-        let majorType = BinaryMajorType(rawValue: initial >> 5)!
+        let majorType = BinaryMajorType(initial: initial)
         let information = initial & 0x1F
         let argument: UInt64
         switch information {
@@ -204,7 +203,7 @@ public struct BinaryDecoder: Sendable {
             let left = UInt64(buffer.count - cursor)
             // The bytes left once each pending item has its one byte.
             let room = UInt64(max(buffer.count - cursor - remaining, 0))
-            switch BinaryMajorType(rawValue: initial >> 5)! {
+            switch BinaryMajorType(initial: initial) {
             case .unsignedInteger, .negativeInteger, .simpleOrFloat:
                 break
             case .tag:

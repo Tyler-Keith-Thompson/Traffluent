@@ -45,7 +45,6 @@ MUTANTS = [
     Mutant("lastmovesback", L, "max(session.lastActivity, timestamp)", "timestamp"),
     Mutant("defaulttimeout", E, ".seconds(30 * 60)", ".seconds(30 * 60 + 1)"),
     Mutant("zerotimeoutallowed", E, "timeout > .zero", "timeout >= .zero"),
-    Mutant("checkedzeroallowed", E, "checkedTimeout > .zero", "checkedTimeout >= .zero"),
     # SessionStarted and SessionEnded.
     Mutant("nofirststart", R, "            return kinds.contains(.started) ? [startRecord(of: session, in: context)] : []", "            return []", mode="stmt"),
     Mutant("norotatedstart", R, "                records.append(startRecord(of: started, in: context))", "                ()", mode="stmt"),

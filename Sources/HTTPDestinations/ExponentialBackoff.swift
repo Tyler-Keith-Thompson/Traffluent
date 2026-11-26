@@ -1,11 +1,11 @@
 /// How long ``HTTPDestination`` waits before each new attempt at a batch that wasn't delivered:
 /// binary exponential backoff, each wait twice the one before, up to a maximum.
 ///
-/// With the defaults, the waits are 1, 2, 4, 8, 16 and 32 seconds, then 60 seconds for every
-/// retry after that:
+/// `ExponentialBackoff()` waits 1, 2, 4, 8, 16 and 32 seconds, then 60 seconds for every retry
+/// after that, as this one does:
 ///
 /// ```swift
-/// let backoff = ExponentialBackoff(initialDelay: .seconds(1), maximumDelay: .seconds(60))
+/// let backoff = try ExponentialBackoff(initialDelay: .seconds(1), maximumDelay: .seconds(60))
 /// ```
 ///
 /// The waits have no jitter. Each device starts retrying when its own send fails, and its sends
@@ -17,32 +17,25 @@ public struct ExponentialBackoff: Sendable, Hashable {
     /// The longest wait, which every retry waits once doubling reaches it.
     public let maximumDelay: Duration
 
+    /// A backoff that waits 1 second before the first retry and doubles each wait after it, up
+    /// to 60 seconds.
+    public init() {
+        initialDelay = .seconds(1)
+        maximumDelay = .seconds(60)
+    }
+
     /// A backoff that waits `initialDelay` before the first retry and doubles each wait after
     /// it, up to `maximumDelay`.
     ///
     /// - Parameters:
-    ///   - initialDelay: The wait before the first retry; 1 second by default.
-    ///   - maximumDelay: The longest wait; 60 seconds by default.
-    /// - Precondition: `initialDelay` is positive and `maximumDelay` is at least `initialDelay`;
-    ///   ``init(checkedInitialDelay:maximumDelay:)`` throws instead.
-    public init(initialDelay: Duration = .seconds(1), maximumDelay: Duration = .seconds(60)) {
-        precondition(initialDelay > .zero, "A backoff's initial delay must be positive, not \(initialDelay)")
-        precondition(maximumDelay >= initialDelay, "A backoff's maximum delay, \(maximumDelay), can't be less than its initial delay, \(initialDelay)")
+    ///   - initialDelay: The wait before the first retry.
+    ///   - maximumDelay: The longest wait.
+    /// - Throws: ``InvalidBackoff`` when `initialDelay` isn't positive or `maximumDelay` is less
+    ///   than it.
+    public init(initialDelay: Duration, maximumDelay: Duration) throws(InvalidBackoff) {
+        guard initialDelay > .zero, maximumDelay >= initialDelay else { throw InvalidBackoff() }
         self.initialDelay = initialDelay
         self.maximumDelay = maximumDelay
-    }
-
-    /// A backoff that waits `checkedInitialDelay` before the first retry and doubles each wait
-    /// after it, up to `maximumDelay`.
-    ///
-    /// - Parameters:
-    ///   - checkedInitialDelay: The wait before the first retry.
-    ///   - maximumDelay: The longest wait.
-    /// - Throws: ``InvalidBackoff`` when `checkedInitialDelay` isn't positive or `maximumDelay`
-    ///   is less than it.
-    public init(checkedInitialDelay: Duration, maximumDelay: Duration) throws(InvalidBackoff) {
-        guard checkedInitialDelay > .zero, maximumDelay >= checkedInitialDelay else { throw InvalidBackoff() }
-        self.init(initialDelay: checkedInitialDelay, maximumDelay: maximumDelay)
     }
 
     /// The wait before retry number `retry`: `initialDelay` doubled `retry - 1` times, or
@@ -51,15 +44,23 @@ public struct ExponentialBackoff: Sendable, Hashable {
     /// - Parameter retry: Which retry, counting from 1.
     /// - Returns: How long to wait before it.
     /// - Complexity: O(min(`retry`, log₂(`maximumDelay` / `initialDelay`))).
-    /// - Precondition: `retry` is at least 1.
-    public func delay(beforeRetry retry: Int) -> Duration {
-        precondition(retry >= 1, "Retries count from 1, not \(retry)")
+    /// - Throws: ``NonPositiveRetry`` when `retry` is below 1.
+    public func delay(beforeRetry retry: Int) throws(NonPositiveRetry) -> Duration {
+        guard retry >= 1 else { throw NonPositiveRetry() }
+        return delay(afterDoubling: retry - 1)
+    }
+
+    /// `initialDelay` doubled `doublings` times, or `maximumDelay` if that is less; `initialDelay`
+    /// for none, or fewer.
+    func delay(afterDoubling doublings: Int) -> Duration {
         var delay = initialDelay
-        for _ in 1 ..< retry {
+        var doublings = doublings
+        while doublings > 0 {
             // Whether twice the wait passes the maximum, asked of the difference: exact, where
             // `maximumDelay / 2` rounds down, and unable to overflow, as doubling first could.
             guard delay < maximumDelay - delay else { return maximumDelay }
             delay *= 2
+            doublings -= 1
         }
         return delay
     }

@@ -14,12 +14,12 @@ struct TrackingPlanPropertyTests {
     static let typeNames = ["String", "Int", "UInt8", "Int32", "Double", "Bool", "Date", "UUID", "[String]", "Sensitive<Int>", "Coordinate", "[Int: Int]"]
 
     @Test("Any schema's document lists every property once and requires exactly the non-optional ones that aren't Sensitive, in order", .tags(.randomized))
-    func propertiesAndRequired() async {
+    func propertiesAndRequired() async throws {
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 11).array(of: 0 ... 12), Gen.bool.array(of: 12 ... 12), Gen.int(in: 1 ... 5)) { types, optionals, version in
             let properties = types.enumerated().map { index, type in
                 EventSchema.Property(name: "p\(index)", typeName: TrackingPlanPropertyTests.typeNames[type], isOptional: optionals[index])
             }
-            let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: version, consentCategory: .analytics, properties: properties)])
+            let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: version, consentCategory: .analytics, properties: properties)])
             let expectedNames = Set(properties.map(\.name))
             let expectedRequired = properties.filter { !$0.isOptional && !$0.typeName.hasPrefix("Sensitive<") }.map(\.name)
             let text = String(decoding: sut.files.last { $0.path.hasSuffix(".schema.json") }?.contents ?? [], as: UTF8.self)
@@ -47,7 +47,7 @@ struct TrackingPlanPropertyTests {
             let properties = types.enumerated().map { index, type in
                 EventSchema.Property(name: "p\(index)", typeName: TrackingPlanPropertyTests.typeNames[type], isOptional: optionals[index])
             }
-            let sut = TrackingPlan(schemas: [EventSchema(name: String(decoding: name, as: UTF8.self), version: 1, consentCategory: .analytics, properties: properties)])
+            let sut = try TrackingPlan(schemas: [EventSchema(name: String(decoding: name, as: UTF8.self), version: 1, consentCategory: .analytics, properties: properties)])
             let document = try? JSONValue.parse(String(decoding: sut.files.last { $0.path.hasSuffix(".schema.json") }?.contents ?? [], as: UTF8.self))
 
             let actual = document.map { metaSchema.validate($0) }

@@ -128,14 +128,11 @@ final class DestinationBuffer: Sendable {
 
     /// Reports and logs the buffer's drop of `dropped`.
     private func report(_ dropped: Delivery) {
-        let timestamps = dropped.batch.map(\.timestamp)
         let stored = dropped.batch.count { $0.deliveryTag != nil }
-        // A delivery's batch is never empty (`Delivery.init` returns nil for one left empty), so
-        // it has an earliest and a latest timestamp.
         let report = BufferDropReport(
             destinationIndex: index,
             recordCount: dropped.batch.count,
-            timestamps: timestamps.min()!...timestamps.max()!,
+            timestamps: dropped.timestamps,
             storedRecordCount: stored
         )
         let lost = dropped.batch.count - stored

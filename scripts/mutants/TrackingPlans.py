@@ -130,7 +130,16 @@ MUTANTS = [
 # directory that scripts/mutate.py removes afterwards.
     Mutant("checkalonewrites", C, 'arguments[0] != "check"', "true"),
     Mutant("anytwochecks", C, 'arguments[0] == "check"', "true"),
-    Mutant("checkchecksfirst", C, "check(against: arguments[1])", "check(against: arguments[0])"),
+    Mutant("checkchecksfirst", C, "check($0, against: arguments[1])", "check($0, against: arguments[0])"),
+    Mutant("invalidplanexitszero", C, "return 65", "return 0", mode="stmt"),
+    # The keywords a plan accepts: each a constraint could state.
+    Mutant("invalidkeywordaccepted", T, "guard schema.properties.allSatisfy({ !$0.hasInvalidConstraint && $0.keywords.allSatisfy(\\.isStatable) }) else { throw .invalidKeyword }", "", mode="stmt"),
+    Mutant("invalidconstraintexported", T, "!$0.hasInvalidConstraint && $0.keywords.allSatisfy(\\.isStatable)", "$0.keywords.allSatisfy(\\.isStatable)"),
+    Mutant("negativecountstatable", T, "count >= 0", "count >= -1"),
+    Mutant("nonfiniteboundstatable", T, "bound.isFinite", "true"),
+    Mutant("invalidpatternstatable", T, "(try? Regex(pattern)).map { example.contains($0) } ?? false", "(try? Regex(pattern)).map { example.contains($0) } ?? true"),
+    # After invalidpatternstatable's, the text holds two copies; the second is the original's.
+    Mutant("mismatchedexamplestatable", T, "example.contains($0)", "true", nth=1),
     Mutant("matchstatus", C, "            return 0", "            return 7", mode="stmt", nth=1),
     Mutant("breakingstatus", C, "            return 1", "            return 9", mode="stmt"),
     Mutant("outofdatestatus", C, "            return 2", "            return 8", mode="stmt"),
@@ -195,7 +204,7 @@ MUTANTS = [
     Mutant("refinedunmapped", D, "arguments.count == 2", "arguments.count == 3"),
     # JSON numbers.
     Mutant("wholenumberfractional", J, "return .integer(Int64(value))", "return .number(value)", mode="stmt"),
-    Mutant("fractionnotdecoded", J, "self = .number(exactly: number)", "self = .null", mode="stmt"),
+    Mutant("fractionnotdecoded", J, "self = json", "self = .null", mode="stmt"),
     Mutant("hugenumberinteger", J, "value < 9_223_372_036_854_775_808", "true"),
     # Examples that meet their keywords.
     Mutant("patternexampleignored", E, 'self["examples"]?.array?.first', "nil"),

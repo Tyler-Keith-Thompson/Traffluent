@@ -48,7 +48,9 @@ tracker checks them:
 
 ```swift
 enum CouponCode: Refinement {
-    static let constraints: [Constraint<String>] = [.pattern("^[A-Z0-9]{6}$", example: "SPRING")]
+    static var constraints: [Constraint<String>] {
+        get throws(InvalidConstraint) { try [.pattern("^[A-Z0-9]{6}$", example: "SPRING")] }
+    }
 }
 
 @Event(name: "search_performed")
@@ -60,9 +62,9 @@ struct SearchPerformed {
     var coupon: Refined<String, CouponCode>?
 }
 
-let coupon = try? Refined<String, CouponCode>(checked: "spring")  // nil: UnsatisfiedConstraint.pattern
+let coupon = try? Refined<String, CouponCode>("spring")  // nil: UnsatisfiedConstraint.pattern
 let tracker = Tracker()
-tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: Refined("SPRING")))
+tracker.track(SearchPerformed(query: "", resultCount: 3, coupon: try Refined("SPRING")))
 await tracker.finish()
 for await report in tracker.rejectionReports {
     print(report)  // search_performed: "query" breaks minLength 1 (1 rejected)
@@ -74,9 +76,11 @@ a string, `minimum` and `maximum` for a number, `minItems` and `maxItems` for an
 offered only for the types it applies to, with its bound in the property's own type, so
 `.minLength` on an `Int`, or `.minimum(0.5)` on an `Int`, is a compile error. In `@Constrained`,
 so is a lower bound above its upper bound, a pattern that doesn't compile, and a pattern whose
-`example` it, or another keyword of the property, rejects. In a `Refinement`, those trap when its
-constraints are built. `Refined`'s plain initializer traps on a value that breaks its rule, as an
-`Array` subscript does out of range; `init(checked:)` throws the `UnsatisfiedConstraint` instead.
+`example` it, or another keyword of the property, rejects. Built at run time, as a `Refinement`'s
+are, a constraint with an argument no JSON Schema could state (a negative length, a bound that
+isn't finite, a pattern that doesn't compile or doesn't match its example) throws
+`InvalidConstraint`. `Refined`'s initializer throws the `UnsatisfiedConstraint` of the first
+constraint a value breaks, or `invalidConstraint` when the rule's constraints throw.
 
 ### Rejected events
 

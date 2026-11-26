@@ -45,7 +45,7 @@ struct PostHogIdentityTests {
 
     @Test("distinct_id is the record's session, lowercase, and $session_id the same session")
     func distinctIDIsTheSession() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "5D1E3B2A-9C4F-4E6A-8B7D-1F2E3D4C5B6A")!
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -64,7 +64,7 @@ struct PostHogIdentityTests {
 
     @Test("A recovered record, with no context, is sent with its own id as distinct_id and no $session_id")
     func recoveredRecord() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         // As a store remakes a record after a relaunch: no context, marked redelivered.
         let record = EventRecord(
             id: UUID(uuidString: "2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E")!,
@@ -83,7 +83,7 @@ struct PostHogIdentityTests {
 
     @Test("Every event is anonymous and without GeoIP: $process_person_profile false and $geoip_disable true")
     func anonymous() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
@@ -100,7 +100,7 @@ struct PostHogIdentityTests {
 
     @Test("No identifier but the session is sent: not the vendor identifier, an app's account key or the trace")
     func noOtherIdentifier() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let session = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         let vendorIdentifier = UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!
         let recordID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
@@ -133,7 +133,7 @@ struct PostHogIdentityTests {
     @Test("An event's $-prefixed and distinct_id properties are left out, so it can't change the identity or the forced settings")
     func dollarPropertiesDropped() throws {
         let schema = EventSchema(name: "claims_an_identity", version: 1, consentCategory: .analytics, properties: [])
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [schema]))
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [schema]))
         let session = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         var context = ServiceContext.topLevel
         context[SessionKey.self] = session

@@ -44,6 +44,24 @@ struct LoggerDestinationTests {
         #expect(entry.metadata == expectedMetadata)
     }
 
+    // The handler's entries don't hold the line Logger was given, only the metadata, so this pins
+    // that the record is written rather than which line it carries.
+    @Test("A record whose call site has a negative line is still written, its code.lineno as given", arguments: [-1, Int.min])
+    func negativeLine(line: Int) async throws {
+        let handler = InMemoryLogHandler()
+        let sut = LoggerDestination(logger: Logger(label: "test") { _ in handler })
+        let tracker = Tracker(now: { Date(timeIntervalSince1970: 1_700_000_000) })
+        let expected: Logger.MetadataValue = "\(line)"
+
+        tracker.track(SignedUp(plan: "pro"), file: "/x/A.swift", fileID: "M/A.swift", function: "f()", line: line, column: 2)
+        await tracker.finish()
+        try await tracker.records.batch().deliver(to: sut).execute()
+
+        let entry = try #require(handler.entries.first)
+        #expect(handler.entries.count == 1)
+        #expect(entry.metadata["code.lineno"] == expected)
+    }
+
     @Test("A record whose call site was dropped is written without code metadata")
     func droppedCallSite() async throws {
         let handler = InMemoryLogHandler()

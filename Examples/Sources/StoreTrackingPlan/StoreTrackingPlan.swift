@@ -6,5 +6,7 @@ import TrackingPlans
 /// Examples/TrackingPlan, and `swift package check-tracking-plan` checks the events against it.
 @main
 struct StoreTrackingPlan: TrackingPlanCommand {
-    static let trackingPlan = TrackingPlan.store
+    static var trackingPlan: TrackingPlan {
+        get throws(TrackingPlanError) { try .store }
+    }
 }

@@ -20,7 +20,7 @@ struct DestinationsModuleExamplesTests {
 
     @Test("A destination of your own beside an in-memory one, with modifiers")
     func destinationsAndModifiers() async throws {
-        let inspector = InMemoryDestination(capacity: 500)
+        let inspector = try InMemoryDestination(capacity: 500)
         let tracker = Tracker()
         let delivery = tracker.records
             .batch(strategy: .count(20))

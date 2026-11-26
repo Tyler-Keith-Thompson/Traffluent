@@ -51,7 +51,7 @@ struct TrackingPlanPropertyTypeTests {
 
     @Test("A property's type as written maps to its JSON Schema", arguments: mappings)
     func mapping(typeName: String, expected: JSONValue) throws {
-        let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: typeName, isOptional: false),
         ])])
         let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
@@ -93,7 +93,7 @@ struct TrackingPlanPropertyTypeTests {
     @Test("A type the plan can't map accepts any value and records the type", arguments: unknowns)
     func unknown(typeName: String, expectedType: String) throws {
         let expected: JSONValue = ["x-traffluent-swift-type": .string(expectedType)]
-        let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: typeName, isOptional: false),
         ])])
         let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
@@ -106,7 +106,7 @@ struct TrackingPlanPropertyTypeTests {
     @Test("An unknown type nested in a known one records the nested type, without its optional")
     func nestedUnknown() throws {
         let expected: JSONValue = ["type": ["array", "null"], "items": ["x-traffluent-swift-type": "Coordinate"]]
-        let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "value", typeName: "[Coordinate?]", isOptional: true),
         ])])
         let document = try JSONValue.parse(String(decoding: try #require(sut.files.last { $0.path.hasSuffix(".schema.json") }).contents, as: UTF8.self))
@@ -120,7 +120,7 @@ struct TrackingPlanPropertyTypeTests {
     func optionalProperty() throws {
         let expectedProperty: JSONValue = ["type": ["integer", "null"], "minimum": 0, "maximum": 255]
         let expectedRequired: JSONValue = ["plan"]
-        let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
+        let sut = try TrackingPlan(schemas: [EventSchema(name: "event", version: 1, consentCategory: .analytics, properties: [
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
             EventSchema.Property(name: "seats", typeName: "UInt8", isOptional: true),
         ])])

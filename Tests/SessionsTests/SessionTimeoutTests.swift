@@ -40,11 +40,11 @@ struct SessionTimeoutTests {
     }
 
     @Test("Events less than the timeout apart share a session, however long it runs")
-    func withinTimeout() async {
+    func withinTimeout() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let timeout = Duration.seconds(60)
-        let sut = Tracker(enrichers: [.sessions(timeout: timeout)], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: timeout)], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -73,7 +73,7 @@ struct SessionTimeoutTests {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let timeout = Duration.seconds(60)
-        let sut = Tracker(enrichers: [.sessions(timeout: timeout)], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: timeout)], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -117,11 +117,11 @@ struct SessionTimeoutTests {
     }
 
     @Test("SessionEnded and SessionStarted records have identifiers of their own, distinct from every record's and from the session's key")
-    func sessionRecordIdentifiers() async {
+    func sessionRecordIdentifiers() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let timeout = Duration.seconds(60)
-        let sut = Tracker(enrichers: [.sessions(timeout: timeout)], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: timeout)], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -171,11 +171,11 @@ struct SessionTimeoutTests {
     }
 
     @Test("Inactivity counts from the session's last event, not its first")
-    func fromLastEvent() async {
+    func fromLastEvent() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let timeout = Duration.seconds(60)
-        let sut = Tracker(enrichers: [.sessions(timeout: timeout, kinds: [])], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: timeout, kinds: [])], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -196,11 +196,11 @@ struct SessionTimeoutTests {
     }
 
     @Test("An event stamped before the session's last, as a clock set back stamps one, stays in the session and doesn't move its end back")
-    func clockSetBack() async {
+    func clockSetBack() async throws {
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let times = [origin.addingTimeInterval(100), origin, origin.addingTimeInterval(150)]
         let index = TestClock()
-        let sut = Tracker(enrichers: [.sessions(timeout: .seconds(60))], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: .seconds(60))], now: {
             times[Int(TestClock<Duration>.Instant().duration(to: index.now).components.seconds)]
         })
         let expected = ["SessionStarted()", "Tapped(number: 1)", "Tapped(number: 2)", "Tapped(number: 3)"]
@@ -224,7 +224,7 @@ struct SessionTimeoutTests {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let timeout = Duration.seconds(60)
-        let sut = Tracker(enrichers: [.sessions(timeout: timeout, kinds: [])], now: {
+        let sut = Tracker(enrichers: [try .sessions(timeout: timeout, kinds: [])], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
@@ -277,12 +277,12 @@ struct SessionTimeoutTests {
     }
 
     @Test("Session events carry the context the event that ended the session had, and the enrichers after the sessions one run on them")
-    func sessionEventsContext() async {
+    func sessionEventsContext() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let before = Enricher { $0[ScreenKey.self] = "screen of \($0[SessionKey.self] == nil ? "none" : "a session")" }
         let after = Enricher { $0[StageKey.self] = "after \($0[SessionKey.self] == nil ? "none" : "a session")" }
-        let sut = Tracker(enrichers: [before, .sessions(timeout: .seconds(60)), after], now: {
+        let sut = Tracker(enrichers: [before, try .sessions(timeout: .seconds(60)), after], now: {
             let elapsed = TestClock<Duration>.Instant().duration(to: clock.now).components
             return origin.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18)
         })
