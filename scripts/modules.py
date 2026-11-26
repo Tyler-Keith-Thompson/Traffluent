@@ -264,7 +264,7 @@ PLUGINS = [
      "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files.",
      "Writes the tracking plan's JSON Schema files into the package"),
     ("CheckTrackingPlan", "check-tracking-plan",
-     "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan.",
+     "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan, or with --breaking-only only when they break it.",
      None),
 ]
 

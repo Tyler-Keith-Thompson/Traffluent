@@ -104,7 +104,7 @@ struct TrackingPlanWriteTests {
         let expectedStatus: Int32 = 0
         let expectedIndex = try ExampleCommand.trackingPlan.files.first.map { Data($0.contents) }
 
-        let actual = ExampleCommand.run(arguments: [directory.path])
+        let actual = ExampleCommand.run(arguments: [directory.path]).status
 
         #expect(actual == expectedStatus)
         #expect(FileManager.default.contents(atPath: directory.appendingPathComponent("tracking-plan.json").path) == expectedIndex)
@@ -116,7 +116,7 @@ struct TrackingPlanWriteTests {
     func usage(arguments: [String]) {
         let expected: Int32 = 64
 
-        let actual = ExampleCommand.run(arguments: arguments)
+        let actual = ExampleCommand.run(arguments: arguments).status
 
         #expect(actual == expected)
     }
@@ -135,8 +135,8 @@ struct TrackingPlanWriteTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let expected: Int32 = 65
 
-        let written = InvalidCommand.run(arguments: [directory.path])
-        let checked = InvalidCommand.run(arguments: ["check", directory.path])
+        let written = InvalidCommand.run(arguments: [directory.path]).status
+        let checked = InvalidCommand.run(arguments: ["check", directory.path]).status
 
         #expect(written == expected)
         #expect(checked == expected)
@@ -150,7 +150,7 @@ struct TrackingPlanWriteTests {
         #expect(FileManager.default.createFile(atPath: file.path, contents: Data("not a directory".utf8)))
         let expected: Int32 = 73
 
-        let actual = ExampleCommand.run(arguments: [file.path])
+        let actual = ExampleCommand.run(arguments: [file.path]).status
 
         #expect(actual == expected)
     }

@@ -125,13 +125,22 @@ MUTANTS = [
     Mutant("indexnotplanfile", F, 'path == indexFileName', 'false'),
     Mutant("examplesnotplanfiles", F, 'path.hasSuffix(".example.json")', 'false'),
     Mutant("rewritesunchanged", F, "fileManager.contents(atPath: url.path) != contents", "true"),
-    # The check's statuses come before the ones below, whose replacements write `return 1`.
-    # checkalonewrites writes the plan into ./check of the directory the tests run in, the run's own
-# directory that scripts/mutate.py removes afterwards.
+    # The command's arguments. checkalonewrites and writeoption write the plan into ./check and
+    # ./-p of the directory the tests run in, the run's own directory that scripts/mutate.py
+    # removes afterwards. main() isn't mutated: it prints and exits the process, which no test does.
     Mutant("checkalonewrites", C, 'arguments[0] != "check"', "true"),
-    Mutant("anytwochecks", C, 'arguments[0] == "check"', "true"),
+    Mutant("anytwochecks", C, 'arguments[0] == "check"', "true", nth=0),
+    Mutant("anythreechecks", C, 'arguments[0] == "check"', "true", nth=1),
+    Mutant("anyflag", C, "arguments[1] == breakingOnlyFlag", "true"),
+    Mutant("writeoption", C, "!arguments[0].isOption", "true"),
+    Mutant("checkoption", C, "!arguments[1].isOption", "true"),
+    Mutant("breakingonlyoption", C, "!arguments[2].isOption", "true"),
+    Mutant("optiondoubledash", C, 'hasPrefix("-")', 'hasPrefix("--")'),
+    Mutant("optionanydash", C, 'hasPrefix("-")', 'contains("-")'),
     Mutant("checkchecksfirst", C, "check($0, against: arguments[1])", "check($0, against: arguments[0])"),
-    Mutant("invalidplanexitszero", C, "return 65", "return 0", mode="stmt"),
+    Mutant("breakingonlyignored", C, "checkBreakingOnly($0, against: arguments[2])", "check($0, against: arguments[2])"),
+    Mutant("breakingonlychecksflag", C, "checkBreakingOnly($0, against: arguments[2])", "checkBreakingOnly($0, against: arguments[1])"),
+    Mutant("invalidplanexitszero", C, "TrackingPlanCommandResult(status: 65, standardError: \"error: the events' schemas can't make a tracking plan: \\(error)\")", "TrackingPlanCommandResult(status: 0)"),
     # The keywords a plan accepts: each a constraint could state.
     Mutant("invalidkeywordaccepted", T, "guard schema.properties.allSatisfy({ !$0.hasInvalidConstraint && $0.keywords.allSatisfy(\\.isStatable) }) else { throw .invalidKeyword }", "", mode="stmt"),
     Mutant("invalidconstraintexported", T, "!$0.hasInvalidConstraint && $0.keywords.allSatisfy(\\.isStatable)", "$0.keywords.allSatisfy(\\.isStatable)"),
@@ -140,12 +149,21 @@ MUTANTS = [
     Mutant("invalidpatternstatable", T, "(try? Regex(pattern)).map { example.contains($0) } ?? false", "(try? Regex(pattern)).map { example.contains($0) } ?? true"),
     # After invalidpatternstatable's, the text holds two copies; the second is the original's.
     Mutant("mismatchedexamplestatable", T, "example.contains($0)", "true", nth=1),
-    Mutant("matchstatus", C, "            return 0", "            return 7", mode="stmt", nth=1),
-    Mutant("breakingstatus", C, "            return 1", "            return 9", mode="stmt"),
-    Mutant("outofdatestatus", C, "            return 2", "            return 8", mode="stmt"),
-    Mutant("usagestatus", C, "            return 64", "            return 1", mode="stmt"),
-    Mutant("writefailurestatus", C, "            return 73", "            return 1", mode="stmt"),
-    Mutant("successstatus", C, "            return 0", "            return 1", mode="stmt", nth=0),
+    # The command's statuses and output. `TrackingPlanCommandResult(status: 0)` is written, then
+    # matched by both checks, in that order; invalidplanexitszero's replacement, before them, adds
+    # one more first, so these count from 1.
+    Mutant("successstatus", C, "TrackingPlanCommandResult(status: 0)", "TrackingPlanCommandResult(status: 1)", nth=1),
+    Mutant("matchstatus", C, "TrackingPlanCommandResult(status: 0)", "TrackingPlanCommandResult(status: 7)", nth=2),
+    Mutant("breakingonlymatchstatus", C, "TrackingPlanCommandResult(status: 0)", "TrackingPlanCommandResult(status: 7)", nth=3),
+    Mutant("breakingstatus", C, 'TrackingPlanCommandResult(status: 1, standardError: "error: \\(directory): \\(check)")', 'TrackingPlanCommandResult(status: 9, standardError: "error: \\(directory): \\(check)")', nth=0),
+    Mutant("breakingonlypassesbreaking", C, 'TrackingPlanCommandResult(status: 1, standardError: "error: \\(directory): \\(check)")', "TrackingPlanCommandResult(status: 0)", nth=1),
+    Mutant("outofdatestatus", C, 'TrackingPlanCommandResult(status: 2, standardError: "error: \\(directory): \\(check)")', 'TrackingPlanCommandResult(status: 8, standardError: "error: \\(directory): \\(check)")'),
+    Mutant("breakingonlyfailsoutofdate", C, 'TrackingPlanCommandResult(status: 0, standardOutput: lines.joined(separator: "\\n"))', 'TrackingPlanCommandResult(status: 2, standardOutput: lines.joined(separator: "\\n"))'),
+    Mutant("breakingonlysilent", C, 'TrackingPlanCommandResult(status: 0, standardOutput: lines.joined(separator: "\\n"))', 'TrackingPlanCommandResult(status: 0, standardOutput: "")'),
+    Mutant("breakingonlyoutofdatetostderr", C, 'TrackingPlanCommandResult(status: 0, standardOutput: lines.joined(separator: "\\n"))', 'TrackingPlanCommandResult(status: 0, standardError: lines.joined(separator: "\\n"))'),
+    Mutant("breakingonlydropsdifference", C, 'differences.map { "  - \\($0)" }', 'differences.dropFirst().map { "  - \\($0)" }'),
+    Mutant("usagestatus", C, "TrackingPlanCommandResult(status: 64, standardError: usage)", "TrackingPlanCommandResult(status: 1, standardError: usage)"),
+    Mutant("writefailurestatus", C, "TrackingPlanCommandResult(status: 73, standardError: message)", "TrackingPlanCommandResult(status: 1, standardError: message)"),
     # Examples. stringexample comes first, before the mutants below write `.string(...)`.
     Mutant("stringexample", E, '.string(textExample)', '.string("")'),
     Mutant("dateexample", E, '.string("2001-01-01T00:00:00Z")', '.string("example")'),

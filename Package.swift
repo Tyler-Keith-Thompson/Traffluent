@@ -97,7 +97,7 @@ let targets: [Target] = [
 
     // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build
     .plugin(name: "ExportTrackingPlan", capability: .command(intent: .custom(verb: "export-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files."), permissions: [.writeToPackageDirectory(reason: "Writes the tracking plan's JSON Schema files into the package")])),
-    .plugin(name: "CheckTrackingPlan", capability: .command(intent: .custom(verb: "check-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan."))),
+    .plugin(name: "CheckTrackingPlan", capability: .command(intent: .custom(verb: "check-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan, or with --breaking-only only when they break it."))),
 
     // Umbrella: `import Traffluent` imports every module.
     .target(name: "Traffluent", dependencies: ["Events", "Destinations", "LoggingDestinations", "TracingDestinations", "HTTPDestinations", "CollectorEncoding", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "AutomaticScreenTracking", "AutomaticControlTracking", "LifecycleTracking", "Sessions", "StandardContext", "Checksums", "Persistence", "EventMacros"], exclude: bazelFiles),

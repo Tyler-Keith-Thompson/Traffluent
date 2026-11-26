@@ -496,7 +496,7 @@ struct TrackingPlanCheckTests {
         try CheckoutCommand.trackingPlan.write(to: directory)
         let expected: Int32 = 0
 
-        let actual = CheckoutCommand.run(arguments: ["check", directory.path])
+        let actual = CheckoutCommand.run(arguments: ["check", directory.path]).status
 
         #expect(actual == expected)
     }
@@ -540,7 +540,7 @@ struct TrackingPlanCheckTests {
         let expectedStatus: Int32 = 1
         let expectedLine = "  - \(expectedDifference)"
 
-        let actual = CheckoutCommand.run(arguments: ["check", directory.path])
+        let actual = CheckoutCommand.run(arguments: ["check", directory.path]).status
         let report = try CheckoutCommand.trackingPlan.check(againstDirectory: directory).description
 
         #expect(actual == expectedStatus)
@@ -554,7 +554,7 @@ struct TrackingPlanCheckTests {
         try TrackingPlan(schemas: []).write(to: directory)
         let expected: Int32 = 2
 
-        let actual = CheckoutCommand.run(arguments: ["check", directory.path])
+        let actual = CheckoutCommand.run(arguments: ["check", directory.path]).status
 
         #expect(actual == expected)
     }
@@ -564,7 +564,7 @@ struct TrackingPlanCheckTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let expected: Int32 = 1
 
-        let actual = CheckoutCommand.run(arguments: ["check", directory.path])
+        let actual = CheckoutCommand.run(arguments: ["check", directory.path]).status
 
         #expect(actual == expected)
     }
@@ -573,7 +573,7 @@ struct TrackingPlanCheckTests {
     func commandUsage(arguments: [String]) {
         let expected: Int32 = 64
 
-        let actual = CheckoutCommand.run(arguments: arguments)
+        let actual = CheckoutCommand.run(arguments: arguments).status
 
         #expect(actual == expected)
     }

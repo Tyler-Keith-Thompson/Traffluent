@@ -1,10 +1,15 @@
 import Foundation
 import PackagePlugin
 
-/// `swift package check-tracking-plan [--product <name>] [--plan <directory>]`: builds the
-/// package's `TrackingPlanCommand` executable and runs it as `check <directory>`, so it fails, with
-/// a line naming each event and property that changed, when the events no longer match the plan
-/// committed in `<directory>`, `TrackingPlan` in the package by default.
+/// `swift package check-tracking-plan [--product <name>] [--plan <directory>] [--breaking-only]`:
+/// builds the package's `TrackingPlanCommand` executable and runs it as `check <directory>`, so it
+/// fails, with a line naming each event and property that changed, when the events no longer match
+/// the plan committed in `<directory>`, `TrackingPlan` in the package by default.
+///
+/// With `--breaking-only` it runs `check --breaking-only <directory>`, which fails only when a
+/// difference is breaking, and prints a plan that is only out of date as information. CI runs it
+/// with `--plan` naming the base branch's plan, which catches a breaking change the branch has
+/// already exported.
 ///
 /// A plugin of its own rather than a flag of `export-tracking-plan`, because checking only reads:
 /// it needs no `--allow-writing-to-package-directory`, which keeps the command CI runs plain.
@@ -14,8 +19,9 @@ struct CheckTrackingPlan: CommandPlugin {
         var extractor = ArgumentExtractor(arguments)
         let products = extractor.extractOption(named: "product")
         let plans = extractor.extractOption(named: "plan")
-        guard extractor.remainingArguments.isEmpty, products.count <= 1, plans.count <= 1 else {
-            throw CheckError("usage: swift package check-tracking-plan [--product <name>] [--plan <directory>]")
+        let breakingOnly = extractor.extractFlag(named: "breaking-only")
+        guard extractor.remainingArguments.isEmpty, products.count <= 1, plans.count <= 1, breakingOnly <= 1 else {
+            throw CheckError("usage: swift package check-tracking-plan [--product <name>] [--plan <directory>] [--breaking-only]")
         }
         let product = try context.package.trackingPlanCommand(named: products.first)
         let plan = URL(fileURLWithPath: plans.first ?? "TrackingPlan", relativeTo: context.package.directoryURL).standardizedFileURL
@@ -28,16 +34,26 @@ struct CheckTrackingPlan: CommandPlugin {
             throw CheckError("\(product) is not an executable")
         }
 
-        // The command prints the check's report to standard error, which the process shares.
+        // The command prints the check's report to standard output and standard error, which the
+        // process shares.
         let process = Process()
         process.executableURL = executable.url
-        process.arguments = ["check", plan.path]
+        process.arguments = breakingOnly == 1 ? ["check", "--breaking-only", plan.path] : ["check", plan.path]
         try process.run()
         process.waitUntilExit()
-        guard process.terminationReason == .exit, process.terminationStatus == 0 else {
-            throw CheckError("the events don't match the tracking plan in \(plan.path)")
+        guard process.terminationReason == .exit else {
+            throw CheckError("\(product) stopped without checking the tracking plan in \(plan.path)")
         }
-        print("The events match the tracking plan in \(plan.path)")
+        switch process.terminationStatus {
+        case 0:
+            print(breakingOnly == 1 ? "The events don't break the tracking plan in \(plan.path)" : "The events match the tracking plan in \(plan.path)")
+        case 1:
+            throw CheckError("the events break the tracking plan in \(plan.path)")
+        case 2:
+            throw CheckError("the events don't match the tracking plan in \(plan.path)")
+        case let status:
+            throw CheckError("\(product) couldn't check the tracking plan in \(plan.path) (exit status \(status))")
+        }
     }
 }
 
