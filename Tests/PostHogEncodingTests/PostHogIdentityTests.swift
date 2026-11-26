@@ -43,7 +43,7 @@ struct PostHogIdentityTests {
         init(from decoder: inout BinaryDecoder) throws(BinaryDecodingError) {}
     }
 
-    @Test("distinct_id is the record's session, lowercase, and no $session_id is sent")
+    @Test("distinct_id is the record's session, lowercase, and $session_id the same session")
     func distinctIDIsTheSession() throws {
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: TrackingPlan(schemas: [CheckoutStarted.schema]))
         var context = ServiceContext.topLevel
@@ -57,8 +57,9 @@ struct PostHogIdentityTests {
         let event = try #require((object["batch"] as? [[String: Any]])?.first)
         let properties = try #require(event["properties"] as? [String: Any])
         let actual = event["distinct_id"] as? String
+        let actualSessionID = properties["$session_id"] as? String
         #expect(actual == expected)
-        #expect(properties["$session_id"] == nil)
+        #expect(actualSessionID == expected)
     }
 
     @Test("A recovered record, with no context, is sent with its own id as distinct_id and no $session_id")
@@ -110,9 +111,9 @@ struct PostHogIdentityTests {
         context[TraceParentKey.self] = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
         var record = EventRecord(id: recordID, event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         record.revealsSensitiveValues = true
-        // The session, as distinct_id, and the record's own uuid, which names the event rather than
-        // anyone.
-        let expectedIdentifiers = [session.uuidString.lowercased(), recordID.uuidString.lowercased()]
+        // The session, as distinct_id and as $session_id, and the record's own uuid, which names the
+        // event rather than anyone.
+        let expectedIdentifiers = [session.uuidString.lowercased(), session.uuidString.lowercased(), recordID.uuidString.lowercased()]
         let expectedTopLevelKeys = ["distinct_id", "event", "properties", "timestamp", "uuid"]
         let uuidPattern = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
 
@@ -143,7 +144,7 @@ struct PostHogIdentityTests {
             sourceLocation: nil,
             context: context
         )
-        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"claims_an_identity","properties":{"$geoip_disable":true,"$process_person_profile":false,"count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
+        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"claims_an_identity","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
         let actual = try sut.encode([record])
 

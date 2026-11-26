@@ -27,8 +27,9 @@ extension Enricher {
     /// that ended the session had when this enricher reached it; the enrichers after this one run
     /// on them too. Their call site is this call's.
     ///
-    /// A session's identifier is a random UUID, never derived from anything, held in this
-    /// enricher's memory and nowhere else: neither a store nor anything else writes it to disk,
+    /// A session's identifier is a version 7 UUID: the session's start in Unix milliseconds, then
+    /// random bits, never derived from the device, the user or another identifier. It is held in
+    /// this enricher's memory and nowhere else: neither a store nor anything else writes it to disk,
     /// and a new enricher, as on the next launch, starts with a new session. Records a store
     /// kept from an earlier run aren't enriched again, so they carry no key.
     ///

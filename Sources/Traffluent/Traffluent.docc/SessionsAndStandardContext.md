@@ -34,7 +34,9 @@ event comes after the timeout, so a run's last session has no `SessionEnded`; a 
 its end from its last event. `kinds:` turns either event off, or both, and every record still
 carries its session's key.
 
-The identifier is a random UUID, derived from nothing, and it lives in the enricher's memory only.
+The identifier is a version 7 UUID: its first 48 bits are the session's start in Unix milliseconds,
+which every record's timestamp sends anyway, and the rest is random, derived from nothing. It lives
+in the enricher's memory only.
 Neither the tracker nor its store writes it to disk (a store keeps no record's context), and the
 next launch's tracker starts a new session with a new identifier. Traffluent keeps no identifier
 that links one session to another.

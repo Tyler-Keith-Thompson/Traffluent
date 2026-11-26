@@ -98,11 +98,10 @@ let tracker = Tracker(enrichers: [.sessions()])
 let delivery = tracker.records.batch().deliver(to: postHog)
 ```
 
-Each event's `distinct_id` is the record's session (`Enricher.sessions()`), and nothing else
-identifies anyone. Events are sent as anonymous (`$process_person_profile: false`), and the vendor
-identifier, trace context and your own context keys aren't sent. `$session_id` isn't sent either:
-PostHog's sessions take only a UUIDv7, and a Traffluent session is a random UUID, so PostHog's
-session and web analytics don't group these events. PostHog counts a person per `distinct_id`, so
+Each event's `distinct_id` is the record's session (`Enricher.sessions()`), also sent as
+`$session_id` so PostHog's session and web analytics group the events, and nothing else identifies
+anyone. Events are sent as anonymous (`$process_person_profile: false`), and the vendor
+identifier, trace context and your own context keys aren't sent. PostHog counts a person per `distinct_id`, so
 its unique users are sessions. The encoder adds PostHog's own properties for the app, device,
 operating system, locale and network when the standard context enrichers set them. Event names are
 sent as they are.

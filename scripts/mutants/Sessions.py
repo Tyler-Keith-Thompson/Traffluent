@@ -27,6 +27,17 @@ START = "return EventRecord(event: SessionStarted(), timestamp: session.start, s
 GAP = "Duration.seconds(timestamp.timeIntervalSince(session.lastActivity)) < timeout"
 
 MUTANTS = [
+    # SessionKey as a UUIDv7 (TRAF-74).
+    Mutant("v7noversion", "UUID+Version7.swift", "bytes[6] = 0x70 | (bytes[6] & 0x0F)", "bytes[6] = 0x40 | (bytes[6] & 0x0F)", mode="stmt"),
+    Mutant("v7novariant", "UUID+Version7.swift", "bytes[8] = 0x80 | (bytes[8] & 0x3F)", "bytes[8] = 0xC0 | (bytes[8] & 0x3F)", mode="stmt"),
+    Mutant("v7littleendian", "UUID+Version7.swift", "timestamp >> (8 * (5 - index))", "timestamp >> (8 * index)"),
+    Mutant("v7rounded", "UUID+Version7.swift", "(date.timeIntervalSince1970 * 1_000).rounded(.down)", "(date.timeIntervalSince1970 * 1_000).rounded()"),
+    Mutant("v7noclamp", "UUID+Version7.swift", "Swift.max(milliseconds, 0)", "milliseconds"),
+    # The 12 random bits after the version (bytes 6-7) aren't pinned: two sessions share them
+    # once in 4,096, so a test that they differ would flake. A mutant zeroing them would survive,
+    # so none is planted.
+    Mutant("v7norandom", "UUID+Version7.swift", "generator.next() as UInt64", "UInt64(0)", nth=1),
+
     # The timeout's boundary, and inactivity measured from the session's last event.
     Mutant("timeoutboundary", L, GAP, GAP.replace("< timeout", "<= timeout")),
     Mutant("neverrotates", L, GAP, "true"),
@@ -50,7 +61,7 @@ MUTANTS = [
     # The second: the started case's own key.
     Mutant("nokindsnokey", R, "record.context[SessionKey.self] = session.id", "if !kinds.isEmpty { record.context[SessionKey.self] = session.id }", mode="stmt", nth=1),
     # Random, and held in memory only.
-    Mutant("constantid", R, "UUID.init", "{ UUID(uuid: (0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0)) }"),
+    Mutant("constantid", R, "{ UUID(version7At: timestamp) }", "{ UUID(uuid: (0, 0, 0, 0, 0, 0, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0)) }"),
     # A session record's identifier is its own, never the session's key. Only SessionStarted's:
     # SessionEnded's statement holds endatstart's text, and its record takes the same default.
     Mutant("startidissessionkey", R, START, START.replace("EventRecord(event:", "EventRecord(id: session.id, event:"), mode="stmt"),

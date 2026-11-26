@@ -76,7 +76,7 @@ struct PostHogBatchEncoderTests {
             context: secondContext,
             isRedelivered: true
         )
-        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"signed_up","properties":{"$app_build":"418","$app_namespace":"com.example.shop","$app_version":"2.4.1","$device_model":"iPhone17,1","$device_type":"Mobile","$geoip_disable":true,"$locale":"en-US","$network_cellular":false,"$network_wifi":true,"$os_name":"iOS","$os_version":"26.1.0","$process_person_profile":false,"discount":0.25,"plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z","uuid":"6f9619ff-8b86-d011-b42d-00c04fc964ff"},{"distinct_id":"00000000-0000-4000-8000-00000000000c","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z","uuid":"00000000-0000-4000-8000-000000000002"}]}"#
+        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"signed_up","properties":{"$app_build":"418","$app_namespace":"com.example.shop","$app_version":"2.4.1","$device_model":"iPhone17,1","$device_type":"Mobile","$geoip_disable":true,"$locale":"en-US","$network_cellular":false,"$network_wifi":true,"$os_name":"iOS","$os_version":"26.1.0","$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","discount":0.25,"plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z","uuid":"6f9619ff-8b86-d011-b42d-00c04fc964ff"},{"distinct_id":"00000000-0000-4000-8000-00000000000c","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000c","cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z","uuid":"00000000-0000-4000-8000-000000000002"}]}"#
         let expectedContentType = "application/json"
 
         let actual = try sut.encode([first, second])
@@ -166,7 +166,7 @@ struct PostHogBatchEncoderTests {
             sourceLocation: nil,
             context: context
         )
-        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
+        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
         let actual = try sut.encode([record])
 
@@ -186,7 +186,7 @@ struct PostHogBatchEncoderTests {
             context: context
         )
         record.revealsSensitiveValues = reveals
-        let expectedKeys = ["$geoip_disable", "$process_person_profile", "discount", "plan", "referrer", "seats", "tags", "trialEndsAt"]
+        let expectedKeys = ["$geoip_disable", "$process_person_profile", "$session_id", "discount", "plan", "referrer", "seats", "tags", "trialEndsAt"]
 
         let body = try sut.encode([record]).body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])

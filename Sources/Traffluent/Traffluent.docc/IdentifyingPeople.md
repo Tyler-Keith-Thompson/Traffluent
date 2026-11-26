@@ -5,8 +5,8 @@ Traffluent knows people only by a pseudonymous session. An identifier that outli
 ## Overview
 
 The identifier Traffluent makes is the session's: `Enricher.sessions(timeout:kinds:)` (module
-``/Sessions``) stamps every record's context with its `SessionKey`, a random UUID derived from
-nothing and held in the enricher's memory only. It is never written to disk, and the next launch
+``/Sessions``) stamps every record's context with its `SessionKey`, a version 7 UUID (the session's
+start time, then random bits) derived from nothing else and held in the enricher's memory only. It is never written to disk, and the next launch
 starts a new session with a new identifier.
 
 Nothing else identifies the person unless the app asks. Traffluent keeps no persisted anonymous or

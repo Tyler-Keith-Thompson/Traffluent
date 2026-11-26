@@ -88,7 +88,7 @@ struct PostHogContextTests {
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: nil, version: "1.0", build: nil)
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"opened","properties":{"$app_version":"1.0","$geoip_disable":true,"$process_person_profile":false,"count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
+        let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"opened","properties":{"$app_version":"1.0","$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
         let actual = try sut.encode([record])
 
@@ -102,7 +102,7 @@ struct PostHogContextTests {
         context[SessionKey.self] = UUID()
         context[SampleRateKey.self] = 0.5
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = ["$geoip_disable", "$process_person_profile", "count"]
+        let expected = ["$geoip_disable", "$process_person_profile", "$session_id", "count"]
 
         let body = try sut.encode([record]).body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])

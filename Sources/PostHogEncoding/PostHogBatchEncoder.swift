@@ -41,9 +41,10 @@ public import TrackingPlans
 /// tracked by a tracker without `Enricher.sessions()`, or one a store recovered after a relaunch,
 /// which keeps no context) is its own anonymous person, linked to nothing: PostHog rejects a whole
 /// batch when one of its events has no `distinct_id`. PostHog counts a person per `distinct_id`,
-/// so its unique users are sessions. `$session_id` isn't sent: PostHog's sessions take only a
-/// UUIDv7, and `SessionKey` is a random UUID. The record's vendor identifier and trace context, and
-/// any other context value, aren't sent.
+/// so its unique users are sessions. The session is also sent as `$session_id`, which PostHog's
+/// sessions and web analytics group events by (`SessionKey` is the UUIDv7 they require); a record
+/// with no session has none. The record's vendor identifier and trace context, and any other
+/// context value, aren't sent.
 ///
 /// Properties are read from the event's `BinaryCodable` form, which `@Event` derives, through the
 /// types its schema in `plan` lists: a `String` is a string; a `Bool` a boolean; an integer, a
@@ -171,6 +172,10 @@ public struct PostHogBatchEncoder: BatchEncoder {
         }
         for (key, value) in record.postHogContext {
             properties[key] = value
+        }
+        // Written after the event's and context's properties, so neither can replace it.
+        if let session = record.context[SessionKey.self] {
+            properties["$session_id"] = .string(session.uuidString.lowercased())
         }
         properties["$process_person_profile"] = .boolean(false)
         properties["$geoip_disable"] = .boolean(true)

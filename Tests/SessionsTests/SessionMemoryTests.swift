@@ -28,11 +28,11 @@ struct SessionMemoryTests {
         }
     }
 
-    @Test("A new tracker, as on a relaunch, starts a new session with a new, random (version 4) identifier")
+    @Test("A new tracker, as on a relaunch, starts a new session with a new identifier, a version 7 UUID")
     func newTrackerNewSession() async throws {
         let first = Tracker(enrichers: [.sessions(kinds: [])])
         let second = Tracker(enrichers: [.sessions(kinds: [])])
-        let expectedVersion: UInt8 = 4
+        let expectedVersion: UInt8 = 7
 
         first.track(Tapped(number: 1))
         second.track(Tapped(number: 1))

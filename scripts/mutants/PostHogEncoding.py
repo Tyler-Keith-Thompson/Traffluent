@@ -20,6 +20,10 @@ C = "EventRecord+PostHogContext.swift"
 D = "Date+PostHogTimestamp.swift"
 
 MUTANTS = [
+    # $session_id from the v7 SessionKey (TRAF-74).
+    Mutant("nosessionid", "PostHogBatchEncoder.swift", 'properties["$session_id"] = .string(session.uuidString.lowercased())', 'properties["$session_id"] = nil', mode="stmt"),
+    Mutant("sessionidbeforeproperties", "PostHogBatchEncoder.swift", 'properties["$session_id"] = .string(session.uuidString.lowercased())', 'properties["$session_id"] = .string(session.uuidString)', mode="stmt"),
+
     # The request's envelope.
     Mutant("emptyapikey", B, ".string(projectToken)", '.string("")'),
     Mutant("batchrenamed", B, '"batch"', '"events"'),

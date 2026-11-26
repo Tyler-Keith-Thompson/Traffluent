@@ -25,7 +25,8 @@ final class SessionRotation: Sendable {
     /// Sets `record`'s session on its context, and returns the records of the sessions that
     /// ended and started at it, which go before it.
     func enrich(_ record: inout EventRecord) -> [EventRecord] {
-        let transition = timeline.withLock { $0.advance(to: record.timestamp, makingID: UUID.init) }
+        let timestamp = record.timestamp
+        let transition = timeline.withLock { $0.advance(to: timestamp, makingID: { UUID(version7At: timestamp) }) }
         let context = record.context
         switch transition {
         case .continued(let session):
