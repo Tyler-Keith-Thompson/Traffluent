@@ -13,7 +13,7 @@ struct TrackingPlanWorkflowExamplesTests {
     @Event(name: "signed_up", consent: .functional)
     struct SignedUp {
         var plan: String
-        var email: Sensitive<String>?
+        var email: Sensitive<String>
         var referrer: String?
     }
 
@@ -32,10 +32,7 @@ struct TrackingPlanWorkflowExamplesTests {
               "additionalProperties": false,
               "properties": {
                 "email": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "x-traffluent-sensitive": true
                 },
                 "plan": {

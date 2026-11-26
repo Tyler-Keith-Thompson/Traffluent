@@ -55,15 +55,15 @@ struct ProductAddedToCart: Equatable {
 @Event(name: "signed_up", consent: .functional)
 struct SignedUp {
     var plan: String
-    var email: Sensitive<String>?
+    var email: Sensitive<String>
     var referrer: String?
 }
 ```
 
 A `ProductAddedToCart` with a quantity of 0 is rejected and never delivered. `SignedUp` is
 collected for the `functional` consent category; events are `analytics` unless they say otherwise.
-Its email address is optional, so a record whose email a destination left out still matches the
-tracking plan. The store app declares its events in a module of their own, `StoreEvents`. See
+Its email address is `Sensitive`, so the tracking plan never requires it, and a record whose email
+a destination left out still matches the plan. The store app declares its events in a module of their own, `StoreEvents`. See
 <doc:DefiningEvents>.
 
 ### Build the tracker

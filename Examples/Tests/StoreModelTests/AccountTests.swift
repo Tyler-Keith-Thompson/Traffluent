@@ -19,7 +19,7 @@ struct AccountTests {
         let event = try #require(tracked.events(of: SignedUp.self).first)
         let record = try #require(tracked.records.first)
         #expect(tracked.events(of: SignedUp.self).map(\.plan) == expectedPlans)
-        let email = try #require(event.email)
+        let email = event.email
         #expect(record.reveal(email) == expectedEmail)
         #expect(String(describing: email) == expectedDescription)
         #expect(tracked.value == Account(email: "shopper@example.com", plan: .plus))

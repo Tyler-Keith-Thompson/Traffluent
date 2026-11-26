@@ -47,8 +47,9 @@ public import TrackingPlans
 /// A ``/Events/Sensitive`` value is written as its value when the record reveals it
 /// (`EventRecord/revealsSensitiveValues`), as every destination may, and left out once a delivery
 /// redacts it (`redactingSensitiveValues()`): a redacted property is missing from `properties`,
-/// and an element of an array is `null`. A collector that validates against the plan then rejects
-/// the record, naming the property, rather than storing a value that isn't the one tracked.
+/// and an element of an array is `null`. The plan's documents allow both, as they never require a
+/// `Sensitive` property and let a `Sensitive` element be `null`, so a collector that validates
+/// against the plan accepts the record.
 ///
 /// `context` holds, for each of these keys the record's context has a value for:
 ///

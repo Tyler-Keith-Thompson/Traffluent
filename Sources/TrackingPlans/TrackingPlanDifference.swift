@@ -14,6 +14,7 @@
 /// | ``eventRemoved(event:version:)``, which is also how a rename shows | yes |
 /// | ``propertyRetyped(event:version:property:committed:current:)`` | yes |
 /// | ``propertyMadeRequired(event:version:property:)`` | yes |
+/// | ``sensitivePropertyMadeRequired(event:version:property:)`` | yes |
 /// | ``requiredPropertyAdded(event:version:property:)`` | yes |
 /// | ``defaultValueRemoved(event:version:property:)`` | yes |
 /// | ``constraintTightened(event:version:property:keyword:committed:current:)`` | yes |
@@ -37,6 +38,12 @@
 /// compatible unless it is now required, as ``requiredPropertyAdded(event:version:property:)``,
 /// since the records and payloads written while it was gone lack it.
 ///
+/// A `Sensitive` property is never required, as any destination may redact it. Making a property
+/// `Sensitive` is compatible: the payloads that hold it still validate. Making one that is neither
+/// optional nor defaulted stop being `Sensitive` makes it required, as
+/// ``sensitivePropertyMadeRequired(event:version:property:)``, since the payloads a redacting
+/// destination sent lack it.
+///
 /// Raising an event's version is how its author marks a breaking change: the plan then holds a
 /// new document, and the committed version's properties aren't compared with the new one's.
 public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible {
@@ -52,6 +59,10 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// An optional property, whose value the committed plan lets be `null`, isn't optional now, so
     /// a stored `null` can't be read.
     case propertyMadeRequired(event: String, version: Int, property: String)
+    /// A property that is neither optional nor has a default value, which the committed plan
+    /// marks `Sensitive` and so doesn't require, isn't `Sensitive` now, so a payload a redacting
+    /// destination sent without it doesn't validate.
+    case sensitivePropertyMadeRequired(event: String, version: Int, property: String)
     /// The event has a property that is neither optional nor has a default value, and that the
     /// committed plan doesn't have, or marks `deprecated`: the payloads and records written without
     /// it can't be read.
@@ -84,7 +95,9 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     case propertyMadeOptional(event: String, version: Int, property: String)
     /// The event's consent category changed, from the committed name to the current one.
     case consentCategoryChanged(event: String, version: Int, committed: String, current: String)
-    /// A property became `Sensitive`, or stopped being, as `isSensitive` says.
+    /// A property became `Sensitive`, or stopped being, as `isSensitive` says, and payloads that
+    /// left it out still validate: it became `Sensitive`, or it is optional or has a default
+    /// value.
     case sensitivityChanged(event: String, version: Int, property: String, isSensitive: Bool)
     /// A property's constraint keyword is looser: a lower bound fell, an upper one rose, or one
     /// was removed, or a `pattern` was only removed. The values are as for
@@ -99,8 +112,8 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
     /// table in ``TrackingPlanDifference`` lists which differences are.
     public var isBreaking: Bool {
         switch self {
-        case .eventRemoved, .propertyRetyped, .propertyMadeRequired, .requiredPropertyAdded, .defaultValueRemoved, .constraintTightened,
-            .unreadableFile:
+        case .eventRemoved, .propertyRetyped, .propertyMadeRequired, .sensitivePropertyMadeRequired, .requiredPropertyAdded, .defaultValueRemoved,
+            .constraintTightened, .unreadableFile:
             true
         case .eventAdded, .versionRaised, .optionalPropertyAdded, .defaultedPropertyAdded, .propertyRemoved, .propertyMadeOptional,
             .defaultValueAdded, .consentCategoryChanged, .sensitivityChanged, .constraintLoosened, .fileOutOfDate:
@@ -119,6 +132,8 @@ public enum TrackingPlanDifference: Sendable, Hashable, CustomStringConvertible 
             "\(event) v\(version): property \"\(property)\" changed type from \(committed) to \(current)"
         case .propertyMadeRequired(let event, let version, let property):
             "\(event) v\(version): property \"\(property)\" was optional and is now required"
+        case .sensitivePropertyMadeRequired(let event, let version, let property):
+            "\(event) v\(version): property \"\(property)\" is no longer sensitive and is now required"
         case .requiredPropertyAdded(let event, let version, let property):
             "\(event) v\(version): required property \"\(property)\" was added without a default value"
         case .defaultValueRemoved(let event, let version, let property):

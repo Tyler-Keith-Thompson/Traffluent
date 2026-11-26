@@ -23,7 +23,7 @@ struct GettingStartedExamplesTests {
     @Event(name: "signed_up", consent: .functional)
     struct SignedUp {
         var plan: String
-        var email: Sensitive<String>?
+        var email: Sensitive<String>
         var referrer: String?
     }
 

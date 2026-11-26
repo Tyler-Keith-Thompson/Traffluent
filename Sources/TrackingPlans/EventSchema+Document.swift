@@ -50,11 +50,14 @@ extension EventSchema {
 }
 
 extension EventSchema.Property {
-    /// Whether every payload of the event holds the property, whichever release wrote it: one
-    /// that is neither optional nor has a default value, which a release before it was added
-    /// leaves out.
+    /// Whether every payload of the event holds the property, whichever release wrote it and
+    /// whichever destination sent it: one that is neither optional nor has a default value, which
+    /// a release before it was added leaves out, nor `Sensitive`, which a destination that redacts
+    /// it leaves out.
     fileprivate var isRequired: Bool {
-        !isOptional && !hasDefaultValue
+        // Read from the schema's marker, as the plan's check reads it, so a document and the
+        // check never disagree on what is sensitive.
+        !isOptional && !hasDefaultValue && schema["x-traffluent-sensitive"] != .boolean(true)
     }
 
     /// The property's schema: its type's, with `null` allowed when it is optional, narrowed by its
@@ -123,7 +126,8 @@ extension WrittenType {
             return arguments[0].schema(isNullable: isNullable).merging(["x-traffluent-sensitive": .boolean(true)]) { $1 }
         }
         if let element = arrayElement {
-            return ["type": .type("array", isNullable: isNullable), "items": .object(element.schema(isNullable: false))]
+            // A redacted element of an array is null, so a sensitive one allows it.
+            return ["type": .type("array", isNullable: isNullable), "items": .object(element.schema(isNullable: element.isSensitive))]
         }
         for scalar in Scalar.all {
             if let arguments = names(scalar.name, in: scalar.modules), arguments.isEmpty {
@@ -132,6 +136,11 @@ extension WrittenType {
         }
         // A type whose JSON shape the plan can't know: any value, null included, is allowed.
         return ["x-traffluent-swift-type": .string(source)]
+    }
+
+    /// Whether the type is `Sensitive<T>`, which a destination may redact.
+    private var isSensitive: Bool {
+        names("Sensitive", in: ["Events", "Traffluent"])?.count == 1
     }
 
     private var arrayElement: WrittenType? {

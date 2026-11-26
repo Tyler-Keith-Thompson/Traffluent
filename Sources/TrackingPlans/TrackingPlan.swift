@@ -30,9 +30,11 @@ public import Events
 ///   to it resolve against the directory the plan is written to.
 /// - `title` is the event's name, `type` is `object` and `additionalProperties` is `false`.
 /// - `properties` holds each stored property's schema, and `required` the names of the properties
-///   that are neither optional nor have a default value, in declaration order: those every
-///   release's payloads hold. A property with a default value is marked `x-traffluent-default:
-///   true`, as a reader of a stored payload without it reads the default.
+///   that are neither optional, nor have a default value, nor are `Sensitive`, in declaration
+///   order: those every release's payloads hold, whichever destination sent them. A property with
+///   a default value is marked `x-traffluent-default: true`, as a reader of a stored payload
+///   without it reads the default. A `Sensitive` property is never required, as a destination
+///   that redacts it (`redactingSensitiveValues()`) leaves it out.
 /// - A property the event declared at this version and no longer does stays in `properties`, with
 ///   the schema it had and `deprecated: true`, and out of `required`: the payloads and records of
 ///   releases that sent it still hold it, and `additionalProperties` would otherwise reject them.
@@ -46,7 +48,8 @@ public import Events
 /// for the types of 32 bits or fewer and a `minimum` of 0 for the unsigned ones; `Date` a `string`
 /// of `format` `date-time` and `UUID` one of `format` `uuid`; an array (`[T]`, `Array<T>`) an
 /// `array` whose `items` are `T`'s schema. An optional type (`T?`, `T!`, `Optional<T>`) adds `null`
-/// to `T`'s `type`. `Sensitive<T>` is `T`'s schema with `x-traffluent-sensitive: true`, and
+/// to `T`'s `type`. `Sensitive<T>` is `T`'s schema with `x-traffluent-sensitive: true`, which
+/// allows `null` too as an array's element, since a redacted element is `null`; and
 /// `Refined<T, Rule>` is `T`'s schema. Each may be qualified by its module (`Swift.Int`,
 /// `Foundation.Date`, `Events.Sensitive`). Any other type, whose JSON shape the plan can't know,
 /// accepts any value and records the type in `x-traffluent-swift-type`.

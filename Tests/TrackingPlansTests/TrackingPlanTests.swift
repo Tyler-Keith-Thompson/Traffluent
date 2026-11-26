@@ -179,7 +179,7 @@ struct TrackingPlanTests {
         #expect(String(decoding: actual.contents, as: UTF8.self) == expected)
     }
 
-    @Test("An event's document marks a Sensitive property and names the event's consent category")
+    @Test("An event's document marks a Sensitive property, which it doesn't require, and names the event's consent category")
     func signedUp() throws {
         let expected = """
             {
@@ -202,8 +202,7 @@ struct TrackingPlanTests {
                 }
               },
               "required": [
-                "plan",
-                "email"
+                "plan"
               ],
               "title": "signed_up",
               "type": "object",

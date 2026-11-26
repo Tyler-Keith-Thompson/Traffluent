@@ -1,5 +1,5 @@
 // Property tests against a naive reference: any schemas' documents list each property exactly once,
-// require exactly the ones that aren't optional, and are valid JSON Schema 2020-12.
+// require exactly the ones that are neither optional nor Sensitive, and are valid JSON Schema 2020-12.
 
 import Events
 import Foundation
@@ -13,7 +13,7 @@ import TraffluentTestSupport
 struct TrackingPlanPropertyTests {
     static let typeNames = ["String", "Int", "UInt8", "Int32", "Double", "Bool", "Date", "UUID", "[String]", "Sensitive<Int>", "Coordinate", "[Int: Int]"]
 
-    @Test("Any schema's document lists every property once and requires exactly the non-optional ones, in order", .tags(.randomized))
+    @Test("Any schema's document lists every property once and requires exactly the non-optional ones that aren't Sensitive, in order", .tags(.randomized))
     func propertiesAndRequired() async {
         await propertyCheck(count: 200, input: Gen.int(in: 0 ... 11).array(of: 0 ... 12), Gen.bool.array(of: 12 ... 12), Gen.int(in: 1 ... 5)) { types, optionals, version in
             let properties = types.enumerated().map { index, type in
@@ -21,7 +21,7 @@ struct TrackingPlanPropertyTests {
             }
             let sut = TrackingPlan(schemas: [EventSchema(name: "event", version: version, consentCategory: .analytics, properties: properties)])
             let expectedNames = Set(properties.map(\.name))
-            let expectedRequired = properties.filter { !$0.isOptional }.map(\.name)
+            let expectedRequired = properties.filter { !$0.isOptional && !$0.typeName.hasPrefix("Sensitive<") }.map(\.name)
             let text = String(decoding: sut.files.last { $0.path.hasSuffix(".schema.json") }?.contents ?? [], as: UTF8.self)
             let document = try? JSONValue.parse(text)
 

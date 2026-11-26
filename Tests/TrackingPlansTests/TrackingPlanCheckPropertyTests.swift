@@ -32,7 +32,7 @@ struct TrackingPlanCheckPropertyTests {
 
     @Test("Any one breaking edit is reported as its difference, and breaks the plan", .tags(.randomized))
     func breakingEdit() async {
-        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
+        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 5), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
                     EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
@@ -63,6 +63,12 @@ struct TrackingPlanCheckPropertyTests {
                 committed[event].properties[property].isOptional = true
                 current[event].properties[property].isOptional = false
                 expectedPrefix = TrackingPlanDifference.propertyMadeRequired(event: name, version: 1, property: propertyName).description
+            case 4:
+                committed[event].properties[property].typeName = "Sensitive<Int>"
+                committed[event].properties[property].isOptional = false
+                current[event].properties[property].typeName = "Int"
+                current[event].properties[property].isOptional = false
+                expectedPrefix = TrackingPlanDifference.sensitivePropertyMadeRequired(event: name, version: 1, property: propertyName).description
             default:
                 current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: false))
                 expectedPrefix = TrackingPlanDifference.requiredPropertyAdded(event: name, version: 1, property: "added").description
@@ -80,7 +86,7 @@ struct TrackingPlanCheckPropertyTests {
 
     @Test("Any one breaking edit with the event's version raised breaks nothing: the check reports the raise", .tags(.randomized))
     func breakingEditWithRaisedVersion() async {
-        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
+        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
                     EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
@@ -100,6 +106,11 @@ struct TrackingPlanCheckPropertyTests {
             case 2:
                 committed[event].properties[property].isOptional = true
                 current[event].properties[property].isOptional = false
+            case 3:
+                committed[event].properties[property].typeName = "Sensitive<Int>"
+                committed[event].properties[property].isOptional = false
+                current[event].properties[property].typeName = "Int"
+                current[event].properties[property].isOptional = false
             default:
                 current[event].properties.append(EventSchema.Property(name: "added", typeName: "Int", isOptional: false))
             }
@@ -115,7 +126,7 @@ struct TrackingPlanCheckPropertyTests {
 
     @Test("Any one compatible edit keeps the version and breaks nothing: the check reports it as the difference it is", .tags(.randomized))
     func compatibleEdit() async {
-        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
+        await propertyCheck(count: 300, input: Gen.int(in: 0 ... 10).array(of: 1 ... 6).array(of: 1 ... 4), Gen.bool.array(of: 24 ... 24), Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99)) { events, optionals, edit, eventChoice, propertyChoice in
             var committed = events.enumerated().map { event, types in
                 EventSchema(name: "e\(event)", version: 1, consentCategory: .analytics, properties: types.enumerated().map { index, type in
                     EventSchema.Property(name: "p\(index)", typeName: TrackingPlanCheckPropertyTests.typeNames[type], isOptional: optionals[event * 6 + index])
@@ -137,6 +148,12 @@ struct TrackingPlanCheckPropertyTests {
             case 2:
                 current[event].properties.remove(at: property)
                 expected = .propertyRemoved(event: name, version: 1, property: propertyName)
+            case 3:
+                committed[event].properties[property].typeName = "Int"
+                committed[event].properties[property].isOptional = false
+                current[event].properties[property].typeName = "Sensitive<Int>"
+                current[event].properties[property].isOptional = false
+                expected = .sensitivityChanged(event: name, version: 1, property: propertyName, isSensitive: true)
             default:
                 committed[event].properties[property].isOptional = false
                 current[event].properties[property].isOptional = false

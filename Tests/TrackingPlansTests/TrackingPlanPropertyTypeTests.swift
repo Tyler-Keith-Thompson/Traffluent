@@ -42,7 +42,10 @@ struct TrackingPlanPropertyTypeTests {
         ("Traffluent.Sensitive<Bool>", ["type": "boolean", "x-traffluent-sensitive": true]),
         ("Sensitive<String?>", ["type": ["string", "null"], "x-traffluent-sensitive": true]),
         ("Sensitive<String>?", ["type": ["string", "null"], "x-traffluent-sensitive": true]),
-        ("[Sensitive<String>]", ["type": "array", "items": ["type": "string", "x-traffluent-sensitive": true]]),
+        ("[Sensitive<String>]", ["type": "array", "items": ["type": ["string", "null"], "x-traffluent-sensitive": true]]),
+        ("[Sensitive<String>?]", ["type": "array", "items": ["type": ["string", "null"], "x-traffluent-sensitive": true]]),
+        ("[Traffluent.Sensitive<Bool>]", ["type": "array", "items": ["type": ["boolean", "null"], "x-traffluent-sensitive": true]]),
+        ("[[Events.Sensitive<Int>]]", ["type": "array", "items": ["type": "array", "items": ["type": ["integer", "null"], "x-traffluent-sensitive": true]]]),
         ("Sensitive< [ UInt8 ] >", ["type": "array", "items": ["type": "integer", "minimum": 0, "maximum": 255], "x-traffluent-sensitive": true]),
     ]
 

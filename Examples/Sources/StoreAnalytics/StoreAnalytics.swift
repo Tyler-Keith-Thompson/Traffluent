@@ -160,10 +160,8 @@ extension StoreAnalytics {
     /// Step 4: the delivery, a new one each time it runs: batches of 20, every 30 seconds, and
     /// as the app goes to the background.
     ///
-    /// The collector never sees a sensitive value. That is safe here because `SignedUp.email`
-    /// is optional, so a record without it still matches the plan; a required `Sensitive`
-    /// property would make a collector that validates against the plan reject the record
-    /// (TRAF-84).
+    /// The collector never sees a sensitive value. A record without `SignedUp.email` still
+    /// matches the plan, which never requires a `Sensitive` property.
     fileprivate static func delivery<Transport: HTTPTransport>(
         of tracker: Tracker,
         to collector: HTTPDestination<Transport, CollectorBatchEncoder>,

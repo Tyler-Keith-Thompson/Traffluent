@@ -193,11 +193,11 @@ struct TrackingPlanCheckTests {
     @Test("A required property made optional, a changed consent category and a changed sensitivity only date the plan")
     func nonBreaking() {
         let committed = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: [
-            EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: false),
+            EventSchema.Property(name: "email", typeName: "Sensitive<String>", isOptional: true),
             EventSchema.Property(name: "plan", typeName: "String", isOptional: false),
         ])])
         let sut = TrackingPlan(schemas: [EventSchema(name: "signed_up", version: 1, consentCategory: .functional, properties: [
-            EventSchema.Property(name: "email", typeName: "String", isOptional: false),
+            EventSchema.Property(name: "email", typeName: "String", isOptional: true),
             EventSchema.Property(name: "plan", typeName: "Sensitive<String>", isOptional: true),
         ])])
         let expected = TrackingPlanCheck.outOfDate([
@@ -437,6 +437,7 @@ struct TrackingPlanCheckTests {
         (.propertyRemoved(event: "e", version: 1, property: "p"), #"e v1: property "p" was removed"#, false),
         (.propertyRetyped(event: "e", version: 1, property: "p", committed: #"{"type": "integer"}"#, current: #"{"type": "string"}"#), #"e v1: property "p" changed type from {"type": "integer"} to {"type": "string"}"#, true),
         (.propertyMadeRequired(event: "e", version: 1, property: "p"), #"e v1: property "p" was optional and is now required"#, true),
+        (.sensitivePropertyMadeRequired(event: "e", version: 1, property: "p"), #"e v1: property "p" is no longer sensitive and is now required"#, true),
         (.requiredPropertyAdded(event: "e", version: 1, property: "p"), #"e v1: required property "p" was added without a default value"#, true),
         (.defaultValueRemoved(event: "e", version: 1, property: "p"), #"e v1: property "p" lost its default value"#, true),
         (.unreadableFile(path: "tracking-plan.json"), "tracking-plan.json is missing from the committed plan, or isn't a tracking plan file", true),

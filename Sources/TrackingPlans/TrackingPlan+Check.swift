@@ -70,6 +70,14 @@ extension JSON {
         let paths = events.compactMap { $0.object?["schema"]?.string }
         return paths.count == events.count ? paths : nil
     }
+
+    /// A `type` keyword's value without the `null` it lists: the one name left, or an array of
+    /// the names left.
+    fileprivate var withoutNull: JSON {
+        guard case .array(let names) = self else { return self }
+        let named = names.filter { $0 != .string("null") }
+        return named.count == 1 ? named[0] : .array(named)
+    }
 }
 
 /// What a committed plan promises about one event: what a payload of it must and may hold.
@@ -178,7 +186,15 @@ private struct EventContract {
                 if before.isDeprecated && before.isRequiredWhenDeclared && after.isRequiredWhenDeclared {
                     differences.append(.requiredPropertyAdded(event: name, version: version, property: property))
                 }
-                if before.isSensitive != after.isSensitive {
+                // A document leaves a Sensitive property out of `required`, as a destination may
+                // redact it. Making a property Sensitive only drops it from `required`, which every
+                // earlier payload still meets, so it is compatible. Making one not Sensitive puts it
+                // back when it is neither optional nor defaulted, and the payloads that redacted it
+                // lack it: breaking, unless a change to optionality or a default above already says
+                // so, or it was deprecated, which a required property added does.
+                if before.isSensitive && !after.isSensitive && before.isRequiredWhenDeclared && after.isRequiredWhenDeclared && !before.isDeprecated {
+                    differences.append(.sensitivePropertyMadeRequired(event: name, version: version, property: property))
+                } else if before.isSensitive != after.isSensitive {
                     differences.append(.sensitivityChanged(event: name, version: version, property: property, isSensitive: after.isSensitive))
                 }
             case (let before?, nil):
@@ -236,9 +252,13 @@ private struct PropertyContract {
         isDeprecated = schema["deprecated"] == .boolean(true)
         constraints = ConstraintContract(schema: schema)
         // A type the plan can't map has no `type` to hold `null`; it is nullable when it is
-        // optional, which is all that leaves it out of `required` without a default. So `Money?`
-        // and `Money` with a default read alike: their payloads are, as such a schema allows any
-        // value, but a stored null wouldn't decode as the second.
+        // optional, which is all that leaves it out of `required` without a default, but for
+        // `Sensitive`. So `Money?` and `Money` with a default read alike, and so do
+        // `Sensitive<Money>?` and `Sensitive<Money>`: their payloads are, as such a schema allows
+        // any value and a redacting destination leaves it out, but a stored null wouldn't decode
+        // as the second. Reading a Sensitive one as nullable keeps a sensitivity change classed
+        // right: `Sensitive<Money>` made `Money` is made required, and `Money?` made
+        // `Sensitive<Money>?` changes sensitivity alone.
         let allowsNull = schema["type"].map { $0 == .string("null") || ($0.array ?? []).contains(.string("null")) }
         isNullable = allowsNull ?? (!isRequired && !hasDefaultValue)
         var type = schema
@@ -248,11 +268,25 @@ private struct PropertyContract {
         for keyword in ConstraintContract.keywords {
             type[keyword] = nil
         }
-        if case .array(let names) = type["type"] {
-            let named = names.filter { $0 != .string("null") }
-            type["type"] = named.count == 1 ? named[0] : .array(named)
+        type["type"] = type["type"]?.withoutNull
+        if let items = type["items"]?.object {
+            type["items"] = .object(Self.withoutRedactedNull(items))
         }
         self.type = .object(type)
+    }
+
+    /// An array's `items` schema without the `null` a `Sensitive` element allows, there for the
+    /// element a destination redacts: a plan exported by a release that didn't allow it then
+    /// compares as the same type. `[Sensitive<T>?]` and `[Sensitive<T>]` already read alike.
+    private static func withoutRedactedNull(_ items: [String: JSON]) -> [String: JSON] {
+        var items = items
+        if items["x-traffluent-sensitive"] == .boolean(true) {
+            items["type"] = items["type"]?.withoutNull
+        }
+        if let nested = items["items"]?.object {
+            items["items"] = .object(withoutRedactedNull(nested))
+        }
+        return items
     }
 }
 
