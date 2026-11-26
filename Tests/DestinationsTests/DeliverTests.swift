@@ -28,6 +28,34 @@ struct DeliverTests {
         }
     }
 
+    /// Yields `record`, then, asked for the next element, sends `askedAgain` and ends once
+    /// `release` is sent. A batch asks for the next element only after adding the one before to
+    /// what is pending, so `askedAgain` tells a test the record is pending.
+    struct OneRecordThenWait: AsyncSequence, Sendable {
+        let record: EventRecord
+        let askedAgain: SingleValueSubject<Void>
+        let release: SingleValueSubject<Void>
+
+        func makeAsyncIterator() -> Iterator {
+            Iterator(sequence: self)
+        }
+
+        struct Iterator: AsyncIteratorProtocol {
+            let sequence: OneRecordThenWait
+            var yielded = false
+
+            mutating func next() async throws -> EventRecord? {
+                guard yielded else {
+                    yielded = true
+                    return sequence.record
+                }
+                try? sequence.askedAgain.send()
+                try await sequence.release.execute()
+                return nil
+            }
+        }
+    }
+
     /// Never flushes; sends `started` each time a delivery starts it, so a test knows the
     /// delivery is reading.
     struct StartGate<Element>: BatchStrategy {
@@ -132,11 +160,20 @@ struct DeliverTests {
     func defaultInterval() async throws {
         let clock = TestClock()
         let recorder = InMemoryDestination()
-        let tracker = Tracker()
-        let sut = tracker.records.batch(clock: clock).deliver(to: recorder)
+        let pending = SingleValueSubject<Void>()
+        let release = SingleValueSubject<Void>()
+        // Not a tracker's records: the batch's interval runs from when the delivery starts, so a
+        // record that became pending only after the clock moved would wait for the next interval.
+        // This sequence says when the record is pending, which a tracker's records can't.
+        let records = OneRecordThenWait(
+            record: EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
+            askedAgain: pending,
+            release: release
+        )
+        let sut = records.batch(clock: clock).deliver(to: recorder)
         let expected = [[1]]
-        tracker.track(Tapped(number: 1))
         let running = Task { try await sut.execute() }
+        try await pending.execute()
         // Polled for the reason timeStrategy gives.
         while (try? await clock.checkSuspension()) != nil {}
 
@@ -144,7 +181,7 @@ struct DeliverTests {
         var deliveries = recorder.deliveries.makeAsyncIterator()
         _ = await deliveries.next()
         let actual = recorder.numbers
-        await tracker.finish()
+        try release.send()
         try await running.value
 
         #expect(actual == expected)
