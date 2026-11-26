@@ -1,32 +1,148 @@
 # ``Traffluent``
 
-Vendor-neutral analytics for Swift: typed events, tracked by a tracker and delivered in batches to any number of destinations.
+Typed analytics events for Swift, delivered in batches to any number of destinations.
 
 ## Overview
 
-An event is a value that conforms to `Event`, declared with `@Event`. A `Tracker` is a value: tracking an event records it as an `EventRecord`, with its timestamp, the caller's `SourceLocation` and its `ServiceContext`, as one of the tracker's `records`. Delivering is a chain of operators over that sequence: Afluent's `batch(strategy:)` (or `batch()`, the default) gathers the records into batches, and `deliver(to:)` hands each batch to every destination, as a lazy unit of work. A `Destination` is a plain sink, narrowed or transformed by its modifiers: `accepting(_:)` for the consent categories it serves, `redactingSensitiveValues()`, `droppingCallSite()`, and `enriched(by:)`, which runs an `Enricher` on the records that destination alone receives. A tracker given a `Consent` delivers an event only once the user grants its `ConsentCategory`, holding it while undecided and dropping it when denied. `track` only queues an event, from any thread; a worker the tracker owns, never on the main actor, does the rest. A tracker given a `SegmentStore` writes each record to disk as its worker reaches it and delivers what an earlier run left first. A property whose valid values are narrower than its type is a `Refined` value, which satisfies its `Refinement`'s `Constraint`s from the moment it is made, or carries constraints declared with `@Constrained`; the tracker's worker rejects an event that breaks one before anything else, reporting each as a `RejectionReport` on `rejectionReports`. On Apple platforms, SwiftUI views read the tracker from the environment and track what they do with view modifiers, and a screen's events carry its `ScreenKey` (``/SwiftUITracking``). UIKit views and view controllers inherit it as a trait, the same value as SwiftUI's, set on a window scene (``/UIKitTracking``), and AppKit views find it up their responder chain (``/AppKitTracking``); a control's `track` tracks an event through the tracker found when its action fires, so each scene or window can have its own. Screen views can track themselves once a window scene or window turns it on with `trackScreensAutomatically`, which tracks `ScreenViewed` as each screen's view controller appears, without swizzling (``/AutomaticScreenTracking``), and UIKit controls once a window scene turns it on with `trackControlsAutomatically`, which tracks `ControlActivated` as a touch activates each control named by its accessibility identifier (``/AutomaticControlTracking``). On every platform, `trackLifecycle` tracks the app's installs, updates, opens, moves to the background and terminations, and makes the tracker's records durable as it leaves the foreground (``/LifecycleTracking``). A tracker given the `Enricher.sessions` enricher stamps every event with its session's `SessionKey`, a random identifier held in memory only, and starts a new session after a timeout of inactivity, tracking `SessionEnded` and `SessionStarted` (``/Sessions``). A tracker given `Sampler`s keeps a seeded fraction of the events they apply to, event by event, or whole sessions with `Sampler.sessions(rate:)`, dropping the rest on its worker before they are held, written or delivered, reporting each drop as a `SamplingDropReport` and stamping each kept record with its `SampleRateKey`. The standard enrichers, `Enricher.application()`, `device()`, `operatingSystem()`, `locale()`, `network()` and `vendorIdentifier()`, stamp every event with the app, device, operating system, locale, network connection and the platform's identifier for vendor, each under a typed key, the static ones read once (``/StandardContext``).
+Each event is a struct, so the compiler checks its name and every property. A tracker holds back
+the events the user hasn't consented to, stamps the rest with their session and device, keeps them
+on disk and delivers them to your server, sending again when the network or the server fails.
 
-`import Traffluent` imports ``/EventMacros``, whose `@Event` macro derives an event's conformances
-and schema from its declaration, and every other module but ``/GRDBPersistence``, a product of its
-own for apps that already use GRDB; ``/TrackingPlans``, which
-exports those schemas as a JSON Schema tracking plan and checks the events against a committed one;
-``/TrackingPlanTesting``, which runs that check from an app's tests; and ``/TrackerTesting``,
-whose `withRecordingTracker` gives a test's body a fresh tracker and returns what it tracked. Each module also has its own documentation and can be imported on its own.
+### An app's analytics, from launch
+
+Declare the events. The tracker rejects an event that breaks a constraint before it is stored or
+delivered, and a `Sensitive` value reaches only the destinations that don't redact it:
 
 ```swift
+import SwiftUI
 import Traffluent
+import TrackingPlans
 
-@Event
-struct SignedUp {
-    var plan: String
+@Event(name: "product_added_to_cart")
+struct ProductAddedToCart {
+    var productID: String
+    @Constrained(.minimum(1), .maximum(10))
+    var quantity: Int
 }
 
-let tracker = Tracker()
-let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
-tracker.track(SignedUp(plan: "pro"))
-await tracker.finish()
-try await delivery.execute()
+@Event(name: "signed_up")
+struct SignedUp {
+    var plan: String
+    var email: Sensitive<String>
+}
 ```
+
+Build the tracker and start its delivery once, as the app launches:
+
+```swift
+func startAnalytics(consent: Consent) throws -> Tracker {
+    let plan = try TrackingPlan(schemas: [
+        ProductAddedToCart.schema, SignedUp.schema, SessionStarted.schema, SessionEnded.schema,
+    ])
+    // Records wait on disk until they are delivered, across launches.
+    let store = try SegmentStore(events: [
+        ProductAddedToCart.self, SignedUp.self, SessionStarted.self, SessionEnded.self,
+    ])
+    // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
+    let tracker = Tracker(
+        store: store,
+        consent: consent,
+        enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()])
+
+    let collector = HTTPDestination(
+        endpoint: collectorURL,
+        headerFields: [.authorization: "Bearer \(apiKey)"],
+        encoder: CollectorBatchEncoder(plan: plan))
+    // Analytics events only, without their email addresses, 20 at a time or every 30 seconds.
+    let delivery = tracker.records.batch().deliver(
+        to: collector.accepting(.analytics).redactingSensitiveValues())
+    Task {
+        do {
+            try await delivery.execute()  // for the life of the app
+        } catch {
+            print("Delivery stopped: \(error)")
+        }
+    }
+
+    // Every event that won't arrive, and why.
+    let rejections = tracker.rejectionReports
+    let consentDrops = consent.dropReports
+    let storeDrops = store.dropReports
+    let collectorDrops = collector.dropReports
+    Task {
+        await withDiscardingTaskGroup { group in
+            group.addTask { for await report in rejections { print("Rejected: \(report)") } }
+            group.addTask { for await report in consentDrops { print("Not consented: \(report)") } }
+            group.addTask { for await report in storeDrops { print("Not stored: \(report)") } }
+            group.addTask { for await report in collectorDrops { print("Not sent: \(report)") } }
+        }
+    }
+    return tracker
+}
+```
+
+Then make the tracker the app's default and hand it to the views, which track through it:
+
+```swift
+@main
+struct StoreApp: App {
+    let tracker: Tracker
+
+    init() {
+        do {
+            // The user's earlier decisions, which the app saved; undecided categories wait in memory.
+            let tracker = try startAnalytics(consent: Consent(savedDecisions))
+            // `Tracker.current` falls back to it where nothing else reaches, such as a detached task.
+            try Tracker.bootstrap(tracker)
+            self.tracker = tracker
+        } catch {
+            print("Analytics are off: \(error)")
+            tracker = .noOp
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            CartView()
+                .tracker(tracker)
+        }
+    }
+}
+
+struct CartView: View {
+    @Environment(\.tracker) private var tracker
+
+    var body: some View {
+        Button("Add to Cart") {
+            tracker.track(ProductAddedToCart(productID: "canvas-tote", quantity: 1))
+        }
+    }
+}
+```
+
+`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``,
+``/GRDBPersistence`` and the testing modules, which are products of their own.
+
+### Where to go next
+
+- Set it up step by step, from adding the package to testing what you track: <doc:GettingStarted>.
+- Declare events and their constraints: <doc:DefiningEvents>; change one that has shipped:
+  <doc:ChangingEvents>.
+- Track from SwiftUI, UIKit and AppKit views: <doc:TrackingFromViews>; let screens, controls and
+  the app's lifecycle track themselves: <doc:AutomaticTracking>.
+- Reach the tracker from any code, batch records and add context to them: <doc:TrackingEvents>.
+- Keep events when the app ends or goes offline before delivering them: <doc:PersistingRecords>.
+- Ask for consent and gate events by it: <doc:ConsentGating>.
+- Keep a fraction of events or sessions: <doc:SamplingEvents>.
+- Group events into sessions and stamp them with the app and device: <doc:SessionsAndStandardContext>.
+  A session's key is a UUIDv7, its start time in Unix milliseconds followed by random bits, held in
+  memory only.
+- Export the events' schemas and catch breaking changes in CI: <doc:TrackingPlanWorkflow>.
+- Test what your code tracks: <doc:TestingWhatYouTrack>.
+- Send to logs, traces, your own server, PostHog or memory, with values for one destination
+  alone: <doc:ChoosingDestinations>.
+- Decide what belongs in an event and what stays out of it: <doc:WhatGoesWhere>, <doc:IdentifyingPeople>
+  and <doc:PrivacyManifests>.
 
 ## Topics
 
