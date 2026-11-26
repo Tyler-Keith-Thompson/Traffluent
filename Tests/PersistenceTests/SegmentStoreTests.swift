@@ -162,8 +162,15 @@ struct SegmentStoreTests {
         let file = root.appending("file")
         try #require(FileManager.default.createFile(atPath: file.string, contents: Data([1])))
 
-        #expect(throws: SegmentStoreError.fileSystem(.notDirectory)) {
+        // Which Errno depends on the platform: Darwin's Foundation reports ENOTDIR, Linux's gives
+        // a CocoaError with no POSIX code under it, which the store reports as EIO.
+        let actual = #expect(throws: SegmentStoreError.self) {
             _ = try SegmentStore(events: [Tapped.self], directory: file.appending("log"))
+        }
+
+        guard case .fileSystem = actual else {
+            Issue.record("expected a file system error, got \(String(describing: actual))")
+            return
         }
     }
 

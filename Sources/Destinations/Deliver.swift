@@ -137,8 +137,13 @@ struct Delivery: Sendable {
             guard let tag = record.deliveryTag, let held = withheld[ObjectIdentifier(tag.acknowledger)] else { return true }
             return !held.contains(tag.position)
         }
-        let times = delivered.map(\.timestamp)
-        guard let earliest = times.min(), let latest = times.max() else { return nil }
+        guard !delivered.isEmpty else { return nil }
+        // A NaN time (a caller's clock, or a record decoded from disk) compares false both ways,
+        // so it would leave the range's bounds unordered, which traps. The range leaves it out,
+        // and a batch of nothing but NaN times spans the epoch, as SpanEventDestination stamps it.
+        let times = delivered.map(\.timestamp).filter { !$0.timeIntervalSince1970.isNaN }
+        let earliest = times.min() ?? Date(timeIntervalSince1970: 0)
+        let latest = times.max() ?? earliest
         self.batch = delivered
         timestamps = earliest...latest
         acknowledgement = BatchAcknowledgement(of: delivered, destinationCount: destinationCount)

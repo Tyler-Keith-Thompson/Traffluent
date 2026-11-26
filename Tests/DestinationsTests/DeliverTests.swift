@@ -252,6 +252,23 @@ struct DeliverTests {
         #expect(recorder.numbers == expected)
     }
 
+    @Test("A batch whose times aren't numbers is delivered", arguments: [[Double.nan], [Double.nan, 5], [5, Double.nan, 3]])
+    func nanTimes(seconds: [Double]) async throws {
+        let recorder = InMemoryDestination()
+        let batch = seconds.enumerated().map { index, time in
+            EventRecord(event: Tapped(number: index), timestamp: Date(timeIntervalSince1970: time), sourceLocation: nil)
+        }
+        let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
+        let sut = batches.deliver(to: recorder)
+        let expected = [Array(seconds.indices)]
+
+        input.yield(batch)
+        input.finish()
+        try await sut.execute()
+
+        #expect(recorder.numbers == expected)
+    }
+
     @Test("A delivery to no destinations reads the records and completes")
     func noDestinations() async throws {
         let tracker = Tracker()
