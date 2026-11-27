@@ -16,6 +16,7 @@ MANIFESTS = [
 LIBRARY_DIRECTORIES = [
     "Plugins/CheckTrackingPlan",
     "Plugins/ExportTrackingPlan",
+    "Sources/AmplitudeEncoding",
     "Sources/AppKitTracking",
     "Sources/AsyncQueues",
     "Sources/AutomaticControlTracking",

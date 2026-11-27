@@ -117,8 +117,9 @@ struct CartView: View {
 }
 ```
 
-`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``, ``/PropertyJSON``, ``/JSONValues``,
-``/GRDBPersistence`` and the testing modules, which are products of their own.
+`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``,
+``/AmplitudeEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/GRDBPersistence`` and the testing
+modules, which are products of their own.
 
 ### Where to go next
 
@@ -136,11 +137,12 @@ struct CartView: View {
   memory only.
 - Export the events' schemas and catch breaking changes in CI: <doc:TrackingPlanWorkflow>.
 - Test what your code tracks: <doc:TestingWhatYouTrack>.
-- Send to logs, traces, your own server, PostHog or memory, with values for one destination
-  alone: <doc:ChoosingDestinations>.
-- Send to an analytics vendor not yet covered, from a module of your own: <doc:WritingAVendorDestination>.
-- Decide what belongs in an event and what stays out of it: <doc:WhatGoesWhere>, <doc:IdentifyingPeople>
-  and <doc:PrivacyManifests>.
+- Send to logs, traces, your own server, PostHog, Amplitude or memory, with values for one
+  destination alone: <doc:ChoosingDestinations>.
+- Send to an analytics vendor not yet covered, from a module of your own:
+  <doc:WritingAVendorDestination>.
+- Decide what belongs in an event and what stays out of it: <doc:WhatGoesWhere>,
+  <doc:IdentifyingPeople> and <doc:PrivacyManifests>.
 
 ## Topics
 
@@ -188,6 +190,7 @@ struct CartView: View {
 - ``/HTTPDestinations``
 - ``/CollectorEncoding``
 - ``/PostHogEncoding``
+- ``/AmplitudeEncoding``
 - ``/PropertyJSON``
 - ``/JSONValues``
 - ``/Persistence``

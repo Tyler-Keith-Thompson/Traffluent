@@ -62,6 +62,7 @@ docc_archive(
         "//Sources/TrackingPlanTesting:TrackingPlanTestingDocumentation",
         "//Sources/TrackerTesting:TrackerTestingDocumentation",
         "//Sources/PostHogEncoding:PostHogEncodingDocumentation",
+        "//Sources/AmplitudeEncoding:AmplitudeEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/DestinationTesting:DestinationTestingDocumentation",

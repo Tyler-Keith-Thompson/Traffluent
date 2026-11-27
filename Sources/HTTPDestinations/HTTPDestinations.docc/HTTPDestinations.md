@@ -23,9 +23,9 @@ fields, and `Content-Type` is always the encoder's.
 
 Reach for this module to send to a server whose format you write yourself. For TraffluentCollector's
 format, give the destination a `CollectorBatchEncoder` (module `CollectorEncoding`); for PostHog,
-make it with `HTTPDestination.postHog(projectToken:host:plan:)` (module `PostHogEncoding`). To read
-events inside the app or in a test, use
-`InMemoryDestination` (module `Destinations`) instead.
+make it with `HTTPDestination.postHog(projectToken:host:plan:)` (module `PostHogEncoding`); for
+Amplitude, with `HTTPDestination.amplitude(apiKey:region:plan:)` (module `AmplitudeEncoding`). To
+read events inside the app or in a test, use `InMemoryDestination` (module `Destinations`) instead.
 
 ```swift
 import HTTPDestinations

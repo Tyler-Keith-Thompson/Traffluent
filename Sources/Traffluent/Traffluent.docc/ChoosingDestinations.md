@@ -100,6 +100,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Vendor | Module | Factory | What the vendor receives |
 |---|---|---|---|
 | PostHog | ``/PostHogEncoding`` | `HTTPDestination.postHog(projectToken:host:plan:)` | Each record as an anonymous event: its session as `distinct_id` and `$session_id`, its identifier as `uuid`, its properties through your plan, and the standard context as PostHog's `$`-prefixed properties |
+| Amplitude | ``/AmplitudeEncoding`` | `HTTPDestination.amplitude(apiKey:region:plan:)` | Each record as an event of an anonymous device: its session as `device_id`, the session's start as `session_id`, its identifier as `insert_id`, its time in epoch milliseconds, its properties through your plan as `event_properties`, and the standard context as Amplitude's own fields; no `user_id` |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -151,6 +152,52 @@ isn't `Encodable` and one holding a value JSON can't, and also one whose event n
 `$`, as PostHog keeps those names for its own events, and one too large for PostHog's event limit.
 It logs each at error level, and the destination reports each on `dropReports` as
 `HTTPDropReport.skipped(_:)`.
+
+### Amplitude
+
+To send to an Amplitude project, make the destination with
+`HTTPDestination.amplitude(apiKey:region:plan:)` (module ``/AmplitudeEncoding``). It posts to the
+HTTP V2 API of the region where the project's data resides, `.us` for Amplitude's default data
+center or `.eu` for its EU one. The region has no default, as events posted to the other region's
+endpoint never reach the project. The destination sends no trace context in the header
+fields, and splits each batch into requests of at most 10 events and 1 MB, which a project on any
+Amplitude plan accepts. The API key goes in the body; like every Amplitude client's, it is public.
+The factory throws `AmplitudeSetupError` for an empty key and for an Amplitude Experiment
+deployment key (`client-…` or `server-…`), which isn't the project's API key. The destination
+retries 429 and 5xx responses and drops a request Amplitude rejects, such as one answered with
+400 or 413. A record sent again in the same run keeps its `insert_id` and `device_id`, and
+Amplitude drops a repeat of both. A record a store recovers after a relaunch has no session, so it
+goes out under its own identifier as `device_id`; if Amplitude stored it before the app ended, it
+is stored twice.
+
+```swift
+let plan = try TrackingPlan()
+let amplitude = try HTTPDestination.amplitude(
+    apiKey: apiKey,
+    region: .us,  // or .eu, where the project's data resides
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: amplitude)
+```
+
+Each event's `device_id` is the record's session (`Enricher.sessions()`), and its `session_id` the
+session's start in Unix milliseconds, so Amplitude groups the session's events. No `user_id` is
+sent, nor anything else that identifies anyone: not the vendor identifier, the trace context, your
+own context keys or an `ip`. Amplitude counts a user per `device_id` and bills by monthly tracked
+users, so each session counts as one tracked user, and so does each record sent without a session. The encoder fills in Amplitude's own fields
+for the app version, device model, operating system and language when the standard context
+enrichers set them. Event names are sent as they are.
+
+Amplitude can reject an event that has neither a `device_id` nor a `user_id`, so every event gets a
+`device_id`. A record with no session is sent under its own record identifier, with no
+`session_id`: an anonymous device of one event, linked to nothing. Either identifier is a UUID, well
+over the 5 characters Amplitude requires.
+
+A `Sensitive` value is never sent, whatever the record reveals. The encoder leaves out the same
+records as the collector's encoder, and also one named as one of Amplitude's own events
+(`[Amplitude] Start Session` and the rest of the `[Amplitude]` names, `$identify`,
+`$groupidentify`), one whose timestamp has no epoch-milliseconds form, and one too large for a
+request. The destination reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
 
 ### Memory
 

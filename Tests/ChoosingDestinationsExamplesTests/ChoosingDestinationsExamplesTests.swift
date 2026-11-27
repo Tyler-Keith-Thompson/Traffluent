@@ -2,6 +2,7 @@
 // (Sources/Traffluent/Traffluent.docc/ChoosingDestinations.md), verbatim, so the article cannot
 // drift from the code.
 
+import AmplitudeEncoding
 import Foundation
 import Instrumentation
 import PostHogEncoding
@@ -114,6 +115,32 @@ struct ChoosingDestinationsPostHogExamplesTests {
         await tracker.finish()
         try await delivery.execute()
         let expected = [SignedUp.name, SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw.
+@Suite("Choosing destinations examples: Amplitude", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsAmplitudeExamplesTests {
+    @Test("Amplitude")
+    func amplitude() async throws {
+        let apiKey = "0123456789abcdef0123456789abcdef"
+
+        let plan = try TrackingPlan()
+        let amplitude = try HTTPDestination.amplitude(
+            apiKey: apiKey,
+            region: .us,  // or .eu, where the project's data resides
+            plan: plan)
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: amplitude)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
         let actual = plan.schemas.map(\.name)
 
         #expect(expected.allSatisfy(actual.contains))
