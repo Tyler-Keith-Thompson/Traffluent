@@ -52,15 +52,16 @@ PACKAGES = [
     # image's records, on Mach-O through dyld and on ELF through dl_iterate_phdr, a shared or
     # dlopen'ed library's included. From 0.0.23: 0.0.20 added recordPeers(of:providingPeersOf:in:)
     # and refusal(of:providingPeersOf:in:), which the macro calls (LS-20), and 0.0.23 split out
-    # LinkerSetsRuntime, whose record type the expansion names (LS-19). `from:` floats, and the
-    # EventMacrosPlugin tests pin the record's expansion text, so a release that adds an
-    # object-format branch (LS-23) changes that text and fails them until they're updated (LS-24,
-    # TRAF-128). Events and EventMacros, which only read records or name their type, depend on
-    # LinkerSetsRuntime, which builds no macro, so a module that depends on Events alone builds no
-    # swift-syntax (TRAF-126). The LinkerSets product builds its @LinkerSetEntry plugin, and so
-    # swift-syntax, for the modules that write their own events' records with it: Sessions,
-    # SwiftUITracking, AutomaticControlTracking and LifecycleTracking.
-    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.23"),
+    # LinkerSetsRuntime, whose record type the expansion names (LS-19). Capped below 0.0.24
+    # (TRAF-131): from 0.0.24 the expansion is a #linkerSetRecord call, a macro of the LinkerSets
+    # product, which Events' dependents don't see, so every @Event fails to compile on a fresh
+    # SwiftPM resolve. TRAF-128 adopts it and lifts the cap. Events and EventMacros, which only
+    # read records or name their type, depend on LinkerSetsRuntime, which builds no macro, so a
+    # module that depends on Events alone builds no swift-syntax (TRAF-126). The LinkerSets
+    # product builds its @LinkerSetEntry plugin, and so swift-syntax, for the modules that write
+    # their own events' records with it: Sessions, SwiftUITracking, AutomaticControlTracking and
+    # LifecycleTracking.
+    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "range:0.0.23..<0.0.24"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
