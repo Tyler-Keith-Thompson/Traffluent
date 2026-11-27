@@ -213,6 +213,14 @@ public struct SegmentSpecBatchEncoder: BatchEncoder {
         guard seconds >= Self.earliestSeconds, seconds < Self.endSeconds else {
             throw .unrepresentableTimestamp
         }
+        let timestamp: String
+        do {
+            timestamp = try record.timestamp.iso8601Timestamp
+        } catch {
+            // Unreached: every four-digit year has a millisecond count in Int64. The catch keeps
+            // the reason the guard gives, should the two ranges ever part.
+            throw .unrepresentableTimestamp
+        }
         var context = record.segmentSpecContext
         // The spec's reading of `context.ip` is the user's address, which Segment takes in place
         // of the request's, so it records none. `context.direct`, which asks Segment to record the
@@ -229,7 +237,7 @@ public struct SegmentSpecBatchEncoder: BatchEncoder {
             "event": .string(record.name),
             "messageId": .string(record.deduplicationID),
             "properties": .object(properties),
-            "timestamp": .string(record.timestamp.iso8601Timestamp),
+            "timestamp": .string(timestamp),
             "type": .string("track"),
         ]
         if sendsRequestIP {

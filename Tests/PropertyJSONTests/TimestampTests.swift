@@ -14,7 +14,7 @@ struct TimestampTests {
         let expectedISO = "2026-11-23T14:03:27.500Z"
         let expectedMilliseconds: Int64 = 1_795_442_607_500
 
-        let actualISO = sut.iso8601Timestamp
+        let actualISO = try sut.iso8601Timestamp
         let actualMilliseconds = try sut.millisecondsSince1970()
 
         #expect(actualISO == expectedISO)
@@ -27,7 +27,7 @@ struct TimestampTests {
         let expectedISO = "1970-01-01T00:00:00.000Z"
         let expectedMilliseconds: Int64 = 0
 
-        let actualISO = sut.iso8601Timestamp
+        let actualISO = try sut.iso8601Timestamp
         let actualMilliseconds = try sut.millisecondsSince1970()
 
         #expect(actualISO == expectedISO)
@@ -44,7 +44,7 @@ struct TimestampTests {
 
         let actualAfter = try after.millisecondsSince1970()
         let actualBefore = try before.millisecondsSince1970()
-        let actualAfterISO = after.iso8601Timestamp
+        let actualAfterISO = try after.iso8601Timestamp
 
         #expect(actualAfter == expectedAfter)
         #expect(actualBefore == expectedBefore)
@@ -103,7 +103,7 @@ struct TimestampTests {
             let expectedFraction = String(format: "%03lld", ((milliseconds % 1000) + 1000) % 1000)
 
             let actual = try sut.millisecondsSince1970()
-            let actualFraction = String(sut.iso8601Timestamp.dropLast().suffix(3))
+            let actualFraction = String(try sut.iso8601Timestamp.dropLast().suffix(3))
 
             #expect(actual == expected)
             #expect(actualFraction == expectedFraction)
@@ -111,11 +111,11 @@ struct TimestampTests {
     }
 
     @Test("0001-01-01T00:00:00Z, 62,135,596,800 seconds before 1970, is 0001-01-01T00:00:00.000Z, in the proleptic Gregorian calendar")
-    func yearOne() {
+    func yearOne() throws {
         let sut = Date(timeIntervalSince1970: -62_135_596_800)
         let expected = "0001-01-01T00:00:00.000Z"
 
-        let actual = sut.iso8601Timestamp
+        let actual = try sut.iso8601Timestamp
 
         #expect(actual == expected)
     }
@@ -123,10 +123,10 @@ struct TimestampTests {
     @Test("The days either side of the Gregorian reform, 1582-10-14 and 1582-10-15, are one day apart, not eleven", arguments: [
         (-12_219_379_200.0, "1582-10-14T00:00:00.000Z"), (-12_219_292_800, "1582-10-15T00:00:00.000Z"),
     ])
-    func reform(seconds: Double, expected: String) {
+    func reform(seconds: Double, expected: String) throws {
         let sut = Date(timeIntervalSince1970: seconds)
 
-        let actual = sut.iso8601Timestamp
+        let actual = try sut.iso8601Timestamp
 
         #expect(actual == expected)
     }
@@ -136,10 +136,10 @@ struct TimestampTests {
         (-62_035_891_200, "0004-02-29T00:00:00.000Z"), (951_782_400, "2000-02-29T00:00:00.000Z"),
         (-2_203_891_200.5, "1900-02-28T23:59:59.500Z"), (-2_203_891_200, "1900-03-01T00:00:00.000Z"),
     ])
-    func leapDays(seconds: Double, expected: String) {
+    func leapDays(seconds: Double, expected: String) throws {
         let sut = Date(timeIntervalSince1970: seconds)
 
-        let actual = sut.iso8601Timestamp
+        let actual = try sut.iso8601Timestamp
 
         #expect(actual == expected)
     }
@@ -149,31 +149,56 @@ struct TimestampTests {
         (-62_198_755_200, "-0001-01-01T00:00:00.000Z"), (-377_705_116_800, "-9999-01-01T00:00:00.000Z"),
         (253_402_300_799.5, "9999-12-31T23:59:59.500Z"), (253_402_300_800, "10000-01-01T00:00:00.000Z"),
     ])
-    func beyondFourDigits(seconds: Double, expected: String) {
+    func beyondFourDigits(seconds: Double, expected: String) throws {
         let sut = Date(timeIntervalSince1970: seconds)
 
-        let actual = sut.iso8601Timestamp
+        let actual = try sut.iso8601Timestamp
 
         #expect(actual == expected)
     }
 
-    @Test("A date more than Int64.max milliseconds from 1970 is written as the nearest one that isn't, and NaN as the earliest", arguments: [
-        (Double.infinity, "292278994-08-17T07:12:55.807Z"), (0x1p63 / 1000, "292278994-08-17T07:12:55.807Z"),
-        (-Double.infinity, "-292275055-05-16T16:47:04.192Z"), (-0x1p64 / 1000, "-292275055-05-16T16:47:04.192Z"),
-        (Double.nan, "-292275055-05-16T16:47:04.192Z"),
-    ])
-    func outsideMilliseconds(seconds: Double, expected: String) {
-        let sut = Date(timeIntervalSince1970: seconds)
+    @Test("iso8601Timestamp throws UnrepresentableTimestamp at 2^63 milliseconds, and not one step of a Double below it")
+    func timestampUpperBoundary() throws {
+        let boundary: Double = 0x1p63 / 1000
+        let throwing = Date(timeIntervalSince1970: boundary)
+        let fitting = Date(timeIntervalSince1970: boundary.nextDown)
+        let expected = "292278994-08-17T07:12:53.760Z"
 
-        let actual = sut.iso8601Timestamp
+        #expect(throws: UnrepresentableTimestamp()) {
+            try throwing.iso8601Timestamp
+        }
+        let actual = try fitting.iso8601Timestamp
+        #expect(actual == expected)
+    }
+
+    @Test("iso8601Timestamp is Int64.min milliseconds' date at -2^63 milliseconds, and throws UnrepresentableTimestamp one step of a Double below it")
+    func timestampLowerBoundary() throws {
+        let boundary: Double = -0x1p63 / 1000
+        let fitting = Date(timeIntervalSince1970: boundary)
+        let throwing = Date(timeIntervalSince1970: boundary.nextDown)
+        let expected = "-292275055-05-16T16:47:04.192Z"
+
+        let actual = try fitting.iso8601Timestamp
 
         #expect(actual == expected)
+        #expect(throws: UnrepresentableTimestamp()) {
+            try throwing.iso8601Timestamp
+        }
+    }
+
+    @Test("iso8601Timestamp throws UnrepresentableTimestamp for an infinite or NaN date", arguments: [Double.infinity, -Double.infinity, Double.nan])
+    func timestampNotFinite(interval: Double) {
+        let sut = Date(timeIntervalSince1970: interval)
+
+        #expect(throws: UnrepresentableTimestamp()) {
+            try sut.iso8601Timestamp
+        }
     }
 
     @Test("For any day and time from year -9999 to 19999, the ISO 8601 timestamp is the proleptic Gregorian date a naive count of days gives", .tags(.randomized))
     func prolepticGregorian() async {
         await propertyCheck(count: 500, input: Gen.uint64(in: .min ... .max)) { seed in
-            check(seed: seed)
+            try check(seed: seed)
         }
 
         // Howard Hinnant's days_from_civil
@@ -193,7 +218,7 @@ struct TimestampTests {
             return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
         }
 
-        func check(seed: UInt64) {
+        func check(seed: UInt64) throws {
             var random = Xoshiro256StarStar(seed: seed)
             let year = random.integer(in: -9_999 ... 19_999)
             let month = random.integer(in: 1 ... 12)
@@ -206,7 +231,7 @@ struct TimestampTests {
             let expectedYear = (year < 0 ? "-" : "") + String(format: "%04ld", abs(year))
             let expected = expectedYear + String(format: "-%02ld-%02ldT%02ld:%02ld:%02ld.%03ldZ", month, day, millisecond / 3_600_000, millisecond / 60_000 % 60, millisecond / 1_000 % 60, millisecond % 1_000)
 
-            let actual = sut.iso8601Timestamp
+            let actual = try sut.iso8601Timestamp
 
             #expect(actual == expected)
         }

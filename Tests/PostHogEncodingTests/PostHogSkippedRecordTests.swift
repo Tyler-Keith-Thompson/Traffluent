@@ -105,6 +105,39 @@ struct PostHogSkippedRecordTests {
         #expect(actual == expected)
     }
 
+    // 2^63 milliseconds is about 9.223e15 seconds from 1970; each boundary is pinned at the last
+    // Double that throws and the first that doesn't.
+    static let timestampBoundaries: [(seconds: Double, skipped: Bool)] = [
+        (.nan, true), (.infinity, true), (-.infinity, true), (0x1p63 / 1000, true), ((0x1p63 / 1000).nextDown, false),
+        (-0x1p63 / 1000, false), ((-0x1p63 / 1000).nextDown, true), (0, false),
+    ]
+
+    @Test("A record whose timestamp has no ISO 8601 form is left out as unrepresentableTimestamp, and one just inside the range is sent", arguments: timestampBoundaries)
+    func unrepresentableTimestamp(seconds: Double, skipped: Bool) throws {
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: seconds), sourceLocation: nil)
+        let expected: [SkippedRecord<PostHogEncodingError>] = skipped
+            ? [SkippedRecord(recordID: record.id, eventName: "checkout_started", schemaVersion: 2, reason: .unrepresentableTimestamp)]
+            : []
+
+        let actual = sut.requests(for: [record])
+
+        #expect(actual.skippedRecords == expected)
+        #expect(actual.requests.flatMap(\.recordIDs) == (skipped ? [] : [record.id]))
+    }
+
+    @Test("A record whose event name starts with $ is left out as reservedEventName, though its timestamp has no ISO 8601 form either")
+    func reservedNameBeforeTimestamp() throws {
+        let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [identify]))
+        let record = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: .nan), sourceLocation: nil)
+        let expected: [PostHogEncodingError] = [.reservedEventName(name: "$identify")]
+
+        let actual = sut.requests(for: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == expected)
+    }
+
     @Test("A record whose encoding isn't a map is left out as unrepresentableValue with no property")
     func notAMap() throws {
         let schema = EventSchema(name: "not_a_map", version: 1, consentCategory: .analytics, properties: [])

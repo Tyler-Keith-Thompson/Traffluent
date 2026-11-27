@@ -55,6 +55,41 @@ struct PropertyReaderTests {
         #expect(actual == expected)
     }
 
+    // 2^63 milliseconds is 9,223,372,036,854,775.808 seconds, which a Double holds as
+    // 9,223,372,036,854,776; the Double below it, 2 seconds earlier, is within Int64's
+    // milliseconds. Both survive the trip through seconds since 2001 exactly.
+    static let millisecondBoundaries: [(seconds: Double, throwing: Bool)] = [
+        (0x1p63 / 1000, true), ((0x1p63 / 1000).nextDown, false), (-0x1p63 / 1000, false), ((-0x1p63 / 1000).nextDown, true),
+    ]
+
+    @Test("A Date property 2^63 milliseconds or more from 1970 either way throws unrepresentableValue naming it, and one a step of a Double inside is written", arguments: millisecondBoundaries)
+    func dateBeyondMilliseconds(seconds: Double, throwing: Bool) throws {
+        let sut = PropertyReader(plan: try TrackingPlan(schemas: [Dated.schema]))
+        let date = Date(timeIntervalSince1970: seconds)
+        let record = EventRecord(event: Dated(at: date, stamp: Stamp(at: Date(timeIntervalSince1970: 0))), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expected = PropertyReadingError.unrepresentableValue(event: "dated", property: "at")
+
+        if throwing {
+            #expect(throws: expected) {
+                try sut.properties(of: record, includingSensitiveValues: false)
+            }
+        } else {
+            let actual = try sut.properties(of: record, includingSensitiveValues: false)["at"]
+            #expect(actual == .string(try date.iso8601Timestamp))
+        }
+    }
+
+    @Test("A Date inside a type of the app's own 2^63 milliseconds from 1970 throws unrepresentableValue naming the property that holds it")
+    func nestedDateBeyondMilliseconds() throws {
+        let sut = PropertyReader(plan: try TrackingPlan(schemas: [Dated.schema]))
+        let record = EventRecord(event: Dated(at: Date(timeIntervalSince1970: 0), stamp: Stamp(at: Date(timeIntervalSince1970: 0x1p63 / 1000))), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expected = PropertyReadingError.unrepresentableValue(event: "dated", property: "stamp")
+
+        #expect(throws: expected) {
+            try sut.properties(of: record, includingSensitiveValues: false)
+        }
+    }
+
     @Test("A Sensitive value is written only when asked for and the record reveals it", arguments: [(false, false), (false, true), (true, false), (true, true)])
     func sensitiveRule(including: Bool, reveals: Bool) throws {
         let sut = PropertyReader(plan: try TrackingPlan(schemas: [SignedUp.schema]))

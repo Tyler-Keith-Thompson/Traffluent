@@ -8,6 +8,8 @@
 # note here saying why it is equivalent.
 #
 # Known equivalent mutants (left out, as they would survive by design):
+# - The catch around `iso8601Timestamp` in json(of:) writing a value instead of throwing: the
+#   four-digit-year guard before it leaves only dates that have a timestamp.
 # - The properties PropertyJSON reads (its PropertyReader), its identity, timestamps and batch
 #   splitting: PropertyJSON's spec plants those.
 # - The unknownEvent arm of `SegmentSpecEncodingError.init(_ error: PropertyReadingError)` mapped
@@ -40,7 +42,7 @@ MUTANTS = [
     Mutant("freshmessageid", B, ".string(record.deduplicationID)", ".string(UUID().uuidString.lowercased())"),
     Mutant("anonymousiduppercase", B, "record.pseudonymousIdentity.uuid.uuidString.lowercased()", "record.pseudonymousIdentity.uuid.uuidString"),
     Mutant("anonymousidisrecord", B, "record.pseudonymousIdentity.uuid.uuidString.lowercased()", "record.deduplicationID"),
-    Mutant("timestampnow", B, ".string(record.timestamp.iso8601Timestamp)", ".string(Date().iso8601Timestamp)"),
+    Mutant("timestampnow", B, "timestamp = try record.timestamp.iso8601Timestamp", "timestamp = try Date().iso8601Timestamp", mode="stmt"),
     Mutant("noip", B, 'context["ip"] = .string("0.0.0.0")', "", mode="stmt"),
     Mutant("iplocalhost", B, 'context["ip"] = .string("0.0.0.0")', 'context["ip"] = .string("127.0.0.1")', mode="stmt"),
     # RudderStack's request_ip: written only when the option is on, which only its factory sets.

@@ -40,7 +40,8 @@ MUTANTS = [
     # The second revealsSensitiveValues: the call's, after the doc comment's.
     Mutant("alwaysreveals", B, "revealsSensitiveValues", "true", nth=1),
     Mutant("neverreveals", B, "revealsSensitiveValues", "false", nth=1),
-    Mutant("timestampjulian", B, ".string(record.timestamp.iso8601Timestamp)", ".string(record.timestamp.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true)))"),
+    Mutant("timestampjulian", B, "timestamp = try record.timestamp.iso8601Timestamp", "timestamp = record.timestamp.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))", mode="stmt"),
+    Mutant("unrepresentabletimestampsent", B, "throw .unrepresentableTimestamp", 'timestamp = "1970-01-01T00:00:00.000Z"', mode="stmt"),
     Mutant("notencodableasunrepresentable", B, ".notEncodable(name: name)", 'CollectorEncodingError.unrepresentableValue(event: name, property: "")'),
     Mutant("propertyunnamed", B, ".unrepresentableValue(event: event, property: property)", '.unrepresentableValue(event: event, property: "")'),
     # Context.

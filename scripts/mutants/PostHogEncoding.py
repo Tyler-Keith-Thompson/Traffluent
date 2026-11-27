@@ -33,7 +33,8 @@ MUTANTS = [
     # The request's envelope.
     Mutant("emptyapikey", B, ".string(projectToken)", '.string("")'),
     Mutant("batchrenamed", B, '"batch"', '"events"'),
-    Mutant("utcoffset", B, ".string(record.timestamp.iso8601Timestamp)", '.string(record.timestamp.formatted(.iso8601))'),
+    Mutant("utcoffset", B, "timestamp = try record.timestamp.iso8601Timestamp", "timestamp = record.timestamp.formatted(.iso8601)", mode="stmt"),
+    Mutant("unrepresentabletimestampsent", B, "throw .unrepresentableTimestamp", 'timestamp = "1970-01-01T00:00:00.000Z"', mode="stmt"),
     # Each event's members.
     Mutant("freshuuid", B, ".string(record.deduplicationID)", ".string(UUID().uuidString.lowercased())"),
     # Identity: the session, or the record's own id.

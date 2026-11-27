@@ -18,8 +18,9 @@ property is left out, and an array's element, or a value inside a type the plan 
 `null`.
 
 A record the encoder can't write is left out and the rest of the batch is sent: one whose event and
-version the plan doesn't describe, one whose event isn't `Encodable`, and one holding a value
-JSON can't, such as a NaN. ``CollectorBatchEncoder/requests(for:)`` returns each record left out
+version the plan doesn't describe, one whose event isn't `Encodable`, one holding a value
+JSON can't, such as a NaN, and one whose timestamp has no ISO 8601 form (NaN, infinite, or more
+than `Int64.max` milliseconds from 1970). ``CollectorBatchEncoder/requests(for:)`` returns each record left out
 as a `SkippedRecord` (module ``/HTTPDestinations``), which the destination logs and reports on
 its `dropReports`. When no record of a batch can be written, the destination sends nothing.
 ``CollectorBatchEncoder/batch(of:)`` returns the same body and skipped records without a

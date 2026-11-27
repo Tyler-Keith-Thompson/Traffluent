@@ -84,9 +84,11 @@ trace context. A `Sensitive` value is sent only while the record reveals it.
 A record the encoder can't write is left out of the request, and the rest of its batch is sent.
 That happens when the plan has no schema for the record's event at its version (an event that
 conforms to `Event` by hand, left out of a list-free `TrackingPlan()`), when the event isn't
-`Encodable`, or when a value has no JSON form, such as a NaN. The destination logs each skipped
-record at error level and reports it on `dropReports` as `HTTPDropReport.skipped(_:)`. A batch with
-no record the encoder can write sends nothing.
+`Encodable`, when a value has no JSON form, such as a NaN, or when the record's timestamp has no
+ISO 8601 form (NaN, infinite, or more than `Int64.max` milliseconds from 1970, as a faulty clock
+can return). The destination logs each skipped record at error level and reports it on
+`dropReports` as `HTTPDropReport.skipped(_:)`. A batch with no record the encoder can write sends
+nothing.
 
 ### Vendors
 
@@ -152,8 +154,9 @@ A `Sensitive` value is never sent, whatever the record reveals, so a value meant
 `Sensitive`. Properties whose names PostHog reads as settings or identity (`$`-prefixed ones, which
 only a hand-written `Encodable` conformance can write, and `distinct_id`) are left out and
 logged. Like the collector's encoder, it leaves out a record the plan doesn't describe, one that
-isn't `Encodable` and one holding a value JSON can't, and also one whose event name starts with
-`$`, as PostHog keeps those names for its own events, and one too large for PostHog's event limit.
+isn't `Encodable`, one holding a value JSON can't and one whose timestamp has no ISO 8601 form,
+and also one whose event name starts with `$`, as PostHog keeps those names for its own events,
+and one too large for PostHog's event limit.
 It logs each at error level, and the destination reports each on `dropReports` as
 `HTTPDropReport.skipped(_:)`.
 

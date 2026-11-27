@@ -8,39 +8,43 @@ extension Date {
     /// the calendar reform of October 1582 too: 62,135,596,800 seconds before 1970 is
     /// `0001-01-01T00:00:00.000Z`. Years from 1 to 9999 have four digits. Year 0, which is 1 BCE,
     /// is `0000`, an earlier year is negative (`-0001`), and a year after 9999 has as many digits
-    /// as it needs. A date more than `Int64.max` milliseconds from 1970 is written as the nearest
-    /// date that isn't, and NaN as the earliest.
+    /// as it needs.
     ///
+    /// - Throws: ``UnrepresentableTimestamp`` when the date isn't finite, or is more than
+    ///   `Int64.max` milliseconds from 1970 either way, as ``millisecondsSince1970()`` does.
     /// - Complexity: O(1).
     public var iso8601Timestamp: String {
-        // Days and milliseconds rather than Foundation's formatters. ISO8601FormatStyle and
-        // Date.FormatStyle count a date before 1582-10-15 in the Julian calendar (0001-01-01 comes
-        // out as 0001-01-03), and Calendar has no public way to move its Gregorian change date.
-        // DateFormatter's gregorianStartDate can, but it rounds to the nearest millisecond rather
-        // than down, writes a year before 1 as a year of its era, and isn't Sendable.
-        let milliseconds = (try? millisecondsSince1970()) ?? (timeIntervalSince1970 > 0 ? .max : .min)
-        let (days, millisecondOfDay) = milliseconds.flooredQuotientAndRemainder(dividingBy: 86_400_000)
-        let date = CivilDate(daysSince1970: days)
-        var text: [UInt8] = []
-        text.reserveCapacity(32)
-        if date.year < 0 {
+        get throws(UnrepresentableTimestamp) {
+            // Days and milliseconds rather than Foundation's formatters. ISO8601FormatStyle and
+            // Date.FormatStyle count a date before 1582-10-15 in the Julian calendar (0001-01-01
+            // comes out as 0001-01-03), and Calendar has no public way to move its Gregorian
+            // change date. DateFormatter's gregorianStartDate can, but it rounds to the nearest
+            // millisecond rather than down, writes a year before 1 as a year of its era, and
+            // isn't Sendable.
+            let milliseconds = try millisecondsSince1970()
+            let (days, millisecondOfDay) = milliseconds.flooredQuotientAndRemainder(dividingBy: 86_400_000)
+            let date = CivilDate(daysSince1970: days)
+            var text: [UInt8] = []
+            text.reserveCapacity(32)
+            if date.year < 0 {
+                text.append(UInt8(ascii: "-"))
+            }
+            text.appendDecimal(date.year.magnitude, digits: 4)
             text.append(UInt8(ascii: "-"))
+            text.appendDecimal(date.month.magnitude, digits: 2)
+            text.append(UInt8(ascii: "-"))
+            text.appendDecimal(date.day.magnitude, digits: 2)
+            text.append(UInt8(ascii: "T"))
+            text.appendDecimal((millisecondOfDay / 3_600_000).magnitude, digits: 2)
+            text.append(UInt8(ascii: ":"))
+            text.appendDecimal((millisecondOfDay / 60_000 % 60).magnitude, digits: 2)
+            text.append(UInt8(ascii: ":"))
+            text.appendDecimal((millisecondOfDay / 1_000 % 60).magnitude, digits: 2)
+            text.append(UInt8(ascii: "."))
+            text.appendDecimal((millisecondOfDay % 1_000).magnitude, digits: 3)
+            text.append(UInt8(ascii: "Z"))
+            return String(decoding: text, as: UTF8.self)
         }
-        text.appendDecimal(date.year.magnitude, digits: 4)
-        text.append(UInt8(ascii: "-"))
-        text.appendDecimal(date.month.magnitude, digits: 2)
-        text.append(UInt8(ascii: "-"))
-        text.appendDecimal(date.day.magnitude, digits: 2)
-        text.append(UInt8(ascii: "T"))
-        text.appendDecimal((millisecondOfDay / 3_600_000).magnitude, digits: 2)
-        text.append(UInt8(ascii: ":"))
-        text.appendDecimal((millisecondOfDay / 60_000 % 60).magnitude, digits: 2)
-        text.append(UInt8(ascii: ":"))
-        text.appendDecimal((millisecondOfDay / 1_000 % 60).magnitude, digits: 2)
-        text.append(UInt8(ascii: "."))
-        text.appendDecimal((millisecondOfDay % 1_000).magnitude, digits: 3)
-        text.append(UInt8(ascii: "Z"))
-        return String(decoding: text, as: UTF8.self)
     }
 
     /// The milliseconds from 1970-01-01T00:00:00Z to the date, rounded down, as

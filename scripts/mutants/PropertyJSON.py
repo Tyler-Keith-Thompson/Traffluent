@@ -50,7 +50,7 @@ MUTANTS = [
     # After datesince1970, its text occurs twice; the second is the original's.
     Mutant("tagdatesince2001", P, "date = Date(timeIntervalSince1970: seconds)", "date = Date(timeIntervalSinceReferenceDate: seconds)", mode="stmt", nth=1),
     # The second copy is anyValue()'s, for a Date in a type the plan can't map.
-    Mutant("nesteddateunread", P, "return try .string(Self.date(value).iso8601Timestamp)", "throw Unrepresentable()", mode="stmt", nth=1),
+    Mutant("nesteddateunread", P, "return try .string(Self.timestamp(value))", "throw Unrepresentable()", mode="stmt", nth=1),
     Mutant("dateasnumber", P, 'if names("Date", in: ["Foundation", "FoundationEssentials"])?.isEmpty == true { return .date }', "", mode="stmt"),
     Mutant("unqualifieddateonly", P, '["Foundation", "FoundationEssentials"]', '["FoundationEssentials"]'),
     Mutant("refinedopaque", P, 'if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .refined(arguments[0]) }', "", mode="stmt"),
@@ -60,7 +60,8 @@ MUTANTS = [
     Mutant("largeunsignedclamped", P, ".number(Double(magnitude))", ".number(Double(UInt64(Int64.max)))"),
     # The guard binds the number, so a non-finite one becomes null rather than the guard dropped.
     Mutant("nonfiniteaccepted", P, "JSON.number(exactly: number)", "Optional(JSON.number(exactly: number) ?? .null)"),
-    Mutant("nonfinitedateaccepted", P, "guard date.timeIntervalSinceReferenceDate.isFinite else { throw Unrepresentable() }", "", mode="stmt"),
+    # A date with no timestamp written as an empty string rather than rejected.
+    Mutant("unrepresentabledateblank", P, "return try date.iso8601Timestamp", 'return (try? date.iso8601Timestamp) ?? ""', mode="stmt"),
     # The public reader.
     Mutant("readerignoresreveal", READER, "includingSensitiveValues && record.revealsSensitiveValues", "includingSensitiveValues"),
     Mutant("readerignoresrequest", READER, "includingSensitiveValues && record.revealsSensitiveValues", "record.revealsSensitiveValues"),
@@ -68,7 +69,9 @@ MUTANTS = [
     # Timestamps.
     # Foundation's ISO 8601 style, whose default Gregorian calendar turns Julian before 1582-10-15.
     Mutant("defaultcalendar", D, "String(decoding: text, as: UTF8.self)", "formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))"),
-    Mutant("clampsswapped", D, "timeIntervalSince1970 > 0 ? .max : .min", "timeIntervalSince1970 > 0 ? .min : .max"),
+    # The epoch in place of a date with no millisecond count, rather than throwing.
+    # The second copy is iso8601Timestamp's call, after its doc comment's.
+    Mutant("timestampnotthrowing", D, "millisecondsSince1970()", "Int64(0)", nth=1),
     Mutant("remaindernotfloored", D, "remainder < 0 ? (quotient - 1, remainder + divisor) : (quotient, remainder)", "(quotient, remainder)"),
     Mutant("eratruncated", D, "shifted >= 0 ? shifted : shifted - 146_096", "shifted"),
     Mutant("nocenturyrule", D, "dayOfEra / 36_524", "0"),

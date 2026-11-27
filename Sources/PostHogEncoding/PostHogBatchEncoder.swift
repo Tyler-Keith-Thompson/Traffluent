@@ -62,7 +62,8 @@ public import TrackingPlans
 /// A record the encoder can't write is left out of the request, and the batch's other records are
 /// sent: one whose event and version `plan` doesn't describe, one whose event name starts with `$`
 /// (a name PostHog keeps for its own events), one whose event isn't `Encodable`, one that holds a
-/// value JSON can't, and one too large for PostHog to store (``PostHogEncodingError``).
+/// value JSON can't, one whose timestamp has no ISO 8601 form, and one too large for PostHog to
+/// store (``PostHogEncodingError``).
 /// ``requests(for:)`` returns them as `SkippedRecord`s, which `HTTPDestination` logs and reports
 /// on its `dropReports`.
 ///
@@ -139,6 +140,12 @@ public struct PostHogBatchEncoder: BatchEncoder {
         guard !record.name.hasPrefix("$") else {
             throw .reservedEventName(name: record.name)
         }
+        let timestamp: String
+        do {
+            timestamp = try record.timestamp.iso8601Timestamp
+        } catch {
+            throw .unrepresentableTimestamp
+        }
         // PostHog reads $-prefixed properties as settings ($set, $process_person_profile), and a
         // `distinct_id` property as the identity when the top-level one is missing.
         for key in properties.keys.sorted() where key.hasPrefix("$") || key == "distinct_id" {
@@ -163,7 +170,7 @@ public struct PostHogBatchEncoder: BatchEncoder {
             "distinct_id": .string(identity.uuid.uuidString.lowercased()),
             "event": .string(record.name),
             "properties": .object(properties),
-            "timestamp": .string(record.timestamp.iso8601Timestamp),
+            "timestamp": .string(timestamp),
             "uuid": .string(record.deduplicationID),
         ])
     }

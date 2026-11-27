@@ -82,7 +82,7 @@ struct CBORPropertyReader {
             }
             return .array(elements)
         case .date:
-            return try .string(Self.date(value).iso8601Timestamp)
+            return try .string(Self.timestamp(value))
         case .other, nil:
             return try anyValue(value)
         }
@@ -130,10 +130,21 @@ struct CBORPropertyReader {
         case .tagged(.epochDateTime, _):
             // A Date the CBOR package wrote itself: one inside an array or a type of the app's
             // own, which `@Event` doesn't reach.
-            return try .string(Self.date(value).iso8601Timestamp)
+            return try .string(Self.timestamp(value))
         default:
             // Bytes, other tags and other simple values, undefined among them: JSON has no form
             // for them, and no standard type's encoding writes them.
+            throw Unrepresentable()
+        }
+    }
+
+    /// The ISO 8601 timestamp of the date `value` holds, which a date with no millisecond count in
+    /// `Int64` (NaN, an infinity, or one about 292 million years from 1970) has none of.
+    private static func timestamp(_ value: CBOR) throws(Unrepresentable) -> String {
+        let date = try date(value)
+        do {
+            return try date.iso8601Timestamp
+        } catch {
             throw Unrepresentable()
         }
     }
@@ -155,7 +166,6 @@ struct CBORPropertyReader {
         default:
             throw Unrepresentable()
         }
-        guard date.timeIntervalSinceReferenceDate.isFinite else { throw Unrepresentable() }
         return date
     }
 }

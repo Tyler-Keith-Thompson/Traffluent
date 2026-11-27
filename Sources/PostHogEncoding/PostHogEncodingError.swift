@@ -13,6 +13,9 @@ public enum PostHogEncodingError: Error, Sendable, Hashable {
     /// the event's `Encodable` conformance, one of the app's own, doesn't write a map of its
     /// properties, or throws.
     case unrepresentableValue(event: String, property: String)
+    /// The record's timestamp has no ISO 8601 form: it is NaN, infinite, or further from 1970
+    /// than `Int64.max` milliseconds.
+    case unrepresentableTimestamp
     /// The event's JSON is `byteCount` bytes, more than PostHog stores of one event, or than one
     /// request holds beside the envelope (``PostHogBatchEncoder/batchLimit``); only
     /// ``PostHogBatchEncoder/requests(for:)`` leaves a record out for it.

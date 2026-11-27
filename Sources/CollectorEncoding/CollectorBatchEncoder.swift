@@ -68,7 +68,8 @@ public import TrackingPlans
 ///
 /// A record the encoder can't write is left out of the body, and the batch's other records are
 /// sent: one whose event and version `plan` doesn't describe, whose event isn't `Encodable`,
-/// or that holds a value JSON can't (``CollectorEncodingError``). ``requests(for:)`` returns them
+/// that holds a value JSON can't, or whose timestamp has no ISO 8601 form
+/// (``CollectorEncodingError``). ``requests(for:)`` returns them
 /// as `SkippedRecord`s, which `HTTPDestination` logs and reports on its `dropReports`; when every
 /// record of a batch is left out, it sends nothing for it. A batch is one request: the collector
 /// sets no limit on its size.
@@ -152,11 +153,18 @@ public struct CollectorBatchEncoder: BatchEncoder {
         guard let types = propertyTypes[version] else {
             throw .unknownEvent(name: version.name, version: version.version)
         }
+        let properties = try record.properties(types: types)
+        let timestamp: String
+        do {
+            timestamp = try record.timestamp.iso8601Timestamp
+        } catch {
+            throw .unrepresentableTimestamp
+        }
         return .object([
             "id": .string(record.id.uuidString),
             "name": .string(record.name),
-            "timestamp": .string(record.timestamp.iso8601Timestamp),
-            "properties": .object(try record.properties(types: types)),
+            "timestamp": .string(timestamp),
+            "properties": .object(properties),
             "context": .object(record.collectorContext(instrument: instrument)),
             "isRedelivered": .boolean(record.isRedelivered),
         ])

@@ -24,8 +24,9 @@ Properties are read through the event's schema in the `TrackingPlan` the encoder
 `Sensitive` value is never sent, whatever the record reveals, and a property whose name starts with
 `$` or is `distinct_id` is left out and logged. A record the encoder can't write is left out and
 the rest of the batch is sent: one the plan doesn't describe, one whose event name starts with `$`,
-one whose event isn't `Encodable`, one holding a value JSON can't, and one too large for PostHog's
-event limit. The destination reports each as `HTTPDropReport.skipped(_:)`, a `SkippedRecord` whose
+one whose event isn't `Encodable`, one holding a value JSON can't, one whose timestamp has no
+ISO 8601 form (NaN, infinite, or more than `Int64.max` milliseconds from 1970), and one too large
+for PostHog's event limit. The destination reports each as `HTTPDropReport.skipped(_:)`, a `SkippedRecord` whose
 reason is a ``PostHogEncodingError``.
 
 To send to TraffluentCollector, use `CollectorBatchEncoder` (module `CollectorEncoding`)
