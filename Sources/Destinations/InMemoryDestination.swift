@@ -1,3 +1,4 @@
+public import AsyncQueues
 import DequeModule
 public import Events
 import Synchronization
@@ -63,7 +64,7 @@ public struct InMemoryDestination: Destination {
     /// ``deliveries``.
     public func receive(_ batch: [EventRecord]) async {
         log.kept.withLock { $0.append(batch) }
-        log.continuation.yield(batch)
+        log.deliveries.enqueue(batch)
     }
 
     /// The batches kept, in the order received.
@@ -96,12 +97,15 @@ public struct InMemoryDestination: Destination {
     /// Each batch as it is received, whole, for a reader that waits for a delivery: a view that
     /// refreshes, or a test that reads once a batch arrives.
     ///
-    /// The stream has one consumer: iterate it from a single task, which can fan each batch out
-    /// to the rest of the app. A second iterator takes batches from the first rather than seeing
-    /// them too. Batches not yet read wait in a buffer of the newest `capacity` batches; a slower
-    /// reader misses the older ones, and reads ``records`` for what is kept. The stream never
-    /// finishes.
-    public var deliveries: AsyncStream<[EventRecord]> {
+    /// Batches not yet read wait in a buffer of the newest `capacity` batches; a slower reader
+    /// misses the older ones, and reads ``records`` for what is kept. The sequence ends once the
+    /// destination and every copy of it are gone and every batch kept has been read.
+    ///
+    /// One task reads the batches at a time; it can fan each one out to the rest of the app. The
+    /// first iterator to read holds them until its iteration ends or it is released; a second
+    /// reader meanwhile waits its turn, logging a warning once, then reads on from the next batch,
+    /// so the first gets every batch in order. A reader cancelled while it waits returns `nil`.
+    public var deliveries: AsyncQueue<[EventRecord]> {
         log.deliveries
     }
 }
@@ -113,15 +117,18 @@ extension InMemoryDestination {
         // and each receive appends and evicts without awaiting, so the lock is held for moments.
         // Switch to an actor if receiving ever has to await while holding the log.
         let kept: Mutex<Kept>
-        let deliveries: AsyncStream<[EventRecord]>
-        let continuation: AsyncStream<[EventRecord]>.Continuation
+        let deliveries: AsyncQueue<[EventRecord]>
 
         /// A log of at most `capacity` records, or of every record when `capacity` is `nil`.
         init(capacity: Int?) {
             kept = Mutex(Kept(capacity: capacity))
-            let policy: AsyncStream<[EventRecord]>.Continuation.BufferingPolicy =
-                if let capacity { .bufferingNewest(capacity) } else { .unbounded }
-            (deliveries, continuation) = AsyncStream.makeStream(of: [EventRecord].self, bufferingPolicy: policy)
+            deliveries = AsyncQueue(name: "an InMemoryDestination's deliveries", buffering: capacity.map { .newest($0) } ?? .unbounded)
+        }
+
+        deinit {
+            // Every copy of the destination is gone, so no batch can arrive: the deliveries end
+            // after those waiting.
+            deliveries.finish()
         }
     }
 

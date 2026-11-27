@@ -1,3 +1,4 @@
+public import AsyncQueues
 public import Events
 public import Foundation
 internal import Instrumentation
@@ -353,14 +354,19 @@ public struct Tracker: Sendable {
     /// Reports wait until they are read, merged: a rejection joins the waiting report of the same
     /// event, property and keyword, adding to its count and widening its timestamps. So the
     /// reports waiting unread are at most one per constraint the app declares, however many events
-    /// break them. Copies of a tracker share one sequence, which has one consumer and ends once the
-    /// tracker has finished. A ``noOp`` tracker's is empty.
-    public var rejectionReports: AsyncStream<RejectionReport> {
+    /// break them. Copies of a tracker share one sequence, which ends once the tracker has
+    /// finished and every report has been read. A ``noOp`` tracker's is empty.
+    ///
+    /// One task reads the reports at a time. The first iterator to read holds them until its
+    /// iteration ends or it is released; a second reader meanwhile waits its turn, logging a
+    /// warning once, then reads on from the next report, so the first gets every report in order.
+    /// A reader cancelled while it waits returns `nil`.
+    public var rejectionReports: AsyncQueue<RejectionReport> {
         switch backing {
         case .intake(let intake):
             intake.rejectionReports
         case .none, .unbound:
-            AsyncStream { $0.finish() }
+            .finished(name: "a tracker's rejection reports")
         case .unset:
             resolved.rejectionReports
         }
@@ -375,14 +381,19 @@ public struct Tracker: Sendable {
     /// Reports wait until they are read, merged: a drop joins the waiting report of the same
     /// event, adding to its count and widening its timestamps. So the reports waiting unread are at
     /// most one per event type, however many events are dropped. Copies of a tracker share one
-    /// sequence, which has one consumer and ends once the tracker has finished. A ``noOp``
-    /// tracker's is empty.
-    public var samplingDropReports: AsyncStream<SamplingDropReport> {
+    /// sequence, which ends once the tracker has finished and every report has been read. A
+    /// ``noOp`` tracker's is empty.
+    ///
+    /// One task reads the reports at a time. The first iterator to read holds them until its
+    /// iteration ends or it is released; a second reader meanwhile waits its turn, logging a
+    /// warning once, then reads on from the next report, so the first gets every report in order.
+    /// A reader cancelled while it waits returns `nil`.
+    public var samplingDropReports: AsyncQueue<SamplingDropReport> {
         switch backing {
         case .intake(let intake):
             intake.samplingDropReports
         case .none, .unbound:
-            AsyncStream { $0.finish() }
+            .finished(name: "a tracker's sampling drop reports")
         case .unset:
             resolved.samplingDropReports
         }

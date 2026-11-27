@@ -28,9 +28,10 @@ let targets: [Target] = [
     .target(name: "StoreModel", dependencies: ["StoreEvents", library("Events"), library("Trackers")], exclude: bazelFiles),
     .target(name: "StoreAnalytics", dependencies: [
         "StoreEvents",
-        library("AutomaticControlTracking"), library("CollectorEncoding"), library("Destinations"), library("Events"),
-        library("HTTPDestinations"), library("LifecycleTracking"), library("Persistence"), library("Sessions"),
-        library("StandardContext"), library("SwiftUITracking"), library("Trackers"), library("TrackingPlans"),
+        library("AsyncQueues"), library("AutomaticControlTracking"), library("CollectorEncoding"), library("Destinations"),
+        library("Events"), library("HTTPDestinations"), library("LifecycleTracking"), library("Persistence"),
+        library("Sessions"), library("StandardContext"), library("SwiftUITracking"), library("Trackers"),
+        library("TrackingPlans"),
         logging, system,
     ], exclude: bazelFiles),
     .target(name: "StoreViews", dependencies: [

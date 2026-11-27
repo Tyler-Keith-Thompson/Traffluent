@@ -34,7 +34,7 @@ public struct SamplingDropReport: Sendable, Hashable, CustomStringConvertible {
     }
 }
 
-extension SamplingDropReport: QueuedReport {
+extension SamplingDropReport {
     /// Merges a report into the waiting one of the same event, wherever it waits, so the reports
     /// waiting hold at most one per event type, however many events are dropped.
     static func add(_ report: SamplingDropReport, to waiting: inout Deque<SamplingDropReport>) {

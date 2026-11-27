@@ -11,6 +11,7 @@ swift_library(
     visibility = ["//Examples:__subpackages__"],
     deps = [
         "//Examples/Sources/StoreEvents",
+        "//Sources/AsyncQueues",
         "//Sources/AutomaticControlTracking",
         "//Sources/CollectorEncoding",
         "//Sources/Destinations",

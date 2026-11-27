@@ -16,6 +16,7 @@
 // holding a value of another type, an unknown event type, bytes past its map or a version other
 // than its type's must not.
 
+import AsyncQueues
 import Checksums
 import Events
 import Foundation
@@ -287,7 +288,7 @@ enum FuzzPersistence {
 
         // The next launch finds what this one left: the same records, numbered in order, and no
         // drop to report.
-        let reports: AsyncStream<DropReport>
+        let reports: AsyncQueue<DropReport>
         var again: [(event: Tapped?, id: UUID, isRedelivered: Bool, index: UInt32)] = []
         do {
             let next: SegmentStore
@@ -316,7 +317,7 @@ enum FuzzPersistence {
 
     /// Every report `reports` yields, read until it finishes: its store is gone, so it has. The
     /// fuzzer's callback can't await, so a task reads them while it waits.
-    static func allReports(_ reports: AsyncStream<DropReport>) -> [DropReport] {
+    static func allReports(_ reports: AsyncQueue<DropReport>) -> [DropReport] {
         let result = Mutex<[DropReport]>([])
         let done = DispatchSemaphore(value: 0)
         Task {

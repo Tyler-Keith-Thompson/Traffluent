@@ -1,4 +1,5 @@
 import Afluent
+import AsyncQueues
 import AutomaticControlTracking
 import CollectorEncoding
 import Destinations
@@ -191,10 +192,10 @@ extension AsyncStream where Element == AnalyticsDrop {
     /// Step 5: every drop report, as one stream, each source's in its order. The sources are
     /// passed as streams, not their owners, so the reading task holds no collector or store.
     fileprivate init(
-        merging rejections: AsyncStream<RejectionReport>,
-        _ consentDrops: AsyncStream<ConsentDropReport>,
-        _ storeDrops: AsyncStream<DropReport>?,
-        _ collectorDrops: AsyncStream<HTTPDropReport<CollectorEncodingError>>?,
+        merging rejections: AsyncQueue<RejectionReport>,
+        _ consentDrops: AsyncQueue<ConsentDropReport>,
+        _ storeDrops: AsyncQueue<DropReport>?,
+        _ collectorDrops: AsyncQueue<HTTPDropReport<CollectorEncodingError>>?,
         _ bufferDrops: AsyncStream<BufferDropReport>
     ) {
         let (drops, continuation) = AsyncStream.makeStream(of: AnalyticsDrop.self)

@@ -1,3 +1,4 @@
+import AsyncQueues
 public import Events
 import Foundation
 import Logging
@@ -88,8 +89,7 @@ final class SegmentLog: Acknowledger {
     // can't await an actor. Every section is short (a write() of one record, or a few file deletions);
     // fsync, the one slow call, runs outside it.
     private let state: Mutex<State>
-    let dropReports: AsyncStream<DropReport>
-    private let dropReporter: AsyncStream<DropReport>.Continuation
+    let dropReports = AsyncQueue<DropReport>(name: "a SegmentStore's drop reports")
     private let unlistedTypes = UnlistedEventTypes()
 
     private static let logger = Logger(label: "Persistence.SegmentStore")
@@ -123,7 +123,6 @@ final class SegmentLog: Acknowledger {
         self.registry = registry
         self.byteBound = byteBound
         self.segmentByteCount = segmentByteCount
-        (dropReports, dropReporter) = AsyncStream.makeStream(of: DropReport.self)
         try directory.createDirectory()
         var reports: [DropReport] = []
         var recovered = try Self.recover(directory: directory, registry: registry, reports: &reports)
@@ -136,12 +135,12 @@ final class SegmentLog: Acknowledger {
         state.recovered = recovered.records.flatMap { $0 }
         self.state = Mutex(state)
         for report in reports {
-            dropReporter.yield(report)
+            dropReports.enqueue(report)
         }
     }
 
     deinit {
-        dropReporter.finish()
+        dropReports.finish()
     }
 
     // MARK: Appending
@@ -152,7 +151,7 @@ final class SegmentLog: Acknowledger {
         guard let registration = registry.registration(of: type(of: record.event)) else {
             if unlistedTypes.insert(type(of: record.event)) {
                 Self.logger.notice("Kept \(record.name) records in memory only: its type isn't one of the store's events")
-                dropReporter.yield(.notPersisted(event: record.name))
+                dropReports.enqueue(.notPersisted(event: record.name))
             }
             return record
         }
@@ -169,12 +168,12 @@ final class SegmentLog: Acknowledger {
             encoded = try SegmentFormat.recordFrame(of: record, registration: registration, reusing: consume spare)
         } catch {
             Self.logger.error("Kept a \(registration.name) record in memory only: encoding its event failed with \(error)")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
         guard let frame = encoded else {
             Self.logger.error("Kept a \(registration.name) record in memory only: its frame would be larger than a frame can be")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
         let appending: Appending = state.withLock { state in
@@ -212,15 +211,15 @@ final class SegmentLog: Acknowledger {
             return record
         case .failed(let error):
             Self.logger.error("Kept a \(registration.name) record in memory only: writing it to \(directory) failed with \(error)")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         case .full:
             Self.logger.error("Kept a \(registration.name) record in memory only: segments in \(directory) that couldn't be deleted fill its bound of \(byteBound) bytes")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         case .exhausted:
             Self.logger.error("Kept a \(registration.name) record in memory only: the log in \(directory) has used every segment number")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
         var tagged = record
@@ -249,7 +248,7 @@ final class SegmentLog: Acknowledger {
             var reports: [DropReport] = []
             Self.delete(state.segments.removeFirst(), from: &state, reports: &reports)
             for report in reports {
-                dropReporter.yield(report)
+                dropReports.enqueue(report)
             }
         }
         // Segments whose files couldn't be deleted still take their bytes on disk.
@@ -351,7 +350,7 @@ final class SegmentLog: Acknowledger {
                     var reports: [DropReport] = []
                     Self.delete(state.segments.removeFirst(), from: &state, reports: &reports)
                     for report in reports {
-                        dropReporter.yield(report)
+                        dropReports.enqueue(report)
                     }
                 }
                 guard let segment = state.segments.firstIndex(where: { $0.number == number }) else {

@@ -2,6 +2,7 @@
 // events, and reports the drops, as a model built from plain arrays does, for any sequence of
 // tracks and decisions and any hold bound.
 
+import AsyncQueues
 import Destinations
 import Events
 import Foundation
@@ -116,7 +117,7 @@ struct ConsentPropertyTests {
     /// what it lets through, and returns the numbers delivered, how many records were held after
     /// each operation, and the consent's drop reports, which end as the consent goes away when
     /// this returns.
-    func run(_ operations: [Int], limit: Int) async throws -> ([Int], [Int], AsyncStream<ConsentDropReport>) {
+    func run(_ operations: [Int], limit: Int) async throws -> ([Int], [Int], AsyncQueue<ConsentDropReport>) {
         let consent = try Consent(heldRecordLimit: limit)
         let tracker = Tracker(consent: consent, now: { Date(timeIntervalSince1970: Double(Clock.number)) })
         let recorder = InMemoryDestination()

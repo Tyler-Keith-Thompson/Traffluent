@@ -194,6 +194,7 @@ struct CartView: View {
 - ``/GRDBPersistence``
 - ``/EventMacros``
 - ``/TrackingPlans``
+- ``/AsyncQueues``
 - ``/Checksums``
 
 ### Testing

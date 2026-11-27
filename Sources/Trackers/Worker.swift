@@ -1,3 +1,4 @@
+internal import AsyncQueues
 internal import Events
 internal import Foundation
 internal import Instrumentation
@@ -11,10 +12,10 @@ struct Worker: Sendable {
     let store: (any RecordStore)?
     let enrichers: [Enricher]
     let membership: ConsentGate.Membership?
-    let rejections: DropReportQueue<RejectionReport>
+    let rejections: AsyncQueue<RejectionReport>
     let samplers: [Sampler]
     let samplingSeed: UInt64
-    let samplingDrops: DropReportQueue<SamplingDropReport>
+    let samplingDrops: AsyncQueue<SamplingDropReport>
 
     private static let logger = Logger(label: "Trackers.Worker")
 
@@ -100,7 +101,7 @@ extension Worker {
         // and the property's value is never logged.
         Self.logger.error("Rejected \(name) tracked at \(record.sourceLocation.map { "\($0.fileID):\($0.line)" } ?? "an unknown call site"): \(violation)")
         #endif
-        rejections.report(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
+        rejections.enqueue(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
         return true
     }
 }
@@ -118,7 +119,7 @@ extension Worker {
             if sampling.keeps(&record) {
                 kept.append(record)
             } else {
-                samplingDrops.report(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
+                samplingDrops.enqueue(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))
             }
         }
         return kept

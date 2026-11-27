@@ -1,3 +1,4 @@
+public import AsyncQueues
 public import Events
 
 /// The user's consent, category by category, which a tracker given it applies to every event.
@@ -107,9 +108,13 @@ public struct Consent: Sendable {
     /// dropped; while that report waits unread, later ones merge into it, one report counting
     /// them all across their timestamps. So the reports waiting unread hold at most one overflow
     /// report between any two others (denials and finished trackers), however many events
-    /// overflow. The sequence has one
-    /// consumer, and ends once the consent is gone.
-    public var dropReports: AsyncStream<ConsentDropReport> {
+    /// overflow. The sequence ends once the consent is gone and every report has been read.
+    ///
+    /// One task reads the reports at a time. The first iterator to read holds them until its
+    /// iteration ends or it is released; a second reader meanwhile waits its turn, logging a
+    /// warning once, then reads on from the next report, so the first gets every report in order.
+    /// A reader cancelled while it waits returns `nil`.
+    public var dropReports: AsyncQueue<ConsentDropReport> {
         gate.dropReports
     }
 }

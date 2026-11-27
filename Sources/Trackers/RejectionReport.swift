@@ -40,7 +40,7 @@ public struct RejectionReport: Sendable, Hashable, CustomStringConvertible {
     }
 }
 
-extension RejectionReport: QueuedReport {
+extension RejectionReport {
     /// Merges a report into the waiting one of the same event and violation, wherever it waits, so
     /// the reports waiting hold at most one per event, property and keyword: as many as the app
     /// declares constraints, however many events break them.

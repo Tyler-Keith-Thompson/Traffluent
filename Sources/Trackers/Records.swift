@@ -1,3 +1,4 @@
+internal import AsyncQueues
 public import Events
 import Logging
 

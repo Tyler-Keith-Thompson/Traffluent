@@ -1,3 +1,4 @@
+import AsyncQueues
 import Events
 import Foundation
 import Persistence
@@ -44,7 +45,7 @@ struct SegmentStoreDropRewriteTests {
         var firstReports = try SegmentStore(events: [Tapped.self], directory: directory).dropReports.makeAsyncIterator()
         var actualFirstReports: [DropReport] = []
         while let report = await firstReports.next() { actualFirstReports.append(report) }
-        var secondReports: AsyncStream<DropReport>.AsyncIterator
+        var secondReports: AsyncQueue<DropReport>.AsyncIterator
         let actualNumbers: [Int]
         let actualRedelivered: [Bool]
         do {
@@ -81,7 +82,7 @@ struct SegmentStoreDropRewriteTests {
         var firstReports = try SegmentStore(events: [Tapped.self, OtherVersion2.self], directory: directory).dropReports.makeAsyncIterator()
         var actualFirstReports: [DropReport] = []
         while let report = await firstReports.next() { actualFirstReports.append(report) }
-        var secondReports: AsyncStream<DropReport>.AsyncIterator
+        var secondReports: AsyncQueue<DropReport>.AsyncIterator
         let actualNumbers: [Int]
         let actualRedelivered: [Bool]
         do {
@@ -199,7 +200,7 @@ struct SegmentStoreDropRewriteTests {
         var actualFirstReports: [DropReport] = []
         while let report = await firstReports.next() { actualFirstReports.append(report) }
 
-        var secondReports: AsyncStream<DropReport>.AsyncIterator
+        var secondReports: AsyncQueue<DropReport>.AsyncIterator
         let actualNumbers: [Int]
         do {
             let sut = try SegmentStore(events: [Tapped.self], directory: directory)

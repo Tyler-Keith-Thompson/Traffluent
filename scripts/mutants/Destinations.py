@@ -79,7 +79,7 @@ MUTANTS = [
     Mutant("enrichedtwice", "Enriched.swift", "_ = enricher(&record)", "_ = enricher(&record); _ = enricher(&record)", mode="stmt"),
     # InMemoryDestination: what it keeps and announces.
     Mutant("notkept", M, "log.kept.withLock { $0.append(batch) }", "", mode="stmt"),
-    Mutant("notannounced", M, "log.continuation.yield(batch)", "", mode="stmt"),
+    Mutant("notannounced", M, "log.deliveries.enqueue(batch)", "", mode="stmt"),
     Mutant("recordsfirstbatch", M, "log.kept.withLock { Array($0.records) }", "log.kept.withLock { $0.batches.first ?? [] }"),
     Mutant("eventsfirstbatch", M, "log.kept.withLock { $0.records.compactMap { $0.event as? E } }", "log.kept.withLock { ($0.batches.first ?? []).compactMap { $0.event as? E } }"),
     # InMemoryDestination's capacity.
@@ -90,7 +90,9 @@ MUTANTS = [
     Mutant("recordsnotevicted", M, "records.removeFirst(excess)", "", mode="stmt"),
     Mutant("partialbatchdroppedwhole", M, "batchSizes[0] -= excess", "_ = batchSizes.removeFirst()", mode="stmt"),
     Mutant("emptybatchkept", M, "guard !batch.isEmpty else { return }", "", mode="stmt"),
-    Mutant("deliveriesbufferonemore", M, ".bufferingNewest(capacity)", ".bufferingNewest(capacity + 1)"),
+    Mutant("deliveriesbufferonemore", M, ".newest($0)", ".newest($0 + 1)"),
     Mutant("unboundedbounded", M, "Log(capacity: nil)", "Log(capacity: InMemoryDestination.defaultCapacity)"),
-    Mutant("unboundeddeliveriesbounded", M, ".unbounded", ".bufferingNewest(InMemoryDestination.defaultCapacity)"),
+    Mutant("unboundeddeliveriesbounded", M, ".unbounded", ".newest(InMemoryDestination.defaultCapacity)"),
+    # The deliveries left open once every copy of the destination is gone.
+    Mutant("deliveriesneverend", M, "deliveries.finish()", "", mode="stmt"),
 ]

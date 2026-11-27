@@ -266,9 +266,12 @@ Task {
 }
 ```
 
-Each stream has one reader. The task reads the streams, not their owners, so it keeps no store or
-destination alive. The store app merges them into one stream of its own type, `AnalyticsDrop`, and
-logs each one.
+One task reads each stream at a time: a second reader waits, with a warning in the log, until the
+first one's iteration ends or its iterator is released. A reader that stops calling `next()` but
+keeps its iterator keeps the turn, so read each stream in one place and fan its reports out from
+there. The task
+reads the streams, not their owners, so it keeps no store or destination alive. The store app
+merges them into one stream of its own type, `AnalyticsDrop`, and logs each one.
 
 ### Export and check the tracking plan
 

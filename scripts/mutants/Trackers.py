@@ -16,13 +16,12 @@ T = "Tracker.swift"
 W = "WithTracker.swift"
 S = "Subscription.swift"
 E = "Records.swift"
-L = "ReadLock.swift"
 C = "Consent.swift"
 G = "ConsentGate.swift"
 I = "Intake.swift"
 K = "Worker.swift"
 D = "DroppedRecords.swift"
-Q = "DropReportQueue.swift"
+N = "ConsentDropReport.swift"
 J = "RejectionReport.swift"
 R = "SampleRate.swift"
 P = "Sampler.swift"
@@ -43,9 +42,6 @@ O = "SamplingDropReport.swift"
 #   and tests don't pin logs.
 # - Dropping the warning a records iterator logs as it starts to wait for its turn: tests don't
 #   pin logs.
-# - Waiters taking the turn last in, first out (`removeLast()` for `removeFirst()` in ReadLock's
-#   release): not equivalent, but no test can queue two waiters in a known order without a hook
-#   saying a reader has started to wait, and the house rules add none for tests.
 # - A never-set view tracker resolving to a bootstrapped `noOp` as the warning `unbound` rather
 #   than `none`: only the log's level differs.
 # - The enrichers' join with either early return removed: it then concatenates, the same array
@@ -187,17 +183,15 @@ MUTANTS = [
     Mutant("holdunbounded", G, "state.held.count == heldRecordLimit", "state.held.count == heldRecordLimit + 1"),
     Mutant("dropsnewest", G, "state.held.removeFirst()", "state.held.removeLast()"),
     Mutant("zeroholdkeeps", G, "heldRecordLimit > 0", "heldRecordLimit >= 0"),
-    Mutant("reportsneverend", G, "reporter.finish()", "", mode="stmt"),
+    Mutant("reportsneverend", G, "dropReports.finish()", "", mode="stmt"),
     Mutant("countdoubled", D, "count += 1", "count += 2", mode="stmt"),
     Mutant("lowerboundfirst", D, "min($0.lowerBound, record.timestamp)", "$0.lowerBound"),
     Mutant("upperboundlatest", D, "max($0.upperBound, record.timestamp)", "record.timestamp"),
-    # The drop reports' queue.
-    Mutant("reportsnotmerged", Q, "last.merging(report)", "nil"),
-    Mutant("mergedcountlost", Q, "count + nextCount", "count"),
-    Mutant("mergedtimestampsfirst", Q, "max(timestamps.upperBound, nextTimestamps.upperBound)", "timestamps.upperBound"),
-    Mutant("queuenotfinished", Q, "state.isFinished = true", "", mode="stmt"),
-    Mutant("waitingreaderskipped", Q, "reader?.resume(returning: report)", "", mode="stmt"),
-    Mutant("waitingreportlost", Q, "return .some(state.waiting.removeFirst())", "return .some(nil)", mode="stmt"),
+    # How the drop reports merge while unread. The queue holding them is AsyncQueues', whose spec
+    # plants its bugs.
+    Mutant("reportsnotmerged", N, "last.merging(report)", "nil"),
+    Mutant("mergedcountlost", N, "count + nextCount", "count"),
+    Mutant("mergedtimestampsfirst", N, "max(timestamps.upperBound, nextTimestamps.upperBound)", "timestamps.upperBound"),
     # Subscription.
     Mutant("subjectnotfinished", S, "subject.send(completion: .finished)", "", mode="stmt"),
     Mutant("subscriptionnotsent", S, "subject.send(record)", "", mode="stmt"),
@@ -206,29 +200,18 @@ MUTANTS = [
     # Each read subscribes afresh, so what was tracked before it, or while a cancelled read waited,
     # is lost.
     Mutant("subscribedperread", S, "try? await subscription.next()", "try? await subject.makeSubscription().next()"),
-    # One reader at a time (TRAF-97). The turn granted while another reader holds it, so two
-    # reads wait on the subscription, which traps; or not granted again to the reader holding it,
-    # which then waits on itself.
-    Mutant("turnalwaysgranted", L, "guard owner == nil || owner == reader else { return false }", "", mode="stmt"),
-    Mutant("turnnotkept", L, "owner == nil || owner == reader", "owner == nil"),
-    # A release that resumes the first waiter without making it the owner, or never resumes it.
-    Mutant("turnnothandedon", L, "state.owner = next.reader", "", mode="stmt"),
-    Mutant("waiternotresumed", L, "next?.continuation.resume(returning: true)", "", mode="stmt"),
-    # A waiter cancelled while queued, or before it is queued, left waiting.
-    Mutant("cancelledwaiterleft", L, "waiter?.continuation.resume(returning: false)", "", mode="stmt"),
-    Mutant("cancelledbeforequeueing", L, "if Task.isCancelled { return false }", "", mode="stmt"),
-    # The turn kept by a released iterator, or by one whose iteration ended.
-    Mutant("releasedreaderkeepsturn", L, "lock.release(ObjectIdentifier(self))", "", mode="stmt", nth=0),
+    # One reader at a time (TRAF-97). The turn itself is AsyncQueues' ReadLock, whose spec plants
+    # its bugs; these are the records' use of it.
     Mutant("endedreaderkeepsturn", E, "reader.release()", "", mode="stmt"),
     # A cancelled wait taken as the turn, reading the subscription while another reader waits.
     Mutant("cancelledwaitreads", E, "guard await reader.acquire() else { return nil }", "_ = await reader.acquire()", mode="stmt"),
     # The worker's validation, first, and its reports.
     Mutant("rejectedadmitted", K, "guard !rejects(record) else { continue }", "", mode="stmt"),
     Mutant("unvalidatedwithconsent", K, "record.event.constraintViolation()", "(membership == nil ? record.event.constraintViolation() : nil)"),
-    Mutant("rejectionnotreported", K, "rejections.report(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
+    Mutant("rejectionnotreported", K, "rejections.enqueue(RejectionReport(eventName: name, violation: violation, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
     Mutant("rejectionsneverend", K, "rejections.finish()", "", mode="stmt"),
-    Mutant("rejectionsunread", I, "rejectionReports = AsyncStream(unfolding: { await rejections.next() })", "rejectionReports = AsyncStream { $0.finish() }", mode="stmt"),
-    Mutant("rejectionreportsofnoop", T, "intake.rejectionReports", "AsyncStream { $0.finish() }"),
+    Mutant("rejectionsunread", I, "rejectionReports = rejections", "rejectionReports = .finished(name: \"\")", mode="stmt"),
+    Mutant("rejectionreportsofnoop", T, "intake.rejectionReports", ".finished(name: \"\")"),
     # Rejection reports' merging: by event, property and keyword, wherever the report waits.
     Mutant("rejectionsnotmerged", J, "waiting.firstIndex(where: { $0.eventName == report.eventName && $0.violation == report.violation })", "nil"),
     Mutant("mergedacrossevents", J, "$0.eventName == report.eventName && $0.violation == report.violation", "$0.violation == report.violation"),
@@ -254,7 +237,7 @@ MUTANTS = [
     Mutant("defaultseedfixed", T, ".random(in: .min ... .max)", "0", nth=0),
     Mutant("notsampled", K, "admit(sample(enriched, with: &sampling), statuses: statuses)", "admit(enriched, statuses: statuses)", mode="stmt"),
     Mutant("stageskipped", K, "guard !sampling.isEmpty else { return records }", "guard sampling.isEmpty else { return records }", mode="stmt"),
-    Mutant("dropnotreported", K, "samplingDrops.report(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
+    Mutant("dropnotreported", K, "samplingDrops.enqueue(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
     Mutant("dropsneverend", K, "samplingDrops.finish()", "", mode="stmt"),
     Mutant("dropsmergedacrossevents", O, "waiting.firstIndex(where: { $0.eventName == report.eventName })", "waiting.indices.last"),
     Mutant("mergeddropcountlost", O, "merged.recordCount + report.recordCount", "merged.recordCount"),
@@ -278,8 +261,8 @@ MUTANTS = [
     Mutant("unsetlosescallsite", T, UNSET_TRACK, "resolved.track(event)", mode="stmt"),
     Mutant("unsetrecordsempty", T, "resolved.records", "Records(subscription: nil)"),
     Mutant("unsetnostore", T, "resolved.store", "nil"),
-    Mutant("unsetrejectionsempty", T, "resolved.rejectionReports", "AsyncStream { $0.finish() }"),
-    Mutant("unsetsamplingdropsempty", T, "resolved.samplingDropReports", "AsyncStream { $0.finish() }"),
+    Mutant("unsetrejectionsempty", T, "resolved.rejectionReports", ".finished(name: \"\")"),
+    Mutant("unsetsamplingdropsempty", T, "resolved.samplingDropReports", ".finished(name: \"\")"),
     Mutant("unsetflushreturns", T, "await resolved.flush()", "", mode="stmt"),
     Mutant("unsetfinishreturns", T, "await resolved.finish()", "", mode="stmt"),
     # The enrichers' join, which hands back one side when the other is empty.

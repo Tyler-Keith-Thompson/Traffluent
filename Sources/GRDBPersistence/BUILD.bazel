@@ -9,6 +9,7 @@ swift_library(
     srcs = glob(["**/*.swift"]),
     module_name = "GRDBPersistence",
     deps = [
+        "//Sources/AsyncQueues",
         "//Sources/Events",
         "//Sources/Persistence",
         "@swiftpkg_swift_log//:Logging",
@@ -40,6 +41,7 @@ docc_archive(
     module = ":GRDBPersistence",
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
+        "//Sources/AsyncQueues:AsyncQueuesDocumentation",
         "//Sources/Events:EventsDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
     ],

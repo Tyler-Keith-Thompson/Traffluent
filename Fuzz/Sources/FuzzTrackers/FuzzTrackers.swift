@@ -7,6 +7,7 @@
 // event is its number, tracked that many seconds after 1970, and the hold's bound is small, so
 // overflows and ties are common.
 
+import AsyncQueues
 import Foundation
 import FuzzSupport
 import Synchronization
@@ -128,7 +129,7 @@ func numbers(of tracker: Tracker) -> [Int] {
 }
 
 /// The next `count` reports, waiting for each.
-func next(_ count: Int, of reports: AsyncStream<ConsentDropReport>) -> [ConsentDropReport] {
+func next(_ count: Int, of reports: AsyncQueue<ConsentDropReport>) -> [ConsentDropReport] {
     blocking {
         var iterator = reports.makeAsyncIterator()
         var next: [ConsentDropReport] = []
@@ -150,7 +151,7 @@ func sameReports(_ actual: [ConsentDropReport], _ expected: [ConsentDropReport])
 }
 
 /// Runs `input`'s operations and checks them against the model; returns the consent's reports.
-func run(_ input: inout FuzzInput, model: inout Model) -> AsyncStream<ConsentDropReport> {
+func run(_ input: inout FuzzInput, model: inout Model) -> AsyncQueue<ConsentDropReport> {
     let consent: Consent
     do {
         consent = try Consent(heldRecordLimit: model.limit)

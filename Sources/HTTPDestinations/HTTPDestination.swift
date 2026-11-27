@@ -1,4 +1,5 @@
 import Afluent
+public import AsyncQueues
 public import Destinations
 public import Events
 public import Foundation
@@ -113,9 +114,9 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     /// A report of each batch dropped without being delivered, in the order they are dropped.
     ///
     /// Reports wait, without a bound, until they are read, so none is missed by reading late.
-    /// The sequence has one consumer, and ends once the destination and every copy of it are
-    /// gone. Read the sequence into a constant before starting the task that reads it, so the
-    /// task holds the sequence and not the destination:
+    /// The sequence ends once the destination and every copy of it are gone and every report has
+    /// been read. Read the sequence into a constant before starting the task that reads it, so
+    /// the task holds the sequence and not the destination:
     ///
     /// ```swift
     /// let reports = collector.dropReports
@@ -125,7 +126,12 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     ///     }
     /// }
     /// ```
-    public var dropReports: AsyncStream<HTTPDropReport<Encoding.Failure>> {
+    ///
+    /// One task reads the reports at a time. The first iterator to read holds them until its
+    /// iteration ends or it is released; a second reader meanwhile waits its turn, logging a
+    /// warning once, then reads on from the next report, so the first gets every report in order.
+    /// A reader cancelled while it waits returns `nil`.
+    public var dropReports: AsyncQueue<HTTPDropReport<Encoding.Failure>> {
         reporter.reports
     }
 
@@ -244,19 +250,14 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
 
 /// The drop reports a destination and its copies share, ended once the last copy is gone.
 private final class DropReporter<Failure: Error>: Sendable {
-    let reports: AsyncStream<HTTPDropReport<Failure>>
-    private let continuation: AsyncStream<HTTPDropReport<Failure>>.Continuation
-
-    init() {
-        (reports, continuation) = AsyncStream.makeStream(of: HTTPDropReport<Failure>.self)
-    }
+    let reports = AsyncQueue<HTTPDropReport<Failure>>(name: "an HTTPDestination's drop reports")
 
     deinit {
-        continuation.finish()
+        reports.finish()
     }
 
     func report(_ report: HTTPDropReport<Failure>) {
-        continuation.yield(report)
+        reports.enqueue(report)
     }
 }
 

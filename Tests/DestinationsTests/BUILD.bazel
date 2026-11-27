@@ -27,6 +27,7 @@ swift_library(
         "@swiftpkg_swift_property_based//:PropertyBased",
         "@swiftpkg_swiftprng//:Generators",
         "@swiftpkg_swiftprng//:Sampling",
+        "@swiftpkg_swift_concurrency_extras//:ConcurrencyExtras",
         "//Tests/TraffluentTestSupport",
     ],
 )

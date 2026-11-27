@@ -20,7 +20,9 @@ S = "DatabaseStore.swift"
 
 MUTANTS = [
     # Event types not in `events` (TRAF-62).
-    Mutant("unlistednotreported", L, "dropReporter.yield(.notPersisted(event: record.name))", "", mode="stmt"),
+    # The drop reports left open once the store is gone.
+    Mutant("reportsneverend", L, "dropReports.finish()", "", mode="stmt"),
+    Mutant("unlistednotreported", L, "dropReports.enqueue(.notPersisted(event: record.name))", "", mode="stmt"),
     Mutant("unlistedreportedeachrecord", L, "unlistedTypes.insert(type(of: record.event))", "(unlistedTypes.insert(type(of: record.event)) || true)"),
 
     # The table.
@@ -43,11 +45,11 @@ MUTANTS = [
     Mutant("latestnotwidened", L, "max($0.upperBound, timestamp)", "timestamp"),
     Mutant("deletesonlyfirst", L, "lastPosition = position", "lastPosition = lastPosition ?? position", mode="stmt"),
     # The first report is an event whose encode(to:) throws (TRAF-83), the second a failed write's.
-    Mutant("encodefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=0),
-    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=1),
+    Mutant("encodefailurenotreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=0),
+    Mutant("writefailurenotreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=1),
     # A drop that yields no report leaves the test waiting for it; the suite's time limit catches it.
-    Mutant("recoverydropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=0),
-    Mutant("dropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=1),
+    Mutant("recoverydropnotreported", L, "dropReports.enqueue(report)", "", mode="stmt", nth=0),
+    Mutant("dropnotreported", L, "dropReports.enqueue(report)", "", mode="stmt", nth=1),
     # Delivery.
     Mutant("marknotwritten", L, "try statement.execute(arguments: [Int64(truncatingIfNeeded: position)])", "", mode="stmt"),
     Mutant("markclears", L, '"UPDATE \\(table.quotedDatabaseIdentifier) SET isBeingDelivered = 1 WHERE position = ?"', '"UPDATE \\(table.quotedDatabaseIdentifier) SET isBeingDelivered = 0 WHERE position = ?"'),

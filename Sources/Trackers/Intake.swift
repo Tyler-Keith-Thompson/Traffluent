@@ -1,4 +1,5 @@
 internal import Afluent
+internal import AsyncQueues
 internal import Events
 internal import Foundation
 internal import Instrumentation
@@ -27,10 +28,10 @@ final class Intake: Sendable {
     /// What the worker sends the records to, for ``Tracker/records`` to read.
     let subscription: Subscription
     /// The worker's reports of the events it rejected, for ``Tracker/rejectionReports``.
-    let rejectionReports: AsyncStream<RejectionReport>
+    let rejectionReports: AsyncQueue<RejectionReport>
     /// The worker's reports of the records its samplers dropped, for
     /// ``Tracker/samplingDropReports``.
-    let samplingDropReports: AsyncStream<SamplingDropReport>
+    let samplingDropReports: AsyncQueue<SamplingDropReport>
     /// Where the worker writes each record, if anywhere, for ``Tracker/store``.
     let store: (any RecordStore)?
     // An AsyncStream rather than a Mutex-guarded Deque and a hand-written wait: its yield is
@@ -47,15 +48,15 @@ final class Intake: Sendable {
         // Joined here, before `init` returns, so every decision made from now on reaches this
         // intake, in its order with the tracks.
         let membership = consent?.gate.join(entries)
-        let rejections = DropReportQueue<RejectionReport>()
-        let samplingDrops = DropReportQueue<SamplingDropReport>()
+        let rejections = AsyncQueue<RejectionReport>(name: "a tracker's rejection reports", buffering: .init(adding: RejectionReport.add(_:to:)))
+        let samplingDrops = AsyncQueue<SamplingDropReport>(name: "a tracker's sampling drop reports", buffering: .init(adding: SamplingDropReport.add(_:to:)))
         let worker = Worker(sink: RecordSink(subscription: subscription, store: store), store: store, enrichers: enrichers, membership: membership, rejections: rejections, samplers: samplers, samplingSeed: samplingSeed, samplingDrops: samplingDrops)
         self.subscription = subscription
         self.store = store
-        // Captures the queue, not the intake, so reading the reports keeps no tracker alive; the
-        // worker ends them once it ends the records.
-        rejectionReports = AsyncStream(unfolding: { await rejections.next() })
-        samplingDropReports = AsyncStream(unfolding: { await samplingDrops.next() })
+        // The queues, not the intake, so reading the reports keeps no tracker alive; the worker
+        // ends them once it ends the records.
+        rejectionReports = rejections
+        samplingDropReports = samplingDrops
         self.entries = entries
         // Detached, so the worker never runs on the actor that made the tracker, typically the
         // main actor, nor inherits the caller's task-locals: it reads only what entries carry.

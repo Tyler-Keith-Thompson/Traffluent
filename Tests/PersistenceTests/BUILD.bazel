@@ -19,6 +19,7 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/Persistence",
+        "//Sources/AsyncQueues",
         "@swiftpkg_swift_cbor//:CBOR",
         "//Sources/GRDBPersistence",
         "//Sources/Checksums",
@@ -30,6 +31,7 @@ swift_library(
         "@swiftpkg_swift_system//:SystemPackage",
         "@swiftpkg_swift_property_based//:PropertyBased",
         "@swiftpkg_swiftcbor//:SwiftCBOR",
+        "@swiftpkg_swift_concurrency_extras//:ConcurrencyExtras",
         "//Tests/TraffluentTestSupport",
     ] + select({
         # Apple-only packages (APPLE_ONLY_PACKAGES in scripts/modules.py).

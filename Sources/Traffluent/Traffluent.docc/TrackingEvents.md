@@ -158,4 +158,7 @@ one they come back on the next launch (<doc:PersistingRecords>). A batch dropped
 destination's full buffer is reported; its stored records reach that destination later in the same
 run, and the rest are lost. One task reads a tracker's records at a time: a second reader waits, with
 a warning in the log, until the first one's iteration ends or its iterator is released, then reads
-on from the next record. Restarting a delivery after a cancellation is safe.
+on from the next record. Restarting a delivery after a cancellation is safe. The report streams
+(`rejectionReports`, `samplingDropReports`, the `dropReports` of a consent, a store or an
+`HTTPDestination`) and an `InMemoryDestination`'s `deliveries` take turns the same way, as
+``/AsyncQueues/AsyncQueue``s.

@@ -206,9 +206,9 @@ bad row in a dashboard.
   sense. `checked` should be removed and EVERYTHING that can throw, should throw. No trapping."
   Every precondition on an argument is a typed throw on the plain spelling, one error type per
   invariant; there are no `checked:` spellings. A limit reached inside the pipeline drops the
-  record with a drop report. Library code has no force unwrap, `as!` or `try!`. The one trap left
-  is Afluent's: a second task reading a tracker's records while another read waits. An item that
-  adds a trap or a `checked:` spelling is turned down, pointing here.
+  record with a drop report. Library code has no force unwrap, `as!` or `try!`. No stream the
+  library hands out traps on a second reader (TRAF-97, TRAF-99). An item that adds a trap or a
+  `checked:` spelling is turned down, pointing here.
 
 ## Open questions
 - Should Android or Windows (Swift SDKs exist) join Apple platforms and Linux? Each needs its

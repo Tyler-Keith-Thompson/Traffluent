@@ -131,7 +131,9 @@ To read what was tracked inside the app, deliver to an `InMemoryDestination` as 
 preview, or a test of what your code tracks. It keeps the newest 1,000 records, or as many as you
 pass as `capacity:`, dropping the oldest across batches; `InMemoryDestination.unbounded()` keeps
 every one. Read it with `events(of: SignedUp.self)`, `records` or `batches`, or wait on
-`deliveries`, which announces each batch to one reader.
+`deliveries`, which announces each batch to one reader at a time: a second waits its turn until the
+first one's iteration ends or its iterator is released. A reader that stops calling `next()` but
+keeps its iterator keeps the turn.
 
 ### Sensitive values and call sites
 

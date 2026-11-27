@@ -1,3 +1,4 @@
+public import AsyncQueues
 public import Events
 public import SystemPackage
 
@@ -124,8 +125,13 @@ public struct SegmentStore: RecordStore {
     ///
     /// Reports wait, without a bound, until they are read, so none is missed by reading late.
     /// Drops are rare (each is a whole segment, or bytes recovery couldn't read), so they don't
-    /// pile up. The sequence has one consumer, and ends once the store is gone.
-    public var dropReports: AsyncStream<DropReport> {
+    /// pile up. The sequence ends once the store is gone and every report has been read.
+    ///
+    /// One task reads the reports at a time. The first iterator to read holds them until its
+    /// iteration ends or it is released; a second reader meanwhile waits its turn, logging a
+    /// warning once, then reads on from the next report, so the first gets every report in order.
+    /// A reader cancelled while it waits returns `nil`.
+    public var dropReports: AsyncQueue<DropReport> {
         log.dropReports
     }
 

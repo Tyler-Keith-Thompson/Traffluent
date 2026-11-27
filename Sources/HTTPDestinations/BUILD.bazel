@@ -9,6 +9,7 @@ swift_library(
     srcs = glob(["**/*.swift"]),
     module_name = "HTTPDestinations",
     deps = [
+        "//Sources/AsyncQueues",
         "//Sources/Events",
         "//Sources/Destinations",
         "@swiftpkg_afluent//:Afluent",
@@ -26,6 +27,7 @@ docc_archive(
     module = ":HTTPDestinations",
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
+        "//Sources/AsyncQueues:AsyncQueuesDocumentation",
         "//Sources/Events:EventsDocumentation",
         "//Sources/Destinations:DestinationsDocumentation",
     ],

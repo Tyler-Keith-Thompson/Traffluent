@@ -1,13 +1,13 @@
 internal import Synchronization
 
-/// Whose turn it is to read a tracker's records: one reader at a time, the others waiting in the
-/// order they came.
+/// Whose turn it is to read a sequence that takes one reader at a time: one reader holds it, the
+/// others wait in the order they came.
 ///
 /// A reader takes the turn with its first read and keeps it between reads, until its iteration
 /// ends or its last copy is released. Then the first reader waiting takes it. So a reader never
-/// reaches the subscription while another holds the turn, and the subscription, which traps when
-/// two calls wait on it, sees one reader at a time.
-final class ReadLock: Sendable {
+/// reaches what the turn guards (a tracker's subscription, an ``AsyncQueue``'s buffer) while
+/// another holds the turn, and that sees one reader at a time.
+package final class ReadLock: Sendable {
     private struct Waiter {
         let id: UInt64
         let reader: ObjectIdentifier
@@ -35,6 +35,9 @@ final class ReadLock: Sendable {
     // can't take without starting a task, and an actor would add a hop to every read. Not an
     // Atomic: the state includes a queue of continuations.
     private let state = Mutex(State())
+
+    /// A lock no reader holds.
+    package init() {}
 
     /// Gives `reader` the turn if no other reader holds it; `false`, changing nothing, otherwise.
     fileprivate func tryAcquire(_ reader: ObjectIdentifier) -> Bool {
@@ -89,10 +92,10 @@ final class ReadLock: Sendable {
     /// One iterator's place in the lock, shared by the iterator's copies. Releasing its last copy
     /// ends its turn, so a reader whose task ends without finishing its iteration (a cancelled
     /// delivery) hands the turn on.
-    final class Reader: Sendable {
+    package final class Reader: Sendable {
         private let lock: ReadLock
 
-        init(lock: ReadLock) {
+        package init(lock: ReadLock) {
             self.lock = lock
         }
 
@@ -101,17 +104,17 @@ final class ReadLock: Sendable {
         }
 
         /// Takes the turn if no other reader holds it; `false` otherwise.
-        func tryAcquire() -> Bool {
+        package func tryAcquire() -> Bool {
             lock.tryAcquire(ObjectIdentifier(self))
         }
 
         /// Waits for the turn: `true` once taken, `false` if the waiting task is cancelled first.
-        func acquire() async -> Bool {
+        package func acquire() async -> Bool {
             await lock.acquire(ObjectIdentifier(self))
         }
 
         /// Ends the turn, if this reader holds it.
-        func release() {
+        package func release() {
             lock.release(ObjectIdentifier(self))
         }
     }

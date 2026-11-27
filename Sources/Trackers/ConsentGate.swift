@@ -1,3 +1,4 @@
+internal import AsyncQueues
 internal import DequeModule
 internal import Events
 internal import Synchronization
@@ -34,20 +35,16 @@ final class ConsentGate: Sendable {
     // synchronously and briefly, and nothing waits or writes to a store while holding it.
     private let state: Mutex<State>
     private let heldRecordLimit: Int
-    let dropReports: AsyncStream<ConsentDropReport>
-    private let reporter: DropReportQueue<ConsentDropReport>
+    // The queue alone, not the gate, so the reports end once the consent is gone.
+    let dropReports = AsyncQueue<ConsentDropReport>(name: "a consent's drop reports", buffering: .init(adding: ConsentDropReport.add(_:to:)))
 
     init(statuses: [ConsentCategory: ConsentStatus], heldRecordLimit: Int) {
         state = Mutex(State(statuses: statuses))
         self.heldRecordLimit = heldRecordLimit
-        let reporter = DropReportQueue<ConsentDropReport>()
-        self.reporter = reporter
-        // Captures the queue, not the gate, so the reports end once the consent is gone.
-        dropReports = AsyncStream(unfolding: { await reporter.next() })
     }
 
     deinit {
-        reporter.finish()
+        dropReports.finish()
     }
 
     func status(of category: ConsentCategory) -> ConsentStatus {
@@ -123,7 +120,7 @@ extension ConsentGate {
         /// Reports each of `reports` on ``Consent/dropReports``.
         func report(_ reports: [ConsentDropReport]) {
             for report in reports {
-                gate.reporter.report(report)
+                gate.dropReports.enqueue(report)
             }
         }
     }

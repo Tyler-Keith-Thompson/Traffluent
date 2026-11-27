@@ -1,4 +1,5 @@
 #if canImport(GRDB)
+import AsyncQueues
 import Events
 import Foundation
 import GRDB
@@ -51,8 +52,7 @@ final class DatabaseLog: Acknowledger {
     // commits, so the lock is always taken inside GRDB's writer and never held while waiting for
     // it: the tracker's worker appending while the app writes can't deadlock with a delivery.
     private let state: Mutex<State>
-    let dropReports: AsyncStream<DropReport>
-    private let dropReporter: AsyncStream<DropReport>.Continuation
+    let dropReports = AsyncQueue<DropReport>(name: "a DatabaseStore's drop reports")
     private let unlistedTypes = UnlistedEventTypes()
 
     private static let logger = Logger(label: "GRDBPersistence.DatabaseStore")
@@ -68,7 +68,6 @@ final class DatabaseLog: Acknowledger {
         self.table = table
         self.registry = registry
         self.byteBound = byteBound
-        (dropReports, dropReporter) = AsyncStream.makeStream(of: DropReport.self)
         var migrator = DatabaseMigrator()
         migrator.registerMigration(Self.migrationIdentifier(of: table)) { db in
             try db.create(table: table) { definition in
@@ -100,12 +99,12 @@ final class DatabaseLog: Acknowledger {
         }
         state.withLock { $0.recovered = tagged }
         for report in reports {
-            dropReporter.yield(report)
+            dropReports.enqueue(report)
         }
     }
 
     deinit {
-        dropReporter.finish()
+        dropReports.finish()
     }
 
     // MARK: Appending
@@ -116,7 +115,7 @@ final class DatabaseLog: Acknowledger {
         guard let registration = registry.registration(of: type(of: record.event)) else {
             if unlistedTypes.insert(type(of: record.event)) {
                 Self.logger.notice("Kept \(record.name) records in memory only: its type isn't one of the store's events")
-                dropReporter.yield(.notPersisted(event: record.name))
+                dropReports.enqueue(.notPersisted(event: record.name))
             }
             return record
         }
@@ -125,7 +124,7 @@ final class DatabaseLog: Acknowledger {
             payload = try RecordEncoding.bytes(of: record, registration: registration)
         } catch {
             Self.logger.error("Kept a \(registration.name) record in memory only: encoding its event failed with \(error)")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
         guard payload.count <= byteBound else {
@@ -162,11 +161,11 @@ final class DatabaseLog: Acknowledger {
             }
         } catch {
             Self.logger.error("Kept a \(registration.name) record in memory only: inserting it into \(table) failed with \(error)")
-            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
+            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))
             return record
         }
         if let report = eviction.report {
-            dropReporter.yield(report)
+            dropReports.enqueue(report)
         }
         var tagged = record
         tagged.deliveryTag = DeliveryTag(acknowledger: self, position: UInt64(position))

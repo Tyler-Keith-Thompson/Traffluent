@@ -2,6 +2,7 @@
 //
 // Umbrella: `import Traffluent` imports every module.
 
+@_exported import AsyncQueues
 @_exported import Events
 @_exported import Destinations
 @_exported import LoggingDestinations

@@ -1,4 +1,5 @@
 #if canImport(GRDB)
+import AsyncQueues
 import Destinations
 import Events
 import Foundation
@@ -254,7 +255,7 @@ struct DatabaseStoreTests {
         let expectedSecondReports: [DropReport] = []
         let expectedNumbers = [3]
 
-        var firstReports: AsyncStream<DropReport>.AsyncIterator
+        var firstReports: AsyncQueue<DropReport>.AsyncIterator
         do {
             let first = try DatabaseStore(events: [TappedVersion2.self], database: database)
             firstReports = first.dropReports.makeAsyncIterator()
@@ -262,7 +263,7 @@ struct DatabaseStoreTests {
         }
         var actualFirstReports: [DropReport] = []
         while let report = await firstReports.next() { actualFirstReports.append(report) }
-        var secondReports: AsyncStream<DropReport>.AsyncIterator
+        var secondReports: AsyncQueue<DropReport>.AsyncIterator
         let actualNumbers: [Int]
         do {
             let sut = try DatabaseStore(events: [TappedVersion2.self], database: database)

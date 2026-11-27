@@ -43,7 +43,9 @@ RC = "Refined+Codable.swift"
 
 MUTANTS = [
     # Event types not in `events` (TRAF-62).
-    Mutant("unlistednotreported", L, "dropReporter.yield(.notPersisted(event: record.name))", "", mode="stmt"),
+    # The drop reports left open once the store is gone.
+    Mutant("reportsneverend", L, "dropReports.finish()", "", mode="stmt"),
+    Mutant("unlistednotreported", L, "dropReports.enqueue(.notPersisted(event: record.name))", "", mode="stmt"),
     Mutant("unlistedreportedeachrecord", L, "unlistedTypes.insert(type(of: record.event))", "(unlistedTypes.insert(type(of: record.event)) || true)"),
     Mutant("unlistedtypesalwaysnew", "UnlistedEventTypes.swift", "seen.withLock { $0.insert(ObjectIdentifier(type)).inserted }", "seen.withLock { _ in true }", mode="stmt"),
 
@@ -82,7 +84,7 @@ MUTANTS = [
     Mutant("markoffbyone", F, "withUnsafeBytes(of: index.littleEndian) { frame.append(contentsOf: $0) }", "withUnsafeBytes(of: (index + 1).littleEndian) { frame.append(contentsOf: $0) }", mode="stmt"),
     Mutant("payloadnotframed", F, "frame.append(contentsOf: payload)", "", mode="stmt"),
     # An event whose encode(to:) throws: kept in memory, reported as a failed write.
-    Mutant("encodefailurenotreported", L, "            Self.logger.error(\"Kept a \\(registration.name) record in memory only: encoding its event failed with \\(error)\")\n            dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "            Self.logger.error(\"Kept a \\(registration.name) record in memory only: encoding its event failed with \\(error)\")", mode="stmt"),
+    Mutant("encodefailurenotreported", L, "            Self.logger.error(\"Kept a \\(registration.name) record in memory only: encoding its event failed with \\(error)\")\n            dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "            Self.logger.error(\"Kept a \\(registration.name) record in memory only: encoding its event failed with \\(error)\")", mode="stmt"),
     # Appending.
     Mutant("notwritten", L, "try frame.write(to: state.segments[active].file.descriptor)", "", mode="stmt"),
     Mutant("nottagged", L, "tagged.deliveryTag = DeliveryTag(acknowledger: self, position: position)", "", mode="stmt"),
@@ -98,8 +100,8 @@ MUTANTS = [
     # The first report is an encoding failure's (encodefailurenotreported, above). The second, of a
     # frame larger than a frame can be (over 4 GiB), has no mutant: no test can build a record that
     # large. The three after it are a failed write's, a full log's and an exhausted log's.
-    Mutant("writefailurenotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=2),
-    Mutant("fullnotreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=3),
+    Mutant("writefailurenotreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=2),
+    Mutant("fullnotreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=3),
     Mutant("partialwritekept", L, "try? state.segments[active].file.descriptor.resize(to: Int64(state.segments[active].byteCount))", "", mode="stmt"),
     Mutant("partialheaderkept", L, "try? path.removeFile()", "", mode="stmt"),
     Mutant("undeletedforgotten", L, "state.undeleted.insert(segment.number)", "", mode="stmt"),
@@ -107,9 +109,9 @@ MUTANTS = [
     Mutant("largestrejected", L, "frameByteCount <= byteBound - SegmentFormat.header.count", "frameByteCount < byteBound - SegmentFormat.header.count"),
     Mutant("evictsnewest", L, "Self.delete(state.segments.removeFirst(), from: &state, reports: &reports)", "Self.delete(state.segments.removeLast(), from: &state, reports: &reports)", mode="stmt", nth=0),
     # A drop that yields no report leaves the test waiting for it; the suite's time limit catches it.
-    Mutant("recoverydropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=0),
-    Mutant("dropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=1),
-    Mutant("markdropnotreported", L, "dropReporter.yield(report)", "", mode="stmt", nth=2),
+    Mutant("recoverydropnotreported", L, "dropReports.enqueue(report)", "", mode="stmt", nth=0),
+    Mutant("dropnotreported", L, "dropReports.enqueue(report)", "", mode="stmt", nth=1),
+    Mutant("markdropnotreported", L, "dropReports.enqueue(report)", "", mode="stmt", nth=2),
     Mutant("markunbounded", L, "state.byteCount + frame.count > byteBound", "false"),
     Mutant("reportcountsdelivered", L, "zip(segment.timestamps, segment.acknowledged).filter { !$0.1 }", "zip(segment.timestamps, segment.acknowledged).filter { _ in true }"),
     Mutant("reportlatestonly", L, "earliest...latest", "latest...latest"),
@@ -145,7 +147,7 @@ MUTANTS = [
     # that has used them all keeps a new record in memory, reported as a failed write.
     Mutant("segmentlimitraised", L, "1 << 32", "1 << 33"),
     Mutant("numberpastlimitread", L, "$0 < segmentNumberLimit ? $0 : nil", "$0"),
-    Mutant("exhaustedunreported", L, "dropReporter.yield(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=4),
+    Mutant("exhaustedunreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=4),
     Mutant("anyfilename", L, 'guard name.hasSuffix(".segment") else { return nil }', "", mode="stmt"),
     # The store.
     Mutant("defaultbound", S, "5 * 1024 * 1024", "5 * 1000 * 1000"),

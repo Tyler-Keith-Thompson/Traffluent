@@ -80,7 +80,7 @@ MUTANTS = [
     Mutant("abandonedascancelled", D, "return .abandoned(error)", "return .cancelled", mode="stmt"),
     Mutant("encodingnotreported", D, "reporter.report(.notEncoded(error, recordIDs: batch.map(\\.id)))", "", mode="stmt"),
     Mutant("encodingidslost", D, "reporter.report(.notEncoded(error, recordIDs: batch.map(\\.id)))", "reporter.report(.notEncoded(error, recordIDs: []))", mode="stmt"),
-    Mutant("reportsneverend", D, "continuation.finish()", "", mode="stmt"),
+    Mutant("reportsneverend", D, "reports.finish()", "", mode="stmt"),
     # Attempts and retries.
     Mutant("backoffignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock) }", "retryStrategy = { TransientFailureRetry(ExponentialBackoff(), clock: clock) }", mode="stmt"),
     Mutant("clockignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock) }", "retryStrategy = { TransientFailureRetry(backoff, clock: ContinuousClock()) }", mode="stmt"),
@@ -101,7 +101,7 @@ MUTANTS = [
     Mutant("norequesttimeoutretried", R, "self == .requestTimeout", "false"),
     Mutant("notoomanyrequestsretried", R, "self == .tooManyRequests", "false"),
     Mutant("rejectionretried", R, "return false", "return try await backoff.handle(error: error, beforeRetry: beforeRetry)", mode="stmt"),
-    Mutant("backoffbase3", R, "ExponentialBackoffStrategy(base: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(base: 3, maxDelay: backoff.maximumDelay)"),
+    Mutant("backoffbase3", R, "ExponentialBackoffStrategy(base: 2, maxCount: UInt(Int32.max) - 1, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(base: 3, maxCount: UInt(Int32.max) - 1, maxDelay: backoff.maximumDelay)"),
     Mutant("afluentcapsooner", R, "backoff.maximumDelay", "backoff.initialDelay", nth=1),
     Mutant("retryoffbyone", R, "power.trailingZeroBitCount", "power.trailingZeroBitCount + 1"),
     # ExponentialBackoff.

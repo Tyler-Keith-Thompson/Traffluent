@@ -2,6 +2,7 @@
 // once per kind of store, as a parameterized test. Kept in this target rather than in
 // TraffluentTestSupport, which every test target links: there it would bring GRDB to all of them.
 
+import AsyncQueues
 import Events
 import Foundation
 import Persistence
@@ -23,7 +24,7 @@ import Glibc
 protocol InspectableStore: RecordStore {
     var byteCount: Int { get }
     var pendingRecordCount: Int { get }
-    var dropReports: AsyncStream<DropReport> { get }
+    var dropReports: AsyncQueue<DropReport> { get }
 }
 
 extension SegmentStore: InspectableStore {}
