@@ -1,5 +1,6 @@
 internal import CBOR
 package import Events
+package import JSONValues
 package import TrackingPlans
 
 extension EventRecord {

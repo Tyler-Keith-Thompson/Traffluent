@@ -20,15 +20,18 @@ the vendor's. ``/PostHogEncoding`` is built this way and is a full example to co
 
 ### The module
 
-Make the module depend on `HTTPDestinations`, `PropertyJSON` and `TrackingPlans`, and on
-swift-distributed-tracing's `Instrumentation` for `NoOpInstrument`. Its tests depend on
+Make the module depend on `HTTPDestinations`, `PropertyJSON`, `JSONValues` and `TrackingPlans`,
+and on swift-distributed-tracing's `Instrumentation` for `NoOpInstrument`. Its tests depend on
 `DestinationTesting` as well. `PropertyJSON` holds the vendor-neutral pieces an encoder is built
-from, and `DestinationTesting` imports Swift Testing, so it goes in test targets only.
+from, `JSONValues` the `JSON` value it writes, and `TrackingPlans` the app's `TrackingPlan`, which
+the encoder reads properties through. `DestinationTesting` imports Swift Testing, so it goes in
+test targets only.
 
 ```swift
 .target(name: "AcmeEncoding", dependencies: [
     .product(name: "HTTPDestinations", package: "Traffluent"),
     .product(name: "PropertyJSON", package: "Traffluent"),
+    .product(name: "JSONValues", package: "Traffluent"),
     .product(name: "TrackingPlans", package: "Traffluent"),
     .product(name: "Instrumentation", package: "swift-distributed-tracing"),
 ]),

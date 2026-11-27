@@ -4,6 +4,7 @@ import Foundation
 import HTTPDestinations
 import HTTPTypes
 import Instrumentation
+import JSONValues
 import PropertyJSON
 import Testing
 import TrackingPlans

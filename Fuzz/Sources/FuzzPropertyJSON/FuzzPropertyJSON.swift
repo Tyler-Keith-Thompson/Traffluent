@@ -10,8 +10,8 @@ import Events
 import Foundation
 import FuzzSupport
 import HTTPDestinations
+import JSONValues
 import PropertyJSON
-import TrackingPlans
 
 struct Sized: Event {
     var size: Int

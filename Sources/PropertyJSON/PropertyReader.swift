@@ -1,4 +1,5 @@
 public import Events
+public import JSONValues
 public import TrackingPlans
 
 /// Reads each record's event properties as JSON, through its event's schema in a tracking plan.

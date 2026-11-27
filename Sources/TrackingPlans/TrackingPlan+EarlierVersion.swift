@@ -1,4 +1,5 @@
 import Events
+import JSONValues
 
 extension TrackingPlan {
     /// A committed document of an earlier version of one of the plan's events, with its example

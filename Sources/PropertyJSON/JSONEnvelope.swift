@@ -1,6 +1,6 @@
 import Foundation
 public import HTTPDestinations
-public import TrackingPlans
+public import JSONValues
 
 /// The JSON a request body wraps a batch's records in: a bare array, or an object holding the
 /// array under one member, beside members every request repeats (a key, a schema).

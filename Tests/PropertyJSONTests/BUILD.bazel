@@ -19,6 +19,7 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         "//Sources/PropertyJSON",
+        "//Sources/JSONValues",
         "//Sources/EventMacros",
         "//Sources/Events",
         "//Sources/HTTPDestinations",

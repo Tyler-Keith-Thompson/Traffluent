@@ -31,25 +31,25 @@ public indirect enum JSON: Hashable, Sendable {
     case object([String: JSON])
 
     /// The JSON value `bytes` hold, or `nil` when they aren't JSON a plan could have written.
-    init?(parsing bytes: [UInt8]) {
+    package init?(parsing bytes: [UInt8]) {
         guard let value = try? JSONDecoder().decode(JSON.self, from: Data(bytes)) else { return nil }
         self = value
     }
 
     /// The members of an object, or `nil` for any other value.
-    var object: [String: JSON]? {
+    package var object: [String: JSON]? {
         if case .object(let members) = self { return members }
         return nil
     }
 
     /// The elements of an array, or `nil` for any other value.
-    var array: [JSON]? {
+    package var array: [JSON]? {
         if case .array(let elements) = self { return elements }
         return nil
     }
 
     /// The text of a string, or `nil` for any other value.
-    var string: String? {
+    package var string: String? {
         if case .string(let text) = self { return text }
         return nil
     }
@@ -66,7 +66,7 @@ public indirect enum JSON: Hashable, Sendable {
     }
 
     /// The value of a number, an integer included, or `nil` for any other value.
-    var double: Double? {
+    package var double: Double? {
         switch self {
         case .integer(let value): Double(value)
         case .number(let value): value
@@ -75,13 +75,13 @@ public indirect enum JSON: Hashable, Sendable {
     }
 
     /// The value of an integer, or `nil` for any other value.
-    var integer: Int64? {
+    package var integer: Int64? {
         if case .integer(let value) = self { return value }
         return nil
     }
 
     /// The value on one line, with the same spacing and key order as ``rendered``, for messages.
-    var compact: String {
+    package var compact: String {
         switch self {
         case .array(let elements):
             "[" + elements.map(\.compact).joined(separator: ", ") + "]"
@@ -113,7 +113,7 @@ public indirect enum JSON: Hashable, Sendable {
     /// The value as JSON text: two-space indentation, `"key": value`, object keys in the order of
     /// their UTF-8 bytes, and an empty array or object on one line, as JavaScript's
     /// `JSON.stringify(value, null, 2)` writes it.
-    var rendered: String {
+    package var rendered: String {
         var text = ""
         render(into: &text, indentation: "")
         return text

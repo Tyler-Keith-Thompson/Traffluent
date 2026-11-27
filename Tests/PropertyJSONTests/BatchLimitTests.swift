@@ -1,8 +1,8 @@
 import Foundation
 import HTTPDestinations
+import JSONValues
 import PropertyJSON
 import Testing
-import TrackingPlans
 
 @Suite("BatchLimit and JSONEnvelope")
 struct BatchLimitTests {

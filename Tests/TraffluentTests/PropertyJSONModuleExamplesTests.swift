@@ -5,6 +5,7 @@
 import EventMacros
 import Foundation
 import Instrumentation
+import JSONValues
 import PropertyJSON
 import Testing
 import TrackingPlans

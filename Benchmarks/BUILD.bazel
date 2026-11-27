@@ -30,6 +30,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/Events",
     "Sources/GRDBPersistence",
     "Sources/HTTPDestinations",
+    "Sources/JSONValues",
     "Sources/LifecycleTracking",
     "Sources/LoggingDestinations",
     "Sources/Persistence",

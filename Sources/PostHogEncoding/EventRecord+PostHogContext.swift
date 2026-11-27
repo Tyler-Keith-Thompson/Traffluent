@@ -1,8 +1,8 @@
 import Events
 import Foundation
 import Instrumentation
+import JSONValues
 import StandardContext
-import TrackingPlans
 
 extension EventRecord {
     /// The PostHog properties of the library's own context keys the record holds a value for.

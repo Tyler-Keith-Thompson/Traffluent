@@ -1,4 +1,5 @@
 import Events
+import JSONValues
 
 extension EventSchema {
     /// The event's example: a payload its document accepts, with every property present, each set

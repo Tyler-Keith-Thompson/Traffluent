@@ -8,6 +8,7 @@ import EventMacros
 import Foundation
 import Instrumentation
 import HTTPDestinations
+import JSONValues
 import PropertyJSON
 import Testing
 import TrackingPlans

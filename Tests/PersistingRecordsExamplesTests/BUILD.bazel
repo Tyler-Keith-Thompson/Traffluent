@@ -26,6 +26,7 @@ swift_library(
         "//Sources/TrackerTesting",
         "//Sources/PostHogEncoding",
         "//Sources/PropertyJSON",
+        "//Sources/JSONValues",
         "//Sources/DestinationTesting",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_distributed_tracing//:Tracing",

@@ -1,4 +1,5 @@
 public import Events
+import JSONValues
 
 /// The JSON Schema (draft 2020-12) of every event an app tracks: one document per event and an
 /// index, exported from the events' ``/Events/EventSchema`` values.

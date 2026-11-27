@@ -1,10 +1,10 @@
 import EventMacros
 import Foundation
 import HTTPDestinations
+import JSONValues
 import PropertyBased
 import PropertyJSON
 import Testing
-import TrackingPlans
 import TraffluentTestSupport
 
 @Suite("BatchLimit.requests(for:in:encoding:oversized:)")

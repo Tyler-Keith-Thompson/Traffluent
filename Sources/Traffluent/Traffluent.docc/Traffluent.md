@@ -117,7 +117,7 @@ struct CartView: View {
 }
 ```
 
-`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``, ``/PropertyJSON``,
+`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``, ``/PropertyJSON``, ``/JSONValues``,
 ``/GRDBPersistence`` and the testing modules, which are products of their own.
 
 ### Where to go next
@@ -189,6 +189,7 @@ struct CartView: View {
 - ``/CollectorEncoding``
 - ``/PostHogEncoding``
 - ``/PropertyJSON``
+- ``/JSONValues``
 - ``/Persistence``
 - ``/GRDBPersistence``
 - ``/EventMacros``

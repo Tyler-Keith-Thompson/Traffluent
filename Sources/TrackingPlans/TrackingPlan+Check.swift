@@ -1,5 +1,6 @@
 import Events
 public import Foundation
+import JSONValues
 
 extension TrackingPlan {
     /// Compares the plan with `committed`, the files of a plan exported before, and reports every

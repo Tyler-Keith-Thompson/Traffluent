@@ -1,5 +1,6 @@
 internal import CBOR
 import Foundation
+internal import JSONValues
 internal import TrackingPlans
 
 /// Reads an event's CBOR, the map of its properties its `Encodable` conformance writes, as JSON,

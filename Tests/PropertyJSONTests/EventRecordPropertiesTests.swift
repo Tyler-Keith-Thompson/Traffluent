@@ -1,6 +1,7 @@
 import EventMacros
 import Events
 import Foundation
+import JSONValues
 import Persistence
 import PropertyJSON
 import Testing

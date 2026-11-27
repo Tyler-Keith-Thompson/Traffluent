@@ -1,7 +1,7 @@
 public import Events
 public import Foundation
 public import HTTPDestinations
-public import TrackingPlans
+public import JSONValues
 
 extension BatchLimit {
     /// `batch` as the fewest requests in order that keep within the limit, each of `envelope`

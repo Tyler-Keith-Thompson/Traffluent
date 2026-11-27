@@ -10,6 +10,7 @@ swift_library(
     module_name = "CollectorEncoding",
     deps = [
         "//Sources/Events",
+        "//Sources/JSONValues",
         "//Sources/PropertyJSON",
         "//Sources/HTTPDestinations",
         "//Sources/TrackingPlans",
@@ -28,6 +29,7 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/HTTPDestinations:HTTPDestinationsDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",

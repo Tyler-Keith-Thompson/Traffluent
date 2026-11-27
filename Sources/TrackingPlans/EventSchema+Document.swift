@@ -1,4 +1,5 @@
 import Events
+import JSONValues
 
 extension EventSchema {
     /// The event's document's file name: `<name>.v<version>.schema.json`, the name's bytes other

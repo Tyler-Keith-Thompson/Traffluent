@@ -2,6 +2,7 @@
 # (tools/compile_failure_test.bzl). SwiftPM never sees this directory: no target holds it.
 
 load("//tools:compile_failure_test.bzl", "swift_compile_failure_test")
+load("//tools:swift_rules.bzl", "swift_library")
 
 # @Event on a struct with a stored property whose type isn't Codable: the error names the
 # property, through the requirement the macro generates for each one.
@@ -121,4 +122,43 @@ swift_compile_failure_test(
     plugin_module_name = "EventMacrosPlugin",
     tags = ["debug-only"],
     deps = ["//Sources/EventMacros"],
+)
+
+# Another package's top-level `JSON`, for the two checks below; only they reach it.
+swift_library(
+    name = "OtherJSON",
+    testonly = True,
+    srcs = ["OtherJSON/JSON.swift"],
+    module_name = "OtherJSON",
+)
+
+# A file that imports Traffluent and another module's `JSON` names it unqualified: the umbrella
+# leaves JSONValues out (NON_UMBRELLA_MODULES in scripts/modules.py), so it declares no `JSON`.
+swift_compile_failure_test(
+    name = "UmbrellaBesideOtherJSONControl",
+    size = "small",
+    src = "UmbrellaBesideOtherJSONControl.swift",
+    tags = ["debug-only"],
+    deps = [
+        ":OtherJSON",
+        "//Sources/Traffluent",
+    ],
+)
+
+# The same file importing JSONValues as well fails with the ambiguity the umbrella would bring
+# were it to re-export JSONValues, so the control passes because of the umbrella, not because the
+# check can't see a second `JSON`.
+swift_compile_failure_test(
+    name = "UmbrellaBesideOtherJSONWithJSONValues",
+    size = "small",
+    src = "UmbrellaBesideOtherJSONWithJSONValues.swift",
+    expected_errors = [
+        "error: 'JSON' is ambiguous for type lookup in this context",
+    ],
+    tags = ["debug-only"],
+    deps = [
+        ":OtherJSON",
+        "//Sources/JSONValues",
+        "//Sources/Traffluent",
+    ],
 )

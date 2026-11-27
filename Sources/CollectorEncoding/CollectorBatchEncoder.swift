@@ -2,6 +2,7 @@ public import Events
 import Foundation
 public import HTTPDestinations
 public import Instrumentation
+import JSONValues
 import PropertyJSON
 public import TrackingPlans
 

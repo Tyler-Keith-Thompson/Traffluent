@@ -1,9 +1,9 @@
 import Events
 import Foundation
 import Instrumentation
+import JSONValues
 import Sessions
 import StandardContext
-import TrackingPlans
 import Trackers
 
 extension EventRecord {

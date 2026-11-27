@@ -19,9 +19,11 @@ every such encoder needs, so each vendor module writes only its own format:
   records and bytes, and leaves out a record that fits in none of them as a `SkippedRecord`
   (module ``/HTTPDestinations``).
 
-`import Traffluent` leaves this module out; a vendor module imports it on its own.
+Properties, context and envelopes are `JSON` values, a type from ``/JSONValues`` that a vendor
+module imports beside this one. `import Traffluent` leaves both modules out.
 
 ```swift
+import JSONValues
 import PropertyJSON
 import TrackingPlans
 

@@ -10,8 +10,6 @@
 #   normalized scalars, the same order as their bytes for the NFC text every test can write.
 # - The fallback CocoaError in `cocoa(_:)`: every error Foundation's file calls throw is a CocoaError
 #   already, so no test can reach it.
-# - Trying Int64 before Bool in JSON's decoding: JSONDecoder reads no integer from `true` or `false`
-#   on any platform, so the order picks the same case.
 # - Dropping `filter(TrackingPlan.isPlanFile)` in `check(againstDirectory:)`: `check(against:)`
 #   filters the files again; the first filter only saves reading files a plan doesn't write.
 # - `$0.version > event.version` as `>=` when finding a later version: an equal version is the
@@ -24,7 +22,6 @@
 TESTS = ["TrackingPlansTests"]
 
 T = "TrackingPlan.swift"
-J = "JSON.swift"
 D = "EventSchema+Document.swift"
 W = "WrittenType.swift"
 F = "TrackingPlan+Write.swift"
@@ -55,22 +52,6 @@ MUTANTS = [
     Mutant("notrailingnewline", T, 'json.rendered + "\\n"', "json.rendered"),
     Mutant("noexamples", T, "[File(path: schema.fileName, json: document), File(path: schema.exampleFileName, json: schema.example)]", "[File(path: schema.fileName, json: document)]"),
     Mutant("indexexampleisdocument", T, '.string(exampleFileName)', '.string(fileName)'),
-    # JSON: the rendering.
-    Mutant("emptyarraymultiline", J, "!elements.isEmpty", "true"),
-    Mutant("emptyobjectmultiline", J, "!members.isEmpty", "true"),
-    Mutant("arrayindentwide", J, 'indentation + "  "', 'indentation + "    "', nth=0),
-    Mutant("objectindentwide", J, 'indentation + "  "', 'indentation + "    "', nth=1),
-    Mutant("arraytrailingcomma", J, 'offset == elements.count - 1 ? "\\n" : ",\\n"', '",\\n"'),
-    Mutant("objecttrailingcomma", J, 'offset == sorted.count - 1 ? "\\n" : ",\\n"', '",\\n"'),
-    Mutant("keysreversed", J, "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=1),
-    Mutant("colonspaced", J, '": "', '" : "', nth=1),
-    Mutant("booleanalwaystrue", J, 'boolean ? "true" : "false"', '"true"'),
-    Mutant("quoteunescaped", J, r'"\\\""', r'"\""'),
-    Mutant("nonfinitenumberwritten", J, "!number.isFinite", "false"),
-    Mutant("backslashunescaped", J, r'"\\\\"', r'"\\"'),
-    Mutant("newlineraw", J, r'"\\n"', r'"\n"'),
-    Mutant("controlnotpadded", J, "4 - hex.count", "2 - hex.count"),
-    Mutant("controllowercase", J, "String(scalar.value, radix: 16, uppercase: true)", "String(scalar.value, radix: 16, uppercase: false)"),
     # EventSchema+Document: file names and documents.
     Mutant("everybyteunreserved", D, "byte.isUnreserved", "true"),
     Mutant("hexnotpadded", D, '(hex.count == 1 ? "0" : "")', '""'),
@@ -179,14 +160,6 @@ MUTANTS = [
     Mutant("unknownexample", E, ".null", '.string("")', nth=1),
     Mutant("nullexampletype", E, '$0 != "null"', '$0 == "null"'),
     Mutant("nopropertyexamples", E, "(property.name, property.schema.example)", "(property.name, JSON.null)"),
-    # JSON: reading and one-line rendering.
-    Mutant("nullunread", J, "container.decodeNil()", "false"),
-    # The first copy is .null's, the second a non-finite number's.
-    Mutant("nullrendered", J, 'text += "null"', 'text += "nil"', mode="stmt", nth=0),
-    Mutant("compactarrayunspaced", J, '", "', '","', nth=0),
-    Mutant("compactobjectunspaced", J, '", "', '","', nth=1),
-    Mutant("compactcolon", J, 'JSON.string($0.key).compact + ": "', 'JSON.string($0.key).compact + ":"'),
-    Mutant("compactunsorted", J, "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=0),
     # Checking: what is compared.
     Mutant("bytesfirst", K, "differences.isEmpty", "true"),
     Mutant("bytesignored", K, "committedFiles[$0] != currentFiles[$0]", "false"),
@@ -226,10 +199,6 @@ MUTANTS = [
     Mutant("patternexamplemissing", D, 'schema["examples"] = .array([.string(example)])', "", mode="stmt"),
     Mutant("secondpatterndropped", D, 'schema["allOf"] = .array((schema["allOf"]?.array ?? []) + [.object(["pattern": .string(pattern)])])', "", mode="stmt"),
     Mutant("refinedunmapped", D, "arguments.count == 2", "arguments.count == 3"),
-    # JSON numbers.
-    Mutant("wholenumberfractional", J, "return .integer(Int64(value))", "return .number(value)", mode="stmt"),
-    Mutant("fractionnotdecoded", J, "self = json", "self = .null", mode="stmt"),
-    Mutant("hugenumberinteger", J, "value < 9_223_372_036_854_775_808", "true"),
     # Examples that meet their keywords.
     Mutant("patternexampleignored", E, 'self["examples"]?.array?.first', "nil"),
     Mutant("minlengthignored", E, "minimum > 7", "false"),

@@ -1,7 +1,7 @@
+import JSONValues
 import PropertyBased
 import PropertyJSON
 import Testing
-import TrackingPlans
 import TraffluentTestSupport
 
 @Suite("[String: JSON].flattened(separator:)")
