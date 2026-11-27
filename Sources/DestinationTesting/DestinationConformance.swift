@@ -226,7 +226,9 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
 
     private func expectTransientFailuresRetried(sourceLocation: Testing.SourceLocation) async throws {
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
-        let failures: [ScriptedTransport.Answer] = [.noResponse, .status(.requestTimeout), .status(.tooManyRequests), .status(.internalServerError), .status(.serviceUnavailable)]
+        // The encoder's own transient statuses too, by code, so the check runs in one order.
+        let vendorFailures = Encoding.transientStatuses.map(\.status).sorted { $0.code < $1.code }.map(ScriptedTransport.Answer.status)
+        let failures: [ScriptedTransport.Answer] = [.noResponse, .status(.requestTimeout), .status(.tooManyRequests), .status(.internalServerError), .status(.serviceUnavailable)] + vendorFailures
         for failure in failures {
             let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-retried"), timestamp: timestamp, sourceLocation: nil)
 
@@ -246,7 +248,19 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     private func expectRejectionsDropped(sourceLocation: Testing.SourceLocation) async throws {
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
         let rejections: [HTTPResponse.Status] = [.badRequest, .unauthorized, .forbidden, .notFound, .contentTooLarge, .unprocessableContent]
-        for status in rejections {
+        // A status the encoder lists as transient is retried, which transientFailuresRetried checks.
+        let vendorFailures = Set(Encoding.transientStatuses.map(\.status))
+        var checked = rejections.filter { !vendorFailures.contains($0) }
+        if checked.isEmpty {
+            // The encoder lists every status above, so the check sends the first client error it
+            // doesn't list instead, rather than passing on nothing.
+            guard let fallback = (400 ... 499).lazy.map({ HTTPResponse.Status(code: $0) }).first(where: { !vendorFailures.contains($0) }) else {
+                Issue.record("The encoder lists every client error (4xx) as transient, so no rejection is left to check", sourceLocation: sourceLocation)
+                return
+            }
+            checked = [fallback]
+        }
+        for status in checked {
             let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-rejected"), timestamp: timestamp, sourceLocation: nil)
 
             let sent = try await send([record], plan: plan, script: [.status(status)], through: makeDestination)

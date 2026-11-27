@@ -122,8 +122,8 @@ struct AcmeBatchEncoder: BatchEncoder {
 }
 ```
 
-`requests(for:)` is all a `BatchEncoder` implements, and `Failure` names the reason a record is
-left out, as `requests(for:)` doesn't throw. `HTTPDestination` sends the requests in order, and
+A `BatchEncoder` implements `requests(for:)` and declares `transientStatuses` (below), and
+`Failure` names the reason a record is left out, as `requests(for:)` doesn't throw. `HTTPDestination` sends the requests in order, and
 reports each record left out as `HTTPDropReport.skipped(_:)`. Pass `includingSensitiveValues: true` only if the
 vendor's terms allow the values, and then only through a factory the adopter opts in with.
 
@@ -135,6 +135,25 @@ tracked, and `HTTPDestination` drops a request still being retried by then, all 
 reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, rather than send records the
 vendor would store wrongly. Have the factory pass its `now:` to both the encoder and the
 destination, so one clock decides what is encoded and what is sent.
+
+`HTTPDestination` retries no response, a 5xx, 408 and 429, and drops a request answered with any
+other status. Every encoder declares `transientStatuses`, as there is no default: `[]` when the
+vendor answers only those to a request worth sending again. If it answers some other failure for
+one, list that status, and `HTTPDestination` retries it too. A `TransientStatus` is a client or server error (4xx or 5xx); any other status throws
+`InvalidTransientStatus`, as a 2xx is always delivered:
+
+```swift
+extension AcmeBatchEncoder {
+    /// Acme answers 425 Too Early while a new region starts up, and takes the request later.
+    static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(425)).map { [$0] } ?? []
+}
+```
+
+The set belongs to the encoder's type, so every destination made with that encoder retries those
+statuses, whether it comes from the factory or not. The conformance checks read it too. An encoder
+that wraps another, to filter or rename records, forwards the inner encoder's set
+(`static var transientStatuses: Set<TransientStatus> { Inner.transientStatuses }`), or the
+vendor's retries are lost.
 
 ### The factory
 
@@ -188,7 +207,7 @@ limit and a closure that calls the factory with the setup's plan, transport and 
   skipped and reported.
 - ``/DestinationTesting/ConformanceCheck/transientFailuresRetried`` and
   ``/DestinationTesting/ConformanceCheck/rejectionsDropped``: failures are retried or dropped as
-  `HTTPDestination` classifies them.
+  `HTTPDestination` classifies them, the encoder's `transientStatuses` among the retried ones.
 - ``/DestinationTesting/ConformanceCheck/traceContextWithheld``: no request carries a trace context,
   even while a tracer is active.
 

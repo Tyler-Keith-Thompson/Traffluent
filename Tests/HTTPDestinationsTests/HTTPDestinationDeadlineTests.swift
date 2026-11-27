@@ -16,6 +16,8 @@ struct HTTPDestinationDeadlineTests {
     /// Encodes each record as a request of its own, its body the record's identifier, with the
     /// deadline `deadlines` gives the record's plan, if any.
     struct DeadlineEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         var deadlines: [String: Date] = [:]
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {

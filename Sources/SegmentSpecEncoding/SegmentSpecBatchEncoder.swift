@@ -88,6 +88,9 @@ public import TrackingPlans
 /// records on every run and platform: no whitespace, object members in the order of their names'
 /// UTF-8 bytes.
 public struct SegmentSpecBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From the docs, read on 2026-11-27:
     // - Segment's HTTP Tracking API,
     //   https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/ ("Batch":

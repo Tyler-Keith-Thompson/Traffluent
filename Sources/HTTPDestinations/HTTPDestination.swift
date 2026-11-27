@@ -34,9 +34,10 @@ import Logging
 /// - A request the transport can never send (``HTTPTransportError/invalidRequest(reason:)``: a
 ///   malformed or unsupported URL, or an `http` URL App Transport Security refuses) isn't sent
 ///   again.
-/// - No response, a 5xx status, 408 Request Timeout or 429 Too Many Requests means it didn't
-///   arrive yet: the same request is sent again after the backoff's next wait, for as long as it
-///   takes. A `Retry-After` field is not read; the backoff alone sets the wait.
+/// - No response, a 5xx status, 408 Request Timeout, 429 Too Many Requests, or a status the
+///   encoder lists in ``BatchEncoder/transientStatuses`` means it didn't arrive yet: the same
+///   request is sent again after the backoff's next wait, for as long as it takes. A
+///   `Retry-After` field is not read; the backoff alone sets the wait.
 /// - Any other status means the endpoint won't take the request, and it isn't sent again. The
 ///   batch's later requests are still sent.
 /// - A request with a deadline (``EncodedRequest/deadline``) is sent only while the destination's
@@ -100,6 +101,9 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     // be compared with a Date. The closure form is what `Tracker(now:)` and the vendor encoders
     // take, so a factory hands one function to both its encoder and its destination.
     private let now: @Sendable () -> Date
+    // The encoder's statuses, read once: a static requirement, so the same for every request.
+    // Statuses rather than TransientStatus values, as an answer is compared by its status.
+    private let transientStatuses: Set<HTTPResponse.Status>
     private let reporter = DropReporter<Encoding.Failure>()
 
     /// A destination that sends batches to `endpoint` through `transport`, encoded by `encoder`,
@@ -135,6 +139,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         self.encoder = encoder
         retryStrategy = { TransientFailureRetry(backoff, clock: clock) }
         self.now = now
+        transientStatuses = Set(Encoding.transientStatuses.map(\.status))
     }
 
     /// A report of each batch dropped without being delivered, in the order they are dropped.
@@ -212,7 +217,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
         request.headerFields[.contentType] = encoded.body.contentType
-        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body, deadline: encoded.deadline, now: now)
+        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body, deadline: encoded.deadline, transientStatuses: transientStatuses, now: now)
         do {
             // Built for this request alone: Afluent's strategy keeps its count of retries, and a
             // cancelled unit of work stays cancelled.
@@ -261,6 +266,8 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
     let request: HTTPRequest
     let body: Data
     let deadline: Date?
+    /// The statuses retried beside ``HTTPResponse/Status/isTransient``'s, from the encoder.
+    let transientStatuses: Set<HTTPResponse.Status>
     let now: @Sendable () -> Date
 
     /// Sends the request; throws `CancellationError` when cancelled, so the retry stops, and an
@@ -297,7 +304,7 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
         switch response.status {
         case let status where status.kind == .successful:
             return response
-        case let status where status.isTransient:
+        case let status where status.isTransient || transientStatuses.contains(status):
             throw retried(.unavailable(response), "The endpoint answered a batch with \(status), so it will be sent again")
         default:
             throw AttemptFailure.rejected(response)

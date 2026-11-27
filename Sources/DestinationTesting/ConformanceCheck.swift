@@ -29,11 +29,15 @@ public enum ConformanceCheck: String, Sendable, Hashable, CaseIterable, CustomSt
     /// `BatchLimit.unlimited`, leaves no record the check could make too large, so the check sends
     /// nothing and records no issue.
     case oversizedRecordSkipped
-    /// A request that gets no response, a 5xx, 408 or 429 is sent again, byte for byte, until it is
-    /// delivered, and nothing is reported.
+    /// A request that gets no response, a 5xx, 408, 429 or a status of the encoder's
+    /// `BatchEncoder.transientStatuses` is sent again, byte for byte, until it is delivered, and
+    /// nothing is reported.
     case transientFailuresRetried
-    /// A request answered with a status retrying won't change (400, 401, 403, 404, 413, 422) is
-    /// sent once and reported as `HTTPDropReport.rejected(status:recordIDs:)`.
+    /// A request answered with a status retrying won't change (400, 401, 403, 404, 413, 422, less
+    /// any the encoder lists in `BatchEncoder.transientStatuses`) is sent once and reported as
+    /// `HTTPDropReport.rejected(status:recordIDs:)`. An encoder that lists all six is checked
+    /// with the first client error (4xx) it doesn't list; one that lists every client error
+    /// records an issue, as no rejection is left to check.
     case rejectionsDropped
     /// No request carries a trace context in its header fields (`traceparent`, `tracestate`, or
     /// whatever the instrument injects), even while a tracer is active and the record was tracked

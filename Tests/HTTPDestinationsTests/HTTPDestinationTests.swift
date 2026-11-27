@@ -16,6 +16,8 @@ struct HTTPDestinationTests {
 
     /// Encodes the plans of a batch's sign-ups, comma separated, as plain text.
     struct PlansEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -28,6 +30,8 @@ struct HTTPDestinationTests {
 
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }

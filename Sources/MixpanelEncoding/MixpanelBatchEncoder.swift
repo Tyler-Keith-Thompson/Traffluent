@@ -81,6 +81,9 @@ public import TrackingPlans
 /// the same for the same records on every run and platform: no whitespace, object members in the
 /// order of their names' UTF-8 bytes.
 public struct MixpanelBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Mixpanel's ingestion API reference, read on 2026-11-27:
     // https://developer.mixpanel.com/reference/track-event (/track's 2,000 events a request, the
     // project token in each event, `time` in seconds or milliseconds, an event under 1 MB, 255

@@ -38,6 +38,10 @@ LIMIT = "BatchLimit(maximumRecordCount: 25, maximumByteCount: 1_000_000, maximum
 NAME_CHECK_ON_FAILURE = "if case .unknownEvent = error {} else {\n                try record.checkAptabaseName()\n            }"
 
 MUTANTS = [
+    # The status retried beside HTTPDestination's own.
+    Mutant("noslowuploadretry", B, "return [slowUpload]", "return []", mode="stmt"),
+    Mutant("slowupload417", B, "TransientStatus(418)", "TransientStatus(417)"),
+
     # The limits.
     Mutant("batchcount26", B, LIMIT, "BatchLimit(maximumRecordCount: 26, maximumByteCount: 1_000_000, maximumRecordByteCount: 1_000_000)"),
     Mutant("batchcount24", B, LIMIT, "BatchLimit(maximumRecordCount: 24, maximumByteCount: 1_000_000, maximumRecordByteCount: 1_000_000)"),

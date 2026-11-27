@@ -20,6 +20,8 @@ struct HTTPDestinationStoreTests {
     /// Encodes a batch as its records' identifiers and redelivery markers, one record per line,
     /// as plain text.
     struct IdentifiersEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }

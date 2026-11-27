@@ -75,6 +75,9 @@ public import TrackingPlans
 /// on every run and platform: no whitespace, object members in the order of their names' UTF-8
 /// bytes.
 public struct PostHogBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     /// PostHog's limits on one request: 10,000,000 bytes of body and 1,000,000 bytes of one event,
     /// with no limit on the count of events.
     ///

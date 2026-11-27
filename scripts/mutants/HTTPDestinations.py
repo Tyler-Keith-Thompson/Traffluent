@@ -118,6 +118,16 @@ MUTANTS = [
     Mutant("cancelledrejected", D, "throw CancellationError()", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
     Mutant("transientstatusrejected", D, "status.isTransient", "false"),
     Mutant("everyfailuretransient", D, "status.isTransient", "true"),
+    # The encoder's transient statuses (BatchEncoder.transientStatuses, TransientStatus). The
+    # mutants that drop them leave encoderTransientStatusRetried waiting for an attempt that never
+    # comes, so the suite's time limit catches them.
+    Mutant("encoderstatusesignored", D, "transientStatuses.contains(status)", "false"),
+    Mutant("everyfailureencodertransient", D, "transientStatuses.contains(status)", "true"),
+    Mutant("encoderstatusesunread", D, "Set(Encoding.transientStatuses.map(\\.status))", "[]"),
+    Mutant("anyunsuccessfultaken", "TransientStatus.swift", "status.kind == .clientError || status.kind == .serverError", "status.kind != .successful"),
+    Mutant("clienterrorrefused", "TransientStatus.swift", "status.kind == .clientError", "false"),
+    Mutant("servererrorrefused", "TransientStatus.swift", "status.kind == .serverError", "false"),
+    Mutant("statusreplaced", "TransientStatus.swift", "self.status = status", "self.status = HTTPResponse.Status(code: 400)", mode="stmt"),
     Mutant("noservererrorretried", R, "kind == .serverError", "false"),
     Mutant("norequesttimeoutretried", R, "self == .requestTimeout", "false"),
     Mutant("notoomanyrequestsretried", R, "self == .tooManyRequests", "false"),

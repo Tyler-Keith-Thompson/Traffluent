@@ -83,6 +83,9 @@ public import TrackingPlans
 /// counted again. The bytes are the same for the same records on every run and platform: no
 /// whitespace, object members in the order of their names' UTF-8 bytes.
 public struct TelemetryDeckBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From TelemetryDeck's docs, read on 2026-11-27 (their source, github.com/TelemetryDeck/docs at
     // 1389edf3):
     // - Ingest API v3, https://telemetrydeck.com/docs/ingest/v3/ (POST /v3/{namespace}/, an array

@@ -11,7 +11,10 @@ yours. It sends with `URLSession` through
 ``URLSessionTransport`` by default, or through any ``HTTPTransport`` you pass.
 
 A send that gets no response, or a 5xx, 408 or 429 status, is sent again after the next wait of its
-``ExponentialBackoff``: 1 second, doubling up to 60 seconds, unless you pass another. The
+``ExponentialBackoff``: 1 second, doubling up to 60 seconds, unless you pass another. So is one
+answered with a status the encoder lists in ``BatchEncoder/transientStatuses``, which every encoder
+declares: empty for most servers, or each other failure its vendor answers to a request worth
+sending again, such as Aptabase's 418 for a slow upload. The
 destination takes the next batch only once this one is delivered or dropped, so a tracker's store
 keeps the batch's records until then. A batch the endpoint answers with any other status, whose
 request can never be sent, or that the encoder can't encode is dropped, logged and reported on
@@ -46,6 +49,8 @@ inside the app or in a test, use
 import HTTPDestinations
 
 struct PlansEncoder: BatchEncoder {
+    static let transientStatuses: Set<TransientStatus> = []
+
     func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
         let plans = batch.compactMap { ($0.event as? SignedUp)?.plan }
         let body = EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")
@@ -87,6 +92,11 @@ covers this destination beside the others, and what a delivery does while a batc
 - ``BatchRequests``
 - ``EncodedRequest``
 - ``SkippedRecord``
+
+### Retrying a vendor's own statuses
+
+- ``TransientStatus``
+- ``InvalidTransientStatus``
 
 ### Waiting between attempts
 

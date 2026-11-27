@@ -15,11 +15,10 @@ extension HTTPDestination where Encoding == AptabaseBatchEncoder {
     /// or `host` for a self-hosted key (`A-SH-`, or `A-DEV-` for a server run in development),
     /// with the key in its `App-Key` header field, encoded by an ``AptabaseBatchEncoder`` within
     /// ``AptabaseBatchEncoder/batchLimit``. It sends no trace context. It retries no response, a
-    /// 5xx, 408 or 429, such as Aptabase answers past its rate limit, and drops and reports any
-    /// other status, such as 400 for a request Aptabase can't take. That includes 418, which
-    /// Aptabase answers when a request's body arrives slower than 60 bytes a second after a
-    /// 10-second grace period, as over a poor connection: its records are dropped, reported as
-    /// rejected, rather than retried.
+    /// 5xx, 408 or 429, such as Aptabase answers past its rate limit, and 418, which Aptabase
+    /// answers when a request's body arrives slower than 60 bytes a second after a 10-second grace
+    /// period, as over a poor connection (``AptabaseBatchEncoder/transientStatuses``). It drops and
+    /// reports any other status, such as 400 for a request Aptabase can't take.
     ///
     /// The app key is public, as Aptabase's SDKs ship it in every app, and the events API takes no
     /// other credential, so the destination builds on every platform: an app sends to Aptabase

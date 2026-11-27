@@ -13,10 +13,10 @@ and an ``AptabaseBatchEncoder`` writes the body. Each batch is split to
 ``AptabaseBatchEncoder/batchLimit``: 25 events a request, the most Aptabase takes, and 1,000,000
 bytes a request, the encoder's own bound, under the 1 MiB that nginx takes by default in front of
 many self-hosted servers. A batch with no record the encoder can write, an empty one included,
-makes no request. The destination retries no response, a 5xx, 408 and 429, and drops and reports
-any other status. That includes 418, which Aptabase answers when a request's body arrives slower
-than 60 bytes a second after a 10-second grace period, as over a poor connection, so those records
-are reported as rejected rather than retried. No trace context is sent. `import Traffluent` leaves this module out, so import
+makes no request. The destination retries no response, a 5xx, 408 and 429, and also 418, which
+Aptabase answers when a request's body arrives slower than 60 bytes a second after a 10-second
+grace period, as over a poor connection (``AptabaseBatchEncoder/transientStatuses``). It drops and
+reports any other status. No trace context is sent. `import Traffluent` leaves this module out, so import
 it on its own.
 
 What Aptabase does with these events depends on more than the events themselves:
@@ -129,8 +129,8 @@ reports each record left out as `HTTPDropReport.skipped(_:)`, a `SkippedRecord` 
 property of the plan whose name would be left out.
 
 A request is encoded once and retried as it is, so each request's deadline is 23 hours after its
-oldest record was tracked: one still failing by then isn't sent again, which Aptabase would answer
-with 200 while storing nothing. It is dropped and reported as
+oldest record was tracked: one still failing by then, a slow upload's 418 included, isn't sent
+again, which Aptabase would answer with 200 while storing nothing. It is dropped and reported as
 `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. A clock that reads NaN or infinite has
 every record reported. An event from the future, by a clock that runs ahead, is sent, and Aptabase
 stores it at the time it arrives.

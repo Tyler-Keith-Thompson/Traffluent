@@ -74,6 +74,11 @@ struct AcmeBatchEncoder: BatchEncoder {
     }
 }
 
+extension AcmeBatchEncoder {
+    /// Acme answers 425 Too Early while a new region starts up, and takes the request later.
+    static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(425)).map { [$0] } ?? []
+}
+
 /// Why the Acme factory couldn't make a destination.
 enum AcmeSetupError: Error, Hashable {
     case emptyAPIKey
@@ -115,6 +120,19 @@ struct WritingAVendorDestinationExamplesTests {
             try HTTPDestination.acme(apiKey: "test-key", host: host, plan: setup.plan, transport: setup.transport, backoff: setup.backoff)
         }
         try await conformance.expect(check)
+    }
+
+    @Test("The Acme encoder's transient statuses are 425 alone, which the conformance checks retry")
+    func acmeTransientStatuses() throws {
+        // Read as HTTPDestination reads it, through the protocol.
+        func transientStatuses<Encoder: BatchEncoder>(of encoder: Encoder.Type) -> Set<TransientStatus> {
+            Encoder.transientStatuses
+        }
+        let expected: Set<TransientStatus> = [try TransientStatus(425)]
+
+        let actual = transientStatuses(of: AcmeBatchEncoder.self)
+
+        #expect(actual == expected)
     }
 
     @Test("The Acme encoder writes a hand-worked record as Acme's JSON, without its Sensitive email, and the factory posts it to the host's /v1/events")

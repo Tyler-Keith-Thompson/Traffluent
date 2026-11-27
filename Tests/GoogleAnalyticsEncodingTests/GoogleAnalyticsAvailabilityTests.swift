@@ -22,6 +22,8 @@ struct GoogleAnalyticsAvailabilityTests {
 
     /// An encoder of the probe's own, as GoogleAnalyticsBatchEncoder isn't one on iOS.
     struct ProbeEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         typealias Failure = GoogleAnalyticsAvailabilityTests.Failure
 
         func requests(for batch: [EventRecord]) throws(Failure) -> BatchRequests<Failure> {

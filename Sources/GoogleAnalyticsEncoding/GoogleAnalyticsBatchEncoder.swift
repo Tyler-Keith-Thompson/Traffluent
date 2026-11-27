@@ -97,6 +97,9 @@ public import TrackingPlans
 /// and the same time, on every run and platform: no whitespace, object members in the order of
 /// their names' UTF-8 bytes.
 public struct GoogleAnalyticsBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Google's Measurement Protocol docs, read on 2026-11-27:
     // https://developers.google.com/analytics/devguides/collection/protocol/ga4/reference ("events[]
     // ... Up to 25 events can be sent per request", "Up to 25 parameters can be sent per event",

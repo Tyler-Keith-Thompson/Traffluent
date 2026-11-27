@@ -6,8 +6,9 @@ import HTTPTypes
 enum AttemptFailure: Error {
     /// No response arrived; retried.
     case unanswered(reason: String)
-    /// The endpoint answered with a status a later attempt may not get (``HTTPResponse/Status/isTransient``);
-    /// retried.
+    /// The endpoint answered with a status a later attempt may not get
+    /// (``HTTPResponse/Status/isTransient``, or one of the encoder's
+    /// ``BatchEncoder/transientStatuses``); retried.
     case unavailable(HTTPResponse)
     /// The endpoint answered with a status every attempt would get; not retried.
     case rejected(HTTPResponse)
@@ -18,8 +19,9 @@ enum AttemptFailure: Error {
 }
 
 extension HTTPResponse.Status {
-    /// Whether a request answered with this status may succeed when sent again: 408 Request
-    /// Timeout, 429 Too Many Requests and every 5xx.
+    /// Whether a request answered with this status may succeed when sent again, from any
+    /// endpoint: 408 Request Timeout, 429 Too Many Requests and every 5xx. An encoder adds its
+    /// vendor's own (``BatchEncoder/transientStatuses``).
     var isTransient: Bool {
         kind == .serverError || self == .requestTimeout || self == .tooManyRequests
     }

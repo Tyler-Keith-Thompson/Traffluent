@@ -40,6 +40,10 @@ C = "DestinationConformance.swift"
 S = "DestinationSetup.swift"
 
 MUTANTS = [
+    # rejectionsDropped against an encoder that lists every status it sends.
+    Mutant("rejectionfallbackskipped", C, "checked.isEmpty", "false"),
+    Mutant("rejectionfallbackunreported", C, """Issue.record("The encoder lists every client error (4xx) as transient, so no rejection is left to check", sourceLocation: sourceLocation)""", "", mode="stmt"),
+    Mutant("encoderrejectionsnotskipped", C, "rejections.filter { !vendorFailures.contains($0) }", "rejections"),
     # The transport.
     Mutant("requestsnotkept", T, "sent.append(SentRequest(request: request, body: body))", "", mode="stmt"),
     # Fixtures.

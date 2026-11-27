@@ -14,9 +14,9 @@ public import HTTPTypes
 /// identifiers can be reported again, as ``rejected(status:recordIDs:)`` or
 /// ``deadlineExceeded(deadline:recordIDs:)``.
 public enum HTTPDropReport<Failure: Error>: Sendable {
-    /// The endpoint answered with `status`, a non-2xx status other than 408, 429 or 5xx, so the
-    /// batch of the records identified by `recordIDs` (`EventRecord.id`), oldest first, was
-    /// dropped.
+    /// The endpoint answered with `status`, a non-2xx status other than 408, 429, 5xx or one of
+    /// the encoder's ``BatchEncoder/transientStatuses``, so the batch of the records identified
+    /// by `recordIDs` (`EventRecord.id`), oldest first, was dropped.
     case rejected(status: HTTPResponse.Status, recordIDs: [UUID])
     /// The transport can never send the request (``HTTPTransportError/invalidRequest(reason:)``:
     /// a malformed or unsupported URL, or one the platform refuses), for the reason `reason`, so

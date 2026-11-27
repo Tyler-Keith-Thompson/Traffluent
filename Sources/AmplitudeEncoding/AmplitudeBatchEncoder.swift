@@ -72,6 +72,9 @@ public import TrackingPlans
 /// every run and platform: no whitespace, object members in the order of their names' UTF-8
 /// bytes.
 public struct AmplitudeBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Amplitude's HTTP V2 reference, https://amplitude.com/docs/apis/analytics/http-v2, read
     // on 2026-11-26: "Upload limit" (2,000 events a request, a body under 1 MB, 10 events a
     // request on the Free plan), "Device IDs and User IDs minimum length" (5 characters, which a

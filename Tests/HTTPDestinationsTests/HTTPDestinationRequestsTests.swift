@@ -19,6 +19,8 @@ struct HTTPDestinationRequestsTests {
 
     /// A request per record, its plan as the body, leaving out a record whose plan is "skip".
     struct PerRecordEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         typealias Failure = Unencodable
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Unencodable> {

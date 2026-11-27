@@ -65,6 +65,9 @@ public import TrackingPlans
 /// the same records on every run and platform: no whitespace, object members in the order of their
 /// names' UTF-8 bytes.
 public struct HeapBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Heap's developer docs, read on 2026-11-27:
     // - Track, https://developers.heap.io/reference/track-1 (POST https://heapanalytics.com/api/track,
     //   or https://c.eu.heap-api.com/api/track for the EU data center; its OpenAPI definition's

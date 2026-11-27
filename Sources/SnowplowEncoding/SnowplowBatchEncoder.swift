@@ -91,6 +91,9 @@ public import TrackingPlans
 /// destination counts it as delivered. The bytes are the same for the same records on every run
 /// and platform: no whitespace, object members in the order of their names' UTF-8 bytes.
 public struct SnowplowBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Snowplow's docs, read on 2026-11-27:
     // - Example HTTP requests, https://docs.snowplow.io/docs/events/http-requests/ (the tp2 path,
     //   the payload_data 1-0-4 wrapper, the unstruct_event wrapper and contexts).

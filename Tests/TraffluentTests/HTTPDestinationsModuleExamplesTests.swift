@@ -15,6 +15,8 @@ struct HTTPDestinationsModuleExamplesTests {
     }
 
     struct PlansEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             let plans = batch.compactMap { ($0.event as? SignedUp)?.plan }
             let body = EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")

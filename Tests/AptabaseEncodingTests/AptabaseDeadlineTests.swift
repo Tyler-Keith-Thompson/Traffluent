@@ -63,4 +63,36 @@ struct AptabaseDeadlineTests {
         #expect(actual == expected)
         #expect(transport.requests.count == expectedRequestCount)
     }
+
+    @Test("A request Aptabase keeps answering with 418, for a slow upload, is retried on the backoff until 23 hours after its record was tracked, then sent no more and reported as deadlineExceeded, not rejected")
+    func slowUploadPastDeadline() async throws {
+        let tracked = Date(timeIntervalSince1970: 1_795_442_607)
+        let hours23: TimeInterval = 82_800
+        let clock = TestClock()
+        let origin = clock.now
+        // The wall clock starts 1.5 seconds before the 23 hours end and follows the test clock, so
+        // the attempts at 0 and 1 second are inside them and the one after the 2-second wait isn't.
+        let start = tracked.addingTimeInterval(hours23 - 1.5)
+        let now: @Sendable () -> Date = {
+            let elapsed = origin.duration(to: clock.now).components
+            return start.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
+        }
+        let transport = ScriptedTransport([.status(418)])
+        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, clock: clock, now: now)
+        let batch = [EventRecord(event: Searched(query: "a"), timestamp: tracked, sourceLocation: nil)]
+        let expected = HTTPDropReport<AptabaseEncodingError>.deadlineExceeded(deadline: tracked.addingTimeInterval(hours23), recordIDs: batch.map(\.id))
+        let expectedRequestCount = 2
+        let receiving = Task { await sut.receive(batch) }
+
+        for wait in [Duration.seconds(1), .seconds(2)] {
+            while (try? await clock.checkSuspension()) != nil {}
+            await clock.advance(by: wait)
+        }
+        await receiving.value
+
+        var reports = sut.dropReports.makeAsyncIterator()
+        let actual = await reports.next()
+        #expect(actual == expected)
+        #expect(transport.requests.count == expectedRequestCount)
+    }
 }

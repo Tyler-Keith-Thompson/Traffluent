@@ -6,6 +6,7 @@ import HTTPTypes
 import Instrumentation
 import JSONValues
 import PropertyJSON
+import Synchronization
 import Testing
 import TrackingPlans
 
@@ -45,6 +46,8 @@ struct DestinationConformanceTests {
     }
 
     struct ToyEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         typealias Failure = DestinationConformanceTests.Failure
 
         let reader: PropertyReader
@@ -139,6 +142,96 @@ struct DestinationConformanceTests {
         let sut = Self.conformance(.none)
 
         try await sut.expect(check)
+    }
+
+    /// ``ToyEncoder`` for a vendor that answers 422 for a request worth sending again, one of the
+    /// statuses rejectionsDropped sends.
+    struct UnprocessableRetryingEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(.unprocessableContent)).map { [$0] } ?? []
+
+        typealias Failure = DestinationConformanceTests.Failure
+
+        let wrapped: ToyEncoder
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
+            wrapped.requests(for: batch)
+        }
+    }
+
+    @Test("A destination whose encoder names a transient status the kit would send as a rejection passes transientFailuresRetried and rejectionsDropped, as it retries that status", arguments: [ConformanceCheck.transientFailuresRetried, .rejectionsDropped])
+    func encoderTransientStatus(check: ConformanceCheck) async throws {
+        let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
+        let sut = DestinationConformance(limit: Self.limit) { setup in
+            HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: UnprocessableRetryingEncoder(wrapped: ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: Self.limit, flaw: .none, revealing: false)), backoff: setup.backoff)
+        }
+
+        try await sut.expect(check)
+    }
+
+    /// ``ToyEncoder`` for a vendor that answers every status rejectionsDropped sends, 400, 401,
+    /// 403, 404, 413 and 422, for a request worth sending again.
+    struct EveryRejectionRetryingEncoder: BatchEncoder {
+        typealias Failure = DestinationConformanceTests.Failure
+
+        static let transientStatuses = Set([400, 401, 403, 404, 413, 422].compactMap { try? TransientStatus(HTTPResponse.Status(code: $0)) })
+
+        let wrapped: ToyEncoder
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
+            wrapped.requests(for: batch)
+        }
+    }
+
+    /// ``ToyEncoder`` for a vendor that answers every client error for a request worth sending again.
+    struct EveryClientErrorRetryingEncoder: BatchEncoder {
+        typealias Failure = DestinationConformanceTests.Failure
+
+        static let transientStatuses = Set((400 ... 499).compactMap { try? TransientStatus(HTTPResponse.Status(code: $0)) })
+
+        let wrapped: ToyEncoder
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
+            wrapped.requests(for: batch)
+        }
+    }
+
+    /// Counts the destinations a factory makes, one per send.
+    final class FactoryCalls: Sendable {
+        let count = Mutex(0)
+    }
+
+    @Test("rejectionsDropped against an encoder that lists every status it sends still checks a rejection, the first client error the encoder doesn't list, and passes")
+    func everyRejectionListed() async throws {
+        let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
+        let calls = FactoryCalls()
+        let sut = DestinationConformance(limit: Self.limit) { setup in
+            calls.count.withLock { $0 += 1 }
+            return HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: EveryRejectionRetryingEncoder(wrapped: ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: Self.limit, flaw: .none, revealing: false)), backoff: setup.backoff)
+        }
+        let expectedSends = 1
+
+        try await sut.expect(.rejectionsDropped)
+
+        #expect(calls.count.withLock { $0 } == expectedSends)
+    }
+
+    @Test("rejectionsDropped against an encoder that lists every client error as transient records an issue, as no rejection is left to check")
+    func everyClientErrorListed() async throws {
+        let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
+        let sut = DestinationConformance(limit: Self.limit) { setup in
+            HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: EveryClientErrorRetryingEncoder(wrapped: ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: Self.limit, flaw: .none, revealing: false)), backoff: setup.backoff)
+        }
+        let expected: [String] = ["lists every client error (4xx) as transient"]
+
+        await withKnownIssue(isIntermittent: false) {
+            do {
+                try await sut.expect(.rejectionsDropped)
+            } catch {
+                Issue.record(error)
+            }
+        } matching: { issue in
+            issue.comments.contains { comment in expected.contains { comment.rawValue.contains($0) } }
+        }
     }
 
     @Test("Every check stamps its records with the setup's timestamp, so a destination that leaves out records tracked at any other time passes every check", arguments: ConformanceCheck.allCases)

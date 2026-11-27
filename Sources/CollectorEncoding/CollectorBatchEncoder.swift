@@ -79,6 +79,9 @@ public import TrackingPlans
 /// whole number without a fraction and any other in the shortest form that reads back as the
 /// same `Double` (`0.25`, `1e-05`).
 public struct CollectorBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // A dictionary of each event version's property types, parsed once here rather than per
     // record: every record of a batch is looked up in it.
     private let propertyTypes: [EventVersion: [String: WrittenType?]]

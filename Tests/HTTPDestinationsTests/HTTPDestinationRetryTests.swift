@@ -20,6 +20,8 @@ struct HTTPDestinationRetryTests {
 
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -29,9 +31,20 @@ struct HTTPDestinationRetryTests {
         }
     }
 
+    /// ``IdentifiersEncoder`` for a vendor that also answers 418 for a request worth sending again.
+    struct TeapotRetryingEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(418)).map { [$0] } ?? []
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            IdentifiersEncoder().requests(for: batch)
+        }
+    }
+
     struct Unencodable: Error, Equatable {}
 
     struct FailingEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
         func requests(for batch: [EventRecord]) throws(Unencodable) -> BatchRequests<Unencodable> {
             throw Unencodable()
         }
@@ -270,7 +283,7 @@ struct HTTPDestinationRetryTests {
         #expect(actual == expected)
     }
 
-    @Test("A batch answered with any other non-2xx status is sent once, dropped, and reported with that status and its records' identifiers", arguments: [199, 300, 400, 401, 404, 413, 422, 499])
+    @Test("A batch answered with any other non-2xx status is sent once, dropped, and reported with that status and its records' identifiers", arguments: [199, 300, 400, 401, 404, 413, 418, 422, 499])
     func rejectedReported(code: Int) async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
@@ -289,6 +302,91 @@ struct HTTPDestinationRetryTests {
         let actual = await reports.next()
         #expect(actual == expected)
         #expect(transport.attemptCount == expectedAttempts)
+    }
+
+    @Test("A destination whose encoder names no transient statuses drops a 418 for good: sent once, though the next answer would be 200, and reported as rejected")
+    func teapotRejectedByDefault() async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let clock = TestClock()
+        let transport = ScriptedTransport([.success(HTTPResponse(status: 418)), .success(HTTPResponse(status: .ok))], clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+        let expected = HTTPDropReport<Never>.rejected(status: 418, recordIDs: batch.map(\.id))
+        let expectedAttempts = 1
+
+        await sut.receive(batch)
+
+        var reports = sut.dropReports.makeAsyncIterator()
+        let actual = await reports.next()
+        #expect(actual == expected)
+        #expect(transport.attemptCount == expectedAttempts)
+    }
+
+    @Test("A send answered with a status the encoder names as transient is sent again after each of the backoff's waits, on its clock, and delivered when answered with 2xx, with nothing reported")
+    func encoderTransientStatusRetried() async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let clock = TestClock()
+        let transport = ScriptedTransport([.success(HTTPResponse(status: 418)), .success(HTTPResponse(status: 418)), .success(HTTPResponse(status: .ok)), .success(HTTPResponse(status: .badRequest))], clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), clock: clock)
+        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+        let later = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
+        let expectedSentAt: [Duration] = [.zero, .seconds(1), .seconds(3), .seconds(3)]
+        let expectedBodies = Array(repeating: Data(batch[0].id.uuidString.utf8), count: 3) + [Data(later[0].id.uuidString.utf8)]
+        let expectedReport = HTTPDropReport<Never>.rejected(status: .badRequest, recordIDs: later.map(\.id))
+        var attempts = transport.attempts.makeAsyncIterator()
+        let receiving = Task { await sut.receive(batch) }
+
+        for wait in [Duration.seconds(1), .seconds(2)] {
+            _ = await attempts.next()
+            while (try? await clock.checkSuspension()) != nil {}
+            await clock.advance(by: wait)
+        }
+        await receiving.value
+        // The later batch's rejection is the first report, so the retried batch made none.
+        await sut.receive(later)
+
+        #expect(transport.sentAt.withLock { $0 } == expectedSentAt)
+        #expect(transport.bodies.withLock { $0 } == expectedBodies)
+        var reports = sut.dropReports.makeAsyncIterator()
+        let actual = await reports.next()
+        #expect(actual == expectedReport)
+    }
+
+    @Test("A status the encoder doesn't name is still sent once, dropped and reported as rejected, beside the one it does, 418", arguments: [400, 417, 419, 422, 499])
+    func encoderOtherStatusRejected(code: Int) async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let clock = TestClock()
+        let transport = ScriptedTransport([.success(HTTPResponse(status: .init(code: code))), .success(HTTPResponse(status: .ok))], clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), clock: clock)
+        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+        let expected = HTTPDropReport<Never>.rejected(status: .init(code: code), recordIDs: batch.map(\.id))
+        let expectedAttempts = 1
+
+        await sut.receive(batch)
+
+        var reports = sut.dropReports.makeAsyncIterator()
+        let actual = await reports.next()
+        #expect(actual == expected)
+        #expect(transport.attemptCount == expectedAttempts)
+    }
+
+    @Test("An encoder's transient statuses add to the defaults: 408, 429 and 5xx are still sent again after the backoff's first wait", arguments: [408, 429, 500, 599])
+    func encoderKeepsDefaults(code: Int) async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let clock = TestClock()
+        let transport = ScriptedTransport([.success(HTTPResponse(status: .init(code: code))), .success(HTTPResponse(status: .ok))], clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), clock: clock)
+        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+        let expected: [Duration] = [.zero, .seconds(1)]
+        var attempts = transport.attempts.makeAsyncIterator()
+        let receiving = Task { await sut.receive(batch) }
+
+        _ = await attempts.next()
+        while (try? await clock.checkSuspension()) != nil {}
+        await clock.advance(by: .seconds(1))
+        await receiving.value
+
+        #expect(transport.sentAt.withLock { $0 } == expected)
     }
 
     @Test("A batch whose request the transport can never send is sent once, dropped, and reported with the transport's reason and its records' identifiers")

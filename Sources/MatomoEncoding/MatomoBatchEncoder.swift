@@ -78,6 +78,9 @@ public import TrackingPlans
 /// counted again. The bytes are the same for the same records, time and configuration on every run
 /// and platform.
 public struct MatomoBatchEncoder: BatchEncoder {
+    /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
+    public static let transientStatuses: Set<TransientStatus> = []
+
     // From Matomo's Tracking HTTP API reference, https://developer.matomo.org/api-reference/tracking-api
     // (the Matomo 6.x docs), read on 2026-11-27: idsite and rec=1 required; _id "must be a 16
     // characters hexadecimal string"; apiv=1; e_c and e_a "Must not be empty", e_n and e_v

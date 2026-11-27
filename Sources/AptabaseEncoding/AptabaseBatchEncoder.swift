@@ -102,6 +102,24 @@ public struct AptabaseBatchEncoder: BatchEncoder {
     /// 180 characters, so only an event of many properties comes near it.
     public static let batchLimit = (try? BatchLimit(maximumRecordCount: 25, maximumByteCount: 1_000_000, maximumRecordByteCount: 1_000_000)) ?? .unlimited
 
+    // src/Extensions/ExceptionMiddleware.cs (89d36185, read 2026-11-27) answers 418 for Kestrel's
+    // BadHttpRequestException, which src/Program.cs's MinRequestBodyDataRate raises for a body
+    // slower than 60 bytes a second after a 10-second grace period, and for a request the client
+    // aborted: a slow link, which a later attempt may not have.
+    /// The status Aptabase answers that `HTTPDestination` retries, beside 408, 429 and every 5xx:
+    /// 418, which Aptabase answers when a request's body arrives slower than 60 bytes a second
+    /// after a 10-second grace period, as over a poor connection.
+    ///
+    /// A request answered with it is sent again on the destination's backoff, until it is taken
+    /// or its deadline passes.
+    public static let transientStatuses: Set<TransientStatus> = {
+        // 418 is a client error, which TransientStatus always takes, so the set always holds it;
+        // a test pins it. Rejected: a non-throwing TransientStatus spelling for literals, which
+        // would trap on a literal outside 400 through 599.
+        guard let slowUpload = try? TransientStatus(418) else { return [] }
+        return [slowUpload]
+    }()
+
     /// What every event's `systemProps.sdkVersion` says, which Aptabase requires and keeps with
     /// each event: the library's name, as no constant holds its version.
     static let sdkVersion = "Traffluent"

@@ -11,6 +11,8 @@ public import Events
 ///
 /// ```swift
 /// struct PlansEncoder: BatchEncoder {
+///     static let transientStatuses: Set<TransientStatus> = []
+///
 ///     func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
 ///         let plans = batch.compactMap { ($0.event as? SignedUp)?.plan }
 ///         let body = EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")
@@ -24,6 +26,10 @@ public import Events
 /// of them, or that it can't encode, as a ``SkippedRecord``. One whose ``requests(for:)`` doesn't
 /// throw names its reasons' type as ``Failure`` (`typealias Failure = VendorEncodingError`), which
 /// a method that doesn't throw leaves Swift unable to infer.
+///
+/// Every encoder states ``transientStatuses``: an empty set for an endpoint that answers only
+/// 408, 429 or a 5xx to a request worth sending again, or each other failure status its vendor
+/// answers to one, which ``HTTPDestination`` then retries as it retries those.
 public protocol BatchEncoder: Sendable {
     /// What ``requests(for:)`` throws, and why a record was left out; `Never` for an encoder that
     /// can't fail.
@@ -40,4 +46,17 @@ public protocol BatchEncoder: Sendable {
     /// - Throws: `Failure` when nothing of the batch can be encoded; ``HTTPDestination`` then
     ///   sends nothing for it and reports every record as one drop.
     func requests(for batch: [EventRecord]) throws(Failure) -> BatchRequests<Failure>
+
+    /// The failure statuses, beyond 408 Request Timeout, 429 Too Many Requests and every 5xx, that
+    /// ``HTTPDestination`` sends a request of this encoder again after: `[]` for none.
+    ///
+    /// A vendor fact, the same for every request and every instance, so ``HTTPDestination`` reads
+    /// it once, when it is made. Any other status but a 2xx still drops the request, reported as
+    /// ``HTTPDropReport/rejected(status:recordIDs:)``. An encoder that wraps another forwards the
+    /// wrapped encoder's set (`static var transientStatuses: Set<TransientStatus> {
+    /// Wrapped.transientStatuses }`), or its requests lose the vendor's retries.
+    ///
+    /// There is no default, so a conformer that leaves it out, or declares it with another type
+    /// (an array, say), doesn't compile, rather than silently retrying nothing more.
+    static var transientStatuses: Set<TransientStatus> { get }
 }

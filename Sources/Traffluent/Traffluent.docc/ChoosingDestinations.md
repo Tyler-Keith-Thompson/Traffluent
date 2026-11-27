@@ -22,8 +22,10 @@ writes for it, so events need no `Codable` conformance and the wire format is yo
 `URLSession` by default, or through any `HTTPTransport` you pass as `transport:`.
 
 A send that gets no response, or a 5xx, 408 or 429 status, is sent again after a wait, until it is
-answered with 2xx. The waits start at 1 second and double up to 60 seconds; pass an
-`ExponentialBackoff` as `backoff:` for others, and a test clock as `clock:` in tests. The
+answered with 2xx. So is one answered with a status your encoder lists in its
+`transientStatuses`, for a server that answers another failure to a request worth sending again.
+The waits start at 1 second and double up to 60 seconds; pass an `ExponentialBackoff` as
+`backoff:` for others, and a test clock as `clock:` in tests. The
 destination takes the next batch only once this one arrives, so a tracker's store keeps its records
 until then, and a batch still being retried when the app ends is sent again on the next launch.
 Other destinations aren't held up.
@@ -788,7 +790,10 @@ Aptabase answers 200 to a key of no app, and to one of an account it has locked,
 its plan's monthly events, and stores nothing, so check that the first events reach the app's
 Live View. It doesn't remove duplicates, so a record sent again, after a retry whose answer was
 lost or a store's redelivery, is counted twice. It takes 20 requests a second from one IP
-address and answers 429 past it, which the destination retries on its backoff.
+address and answers 429 past it, which the destination retries on its backoff. It answers 418
+when a request's body arrives slower than 60 bytes a second after a 10-second grace period, as
+over a poor connection, and the destination retries that on its backoff too, until the request's
+deadline.
 
 ### Memory
 

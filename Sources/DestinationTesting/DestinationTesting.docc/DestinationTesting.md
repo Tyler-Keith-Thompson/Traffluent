@@ -11,7 +11,8 @@ Check from Swift Testing that a vendor destination keeps the library's rules and
 - a `Sensitive` value is sent only after the adopter opts in, and only while the record reveals it;
 - behind a tracker's consent and `accepting(_:)`, it sends exactly the records it is handed;
 - a record over the vendor's limit is left out and reported, and the rest of its batch is sent;
-- no response, a 5xx, 408 and 429 are retried, and other failures are dropped and reported;
+- no response, a 5xx, 408, 429 and each status of the encoder's `transientStatuses` are retried,
+  and other failures are dropped and reported;
 - no request carries a trace context in its header fields, even while a tracer is active.
 
 Make it with the vendor's limit and a closure that calls the vendor's factory with the
