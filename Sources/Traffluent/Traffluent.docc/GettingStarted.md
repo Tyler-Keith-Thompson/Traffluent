@@ -240,8 +240,9 @@ let delivering = Task { try await delivery.execute() }
 `batch()` sends 20 records at a time, or every 30 seconds while any are waiting. Nothing runs until
 `execute()`, and the delivery runs for as long as the tracker does, so start it once and keep the
 task if the app needs to stop it. A send that gets no response, a 5xx, 408 or 429 is sent again with backoff
-until it arrives, and the store keeps its records meanwhile. To send to PostHog instead, give the
-destination a `PostHogBatchEncoder` (module ``/PostHogEncoding``). See <doc:ChoosingDestinations>.
+until it arrives, and the store keeps its records meanwhile. To send to PostHog instead, make the
+destination with `HTTPDestination.postHog(projectToken:host:plan:)` (module ``/PostHogEncoding``).
+See <doc:ChoosingDestinations>.
 
 ### Watch what is dropped
 

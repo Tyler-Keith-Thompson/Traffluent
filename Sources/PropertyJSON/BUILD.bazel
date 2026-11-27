@@ -3,14 +3,17 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# An event's stored properties as JSON, read from its @Event encoding through its schema in a TrackingPlan, with or without its Sensitive values: the property reading the JSON batch encoders share, package API only.
+# The vendor-neutral pieces a JSON BatchEncoder is built from: PropertyReader, an event's stored properties as JSON read through its schema in a TrackingPlan, with Sensitive values only on request; the standard context as JSON, and flattened(separator:) for vendors that take only scalars; ISO 8601 and epoch-millisecond timestamps; PseudonymousIdentity, a record's session or the record itself, and its deduplicationID; and BatchLimit, which splits a batch into requests of a JSONEnvelope within a vendor's record and byte limits, leaving out a record too large for any as a SkippedRecord.
 swift_library(
     name = "PropertyJSON",
     srcs = glob(["**/*.swift"]),
     module_name = "PropertyJSON",
     deps = [
         "//Sources/Events",
+        "//Sources/HTTPDestinations",
         "//Sources/TrackingPlans",
+        "//Sources/Sessions",
+        "//Sources/StandardContext",
         "@swiftpkg_swift_cbor//:CBOR",
     ],
     visibility = ["//visibility:public"],
@@ -23,7 +26,10 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/HTTPDestinations:HTTPDestinationsDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
+        "//Sources/Sessions:SessionsDocumentation",
+        "//Sources/StandardContext:StandardContextDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

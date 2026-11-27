@@ -64,6 +64,7 @@ MUTANTS = [
     Mutant("colonspaced", J, '": "', '" : "', nth=1),
     Mutant("booleanalwaystrue", J, 'boolean ? "true" : "false"', '"true"'),
     Mutant("quoteunescaped", J, r'"\\\""', r'"\""'),
+    Mutant("nonfinitenumberwritten", J, "!number.isFinite", "false"),
     Mutant("backslashunescaped", J, r'"\\\\"', r'"\\"'),
     Mutant("newlineraw", J, r'"\\n"', r'"\n"'),
     Mutant("controlnotpadded", J, "4 - hex.count", "2 - hex.count"),
@@ -178,7 +179,8 @@ MUTANTS = [
     Mutant("nopropertyexamples", E, "(property.name, property.schema.example)", "(property.name, JSON.null)"),
     # JSON: reading and one-line rendering.
     Mutant("nullunread", J, "container.decodeNil()", "false"),
-    Mutant("nullrendered", J, 'text += "null"', 'text += "nil"', mode="stmt"),
+    # The first copy is .null's, the second a non-finite number's.
+    Mutant("nullrendered", J, 'text += "null"', 'text += "nil"', mode="stmt", nth=0),
     Mutant("compactarrayunspaced", J, '", "', '","', nth=0),
     Mutant("compactobjectunspaced", J, '", "', '","', nth=1),
     Mutant("compactcolon", J, 'JSON.string($0.key).compact + ": "', 'JSON.string($0.key).compact + ":"'),

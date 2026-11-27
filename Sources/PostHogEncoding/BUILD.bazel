@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# PostHogBatchEncoder: the BatchEncoder of PostHog's batch capture API (POST /batch/), so an HTTPDestination sends to PostHog Cloud or a self-hosted PostHog: each record as an anonymous event whose distinct_id is its session's SessionKey, or the record's own id when it has no session, and no other identifier; its uuid the record's id; its properties read through its schema in a TrackingPlan, never a Sensitive value or a $-prefixed key; GeoIP enrichment turned off; the standard context as PostHog's own properties; a record it can't encode, or whose event name starts with $, is left out as a PostHogSkippedRecord, not the batch.
+# HTTPDestination.postHog(projectToken:host:plan:): a destination for PostHog Cloud or a self-hosted PostHog in one throwing call, which checks the token and host and fills in the batch endpoint, the encoder and PostHog's limits; PostHogBatchEncoder, the BatchEncoder of PostHog's batch capture API (POST /batch/): each record as an anonymous event whose distinct_id is its session's SessionKey, or the record's own id when it has no session, and no other identifier; its uuid the record's id; its properties read through its schema in a TrackingPlan, never a Sensitive value or a $-prefixed key; GeoIP enrichment turned off; the standard context as PostHog's own properties; batches split to PostHog's request and event sizes; a record it can't encode, whose event name starts with $, or too large for PostHog, is left out as a SkippedRecord, not the batch.
 swift_library(
     name = "PostHogEncoding",
     srcs = glob(["**/*.swift"]),
@@ -13,7 +13,6 @@ swift_library(
         "//Sources/HTTPDestinations",
         "//Sources/PropertyJSON",
         "//Sources/TrackingPlans",
-        "//Sources/Sessions",
         "//Sources/StandardContext",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_log//:Logging",
@@ -31,7 +30,6 @@ docc_archive(
         "//Sources/HTTPDestinations:HTTPDestinationsDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/TrackingPlans:TrackingPlansDocumentation",
-        "//Sources/Sessions:SessionsDocumentation",
         "//Sources/StandardContext:StandardContextDocumentation",
     ],
     tags = ["manual"],

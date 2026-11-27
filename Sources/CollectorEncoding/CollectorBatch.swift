@@ -7,14 +7,14 @@ public struct CollectorBatch: Sendable, Hashable {
     /// when the batch had records and every one was skipped, so there is nothing to send.
     public var body: EncodedBatch?
     /// The records left out of `body`, in the batch's order.
-    public var skippedRecords: [SkippedRecord]
+    public var skippedRecords: [SkippedRecord<CollectorEncodingError>]
 
     /// A batch of `body`, without `skippedRecords`.
     ///
     /// - Parameters:
     ///   - body: The request body, or `nil` when there is nothing to send.
     ///   - skippedRecords: The records left out of `body`.
-    public init(body: EncodedBatch?, skippedRecords: [SkippedRecord]) {
+    public init(body: EncodedBatch?, skippedRecords: [SkippedRecord<CollectorEncodingError>]) {
         self.body = body
         self.skippedRecords = skippedRecords
     }

@@ -98,14 +98,14 @@ struct ChoosingDestinationsPostHogExamplesTests {
 
     @Test("PostHog")
     func postHog() async throws {
-        let postHogBatchURL = try #require(URL(string: "https://posthog.example.com/batch/"))
+        let postHogHost = try #require(URL(string: "https://posthog.example.com"))
         let projectToken = "phc_example"
 
         let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
-        let postHog = HTTPDestination(
-            endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
-            instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields
-            encoder: PostHogBatchEncoder(projectToken: projectToken, plan: plan))
+        let postHog = try HTTPDestination.postHog(
+            projectToken: projectToken,
+            host: postHogHost,  // https://us.i.posthog.com, https://eu.i.posthog.com or your own
+            plan: plan)
         let tracker = Tracker(enrichers: [.sessions()])
         let delivery = tracker.records.batch().deliver(to: postHog)
 

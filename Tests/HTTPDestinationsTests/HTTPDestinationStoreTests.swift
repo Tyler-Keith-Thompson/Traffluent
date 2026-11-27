@@ -20,7 +20,11 @@ struct HTTPDestinationStoreTests {
     /// Encodes a batch as its records' identifiers and redelivery markers, one record per line,
     /// as plain text.
     struct IdentifiersEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+
+        func body(of batch: [EventRecord]) -> EncodedBatch {
             let lines = batch.map { "\($0.id.uuidString) \($0.isRedelivered)" }
             return EncodedBatch(body: Data(lines.joined(separator: "\n").utf8), contentType: "text/plain")
         }

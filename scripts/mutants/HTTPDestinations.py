@@ -19,6 +19,13 @@
 #   (Linux), and mutation runs on the Mac, where the file is empty. URLSessionTransportTests pin it
 #   under `swift test` on Linux, cancelRacingRefusal among them.
 #
+# - The dictionary of contexts keeping the last of two records of one identifier rather than the
+#   first: a batch holds one record of each identifier.
+# - The `.cancelled` arm's `return` in `receive(_:)` as `break`, going on to the batch's next
+#   request: that request's unit of work starts in a cancelled task, which Afluent ends before it
+#   calls the transport, so nothing more is sent or reported either way (cancelledMidBatch pins
+#   that). The `return` saves the later requests' setup.
+#
 # Not pinned: URLSessionTransport's `.badURL` and `.appTransportSecurityRequiresSecureConnection`
 # as invalid requests (no URL reliably produces either on both macOS and Linux in a test; the
 # `.unsupportedURL` case beside them is pinned with a `foo://` URL). And the URLSession
@@ -42,20 +49,27 @@ R = "TransientFailureRetry.swift"
 MUTANTS = [
     Mutant("methodput", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .put, url: endpoint, headerFields: headerFields)", mode="stmt"),
     Mutant("noheaderfields", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .post, url: endpoint)", mode="stmt"),
-    Mutant("lastrecordonly", D, "encoded = try encoder.encode(batch)", "encoded = try encoder.encode(Array(batch.suffix(1)))", mode="stmt"),
-    Mutant("injectedaftercontenttype", D, """if let first = batch.first {
-            instrument.inject(first.context, into: &request.headerFields, using: HTTPFieldsInjector())
+    Mutant("lastrecordonly", D, "encoded = try encoder.requests(for: batch)", "encoded = try encoder.requests(for: Array(batch.suffix(1)))", mode="stmt"),
+    Mutant("injectedaftercontenttype", D, """if let context {
+            instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
-        request.headerFields[.contentType] = encoded.contentType""", """request.headerFields[.contentType] = encoded.contentType
-        if let first = batch.first {
-            instrument.inject(first.context, into: &request.headerFields, using: HTTPFieldsInjector())
+        request.headerFields[.contentType] = encoded.body.contentType""", """request.headerFields[.contentType] = encoded.body.contentType
+        if let context {
+            instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }""", mode="stmt"),
-    Mutant("nocontenttype", D, "request.headerFields[.contentType] = encoded.contentType", "", mode="stmt", nth=1),
-    Mutant("configuredcontenttypewins", D, "request.headerFields[.contentType] = encoded.contentType", "request.headerFields[.contentType] = request.headerFields[.contentType] ?? encoded.contentType", mode="stmt", nth=1),
-    Mutant("emptybody", D, "encoded.body", "Data()"),
-    Mutant("noinjection", D, "instrument.inject(first.context, into: &request.headerFields, using: HTTPFieldsInjector())", "", mode="stmt", nth=1),
-    Mutant("lastrecordcontext", D, "first.context", "batch[batch.count - 1].context", nth=1),
-    Mutant("firstrecordindexed", D, "batch.first", "Optional(batch[0])", nth=1),
+    Mutant("nocontenttype", D, "request.headerFields[.contentType] = encoded.body.contentType", "", mode="stmt", nth=1),
+    Mutant("configuredcontenttypewins", D, "request.headerFields[.contentType] = encoded.body.contentType", "request.headerFields[.contentType] = request.headerFields[.contentType] ?? encoded.body.contentType", mode="stmt", nth=1),
+    Mutant("emptybody", D, "encoded.body.body", "Data()"),
+    Mutant("noinjection", D, "instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())", "", mode="stmt", nth=1),
+    # Several requests of one batch (TRAF-101).
+    Mutant("lastrecordcontext", D, "request.recordIDs.first.flatMap { contexts[$0] }", "request.recordIDs.last.flatMap { contexts[$0] }"),
+    Mutant("batchcontext", D, "request.recordIDs.first.flatMap { contexts[$0] }", "batch.first?.context"),
+    Mutant("requestsreversed", D, "encoded.requests", "Array(encoded.requests.reversed())"),
+    # The second copy is the original's, after requestsreversed's.
+    Mutant("onlyfirstrequest", D, "encoded.requests", "Array(encoded.requests.prefix(1))", nth=1),
+    Mutant("skippednotreported", D, "reporter.report(.skipped(skipped))", "", mode="stmt"),
+    # An abandoned request goes on to the batch's next request.
+    Mutant("abandonedstops", D, 'logger.error("Stopped sending a request, whose wait before the next attempt threw: \\(error)")', "return", mode="stmt"),
     Mutant("instrumentignored", D, "self.instrument = instrument", "self.instrument = InstrumentationSystem.instrument", mode="stmt"),
     # Outcomes and reports.
     Mutant("noretry", D, """let response = try await DeferredTask { try await attempt.run() }
@@ -64,19 +78,18 @@ MUTANTS = [
             return .delivered(response)""", """let response = try await DeferredTask { try await attempt.run() }
                 .execute()
             return .delivered(response)""", mode="stmt"),
-    Mutant("encodingerrorlost", D, "return .notEncoded(error)", "return .cancelled", mode="stmt"),
     Mutant("deliveredascancelled", D, "return .delivered(response)", "return .cancelled", mode="stmt", nth=1),
     Mutant("rejectedascancelled", D, "return .rejected(response)", "return .cancelled", mode="stmt"),
-    Mutant("rejectionnotreported", D, "reporter.report(.rejected(status: response.status, recordIDs: batch.map(\\.id)))", "", mode="stmt"),
-    Mutant("rejectionstatuslost", D, "reporter.report(.rejected(status: response.status, recordIDs: batch.map(\\.id)))", "reporter.report(.rejected(status: .badRequest, recordIDs: batch.map(\\.id)))", mode="stmt"),
-    Mutant("rejectionidslost", D, "reporter.report(.rejected(status: response.status, recordIDs: batch.map(\\.id)))", "reporter.report(.rejected(status: response.status, recordIDs: Array(batch.map(\\.id).prefix(1))))", mode="stmt"),
+    Mutant("rejectionnotreported", D, "reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))", "", mode="stmt"),
+    Mutant("rejectionstatuslost", D, "reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))", "reporter.report(.rejected(status: .badRequest, recordIDs: request.recordIDs))", mode="stmt"),
+    Mutant("rejectionidsofbatch", D, "reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))", "reporter.report(.rejected(status: response.status, recordIDs: batch.map(\\.id)))", mode="stmt"),
     Mutant("invalidrequestascancelled", D, "return .invalidRequest(reason)", "return .cancelled", mode="stmt"),
-    Mutant("invalidrequestnotreported", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: batch.map(\\.id)))", "", mode="stmt"),
-    Mutant("invalidrequestreasonlost", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: batch.map(\\.id)))", "reporter.report(.invalidRequest(reason: \"\", recordIDs: batch.map(\\.id)))", mode="stmt"),
-    Mutant("invalidrequestidslost", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: batch.map(\\.id)))", "reporter.report(.invalidRequest(reason: reason, recordIDs: []))", mode="stmt"),
-    # The four mutants before this one that return `.cancelled` sit above it in the file, so the
-    # original `return .cancelled` (under `catch is CancellationError`) is the fifth.
-    Mutant("cancellationabandoned", D, "return .cancelled", "return .abandoned(CancellationError())", mode="stmt", nth=4),
+    Mutant("invalidrequestnotreported", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))", "", mode="stmt"),
+    Mutant("invalidrequestreasonlost", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))", "reporter.report(.invalidRequest(reason: \"\", recordIDs: request.recordIDs))", mode="stmt"),
+    Mutant("invalidrequestidslost", D, "reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))", "reporter.report(.invalidRequest(reason: reason, recordIDs: []))", mode="stmt"),
+    # The three mutants before this one that return `.cancelled` sit above it in the file, so the
+    # original `return .cancelled` (under `catch is CancellationError`) is the fourth.
+    Mutant("cancellationabandoned", D, "return .cancelled", "return .abandoned(CancellationError())", mode="stmt", nth=3),
     Mutant("abandonedascancelled", D, "return .abandoned(error)", "return .cancelled", mode="stmt"),
     Mutant("encodingnotreported", D, "reporter.report(.notEncoded(error, recordIDs: batch.map(\\.id)))", "", mode="stmt"),
     Mutant("encodingidslost", D, "reporter.report(.notEncoded(error, recordIDs: batch.map(\\.id)))", "reporter.report(.notEncoded(error, recordIDs: []))", mode="stmt"),

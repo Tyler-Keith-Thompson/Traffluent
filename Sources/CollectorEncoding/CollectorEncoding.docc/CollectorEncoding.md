@@ -19,9 +19,11 @@ property is left out, and an array's element, or a value inside a type the plan 
 
 A record the encoder can't write is left out and the rest of the batch is sent: one whose event and
 version the plan doesn't describe, one whose event isn't `Encodable`, and one holding a value
-JSON can't, such as a NaN. Each is logged; ``CollectorBatchEncoder/batch(of:)`` returns the body
-with each record left out as a ``SkippedRecord``. When no record of a batch can be written,
-``CollectorBatchEncoder/encode(_:)`` throws, and the destination sends nothing.
+JSON can't, such as a NaN. ``CollectorBatchEncoder/requests(for:)`` returns each record left out
+as a `SkippedRecord` (module ``/HTTPDestinations``), which the destination logs and reports on
+its `dropReports`. When no record of a batch can be written, the destination sends nothing.
+``CollectorBatchEncoder/batch(of:)`` returns the same body and skipped records without a
+destination.
 
 To send to a server of your own format, write a `BatchEncoder` of your own. To send to PostHog,
 use `PostHogBatchEncoder` (module `PostHogEncoding`).
@@ -52,5 +54,4 @@ covers sending to the collector beside the other destinations.
 
 ### Records left out
 
-- ``SkippedRecord``
 - ``CollectorEncodingError``

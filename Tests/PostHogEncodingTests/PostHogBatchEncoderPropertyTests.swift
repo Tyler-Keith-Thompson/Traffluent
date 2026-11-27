@@ -44,9 +44,11 @@ struct PostHogBatchEncoderPropertyTests {
             let expectedCounts: [Int?] = Array(batch.indices)
             let expectedTexts: [String?] = Array(repeating: text, count: batch.count)
 
-            let actual = sut.batch(of: batch)
+            let actual = sut.requests(for: batch)
 
-            let body = try #require(actual.body).body
+            // An empty batch makes no request; any other, small as these are, makes one.
+            #expect(actual.requests.count == (batch.isEmpty ? 0 : 1))
+            let body = actual.requests.first?.body.body ?? Data(#"{"api_key":"phc_test","batch":[]}"#.utf8)
             let object = try JSONSerialization.jsonObject(with: body) as? [String: Any]
             let events = object?["batch"] as? [[String: Any]] ?? []
             let properties = events.map { $0["properties"] as? [String: Any] }

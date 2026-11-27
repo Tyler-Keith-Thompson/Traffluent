@@ -1,5 +1,6 @@
 import EventMacros
 import Foundation
+import HTTPDestinations
 import Instrumentation
 import Persistence
 import PostHogEncoding
@@ -54,12 +55,12 @@ struct PostHogSkippedRecordTests {
             skipped,
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil, context: context),
         ]
-        let expectedBody = try sut.encode([batch[0], batch[2]])
-        let expectedSkipped = [PostHogSkippedRecord(recordID: skipped.id, eventName: "measured", schemaVersion: 1, reason: .unknownEvent(name: "measured", version: 1))]
+        let expectedBody = try #require(sut.requests(for: [batch[0], batch[2]]).requests.first).body
+        let expectedSkipped = [SkippedRecord<PostHogEncodingError>(recordID: skipped.id, eventName: "measured", schemaVersion: 1, reason: .unknownEvent(name: "measured", version: 1))]
 
-        let actual = sut.batch(of: batch)
+        let actual = sut.requests(for: batch)
 
-        #expect(actual.body == expectedBody)
+        #expect(actual.requests.map(\.body) == [expectedBody])
         #expect(actual.skippedRecords == expectedSkipped)
     }
 
@@ -70,9 +71,9 @@ struct PostHogSkippedRecordTests {
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "checkout_started", schemaVersion: 2, reason: .unknownEvent(name: "checkout_started", version: 2))]
+        let expected = [SkippedRecord<PostHogEncodingError>(recordID: record.id, eventName: "checkout_started", schemaVersion: 2, reason: .unknownEvent(name: "checkout_started", version: 2))]
 
-        let actual = sut.batch(of: [record]).skippedRecords
+        let actual = sut.requests(for: [record]).skippedRecords
 
         #expect(actual == expected)
     }
@@ -84,9 +85,9 @@ struct PostHogSkippedRecordTests {
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
+        let expected = [SkippedRecord<PostHogEncodingError>(recordID: record.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
 
-        let actual = sut.batch(of: [record]).skippedRecords
+        let actual = sut.requests(for: [record]).skippedRecords
 
         #expect(actual == expected)
     }
@@ -97,9 +98,9 @@ struct PostHogSkippedRecordTests {
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: Measured(value: .nan), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
-        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "measured", schemaVersion: 1, reason: .unrepresentableValue(event: "measured", property: "value"))]
+        let expected = [SkippedRecord<PostHogEncodingError>(recordID: record.id, eventName: "measured", schemaVersion: 1, reason: .unrepresentableValue(event: "measured", property: "value"))]
 
-        let actual = sut.batch(of: [record]).skippedRecords
+        let actual = sut.requests(for: [record]).skippedRecords
 
         #expect(actual == expected)
     }
@@ -113,9 +114,10 @@ struct PostHogSkippedRecordTests {
         let record = EventRecord(event: NotAMap(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = PostHogEncodingError.unrepresentableValue(event: "not_a_map", property: "")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.requests(for: [record])
+
+        #expect(actual.requests.isEmpty)
+        #expect(actual.skippedRecords.map(\.reason) == [expected])
     }
 
     @Test("A record whose event name starts with $ is left out as reservedEventName, and the records around it are sent")
@@ -130,27 +132,42 @@ struct PostHogSkippedRecordTests {
             skipped,
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil, context: context),
         ]
-        let expectedBody = try sut.encode([batch[0], batch[2]])
-        let expectedSkipped = [PostHogSkippedRecord(recordID: skipped.id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify"))]
+        let expectedBody = try #require(sut.requests(for: [batch[0], batch[2]]).requests.first).body
+        let expectedSkipped = [SkippedRecord<PostHogEncodingError>(recordID: skipped.id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify"))]
 
-        let actual = sut.batch(of: batch)
+        let actual = sut.requests(for: batch)
 
-        #expect(actual.body == expectedBody)
+        #expect(actual.requests.map(\.body) == [expectedBody])
         #expect(actual.skippedRecords == expectedSkipped)
+    }
+
+    @Test("A record the plan describes whose name starts with $ is left out as reservedEventName, though it can't be read either")
+    func reservedBeforeReadError() throws {
+        struct Screen: Event {
+            static let name = "$screen"
+        }
+        let screen = EventSchema(name: "$screen", version: 1, consentCategory: .analytics, properties: [])
+        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [screen]))
+        let record = EventRecord(event: Screen(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expected = [SkippedRecord<PostHogEncodingError>(recordID: record.id, eventName: "$screen", schemaVersion: 1, reason: .reservedEventName(name: "$screen"))]
+
+        let actual = sut.requests(for: [record]).skippedRecords
+
+        #expect(actual == expected)
     }
 
     @Test("A record the plan doesn't describe is left out as unknownEvent even when its name starts with $")
     func unknownBeforeReserved() throws {
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: []))
         let record = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = [PostHogSkippedRecord(recordID: record.id, eventName: "$identify", schemaVersion: 1, reason: .unknownEvent(name: "$identify", version: 1))]
+        let expected = [SkippedRecord<PostHogEncodingError>(recordID: record.id, eventName: "$identify", schemaVersion: 1, reason: .unknownEvent(name: "$identify", version: 1))]
 
-        let actual = sut.batch(of: [record]).skippedRecords
+        let actual = sut.requests(for: [record]).skippedRecords
 
         #expect(actual == expected)
     }
 
-    @Test("A batch whose every record is skipped has no body, and encode throws the first record's reason")
+    @Test("A batch whose every record is skipped has no request, and encode throws the first record's reason")
     func everyRecordSkipped() throws {
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
         let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
@@ -161,17 +178,13 @@ struct PostHogSkippedRecordTests {
             EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil, context: context),
         ]
         let expectedSkipped = [
-            PostHogSkippedRecord(recordID: batch[0].id, eventName: "measured", schemaVersion: 1, reason: .unknownEvent(name: "measured", version: 1)),
-            PostHogSkippedRecord(recordID: batch[1].id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify")),
+            SkippedRecord<PostHogEncodingError>(recordID: batch[0].id, eventName: "measured", schemaVersion: 1, reason: .unknownEvent(name: "measured", version: 1)),
+            SkippedRecord<PostHogEncodingError>(recordID: batch[1].id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify")),
         ]
-        let expectedError = PostHogEncodingError.unknownEvent(name: "measured", version: 1)
 
-        let actual = sut.batch(of: batch)
+        let actual = sut.requests(for: batch)
 
-        #expect(actual.body == nil)
+        #expect(actual.requests.isEmpty)
         #expect(actual.skippedRecords == expectedSkipped)
-        #expect(throws: expectedError) {
-            try sut.encode(batch)
-        }
     }
 }

@@ -63,6 +63,7 @@ docc_archive(
         "//Sources/TrackerTesting:TrackerTestingDocumentation",
         "//Sources/PostHogEncoding:PostHogEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
+        "//Sources/DestinationTesting:DestinationTestingDocumentation",
     ],
     tags = ["manual"],
     visibility = ["//visibility:public"],

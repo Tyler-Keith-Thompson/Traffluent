@@ -7,27 +7,28 @@ public import HTTPTypes
 public import Instrumentation
 import Logging
 
-/// A destination that sends each batch it receives to an HTTP endpoint, as one request, and
-/// sends it again until it arrives.
+/// A destination that sends each batch it receives to an HTTP endpoint, as the requests its encoder
+/// splits it into, and sends each again until it arrives.
 ///
 /// The wire shape, for a server that ingests these batches:
 ///
-/// - One request per batch, in the order the delivery hands them over, the next batch sent only
-///   once the previous one is delivered or dropped.
+/// - The requests the encoder splits each batch into (``BatchEncoder/requests(for:)``), in the
+///   order the delivery hands batches over, each request sent only once the previous one is
+///   delivered or dropped.
 /// - The method is `POST` and the URL is the configured endpoint.
-/// - The header fields are the configured ones, then the trace context of the batch's first
+/// - The header fields are the configured ones, then the trace context of the request's first
 ///   record, then `Content-Type`, each replacing fields of the same name before it:
 ///   - The instrument injects the first (oldest) record's `EventRecord/context`, so a server
 ///     extracting it joins the request, and the events, to the trace the app was in. Its field
 ///     names are the instrument's: `traceparent` and `tracestate` for a W3C Trace Context tracer.
 ///     A record tracked outside any span, or an instrument that injects nothing (the default
 ///     `NoOpInstrument` when none is bootstrapped), adds no fields.
-///   - Only the first record's context travels in the header fields, though a batch may hold
+///   - Only the first record's context travels in the header fields, though a request may hold
 ///     records tracked in other traces. A server that needs each record's context reads it from
 ///     the body, where a ``BatchEncoder`` writes it.
 ///   - `Content-Type` is always the encoder's ``EncodedBatch/contentType``, whatever a configured
 ///     field or the instrument wrote.
-/// - The body is exactly the encoder's ``EncodedBatch/body`` for the batch's records, oldest
+/// - The body is exactly the encoder's ``EncodedBatch/body`` for the request's records, oldest
 ///   first. The format is the encoder's; events need no `Codable` conformance.
 /// - A response with a 2xx status means the batch arrived.
 /// - A request the transport can never send (``HTTPTransportError/invalidRequest(reason:)``: a
@@ -36,20 +37,29 @@ import Logging
 /// - No response, a 5xx status, 408 Request Timeout or 429 Too Many Requests means it didn't
 ///   arrive yet: the same request is sent again after the backoff's next wait, for as long as it
 ///   takes. A `Retry-After` field is not read; the backoff alone sets the wait.
-/// - Any other status means the endpoint won't take the batch, and it isn't sent again.
+/// - Any other status means the endpoint won't take the request, and it isn't sent again. The
+///   batch's later requests are still sent.
 /// - A record can arrive twice: a request the server took whose response was lost is sent
 ///   again, and a record a store redelivers after the app was stopped mid-send
 ///   (`EventRecord/isRedelivered`) may have arrived before. Its `EventRecord/id` is the one it was
 ///   first sent with, so an encoder that writes each record's identifier lets the server keep one
 ///   copy.
+/// - A batch of several requests is acknowledged only once every request is delivered or dropped.
+///   A delivery cancelled, or an app stopped, after some of its requests arrived hands the whole
+///   batch over again, so those requests are sent again too: a server that keeps one copy per
+///   record identifier absorbs them. The records the encoder leaves out are then reported again.
 ///
 /// ``receive(_:)`` returns once the batch is delivered, dropped, or the delivery is cancelled, so
 /// a tracker's store keeps the records of a batch until it arrives, and a batch still being
-/// retried when the app ends is delivered again on the next launch. A batch the endpoint rejects,
-/// whose request can't be sent, or that the encoder can't encode is dropped: logged at error
-/// level and reported on ``dropReports``. Each failed attempt that will be retried is logged at notice level.
+/// retried when the app ends is delivered again on the next launch. A request the endpoint
+/// rejects or that can't be sent, a batch the encoder can't encode, and a record the encoder
+/// leaves out of its requests are dropped: logged at error level and reported on
+/// ``dropReports``. Each failed attempt that will be retried is logged at notice level.
 /// Cancelling the delivery cancels the send in flight or the wait before the next one, and
-/// ``receive(_:)`` returns without logging or reporting it.
+/// ``receive(_:)`` returns without logging or reporting it, or sending the batch's later
+/// requests. A request whose wait before the next attempt throws something other than
+/// `CancellationError` (a custom clock's failure) is given up on, logged at error level but not
+/// reported, and the batch's next request is sent.
 ///
 /// While a batch is retried, the delivery's later batches wait in this destination's buffer,
 /// which drops its oldest batch when full and reports it
@@ -73,10 +83,10 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     private let instrument: any Instrument
     private let transport: Transport
     private let encoder: Encoding
-    // A closure making each batch's strategy, built where the clock's type is known, rather than
+    // A closure making each request's strategy, built where the clock's type is known, rather than
     // a third generic parameter for the clock, for the same reason as `instrument`; and rather
     // than an `any Clock<Duration>`, which Afluent's strategy can't take, and Swift won't open
-    // into a `some Clock<Duration>` parameter. A new strategy per batch, as each keeps its count.
+    // into a `some Clock<Duration>` parameter. A new strategy per request, as each keeps its count.
     private let retryStrategy: @Sendable () -> any RetryStrategy
     private let reporter = DropReporter<Encoding.Failure>()
 
@@ -91,7 +101,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     ///   - instrument: What injects each batch's first record's trace context into the header
     ///     fields; the bootstrapped `InstrumentationSystem.instrument`, read once here, by default.
     ///   - transport: What sends each request.
-    ///   - encoder: What turns each batch into a request body.
+    ///   - encoder: What turns each batch into requests.
     ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up to
     ///     60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
@@ -135,44 +145,57 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         reporter.reports
     }
 
-    /// Sends `batch` to the endpoint as one request, sends it again after each transient
-    /// failure, and returns once it is delivered, dropped or cancelled.
+    /// Sends `batch` to the endpoint, as the requests its encoder splits it into, one after
+    /// another; sends each again after each transient failure, and returns once every one is
+    /// delivered or dropped, or the delivery is cancelled.
     ///
     /// - Parameter batch: The records to send.
     public func receive(_ batch: [EventRecord]) async {
-        switch await send(batch) {
-        case .delivered, .cancelled:
-            break
-        case .rejected(let response):
-            logger.error("Dropped a batch the endpoint answered with \(response.status)")
-            reporter.report(.rejected(status: response.status, recordIDs: batch.map(\.id)))
-        case .invalidRequest(let reason):
-            logger.error("Dropped a batch whose request can never be sent: \(reason)")
-            reporter.report(.invalidRequest(reason: reason, recordIDs: batch.map(\.id)))
-        case .notEncoded(let error):
+        let encoded: BatchRequests<Encoding.Failure>
+        do {
+            encoded = try encoder.requests(for: batch)
+        } catch {
             logger.error("Dropped a batch the encoder couldn't encode: \(error)")
             reporter.report(.notEncoded(error, recordIDs: batch.map(\.id)))
-        case .abandoned(let error):
-            logger.error("Stopped sending a batch, whose wait before the next attempt threw: \(error)")
+            return
+        }
+        for skipped in encoded.skippedRecords {
+            logger.error("Left a record of \(skipped.eventName) version \(skipped.schemaVersion) out of the batch: \(skipped.reason)")
+            reporter.report(.skipped(skipped))
+        }
+        // Each request's trace context is its own first record's. A dictionary, as a request
+        // names its records by identifier; of two records of one identifier, the first's.
+        let contexts = Dictionary(batch.map { ($0.id, $0.context) }) { first, _ in first }
+        for request in encoded.requests {
+            let context = request.recordIDs.first.flatMap { contexts[$0] }
+            switch await send(request, context: context) {
+            case .delivered:
+                break
+            case .cancelled:
+                return
+            case .rejected(let response):
+                logger.error("Dropped a request the endpoint answered with \(response.status)")
+                reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))
+            case .invalidRequest(let reason):
+                logger.error("Dropped a request that can never be sent: \(reason)")
+                reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))
+            case .abandoned(let error):
+                logger.error("Stopped sending a request, whose wait before the next attempt threw: \(error)")
+            }
         }
     }
 
-    /// Encodes `batch`, sends it until it is delivered, rejected or cancelled, and says which.
-    package func send(_ batch: [EventRecord]) async -> Outcome {
-        let encoded: EncodedBatch
-        do {
-            encoded = try encoder.encode(batch)
-        } catch {
-            return .notEncoded(error)
-        }
+    /// Sends `encoded` until it is delivered, rejected or cancelled, with the trace context of
+    /// `context` in its header fields, and says which.
+    package func send(_ encoded: EncodedRequest, context: ServiceContext?) async -> Outcome {
         var request = request
-        if let first = batch.first {
-            instrument.inject(first.context, into: &request.headerFields, using: HTTPFieldsInjector())
+        if let context {
+            instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
-        request.headerFields[.contentType] = encoded.contentType
-        let attempt = Attempt(transport: transport, request: request, body: encoded.body)
+        request.headerFields[.contentType] = encoded.body.contentType
+        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body)
         do {
-            // Built for this batch alone: Afluent's strategy keeps its count of retries, and a
+            // Built for this request alone: Afluent's strategy keeps its count of retries, and a
             // cancelled unit of work stays cancelled.
             let response = try await DeferredTask { try await attempt.run() }
                 .retry(retryStrategy())
@@ -186,15 +209,15 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             return .cancelled
         } catch {
             // Reached only through a clock whose sleep throws something other than
-            // CancellationError: with Afluent 1.1.46 the retry throws the attempt's errors
-            // (AttemptFailure or CancellationError) and its strategy's, which are the sleep's.
-            // Retrying would spin on a clock that keeps throwing, and receive must return, so the
-            // batch is given up on for this run, logged rather than reported as a drop.
+            // CancellationError: Afluent's retry throws the attempt's errors (AttemptFailure or
+            // CancellationError) and its strategy's, which are the sleep's. Retrying would spin
+            // on a clock that keeps throwing, and receive must return, so the request is given
+            // up on for this run, logged rather than reported as a drop.
             return .abandoned(error)
         }
     }
 
-    /// What became of one batch.
+    /// What became of one request.
     package enum Outcome {
         /// The server answered with a 2xx status.
         case delivered(HTTPResponse)
@@ -202,9 +225,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         case rejected(HTTPResponse)
         /// The transport can never send the request.
         case invalidRequest(String)
-        /// The encoder threw, so nothing was sent.
-        case notEncoded(Encoding.Failure)
-        /// The delivery was cancelled before the batch was delivered or dropped.
+        /// The delivery was cancelled before the request was delivered or dropped.
         case cancelled
         /// The clock's sleep before the next attempt threw `error`, not `CancellationError`.
         case abandoned(any Error)

@@ -19,7 +19,11 @@ struct HTTPDestinationReportReadTurnTests {
 
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+
+        func body(of batch: [EventRecord]) -> EncodedBatch {
             EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
         }
     }

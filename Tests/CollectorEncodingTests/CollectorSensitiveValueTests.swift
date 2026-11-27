@@ -33,7 +33,7 @@ struct CollectorSensitiveValueTests {
         record.revealsSensitiveValues = true
         let expected = #"{"records":[{"context":{"vendorIdentifier":"00000000-0000-4000-8000-00000000000B"},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"signed_up","properties":{"backupEmail":"ada@example.org","email":"ada@example.com","plan":"pro","recoveryCodes":["1234"],"verifiedAt":"1970-01-01T00:01:00.000Z"},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -54,7 +54,7 @@ struct CollectorSensitiveValueTests {
         )
         let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"signed_up","properties":{"plan":"pro","recoveryCodes":[null]},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -74,7 +74,7 @@ struct CollectorSensitiveValueTests {
 
         await sut.receive([record])
         let delivered = sink.records
-        let actual = String(decoding: try encoder.encode(delivered).body, as: UTF8.self)
+        let actual = String(decoding: try #require(encoder.batch(of: delivered).body).body, as: UTF8.self)
 
         #expect(!actual.contains(unexpected))
     }

@@ -120,7 +120,7 @@ struct CartView: View {
 }
 ```
 
-`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``,
+`import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``, ``/PropertyJSON``,
 ``/GRDBPersistence`` and the testing modules, which are products of their own.
 
 ### Where to go next
@@ -141,6 +141,7 @@ struct CartView: View {
 - Test what your code tracks: <doc:TestingWhatYouTrack>.
 - Send to logs, traces, your own server, PostHog or memory, with values for one destination
   alone: <doc:ChoosingDestinations>.
+- Send to an analytics vendor not yet covered, from a module of your own: <doc:WritingAVendorDestination>.
 - Decide what belongs in an event and what stays out of it: <doc:WhatGoesWhere>, <doc:IdentifyingPeople>
   and <doc:PrivacyManifests>.
 
@@ -163,6 +164,7 @@ struct CartView: View {
 - <doc:PersistingRecords>
 - <doc:DefiningEvents>
 - <doc:TrackingPlanWorkflow>
+- <doc:WritingAVendorDestination>
 
 ### Choosing what to record
 
@@ -201,3 +203,4 @@ struct CartView: View {
 
 - ``/TrackingPlanTesting``
 - ``/TrackerTesting``
+- ``/DestinationTesting``

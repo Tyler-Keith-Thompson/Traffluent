@@ -61,10 +61,10 @@ identifiers and the status, the transport's reason or the encoder's error. Cance
 stops the retries.
 
 The bootstrapped tracing instrument, or the one you pass as `instrument:`, injects the trace
-context of the batch's first record into the request's header fields, so a server that extracts it
-joins the request to the app's trace. The encoder's `Content-Type` always wins, and with no
-instrument bootstrapped no header is added. Only the first record's context travels in the header
-fields; write each record's context into the body if the server needs it.
+context of each request's first record into its header fields, so a server that extracts it joins
+the request to the app's trace. The encoder's `Content-Type` always wins, and with no instrument
+bootstrapped no header is added. Only the first record's context travels in the header fields;
+write each record's context into the body if the server needs it.
 
 To send to a self-hosted TraffluentCollector, give `HTTPDestination` a
 `CollectorBatchEncoder(plan:)` (module ``/CollectorEncoding``) as its encoder, and the collector's
@@ -76,24 +76,43 @@ trace context. A `Sensitive` value is sent only while the record reveals it.
 A record the encoder can't write is left out of the request, and the rest of its batch is sent.
 That happens when the plan has no schema for the record's event at its version (an event the
 library tracks, such as `SessionStarted`, that the plan doesn't list), when the event isn't
-`Encodable`, or when a value has no JSON form, such as a NaN. The encoder logs each skipped
-record at error level, and `batch(of:)` returns them as `SkippedRecord`s. A batch with no record
-the encoder can write sends nothing.
+`Encodable`, or when a value has no JSON form, such as a NaN. The destination logs each skipped
+record at error level and reports it on `dropReports` as `HTTPDropReport.skipped(_:)`. A batch with
+no record the encoder can write sends nothing.
+
+### Vendors
+
+Each analytics vendor Traffluent sends to has a module of its own, which `import Traffluent` leaves
+out, holding a factory on `HTTPDestination` that makes a destination for it in one throwing call.
+The factory checks what you pass it, fills in the vendor's endpoint, encoder and batch limits,
+and leaves the rest to `HTTPDestination` as above: it retries and drops a vendor's requests as it
+does any server's. Each module writes to the vendor's
+public HTTP ingestion API, so no vendor SDK is linked.
+
+| Vendor | Module | Factory | What the vendor receives |
+|---|---|---|---|
+| PostHog | ``/PostHogEncoding`` | `HTTPDestination.postHog(projectToken:host:plan:)` | Each record as an anonymous event: its session as `distinct_id` and `$session_id`, its identifier as `uuid`, its properties through your plan, and the standard context as PostHog's `$`-prefixed properties |
+
+To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
 ### PostHog
 
-To send to PostHog, Cloud or self-hosted, give `HTTPDestination` a
-`PostHogBatchEncoder(projectToken:plan:)` (module ``/PostHogEncoding``, which `import Traffluent`
-leaves out) and your instance's `/batch/` URL. The project token goes in the body; it is public,
-like every PostHog client's, so no header is needed. The destination retries and reports drops as
-it does for any server, and a record sent again keeps its `uuid`.
+To send to PostHog, Cloud or self-hosted, make the destination with
+`HTTPDestination.postHog(projectToken:host:plan:)` (module ``/PostHogEncoding``). It posts to the
+host's `/batch/`, sends no trace context in the header fields, and splits each batch to PostHog's
+request and event sizes. The project token goes in the body; it is public, like every PostHog
+client's, so no header is needed. The factory throws `PostHogSetupError` for an empty token, a
+personal API key (`phx_…`), which must never ship in an app, and a host that isn't a plain `https`
+URL. The destination retries and reports drops as it does for any server, and a record sent again
+keeps its `uuid`. A batch with no record the encoder can write, an empty one included, makes no
+request.
 
 ```swift
 let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
-let postHog = HTTPDestination(
-    endpoint: postHogBatchURL,  // https://us.i.posthog.com/batch/, https://eu.i.posthog.com/batch/ or your own
-    instrument: NoOpInstrument(),  // so no trace context goes to PostHog in the header fields
-    encoder: PostHogBatchEncoder(projectToken: projectToken, plan: plan))
+let postHog = try HTTPDestination.postHog(
+    projectToken: projectToken,
+    host: postHogHost,  // https://us.i.posthog.com, https://eu.i.posthog.com or your own
+    plan: plan)
 let tracker = Tracker(enrichers: [.sessions()])
 let delivery = tracker.records.batch().deliver(to: postHog)
 ```
@@ -121,8 +140,9 @@ A `Sensitive` value is never sent, whatever the record reveals, so a value meant
 only a hand-written `Encodable` conformance can write, and `distinct_id`) are left out and
 logged. Like the collector's encoder, it leaves out a record the plan doesn't describe, one that
 isn't `Encodable` and one holding a value JSON can't, and also one whose event name starts with
-`$`, as PostHog keeps those names for its own events. It logs each at error level, and
-`batch(of:)` returns them as `PostHogSkippedRecord`s.
+`$`, as PostHog keeps those names for its own events, and one too large for PostHog's event limit.
+It logs each at error level, and the destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`.
 
 ### Memory
 

@@ -17,7 +17,6 @@ swift_library(
         "//Sources/Sessions",
         "//Sources/StandardContext",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
-        "@swiftpkg_swift_log//:Logging",
     ],
     visibility = ["//visibility:public"],
 )

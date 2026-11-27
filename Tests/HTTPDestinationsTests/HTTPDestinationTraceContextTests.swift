@@ -19,7 +19,11 @@ struct HTTPDestinationTraceContextTests {
 
     /// Encodes the plans of a batch's sign-ups, comma separated, as plain text.
     struct PlansEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+
+        func body(of batch: [EventRecord]) -> EncodedBatch {
             let plans = batch.map { ($0.event as? SignedUp)?.plan ?? "?" }
             return EncodedBatch(body: Data(plans.joined(separator: ",").utf8), contentType: "text/plain")
         }
@@ -106,7 +110,7 @@ struct HTTPDestinationTraceContextTests {
         let expectedFields: HTTPFields = [.authorization: "Bearer t", .contentType: "text/plain"]
         let expectedBody = Data("a".utf8)
 
-        let outcome = await sut.send(batch)
+        let outcome = await sut.send(EncodedRequest(body: PlansEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context)
         span.end()
 
         let actual = try #require(transport.sent.withLock { $0.first })

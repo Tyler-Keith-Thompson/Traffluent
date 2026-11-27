@@ -111,7 +111,7 @@ struct CollectorBatchEncoderTests {
         let expected = #"{"records":[{"context":{"application":{"build":"418","bundleIdentifier":"com.example.shop","version":"2.4.1"},"device":{"formFactor":"phone","model":"iPhone17,1"},"locale":"en-US","network":"wifi","operatingSystem":{"name":"iOS","version":"26.1.0"},"sampleRate":0.5,"session":"00000000-0000-4000-8000-00000000000A","trace":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},"vendorIdentifier":"00000000-0000-4000-8000-00000000000B"},"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","isRedelivered":false,"name":"signed_up","properties":{"discount":0.25,"email":"ada@example.com","plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z"}]}"#
         let expectedContentType = "application/json"
 
-        let actual = try sut.encode([first, second])
+        let actual = try #require(sut.batch(of: [first, second]).body)
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
         #expect(actual.contentType == expectedContentType)
@@ -138,7 +138,7 @@ struct CollectorBatchEncoderTests {
         )
         let expected = #"{"records":[{"context":{},"id":"2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":1,"coupon":"SPRING"},"timestamp":"2026-11-23T14:03:27.000Z"}]}"#
 
-        let actual = try sut.encode([redelivery])
+        let actual = try #require(sut.batch(of: [redelivery]).body)
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
@@ -152,7 +152,7 @@ struct CollectorBatchEncoderTests {
         }
         let expected: [Int] = [3, 1, 2]
 
-        let body = try sut.encode(batch).body
+        let body = try #require(sut.batch(of: batch).body).body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let records = try #require(object["records"] as? [[String: Any]])
         let actual = records.compactMap { ($0["properties"] as? [String: Any])?["cartSize"] as? Int }
@@ -165,7 +165,7 @@ struct CollectorBatchEncoderTests {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let expected = #"{"records":[]}"#
 
-        let actual = try sut.encode([])
+        let actual = try #require(sut.batch(of: []).body)
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
@@ -182,7 +182,7 @@ struct CollectorBatchEncoderTests {
         )
         let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z"}]}"#
 
-        let actual = try sut.encode([record])
+        let actual = try #require(sut.batch(of: [record]).body)
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
@@ -192,7 +192,7 @@ struct CollectorBatchEncoderTests {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 4, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
-        let expected = try encoder.encode([record])
+        let expected = try #require(encoder.batch(of: [record]).body)
         let transport = TransportDouble()
         let sut = HTTPDestination(
             endpoint: try #require(URL(string: "https://collector.example.com/v1/batches")),

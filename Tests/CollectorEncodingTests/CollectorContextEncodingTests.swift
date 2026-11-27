@@ -44,7 +44,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -57,7 +57,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"application":{"version":"1.0"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -75,7 +75,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"device":{"formFactor":""# + name + #"","model":"Model1,1"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -93,7 +93,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"network":""# + name + #""},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -106,7 +106,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"locale":"pt-BR"},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -122,7 +122,7 @@ struct CollectorContextEncodingTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"records":[{"context":{"sampleRate":0.125,"session":"00000000-0000-4000-8000-00000000000A","trace":{"traceparent":"00-a-b-01","tracestate":"vendor=1"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }
@@ -136,7 +136,7 @@ struct CollectorContextEncodingTests {
         let second = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = #"{"records":[{"context":{"sampleRate":1},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
 
-        let actual = String(decoding: try sut.encode([first, second]).body, as: UTF8.self)
+        let actual = String(decoding: try #require(sut.batch(of: [first, second]).body).body, as: UTF8.self)
 
         #expect(actual == expected)
     }

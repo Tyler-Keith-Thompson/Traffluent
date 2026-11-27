@@ -5,9 +5,10 @@ public import HTTPTypes
 ///
 /// A destination reports every batch it drops for good on ``HTTPDestination/dropReports``: one
 /// the endpoint rejected with a status that retrying won't change, one whose request the
-/// transport can never send, or one its encoder couldn't encode. A batch whose send failed for a while and was then delivered isn't reported, and
-/// neither is one whose delivery was cancelled. A dropped batch counts as received, so a store
-/// keeping its records forgets them.
+/// transport can never send, or one its encoder couldn't encode. It reports each record the
+/// encoder left out of a batch's requests too. A batch whose send failed for a while and was then
+/// delivered isn't reported, and neither is one whose delivery was cancelled. A dropped batch
+/// counts as received, so a store keeping its records forgets them.
 public enum HTTPDropReport<Failure: Error>: Sendable {
     /// The endpoint answered with `status`, a non-2xx status other than 408, 429 or 5xx, so the
     /// batch of the records identified by `recordIDs` (`EventRecord.id`), oldest first, was
@@ -20,6 +21,10 @@ public enum HTTPDropReport<Failure: Error>: Sendable {
     /// The encoder threw `error` for the batch of the records identified by `recordIDs`, oldest
     /// first, so nothing was sent and the batch was dropped.
     case notEncoded(Failure, recordIDs: [UUID])
+    /// The encoder left the record out of the batch's requests (``BatchEncoder/requests(for:)``),
+    /// so it was never sent: one it can't write, or one too large for any request the endpoint
+    /// takes. The batch's other records were sent.
+    case skipped(SkippedRecord<Failure>)
 }
 
 extension HTTPDropReport: Equatable where Failure: Equatable {}

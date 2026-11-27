@@ -21,8 +21,14 @@ swift_library(
         "//Sources/PropertyJSON",
         "//Sources/EventMacros",
         "//Sources/Events",
+        "//Sources/HTTPDestinations",
         "//Sources/Persistence",
         "//Sources/TrackingPlans",
+        "//Sources/Sessions",
+        "//Sources/StandardContext",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
+        "@swiftpkg_swift_property_based//:PropertyBased",
+        "//Tests/TraffluentTestSupport",
     ],
 )
 

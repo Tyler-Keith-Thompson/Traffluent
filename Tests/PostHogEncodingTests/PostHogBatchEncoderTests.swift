@@ -79,7 +79,7 @@ struct PostHogBatchEncoderTests {
         let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"signed_up","properties":{"$app_build":"418","$app_namespace":"com.example.shop","$app_version":"2.4.1","$device_model":"iPhone17,1","$device_type":"Mobile","$geoip_disable":true,"$locale":"en-US","$network_cellular":false,"$network_wifi":true,"$os_name":"iOS","$os_version":"26.1.0","$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","discount":0.25,"plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z","uuid":"6f9619ff-8b86-d011-b42d-00c04fc964ff"},{"distinct_id":"00000000-0000-4000-8000-00000000000c","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000c","cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z","uuid":"00000000-0000-4000-8000-000000000002"}]}"#
         let expectedContentType = "application/json"
 
-        let actual = try sut.encode([first, second])
+        let actual = try #require(sut.requests(for: [first, second]).requests.first).body
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
         #expect(actual.contentType == expectedContentType)
@@ -107,9 +107,9 @@ struct PostHogBatchEncoderTests {
             context: context,
             isRedelivered: true
         )
-        let expected = try sut.encode([firstDelivery])
+        let expected = try #require(sut.requests(for: [firstDelivery]).requests.first).body
 
-        let actual = try sut.encode([redelivery])
+        let actual = try #require(sut.requests(for: [redelivery]).requests.first).body
 
         #expect(actual == expected)
     }
@@ -125,7 +125,7 @@ struct PostHogBatchEncoderTests {
         }
         let expected: [Int] = [3, 1, 2]
 
-        let body = try sut.encode(batch).body
+        let body = try #require(sut.requests(for: batch).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let events = try #require(object["batch"] as? [[String: Any]])
         let actual = events.compactMap { ($0["properties"] as? [String: Any])?["cartSize"] as? Int }
@@ -133,24 +133,15 @@ struct PostHogBatchEncoderTests {
         #expect(actual == expected)
     }
 
-    @Test("An empty batch is the project token and an empty batch array")
-    func emptyBatch() throws {
-        let sut = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: []))
-        let expected = #"{"api_key":"phc_test","batch":[]}"#
-
-        let actual = try sut.encode([])
-
-        #expect(String(decoding: actual.body, as: UTF8.self) == expected)
-    }
-
     @Test("The project token is written as given, escaped as a JSON string")
     func projectTokenEscaped() throws {
-        let sut = PostHogBatchEncoder(projectToken: #"phc_"quoted"\"#, plan: try TrackingPlan(schemas: []))
-        let expected = #"{"api_key":"phc_\"quoted\"\\","batch":[]}"#
+        let sut = PostHogBatchEncoder(projectToken: #"phc_"quoted"\"#, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let record = EventRecord(event: CheckoutStarted(cartSize: 1, coupon: nil), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expected = #"{"api_key":"phc_\"quoted\"\\","batch":["#
 
-        let actual = try sut.encode([])
+        let actual = try #require(sut.requests(for: [record]).requests.first).body
 
-        #expect(String(decoding: actual.body, as: UTF8.self) == expected)
+        #expect(String(decoding: actual.body, as: UTF8.self).hasPrefix(expected))
     }
 
     @Test("A timestamp is ISO 8601 in UTC with milliseconds and a Z, whole seconds included")
@@ -168,7 +159,7 @@ struct PostHogBatchEncoderTests {
         )
         let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
-        let actual = try sut.encode([record])
+        let actual = try #require(sut.requests(for: [record]).requests.first).body
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
@@ -188,7 +179,7 @@ struct PostHogBatchEncoderTests {
         record.revealsSensitiveValues = reveals
         let expectedKeys = ["$geoip_disable", "$process_person_profile", "$session_id", "discount", "plan", "referrer", "seats", "tags", "trialEndsAt"]
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let event = try #require((object["batch"] as? [[String: Any]])?.first)
         let actual = try #require(event["properties"] as? [String: Any]).keys.sorted()

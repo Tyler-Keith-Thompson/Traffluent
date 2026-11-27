@@ -46,6 +46,9 @@ bad row in a dashboard.
   type may be named after a vendor. Vendor code lives only in its destination module.
 - N4. Wrapping every vendor in this repo. Destinations beyond D1 belong in their own packages,
   built on the public destination protocol, unless the owner adds one.
+  The owner amended N4 on 2026-11-26 (TRAF-101): "We should add destinations for other popular analytics providers. File backlog tickets for a bunch of those. Let's make this as plug and play as possible." So
+  destinations for popular analytics vendors now belong in this repo, under D1's rules for them;
+  vendors beyond D1's list still belong in their own packages until the owner adds them.
 - N5. An analytics backend, dashboard, query engine or data warehouse. Traffluent is the client
   side. Where events end up belongs to the destination's vendor. The one exception, by the
   owner's decision on 2026-11-22 (TRAF-31): a self-hosted collector in a separate package, which
@@ -84,7 +87,8 @@ bad row in a dashboard.
 - Retry, timeout, async sequencing or subject behaviour missing from Afluent → Afluent's board.
 - Container or test-double gaps → DependencyInjection's board. Seeded-random gaps → SwiftPRNG's
   board.
-- Destinations for other vendors (N4) → their own packages, not this backlog.
+- Destinations for vendors not in D1's list (N4) → their own packages, not this backlog, until the
+  owner adds them. Those in D1's list belong here (TRAF-101).
 
 ## Kinds, labels and Ready
 - bug: wrong behaviour in shipped code, especially events lost, sent twice or sent without
@@ -104,6 +108,18 @@ bad row in a dashboard.
   (another pipeline, so it would duplicate this one), Firebase or Amplitude (vendor SDKs, Apple- or
   vendor-bound), and OpenTelemetry as the only destination (built for traces, not product
   analytics).
+  The owner amended D1 again on 2026-11-26 (TRAF-101): "We should add destinations for other popular analytics providers. File backlog tickets for a bunch of those. Let's make this as plug and play as possible." Each
+  vendor gets one `<Vendor>Encoding` module over `HTTPDestination`, written against the vendor's
+  public HTTP ingestion API and never its SDK (N3, N7), each its own product and listed in
+  `NON_UMBRELLA_MODULES`, so `import Traffluent` names no vendor. Each module offers one throwing
+  factory on `HTTPDestination` that fills in the endpoint, encoder and limits, builds
+  on `PropertyJSON`'s shared pieces, and passes `DestinationTesting`'s conformance checks. The
+  vendors, after PostHog: Amplitude (TRAF-102), Mixpanel (TRAF-103), the Segment spec (Segment,
+  RudderStack and Customer.io; TRAF-104), GA4's Measurement Protocol (TRAF-105, pending the
+  `api_secret` decision), Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap
+  (TRAF-109) and Aptabase (TRAF-110). This reverses the rejection of Segment above: as a plain
+  sink, one more destination the pipeline delivers to, it duplicates nothing. The rejection of
+  Firebase's and Amplitude's SDKs stands; Amplitude's destination uses its HTTP API.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):
@@ -219,4 +235,8 @@ bad row in a dashboard.
 - Is server-side Swift (Vapor services sending analytics) a target user, or only apps?
 - Are the template's minimum OS versions (macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2)
   right for a library that apps adopt, or should they go lower?
-- Which vendors, if any, beyond D1 should get first-party destinations here (N4)?
+- Which vendors, if any, beyond D1 should get first-party destinations here (N4)? Answered on
+  2026-11-26 (TRAF-101): Amplitude (TRAF-102), Mixpanel (TRAF-103), the Segment spec (Segment,
+  RudderStack, Customer.io; TRAF-104), GA4 Measurement Protocol (TRAF-105, `api_secret` decision
+  pending), Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap (TRAF-109) and
+  Aptabase (TRAF-110). See D1.

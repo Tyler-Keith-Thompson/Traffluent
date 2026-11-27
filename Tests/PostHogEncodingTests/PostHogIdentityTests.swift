@@ -57,7 +57,7 @@ struct PostHogIdentityTests {
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = "5d1e3b2a-9c4f-4e6a-8b7d-1f2e3d4c5b6a"
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
 
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let event = try #require((object["batch"] as? [[String: Any]])?.first)
@@ -81,9 +81,9 @@ struct PostHogIdentityTests {
         )
         let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"2b4c6d8e-1a3f-4b5c-9d7e-0f1a2b3c4d5e","event":"checkout_started","properties":{"$geoip_disable":true,"$process_person_profile":false,"cartSize":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"2b4c6d8e-1a3f-4b5c-9d7e-0f1a2b3c4d5e"}]}"#
 
-        let actual = sut.batch(of: [record])
+        let actual = sut.requests(for: [record])
 
-        #expect(actual.body.map { String(decoding: $0.body, as: UTF8.self) } == expected)
+        #expect(actual.requests.map { String(decoding: $0.body.body, as: UTF8.self) } == [expected])
         #expect(actual.skippedRecords.isEmpty)
     }
 
@@ -94,7 +94,7 @@ struct PostHogIdentityTests {
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
 
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
@@ -123,7 +123,7 @@ struct PostHogIdentityTests {
         let expectedTopLevelKeys = ["distinct_id", "event", "properties", "timestamp", "uuid"]
         let uuidPattern = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
 
-        let text = String(decoding: try sut.encode([record]).body, as: UTF8.self)
+        let text = String(decoding: try #require(sut.requests(for: [record]).requests.first).body.body, as: UTF8.self)
 
         let object = try #require(try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         let event = try #require((object["batch"] as? [[String: Any]])?.first)
@@ -152,7 +152,7 @@ struct PostHogIdentityTests {
         )
         let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"claims_an_identity","properties":{"$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
-        let actual = try sut.encode([record])
+        let actual = try #require(sut.requests(for: [record]).requests.first).body
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }

@@ -1,6 +1,6 @@
 /// Why ``CollectorBatchEncoder`` couldn't encode a record, which it leaves out of the batch's
-/// body as a ``SkippedRecord``. When it can encode no record of a batch, ``CollectorBatchEncoder/encode(_:)``
-/// throws the first one's, and `HTTPDestination` sends nothing for the batch and logs the error.
+/// request as a `SkippedRecord`, and `HTTPDestination` logs and reports. When it can encode no
+/// record of a batch, it makes no request, and `HTTPDestination` sends nothing for the batch.
 public enum CollectorEncodingError: Error, Sendable, Hashable {
     /// The tracking plan the encoder was made with has no schema of this event at this version.
     case unknownEvent(name: String, version: Int)

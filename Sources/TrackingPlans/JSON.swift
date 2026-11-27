@@ -1,24 +1,33 @@
 import Foundation
 
-/// A JSON value, rendered the same way on every platform and release.
-///
-/// Written here rather than with Foundation's `JSONEncoder`, whose key order and pretty-printed
-/// spacing are Foundation's to change: a plan's bytes are committed and compared, so they must not
-/// move when the toolchain does. swift-json-schema's OrderedJSON renders deterministically too, but
-/// would be a dependency of the library for a few dozen lines. Reading is Foundation's
-/// `JSONDecoder`'s: what it parses doesn't reach the bytes a plan writes.
+/// A JSON value, rendered the same way on every platform and release: a tracking plan's
+/// documents, and the request bodies the JSON batch encoders write (``minified``).
 ///
 /// A number is ``integer(_:)`` when it is a whole number that fits an `Int64`, and
 /// ``number(_:)`` otherwise, both when a plan writes it (``number(exactly:)``) and when it reads one,
 /// so a value reads back as the case it was written as.
-package indirect enum JSON: Hashable, Sendable {
+// Written here rather than with Foundation's `JSONEncoder`, whose key order and pretty-printed
+// spacing are Foundation's to change: a plan's bytes are committed and compared, and so are request
+// bodies, so they must not move when the toolchain does. swift-json-schema's OrderedJSON renders
+// deterministically too, but would be a dependency of the library for a few dozen lines. Reading
+// is Foundation's `JSONDecoder`'s: what it parses doesn't reach the bytes a plan writes.
+public indirect enum JSON: Hashable, Sendable {
+    /// `null`.
     case null
+    /// A string.
     case string(String)
+    /// A whole number in `Int64`'s range.
     case integer(Int64)
     /// A number with a fraction, or a whole one beyond `Int64`'s range: a bound on a `Double`.
+    ///
+    /// A NaN or infinite value, which no JSON number is, renders as `null`, as JavaScript's
+    /// `JSON.stringify` writes it; ``number(exactly:)`` makes none.
     case number(Double)
+    /// `true` or `false`.
     case boolean(Bool)
+    /// An array of values, in order.
     case array([JSON])
+    /// An object of members by name, written in the order of their names' UTF-8 bytes.
     case object([String: JSON])
 
     /// The JSON value `bytes` hold, or `nil` when they aren't JSON a plan could have written.
@@ -47,7 +56,7 @@ package indirect enum JSON: Hashable, Sendable {
 
     /// `value` as JSON: an ``integer(_:)`` when it is a whole number in `Int64`'s range, a
     /// ``number(_:)`` otherwise, or `nil` when it is NaN or infinite, which no JSON number is.
-    package static func number(exactly value: Double) -> JSON? {
+    public static func number(exactly value: Double) -> JSON? {
         guard value.isFinite else { return nil }
         // -2^63 ..< 2^63: every whole Double in it converts to Int64 exactly.
         if value.rounded() == value, value >= -9_223_372_036_854_775_808, value < 9_223_372_036_854_775_808 {
@@ -86,8 +95,9 @@ package indirect enum JSON: Hashable, Sendable {
     }
 
     /// The value as JSON text with no whitespace between its tokens, object keys in the order of
-    /// their UTF-8 bytes, as JavaScript's `JSON.stringify(value)` writes it: a request body.
-    package var minified: String {
+    /// their UTF-8 bytes, as JavaScript's `JSON.stringify(value)` writes it: a request body. A
+    /// ``number(_:)`` that is NaN or infinite is `null`.
+    public var minified: String {
         switch self {
         case .array(let elements):
             "[" + elements.map(\.minified).joined(separator: ",") + "]"
@@ -117,6 +127,9 @@ package indirect enum JSON: Hashable, Sendable {
             string.renderQuoted(into: &text)
         case .integer(let integer):
             text += String(integer)
+        case .number(let number) where !number.isFinite:
+            // Swift would write `nan` or `inf`, which no JSON reader takes.
+            text += "null"
         case .number(let number):
             // Swift's shortest representation that reads back as the same Double, the same on
             // every platform: `0.5`, `1e-05`, `1e+20`, each valid JSON.
@@ -160,7 +173,11 @@ extension JSON: Decodable {
     // Bool is tried before Int64, which JSONDecoder doesn't read from `true` or `false`, Int64
     // before Double, and both before String, so each value takes the one case that holds it on
     // every platform.
-    package init(from decoder: any Decoder) throws {
+    /// The value `decoder` holds, a whole number in `Int64`'s range read as ``integer(_:)``.
+    ///
+    /// - Parameter decoder: The decoder to read from.
+    /// - Throws: `DecodingError` when the value isn't JSON.
+    public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null

@@ -15,9 +15,10 @@ struct HTTPDestinationsModuleExamplesTests {
     }
 
     struct PlansEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             let plans = batch.compactMap { ($0.event as? SignedUp)?.plan }
-            return EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")
+            let body = EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")
+            return BatchRequests(requests: [EncodedRequest(body: body, recordIDs: batch.map(\.id))], skippedRecords: [])
         }
     }
 
@@ -56,9 +57,9 @@ struct HTTPDestinationsModuleExamplesTests {
         tracker.track(SignedUp(plan: "team"))
         await tracker.finish()
         try await delivery.execute()
-        let expected = EncodedBatch(body: Data("pro\nteam".utf8), contentType: "text/plain")
+        let expected = BatchRequests<Never>(requests: [EncodedRequest(body: EncodedBatch(body: Data("pro\nteam".utf8), contentType: "text/plain"), recordIDs: memory.records.map(\.id))], skippedRecords: [])
 
-        let actual = PlansEncoder().encode(memory.records)
+        let actual = PlansEncoder().requests(for: memory.records)
 
         #expect(actual == expected)
     }

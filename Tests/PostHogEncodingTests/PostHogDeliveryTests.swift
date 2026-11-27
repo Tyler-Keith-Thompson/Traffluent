@@ -102,7 +102,7 @@ struct PostHogDeliveryTests {
         let sent = stub.sent.withLock { $0 }
         let actual = try #require(sent.first)
         let session = try #require(memory.records.first?.context[SessionKey.self])
-        let expectedBody = try encoder.encode(memory.records).body
+        let expectedBody = try #require(encoder.requests(for: memory.records).requests.first).body.body
         let expectedDistinctIDs: [String?] = [session.uuidString.lowercased(), session.uuidString.lowercased()]
         let expectedUUIDs: [String?] = memory.records.map { $0.id.uuidString.lowercased() }
         let object = try #require(try JSONSerialization.jsonObject(with: actual.body) as? [String: Any])
@@ -154,7 +154,7 @@ struct PostHogDeliveryTests {
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)]
-        let expectedBody = try encoder.encode(batch).body
+        let expectedBody = try #require(encoder.requests(for: batch).requests.first).body.body
         var attempts = stub.attempts.makeAsyncIterator()
         let receiving = Task { await sut.receive(batch) }
 
@@ -184,7 +184,7 @@ struct PostHogDeliveryTests {
         #expect(actual == expected)
     }
 
-    @Test("A batch of $-named events isn't sent, and is reported as notEncoded with reservedEventName")
+    @Test("A batch of $-named events isn't sent, and each record is reported as skipped with reservedEventName")
     func reservedBatchReported() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
@@ -192,7 +192,7 @@ struct PostHogDeliveryTests {
         let stub = PostHogStub([.ok])
         let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder)
         let batch = [EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
-        let expected = HTTPDropReport<PostHogEncodingError>.notEncoded(.reservedEventName(name: "$identify"), recordIDs: batch.map(\.id))
+        let expected = HTTPDropReport<PostHogEncodingError>.skipped(SkippedRecord(recordID: batch[0].id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify")))
 
         await sut.receive(batch)
 

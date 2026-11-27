@@ -48,7 +48,7 @@ struct PostHogContextTests {
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expectedModel = "Model1,1"
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
         let actual = properties["$device_type"] as? String
@@ -72,7 +72,7 @@ struct PostHogContextTests {
         context[NetworkKey.self] = network
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
         let actualWifi = properties["$network_wifi"] as? Bool
@@ -91,7 +91,7 @@ struct PostHogContextTests {
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = #"{"api_key":"phc_test","batch":[{"distinct_id":"00000000-0000-4000-8000-00000000000a","event":"opened","properties":{"$app_version":"1.0","$geoip_disable":true,"$process_person_profile":false,"$session_id":"00000000-0000-4000-8000-00000000000a","count":1},"timestamp":"1970-01-01T00:00:00.000Z","uuid":"00000000-0000-4000-8000-000000000001"}]}"#
 
-        let actual = try sut.encode([record])
+        let actual = try #require(sut.requests(for: [record]).requests.first).body
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
@@ -105,7 +105,7 @@ struct PostHogContextTests {
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = ["$geoip_disable", "$process_person_profile", "$session_id", "count"]
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
         let actual = properties.keys.sorted()
@@ -123,7 +123,7 @@ struct PostHogContextTests {
         let record = EventRecord(event: ClaimsTheOperatingSystem(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = "iOS"
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
         let actual = properties["$os_name"] as? String
@@ -140,7 +140,7 @@ struct PostHogContextTests {
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expected = "pt-BR"
 
-        let body = try sut.encode([record]).body
+        let body = try #require(sut.requests(for: [record]).requests.first).body.body
         let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         let properties = try #require((object["batch"] as? [[String: Any]])?.first?["properties"] as? [String: Any])
         let actual = properties["$locale"] as? String

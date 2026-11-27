@@ -49,7 +49,7 @@ struct CollectorSkippedRecordTests {
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil),
         ]
         let expectedSizes: [Int] = [1, 3]
-        let expectedSkipped = [SkippedRecord(recordID: skippedID, eventName: "screen_viewed", schemaVersion: 1, reason: .unknownEvent(name: "screen_viewed", version: 1))]
+        let expectedSkipped = [SkippedRecord<CollectorEncodingError>(recordID: skippedID, eventName: "screen_viewed", schemaVersion: 1, reason: .unknownEvent(name: "screen_viewed", version: 1))]
 
         let actual = sut.batch(of: batch)
 
@@ -67,9 +67,9 @@ struct CollectorSkippedRecordTests {
         let first = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let unknown = EventRecord(event: ScreenViewed(screen: "Home"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)
         let last = EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil)
-        let expected = try sut.encode([first, last])
+        let expected = try #require(sut.batch(of: [first, last]).body)
 
-        let actual = try sut.encode([first, unknown, last])
+        let actual = try #require(sut.batch(of: [first, unknown, last]).body)
 
         #expect(actual == expected)
     }
@@ -84,8 +84,8 @@ struct CollectorSkippedRecordTests {
             skipped,
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil),
         ]
-        let expectedSkipped = [SkippedRecord(recordID: skipped.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
-        let expectedBody = try sut.encode([batch[0], batch[2]])
+        let expectedSkipped = [SkippedRecord<CollectorEncodingError>(recordID: skipped.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
+        let expectedBody = try #require(sut.batch(of: [batch[0], batch[2]]).body)
 
         let actual = sut.batch(of: batch)
 
@@ -102,8 +102,8 @@ struct CollectorSkippedRecordTests {
             skipped,
             EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil),
         ]
-        let expectedSkipped = [SkippedRecord(recordID: skipped.id, eventName: "measured", schemaVersion: 1, reason: .unrepresentableValue(event: "measured", property: "value"))]
-        let expectedBody = try sut.encode([batch[0], batch[2]])
+        let expectedSkipped = [SkippedRecord<CollectorEncodingError>(recordID: skipped.id, eventName: "measured", schemaVersion: 1, reason: .unrepresentableValue(event: "measured", property: "value"))]
+        let expectedBody = try #require(sut.batch(of: [batch[0], batch[2]]).body)
 
         let actual = sut.batch(of: batch)
 
@@ -111,7 +111,7 @@ struct CollectorSkippedRecordTests {
         #expect(actual.skippedRecords == expectedSkipped)
     }
 
-    @Test("A batch whose every record is skipped has no body, and encode throws the first record's reason")
+    @Test("A batch whose every record is skipped has no body, and makes no request")
     func everyRecordSkipped() throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let batch = [
@@ -120,16 +120,31 @@ struct CollectorSkippedRecordTests {
         ]
         let expectedReasons: [CollectorEncodingError] = [.unknownEvent(name: "screen_viewed", version: 1), .unknownEvent(name: "checkout_started", version: 2)]
         let expectedVersions: [Int] = [1, 2]
-        let expectedError = CollectorEncodingError.unknownEvent(name: "screen_viewed", version: 1)
 
         let actual = sut.batch(of: batch)
+        let actualRequests = sut.requests(for: batch)
 
         #expect(actual.body == nil)
         #expect(actual.skippedRecords.map(\.reason) == expectedReasons)
         #expect(actual.skippedRecords.map(\.schemaVersion) == expectedVersions)
-        #expect(throws: expectedError) {
-            try sut.encode(batch)
-        }
+        #expect(actualRequests.requests.isEmpty)
+        #expect(actualRequests.skippedRecords == actual.skippedRecords)
+    }
+
+    @Test("The batch's one request is batch(of:)'s body and carries only the records it holds, and the skipped records are batch(of:)'s")
+    func requestCarriesEncodedRecords() throws {
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
+        let batch = [
+            EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
+            EventRecord(event: ScreenViewed(screen: "Home"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil),
+            EventRecord(event: CheckoutStarted(cartSize: 3), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil),
+        ]
+        let encoded = sut.batch(of: batch)
+        let expected = BatchRequests(requests: [EncodedRequest(body: try #require(encoded.body), recordIDs: [batch[0].id, batch[2].id])], skippedRecords: encoded.skippedRecords)
+
+        let actual = sut.requests(for: batch)
+
+        #expect(actual == expected)
     }
 
     @Test("An empty batch has a body of no records and skips nothing")

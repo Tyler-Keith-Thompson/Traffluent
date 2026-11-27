@@ -17,7 +17,11 @@ struct HTTPDestinationRetryTests {
 
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+
+        func body(of batch: [EventRecord]) -> EncodedBatch {
             EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
         }
     }
@@ -25,7 +29,7 @@ struct HTTPDestinationRetryTests {
     struct Unencodable: Error, Equatable {}
 
     struct FailingEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) throws(Unencodable) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) throws(Unencodable) -> BatchRequests<Unencodable> {
             throw Unencodable()
         }
     }
@@ -121,7 +125,7 @@ struct HTTPDestinationRetryTests {
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expected: [Duration] = [.zero, .seconds(1)]
         var attempts = transport.attempts.makeAsyncIterator()
-        let receiving = Task { await sut.send(batch) }
+        let receiving = Task { await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
 
         _ = await attempts.next()
         while (try? await clock.checkSuspension()) != nil {}
@@ -281,7 +285,7 @@ struct HTTPDestinationRetryTests {
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expected: [Duration] = [.zero, .seconds(1)]
         var attempts = transport.attempts.makeAsyncIterator()
-        let receiving = Task { await sut.send(batch) }
+        let receiving = Task { await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
 
         _ = await attempts.next()
         while (try? await clock.checkSuspension()) != nil {}
@@ -316,7 +320,7 @@ struct HTTPDestinationRetryTests {
         let rejected = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
         let expectedAttempts = 1
 
-        let outcome = await sut.send(batch)
+        let outcome = await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context)
 
         guard case .abandoned(let error) = outcome else {
             Issue.record("Expected abandoned, got \(outcome)")
@@ -398,7 +402,7 @@ struct HTTPDestinationRetryTests {
         let rejected = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
         let expectedAttempts = 1
         var attempts = transport.attempts.makeAsyncIterator()
-        let receiving = Task { await sut.send(batch) }
+        let receiving = Task { await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
         _ = await attempts.next()
         while (try? await clock.checkSuspension()) != nil {}
 
@@ -426,7 +430,7 @@ struct HTTPDestinationRetryTests {
         let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expectedAttempts = 1
-        let receiving = Task { await sut.send(batch) }
+        let receiving = Task { await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
         try await transport.started.execute()
 
         receiving.cancel()
@@ -456,7 +460,7 @@ struct HTTPDestinationRetryTests {
         let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: UncancellableClock())
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expectedAttempts = 1
-        let receiving = Task { await sut.send(batch) }
+        let receiving = Task { await sut.send(EncodedRequest(body: IdentifiersEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
         try await transport.started.execute()
 
         receiving.cancel()

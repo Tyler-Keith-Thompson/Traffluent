@@ -36,7 +36,7 @@ struct CollectorBatchEncoderPropertyTests {
             let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Generated.schema]), instrument: NoOpInstrument())
             let record = EventRecord(event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
 
-            let body = try? sut.encode([record]).body
+            let body = sut.batch(of: [record]).body?.body
             let object = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             let records = object?["records"] as? [[String: Any]]
             let actual = records?.first?["properties"] as? [String: Any]
@@ -70,7 +70,7 @@ struct CollectorBatchEncoderPropertyTests {
             }
             // The naive reference: the listed records alone, encoded as a batch of their own.
             let kept = zip(batch, listed).filter(\.1).map(\.0)
-            let expectedBody = kept.isEmpty && !batch.isEmpty ? nil : try? sut.encode(kept)
+            let expectedBody = kept.isEmpty && !batch.isEmpty ? nil : sut.batch(of: kept).body
             let expectedSkipped = zip(batch, listed).filter { !$0.1 }.map(\.0.id)
 
             let actual = sut.batch(of: batch)

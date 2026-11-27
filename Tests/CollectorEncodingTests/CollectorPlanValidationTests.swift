@@ -36,7 +36,7 @@ struct CollectorPlanValidationTests {
         )
         record.revealsSensitiveValues = true
         await destination.receive([record])
-        let body = try JSONValue.parse(String(decoding: try encoder.encode(sink.records).body, as: UTF8.self))
+        let body = try JSONValue.parse(String(decoding: try #require(encoder.batch(of: sink.records).body).body, as: UTF8.self))
         let properties = try #require(body.object?["records"]?.array?.first?.object?["properties"])
         let expectedNames: Set<String> = ["plan", "recoveryCodes"]
 
@@ -58,7 +58,7 @@ struct CollectorPlanValidationTests {
             sourceLocation: nil
         )
         record.revealsSensitiveValues = true
-        let body = try JSONValue.parse(String(decoding: try encoder.encode([record]).body, as: UTF8.self))
+        let body = try JSONValue.parse(String(decoding: try #require(encoder.batch(of: [record]).body).body, as: UTF8.self))
         let properties = try #require(body.object?["records"]?.array?.first?.object?["properties"])
         let expectedNames: Set<String> = ["backupEmail", "email", "plan", "recoveryCodes", "verifiedAt"]
 

@@ -43,83 +43,83 @@ struct CollectorEncodingErrorTests {
         }
     }
 
-    @Test("An event the plan doesn't describe throws unknownEvent with its name and version")
+    @Test("An event the plan doesn't describe is left out for unknownEvent with its name and version")
     func unknownEvent() throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: []), instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unknownEvent(name: "checkout_started", version: 2)
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("An event whose version the plan doesn't describe throws unknownEvent, though the plan has its name")
+    @Test("An event whose version the plan doesn't describe is left out for unknownEvent, though the plan has its name")
     func unknownVersion() throws {
         let earlier = EventSchema(name: "checkout_started", version: 1, consentCategory: .analytics, properties: [])
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [earlier]), instrument: NoOpInstrument())
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unknownEvent(name: "checkout_started", version: 2)
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("An event that isn't Encodable throws notEncodable")
+    @Test("An event that isn't Encodable is left out for notEncodable")
     func notEncodable() throws {
         let schema = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.notEncodable(name: "HandWritten")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("A NaN or infinite Double throws unrepresentableValue naming the property", arguments: [Double.nan, .infinity, -.infinity])
+    @Test("A NaN or infinite Double is left out for unrepresentableValue naming the property", arguments: [Double.nan, .infinity, -.infinity])
     func nonFiniteDouble(value: Double) throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Measured.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: Measured(value: value), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "measured", property: "value")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("A NaN or infinite Float throws unrepresentableValue naming the property", arguments: [Float.nan, .infinity])
+    @Test("A NaN or infinite Float is left out for unrepresentableValue naming the property", arguments: [Float.nan, .infinity])
     func nonFiniteFloat(value: Float) throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [MeasuredOnce.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: MeasuredOnce(value: value), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "measured_once", property: "value")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("A Date of NaN or infinite seconds throws unrepresentableValue naming the property", arguments: [Double.nan, .infinity])
+    @Test("A Date of NaN or infinite seconds is left out for unrepresentableValue naming the property", arguments: [Double.nan, .infinity])
     func nonFiniteDate(seconds: Double) throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Scheduled.schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: Scheduled(at: Date(timeIntervalSinceReferenceDate: seconds)), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "scheduled", property: "at")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 
-    @Test("An event whose encoding isn't a map throws unrepresentableValue with no property")
+    @Test("An event whose encoding isn't a map is left out for unrepresentableValue with no property")
     func notAMap() throws {
         let schema = EventSchema(name: "not_a_map", version: 1, consentCategory: .analytics, properties: [])
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [schema]), instrument: NoOpInstrument())
         let record = EventRecord(event: NotAMap(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         let expected = CollectorEncodingError.unrepresentableValue(event: "not_a_map", property: "")
 
-        #expect(throws: expected) {
-            try sut.encode([record])
-        }
+        let actual = sut.batch(of: [record]).skippedRecords.map(\.reason)
+
+        #expect(actual == [expected])
     }
 }

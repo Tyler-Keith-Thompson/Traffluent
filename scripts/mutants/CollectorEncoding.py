@@ -8,9 +8,11 @@
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - `records.reserveCapacity(batch.count)` removed: capacity only.
-# - The logger.error line in encode(_:) removed: logs are for developers, and tests don't pin them.
 # - The property reader, propertyTypes and properties(types:writingSensitiveValues:) live in
 #   PropertyJSON, whose spec plants them with these tests among its own.
+# - The unknownEvent arm of `CollectorEncodingError.init(_ error: PropertyReadingError)` mapped to
+#   another case: the encoder looks the event up in the plan itself and reads it through
+#   `properties(types:writingSensitiveValues:)`, which never throws unknownEvent.
 
 TESTS = ["CollectorEncodingTests"]
 
@@ -29,7 +31,11 @@ MUTANTS = [
     Mutant("skipversionignored", B, "type(of: record.event).schemaVersion", "1", nth=0),
     Mutant("allskippedsent", B, "!records.isEmpty || batch.isEmpty", "true"),
     Mutant("emptybatchnobody", B, "!records.isEmpty || batch.isEmpty", "!records.isEmpty"),
-    Mutant("lastskipthrown", B, "throw encoded.skippedRecords[0].reason", "throw encoded.skippedRecords[encoded.skippedRecords.count - 1].reason", mode="stmt"),
+    # requests(for:): the one request of batch(of:)'s body, naming only the records it holds.
+    Mutant("skippedidssent", B, "batch.map(\\.id).filter { !skipped.contains($0) }", "batch.map(\\.id)"),
+    # The first copy is the return for a batch with no body, the third the request's.
+    Mutant("allskippedunreported", B, "encoded.skippedRecords", "[]", nth=0),
+    Mutant("skipsunreported", B, "encoded.skippedRecords", "[]", nth=2),
     # The second: json(of:)'s plan lookup, after batch(of:)'s skipped record.
     Mutant("versionignored", B, "type(of: record.event).schemaVersion", "1", nth=1),
     # The second revealsSensitiveValues: the call's, after the doc comment's.

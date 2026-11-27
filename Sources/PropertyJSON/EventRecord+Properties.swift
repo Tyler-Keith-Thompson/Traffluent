@@ -26,6 +26,6 @@ extension EventRecord {
         } catch {
             throw .unrepresentableValue(event: name, property: "")
         }
-        return try PropertyReader(redactsSensitiveValues: !writingSensitiveValues).properties(of: bytes, types: types, event: name)
+        return try CBORPropertyReader(redactsSensitiveValues: !writingSensitiveValues).properties(of: bytes, types: types, event: name)
     }
 }

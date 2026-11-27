@@ -16,7 +16,11 @@ struct HTTPDestinationTests {
 
     /// Encodes the plans of a batch's sign-ups, comma separated, as plain text.
     struct PlansEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+
+        func body(of batch: [EventRecord]) -> EncodedBatch {
             let plans = batch.map { ($0.event as? SignedUp)?.plan ?? "?" }
             return EncodedBatch(body: Data(plans.joined(separator: ",").utf8), contentType: "text/plain")
         }
@@ -24,16 +28,12 @@ struct HTTPDestinationTests {
 
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) -> EncodedBatch {
-            EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
-    }
 
-    struct Unencodable: Error, Equatable {}
-
-    struct FailingEncoder: BatchEncoder {
-        func encode(_ batch: [EventRecord]) throws(Unencodable) -> EncodedBatch {
-            throw Unencodable()
+        func body(of batch: [EventRecord]) -> EncodedBatch {
+            EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
         }
     }
 
@@ -195,7 +195,7 @@ struct HTTPDestinationTests {
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1))]
         let expected = code
 
-        let outcome = await sut.send(batch)
+        let outcome = await sut.send(EncodedRequest(body: PlansEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context)
 
         guard case .delivered(let response) = outcome else {
             Issue.record("Expected delivered, got \(outcome)")
@@ -213,7 +213,7 @@ struct HTTPDestinationTests {
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1))]
         let expected = code
 
-        let outcome = await sut.send(batch)
+        let outcome = await sut.send(EncodedRequest(body: PlansEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context)
 
         guard case .rejected(let response) = outcome else {
             Issue.record("Expected rejected, got \(outcome)")
@@ -221,25 +221,6 @@ struct HTTPDestinationTests {
         }
         let actual = response.status.code
         #expect(actual == expected)
-    }
-
-    @Test("A batch the encoder can't encode is not sent, and the outcome carries the encoder's error")
-    func notEncoded() async throws {
-        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
-        let transport = TransportDouble(.success(HTTPResponse(status: .ok)))
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: FailingEncoder())
-        let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1))]
-        let expectedAttempts = 0
-
-        let outcome = await sut.send(batch)
-
-        let actualAttempts = transport.sent.withLock { $0.count }
-        guard case .notEncoded(let error) = outcome else {
-            Issue.record("Expected notEncoded, got \(outcome)")
-            return
-        }
-        #expect(error == Unencodable())
-        #expect(actualAttempts == expectedAttempts)
     }
 
     @Test("Cancelling the delivery's run cancels the send in flight, and receive returns")
@@ -269,7 +250,7 @@ struct HTTPDestinationTests {
         let transport = GatedTransport()
         let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: PlansEncoder())
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: SourceLocation(file: "A.swift", fileID: "M/A.swift", function: "f()", line: 1, column: 1))]
-        let sending = Task { await sut.send(batch) }
+        let sending = Task { await sut.send(EncodedRequest(body: PlansEncoder().body(of: batch), recordIDs: batch.map(\.id)), context: batch[0].context) }
         try await transport.started.execute()
 
         sending.cancel()

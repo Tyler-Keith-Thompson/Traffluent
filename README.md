@@ -56,6 +56,7 @@ Tracker.current.track(ProductAddedToCart(productID: "canvas-tote", quantity: 1))
 - [Keep events when the app goes offline or quits](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/persistingrecords)
 - [Ask for consent and gate events by it](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/consentgating)
 - [Send to PostHog, your own server, logs or traces](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations)
+- [Write a destination for another analytics vendor](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/writingavendordestination)
 - [Catch breaking event changes in CI](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow)
 
 The [documentation](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent)

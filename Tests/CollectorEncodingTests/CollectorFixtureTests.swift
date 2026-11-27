@@ -94,7 +94,7 @@ struct CollectorFixtureTests {
             isRedelivered: true
         )
 
-        let actual = try sut.encode([first, second]).body
+        let actual = try #require(sut.batch(of: [first, second]).body).body
 
         #expect(actual == expected)
     }

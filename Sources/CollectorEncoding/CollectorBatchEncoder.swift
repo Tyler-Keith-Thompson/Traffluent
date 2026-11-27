@@ -2,7 +2,6 @@ public import Events
 import Foundation
 public import HTTPDestinations
 public import Instrumentation
-import Logging
 import PropertyJSON
 public import TrackingPlans
 
@@ -68,9 +67,10 @@ public import TrackingPlans
 ///
 /// A record the encoder can't write is left out of the body, and the batch's other records are
 /// sent: one whose event and version `plan` doesn't describe, whose event isn't `Encodable`,
-/// or that holds a value JSON can't (``CollectorEncodingError``). Each is logged at error level;
-/// ``batch(of:)`` returns them as ``SkippedRecord``s. When every record of a batch is left out,
-/// ``encode(_:)`` throws, so `HTTPDestination` sends nothing for it.
+/// or that holds a value JSON can't (``CollectorEncodingError``). ``requests(for:)`` returns them
+/// as `SkippedRecord`s, which `HTTPDestination` logs and reports on its `dropReports`; when every
+/// record of a batch is left out, it sends nothing for it. A batch is one request: the collector
+/// sets no limit on its size.
 ///
 /// Other context values aren't written. The bytes are the same for the same records on every
 /// run and platform: no whitespace, object members in the order of their names' UTF-8 bytes, a
@@ -82,7 +82,8 @@ public struct CollectorBatchEncoder: BatchEncoder {
     private let propertyTypes: [EventVersion: [String: WrittenType?]]
     private let instrument: any Instrument
 
-    private static let logger = Logger(label: "CollectorEncoding.CollectorBatchEncoder")
+    /// Why a record was left out of the batch's request.
+    public typealias Failure = CollectorEncodingError
 
     /// An encoder of the events `plan` describes, writing each record's trace context as
     /// `instrument` injects it.
@@ -102,28 +103,26 @@ public struct CollectorBatchEncoder: BatchEncoder {
         self.instrument = instrument
     }
 
-    /// The request body for `batch`: its records in TraffluentCollector's ingest format, but for
-    /// those it can't encode, which are logged at error level and left out.
+    /// The one request carrying `batch` in TraffluentCollector's ingest format, and the records
+    /// left out of it.
     ///
     /// - Parameter batch: Records of tracked events, oldest first.
-    /// - Returns: The body's JSON, of content type `application/json`.
-    /// - Throws: The ``CollectorEncodingError`` of the first record when `batch` has records and
-    ///   none can be encoded, so `HTTPDestination` sends nothing for it.
+    /// - Returns: A request of ``batch(of:)``'s body, carrying every record but the skipped ones,
+    ///   or no request when every record was skipped, and the skipped records.
     /// - Complexity: O(*n* log *n*) in the batch's size, for sorting each object's members.
-    public func encode(_ batch: [EventRecord]) throws(CollectorEncodingError) -> EncodedBatch {
+    public func requests(for batch: [EventRecord]) -> BatchRequests<CollectorEncodingError> {
         let encoded = self.batch(of: batch)
-        for skipped in encoded.skippedRecords {
-            Self.logger.error("Left a record of \(skipped.eventName) version \(skipped.schemaVersion) out of the batch: \(skipped.reason)")
-        }
         guard let body = encoded.body else {
-            // `body` is nil only when the batch had records and every one was skipped, so the
-            // first skipped record exists.
-            throw encoded.skippedRecords[0].reason
+            return BatchRequests(requests: [], skippedRecords: encoded.skippedRecords)
         }
-        return body
+        // The request names only the records its body holds, so a rejection reports those and
+        // not the skipped ones, which are reported as skipped.
+        let skipped = Set(encoded.skippedRecords.map(\.recordID))
+        let recordIDs = batch.map(\.id).filter { !skipped.contains($0) }
+        return BatchRequests(requests: [EncodedRequest(body: body, recordIDs: recordIDs)], skippedRecords: encoded.skippedRecords)
     }
 
-    /// `batch` encoded as ``encode(_:)`` encodes it, with the records left out of the body.
+    /// The body of `batch` in TraffluentCollector's ingest format, and the records left out of it.
     ///
     /// - Parameter batch: Records of tracked events, oldest first.
     /// - Returns: The body of every record that could be encoded, `nil` when `batch` has records
@@ -132,7 +131,7 @@ public struct CollectorBatchEncoder: BatchEncoder {
     public func batch(of batch: [EventRecord]) -> CollectorBatch {
         var records: [JSON] = []
         records.reserveCapacity(batch.count)
-        var skippedRecords: [SkippedRecord] = []
+        var skippedRecords: [SkippedRecord<CollectorEncodingError>] = []
         for record in batch {
             do {
                 records.append(try json(of: record))
@@ -185,6 +184,7 @@ extension CollectorEncodingError {
     /// The reason the property reader gave, as this encoder's.
     fileprivate init(_ error: PropertyReadingError) {
         switch error {
+        case .unknownEvent(let name, let version): self = .unknownEvent(name: name, version: version)
         case .notEncodable(let name): self = .notEncodable(name: name)
         case .unrepresentableValue(let event, let property): self = .unrepresentableValue(event: event, property: property)
         }

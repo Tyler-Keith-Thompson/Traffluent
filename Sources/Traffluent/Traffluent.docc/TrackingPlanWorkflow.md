@@ -92,8 +92,8 @@ requires a `Sensitive` property, so the redacted record still validates.
 
 You need a plan when someone else reads your events: a dashboard, a warehouse, a collector, or
 another platform's client that tracks the same events. An app that sends to TraffluentCollector or
-PostHog already builds the `TrackingPlan` their encoders read (`CollectorBatchEncoder(plan:)`,
-`PostHogBatchEncoder(projectToken:plan:)`), so exporting it takes one small executable. A collector
+PostHog already builds the `TrackingPlan` their destinations read (`CollectorBatchEncoder(plan:)`,
+`HTTPDestination.postHog(projectToken:host:plan:)`), so exporting it takes one small executable. A collector
 running in production won't start without the exported plan.
 
 You can skip it for a prototype whose events go only to the console or a log, where nothing
