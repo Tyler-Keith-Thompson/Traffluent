@@ -101,6 +101,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 |---|---|---|---|
 | PostHog | ``/PostHogEncoding`` | `HTTPDestination.postHog(projectToken:host:plan:)` | Each record as an anonymous event: its session as `distinct_id` and `$session_id`, its identifier as `uuid`, its properties through your plan, and the standard context as PostHog's `$`-prefixed properties |
 | Amplitude | ``/AmplitudeEncoding`` | `HTTPDestination.amplitude(apiKey:region:plan:)` | Each record as an event of an anonymous device: its session as `device_id`, the session's start as `session_id`, its identifier as `insert_id`, its time in epoch milliseconds, its properties through your plan as `event_properties`, and the standard context as Amplitude's own fields; no `user_id` |
+| Mixpanel | ``/MixpanelEncoding`` | `HTTPDestination.mixpanel(projectToken:region:plan:)` | Each record as an event of an anonymous user: its session as `distinct_id` and `$device_id`, its identifier as `$insert_id`, its time in epoch milliseconds, its properties through your plan, the standard context as Mixpanel's default properties, and `ip` as `0`; no `$user_id` |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -198,6 +199,76 @@ records as the collector's encoder, and also one named as one of Amplitude's own
 (`[Amplitude] Start Session` and the rest of the `[Amplitude]` names, `$identify`,
 `$groupidentify`), one whose timestamp has no epoch-milliseconds form, and one too large for a
 request. The destination reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
+
+### Mixpanel
+
+To send to a Mixpanel project, make the destination with
+`HTTPDestination.mixpanel(projectToken:region:plan:)` (module ``/MixpanelEncoding``). It posts to
+the `/track` endpoint of the project's data residency: `.us` for Mixpanel's default, `.eu` or
+`.india`. The region has no default, as Mixpanel ingests nothing for a project from another
+residency's endpoint. The destination sends no trace context in the header fields, and splits each
+batch into requests of at most 2,000 events and 2 MB.
+
+The project token goes in each event. It is public, like every Mixpanel client's, and it is all
+the destination takes. Mixpanel's import API takes the project's secret or a service account's
+credentials instead; those belong on a server and must never ship in an app, so no Traffluent API
+accepts them. The factory throws `MixpanelSetupError` for an empty token, and for one with a
+character other than a letter or digit, which no project token has. That check matters because
+Mixpanel answers 200 to a token it doesn't know and stores nothing.
+
+The destination retries 429 and 5xx responses and drops a request Mixpanel rejects, such as one
+answered with 400, 401 or 413. A wrong region, or a token of no project, may be answered with 200
+and nothing stored, so check the project's Live View after setting the destination up. A record
+sent again in the same run keeps its `$insert_id` and `distinct_id`, and Mixpanel counts a repeat
+of an event's name, `time`, `distinct_id` and `$insert_id` once. A record a store recovers after a
+relaunch has no session, so it goes out under its own identifier as `distinct_id`; if Mixpanel
+stored it before the app ended, it is stored twice.
+
+```swift
+let plan = try TrackingPlan()
+let mixpanel = try HTTPDestination.mixpanel(
+    projectToken: projectToken,
+    region: .us,  // or .eu or .india, where the project's data resides
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: mixpanel)
+```
+
+Each event's `distinct_id` is the record's session (`Enricher.sessions()`), also sent as
+`$device_id`, which Mixpanel's ID merge reads as an anonymous device. No `$user_id` is sent, nor
+anything else that identifies anyone: not the vendor identifier, the trace context or your own
+context keys. Under Simplified ID Merge, Mixpanel shows a session's events under
+`$device:<session>`, and a sessionless record's under its bare record identifier. Mixpanel counts
+a user per `distinct_id`, so each session is one user in its reports,
+and so is each record sent without a session; on a plan billed by monthly tracked users, each
+counts as one. Every event's `ip` is `0`, as is the endpoint's query, so Mixpanel adds no location
+from the request's address. The encoder fills in Mixpanel's default properties for the app
+version and build, device model, Wi-Fi and operating system when the standard context enrichers
+set them. Event names are sent as they are.
+
+A record with no session, from a tracker without `.sessions()` or recovered by a store, is sent
+under its own record identifier, with no `$device_id`: an anonymous user of one event, linked to
+nothing. Without a `distinct_id`, Mixpanel would attribute it to no user, or to a hash of the
+request's address.
+
+A `Sensitive` value is never sent, whatever the record reveals. The encoder leaves out the same
+records as the collector's encoder, and also one whose event name starts with `$`, as Mixpanel's
+own events' names do (`$identify`, `$create_alias`). It also leaves out one with a property
+Mixpanel reads for itself: a `$`-prefixed one, or `token`, `time`, `distinct_id`, `ip` or `bucket`.
+Such a property would change how Mixpanel ingests the event, or be replaced by the encoder's own
+value, so the record is reported rather than sent without it. Rename the property, raising the
+event's version, to send it; the encoder logs a notice for each such property in the plan when
+the destination is made. The encoder also leaves out a record past Mixpanel's limits, which
+Mixpanel would drop while answering 200: one of 255 properties or more, counting the members the
+encoder adds, one holding an array of 255 elements or more, and one whose property nests objects
+more than 3 deep. Last, the encoder leaves out a record whose timestamp is before 1971
+or has no epoch-milliseconds form, and one too large for Mixpanel. The destination reports each on
+`dropReports` as `HTTPDropReport.skipped(_:)`.
+
+Mixpanel doesn't report every loss. It answers 200 even when it ingests none of a request's
+events, and its track API ingests only events from the last 5 days, so a record older than that
+when it is sent, such as one a store kept through a long time offline, counts as delivered and
+isn't stored.
 
 ### Memory
 

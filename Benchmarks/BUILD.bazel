@@ -34,6 +34,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/JSONValues",
     "Sources/LifecycleTracking",
     "Sources/LoggingDestinations",
+    "Sources/MixpanelEncoding",
     "Sources/Persistence",
     "Sources/PostHogEncoding",
     "Sources/PropertyJSON",

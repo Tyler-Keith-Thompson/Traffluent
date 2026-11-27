@@ -158,6 +158,7 @@ MODULES = [
     ("CollectorEncoding", "Pipeline", "CollectorBatchEncoder: the BatchEncoder of TraffluentCollector's ingest format, each record as JSON with its id, name, timestamp, isRedelivered, properties read from the event's @Event encoding through its schema in a TrackingPlan, and context from the standard context keys and the trace context; sensitive values sent only while the record reveals them; a record it can't encode is left out as a SkippedRecord, not the batch.", ["Events", "JSONValues", "PropertyJSON", "HTTPDestinations", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation"]),
     ("PostHogEncoding", "Pipeline", "HTTPDestination.postHog(projectToken:host:plan:): a destination for PostHog Cloud or a self-hosted PostHog in one throwing call, which checks the token and host and fills in the batch endpoint, the encoder and PostHog's limits; PostHogBatchEncoder, the BatchEncoder of PostHog's batch capture API (POST /batch/): each record as an anonymous event whose distinct_id is its session's SessionKey, or the record's own id when it has no session, and no other identifier; its uuid the record's id; its properties read through its schema in a TrackingPlan, never a Sensitive value or a $-prefixed key; GeoIP enrichment turned off; the standard context as PostHog's own properties; batches split to PostHog's request and event sizes; a record it can't encode, whose event name starts with $, or too large for PostHog, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     ("AmplitudeEncoding", "Pipeline", "HTTPDestination.amplitude(apiKey:region:plan:): a destination for an Amplitude project in one throwing call, which checks the API key and fills in the HTTP V2 endpoint of the project's data residency (AmplitudeRegion), the encoder and Amplitude's limits; AmplitudeBatchEncoder, the BatchEncoder of Amplitude's HTTP V2 API (POST /2/httpapi): each record as an event whose device_id is its session's SessionKey, or the record's own id when it has no session, and no user_id or other identifier; its session_id the session's start in Unix milliseconds; its insert_id the record's id; its time in epoch milliseconds; its event_properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context as Amplitude's own top-level fields; batches split to 10 events and 1 MB a request; a record it can't encode, whose event name Amplitude reserves, or too large for Amplitude, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation"]),
+    ("MixpanelEncoding", "Pipeline", "HTTPDestination.mixpanel(projectToken:region:plan:): a destination for a Mixpanel project in one throwing call, which checks the project token and fills in the /track endpoint of the project's data residency (MixpanelRegion), the encoder and Mixpanel's limits; MixpanelBatchEncoder, the BatchEncoder of Mixpanel's track API (POST /track, with the project token, never /import's secret): each record as an event whose distinct_id is its session's SessionKey, also sent as $device_id, or the record's own id when it has no session, and no $user_id or other identifier; its $insert_id the record's id; its time in epoch milliseconds; its properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context as Mixpanel's default properties; geolocation from the request's address turned off; batches split to 2,000 events and 2 MB a request; a record it can't encode, whose event name Mixpanel reserves, with a property named as one Mixpanel reserves, past Mixpanel's limits on properties, array elements or nesting, or too large for Mixpanel, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; Consent, which holds, delivers or drops each event by its ConsentCategory's status; and Samplers, which keep a seeded fraction of events, or of the groups a context key makes, stamping each kept record with its SampleRateKey.", ["AsyncQueues", "Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees"]),
     # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
     ("TrackerTesting", "Pipeline", "withRecordingTracker(_:): runs a test's body with a fresh tracker bound to its task, then returns a TrackerRecording of every event tracked in it, in order, typed with events(of:).", ["Events", "Trackers"]),
@@ -213,13 +214,13 @@ EXAMPLE_MODULES = ["DiscoveryFixtures"]
 # Testing. EventMacros builds swift-syntax but stays in: `@Event` is how events are declared, so
 # `import Traffluent` alone must give it. PostHogEncoding is a vendor's wire format, which
 # `import Traffluent` leaves out so the umbrella stays vendor-neutral (N3); an app sending to
-# PostHog adds it by name. AmplitudeEncoding is left out for the same reason.
+# PostHog adds it by name. AmplitudeEncoding and MixpanelEncoding are left out for the same reason.
 # PropertyJSON is the toolkit a vendor's encoder is written with, which an app never imports, and
 # it pulls in TrackingPlans and swift-cbor. DestinationTesting imports Swift Testing. Every vendor
 # module (<Vendor>Encoding) stays out too, so `import Traffluent` names no vendor (N3, N4).
 # JSONValues is the JSON those encoders and plans write; left out, `import Traffluent` declares no
 # top-level `JSON` to clash with an app's own or another package's (SwiftyJSON's, GenericJSON's).
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "PropertyJSON", "JSONValues", "DestinationTesting"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "PropertyJSON", "JSONValues", "DestinationTesting"]
 
 # Library modules that import Swift Testing, by name from MODULES: test helpers adopters add to
 # their test targets (a custom Trait, an assertion that records an Issue). Bazel finds Testing only
@@ -265,6 +266,8 @@ RESOURCES = {
     "PostHogEncodingTests": [("copy", "Fixtures")],
     # The requests DestinationConformance compares AmplitudeBatchEncoder's with, byte for byte.
     "AmplitudeEncodingTests": [("copy", "Fixtures")],
+    # The requests DestinationConformance compares MixpanelBatchEncoder's with, byte for byte.
+    "MixpanelEncodingTests": [("copy", "Fixtures")],
 }
 
 # Compiler plugins holding macros: (name, group, description, dependencies), whose dependencies
@@ -307,7 +310,7 @@ EXECUTABLES = [
 ]
 
 # What the docs' examples tests link: the umbrella and the products it leaves out.
-EXAMPLES_TEST_DEPENDENCIES = [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "PropertyJSON", "JSONValues", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]
+EXAMPLES_TEST_DEPENDENCIES = [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "PropertyJSON", "JSONValues", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]
 
 # Examples tests whose article builds a store or plan from every discovered event
 # (`SegmentStore()`, `TrackingPlan()`). A test binary is the program those discover events in, and
@@ -320,6 +323,7 @@ LIST_FREE_EXAMPLES_TESTS = [
     "CollectorEncodingModuleExamplesTests",
     "GettingStartedExamplesTests",
     "GRDBPersistenceModuleExamplesTests",
+    "MixpanelEncodingModuleExamplesTests",
     "PersistenceModuleExamplesTests",
     "PersistingRecordsExamplesTests",
     "PostHogEncodingModuleExamplesTests",
@@ -366,6 +370,7 @@ TEST_TARGETS = [
     ("DestinationTestingTests", ["DestinationTesting", "JSONValues", "HTTPDestinations", "PropertyJSON", "Events", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes"]),
     ("PostHogEncodingTests", ["PostHogEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("AmplitudeEncodingTests", ["AmplitudeEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("MixpanelEncodingTests", ["MixpanelEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", EXAMPLES_TEST_DEPENDENCIES),
 ] + [(name, EXAMPLES_TEST_DEPENDENCIES) for name in LIST_FREE_EXAMPLES_TESTS]
 
