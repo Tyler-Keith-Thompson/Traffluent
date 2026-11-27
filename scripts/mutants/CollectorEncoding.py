@@ -3,7 +3,7 @@
 # Each mutant is Mutant(name, file, old, new), where `old` occurs once in
 # Sources/CollectorEncoding/<file> (or `nth=` picks one), and mode="stmt" replaces whole
 # statements rather than an expression. `module=` puts a mutant in another module's file: here
-# TrackingPlans' JSON.minified, which only this module's body reaches. Every mutant must be caught;
+# JSONValues' JSON.minified, which only this module's body reaches. Every mutant must be caught;
 # one that survives needs a test, or a note here saying why it is equivalent.
 #
 # Known equivalent mutants (left out, as they would survive by design):
@@ -18,7 +18,6 @@ TESTS = ["CollectorEncodingTests"]
 
 B = "CollectorBatchEncoder.swift"
 C = "EventRecord+CollectorContext.swift"
-D = "Date+CollectorTimestamp.swift"
 
 MUTANTS = [
     # The record's envelope.
@@ -41,7 +40,7 @@ MUTANTS = [
     # The second revealsSensitiveValues: the call's, after the doc comment's.
     Mutant("alwaysreveals", B, "revealsSensitiveValues", "true", nth=1),
     Mutant("neverreveals", B, "revealsSensitiveValues", "false", nth=1),
-    Mutant("wholeseconds", D, "true", "false"),
+    Mutant("timestampjulian", B, ".string(record.timestamp.iso8601Timestamp)", ".string(record.timestamp.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true)))"),
     Mutant("notencodableasunrepresentable", B, ".notEncodable(name: name)", 'CollectorEncodingError.unrepresentableValue(event: name, property: "")'),
     Mutant("propertyunnamed", B, ".unrepresentableValue(event: event, property: property)", '.unrepresentableValue(event: event, property: "")'),
     # Context.
@@ -57,8 +56,8 @@ MUTANTS = [
     Mutant("notrace", C, 'members["trace"] = .object(trace.mapValues(JSON.string))', "", mode="stmt"),
     # TrackingPlans' minified rendering.
     # The second "," in JSON.swift: minified's separator between an object's members.
-    Mutant("minifiedspaced", "JSON.swift", '","', '", "', nth=1, module="TrackingPlans"),
-    Mutant("minifiedcolonspaced", "JSON.swift", '":"', '": "', module="TrackingPlans"),
+    Mutant("minifiedspaced", "JSON.swift", '","', '", "', nth=1, module="JSONValues"),
+    Mutant("minifiedcolonspaced", "JSON.swift", '":"', '": "', module="JSONValues"),
     # The second sort in JSON.swift is minified's.
-    Mutant("minifiedunsorted", "JSON.swift", "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=1, module="TrackingPlans"),
+    Mutant("minifiedunsorted", "JSON.swift", "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=1, module="JSONValues"),
 ]

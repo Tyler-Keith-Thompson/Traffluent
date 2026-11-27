@@ -207,11 +207,12 @@ struct SegmentSpecSkippedRecordTests {
         #expect(actual == expected)
     }
 
-    // 1583-01-01T00:00:00Z, the first year wholly in the Gregorian calendar, is -12,212,553,600
-    // seconds from 1970, and 10000-01-01T00:00:00Z is 253,402,300,800.
-    @Test("A record whose timestamp has no Gregorian four-digit-year ISO 8601 form is left out as unrepresentableTimestamp, and one just inside the range is sent", arguments: [
-        (Double.nan, true), (.infinity, true), (-.infinity, true), (-12_212_553_600.001, true), (-62_135_596_800, true), (253_402_300_800, true),
-        (253_402_300_801, true), (9.3e15, true), (-12_212_553_600, false), (253_402_300_799.999, false), (0, false), (1_795_442_607, false),
+    // 0001-01-01T00:00:00Z is -62,135,596,800 seconds from 1970, and 10000-01-01T00:00:00Z is
+    // 253,402,300,800; 1582-10-14T00:00:00Z, the day before the Gregorian reform, is
+    // -12,219,379,200.
+    @Test("A record whose timestamp has no four-digit-year ISO 8601 form is left out as unrepresentableTimestamp, and one just inside the range is sent", arguments: [
+        (Double.nan, true), (.infinity, true), (-.infinity, true), (-62_135_596_800.001, true), (-62_167_219_200, true), (253_402_300_800, true),
+        (253_402_300_801, true), (9.3e15, true), (-62_135_596_800, false), (-12_219_379_200, false), (253_402_300_799.999, false), (0, false), (1_795_442_607, false),
     ])
     func unrepresentableTimestamp(seconds: Double, skipped: Bool) throws {
         let sut = SegmentSpecBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))

@@ -153,9 +153,10 @@ struct SegmentSpecBatchEncoderTests {
         #expect(calls.map { $0["event"] as? String } == expectedEvents)
     }
 
-    @Test("timestamp is ISO 8601 in UTC with milliseconds, rounded down, from 1583 to 9999", arguments: [
+    @Test("timestamp is ISO 8601 in UTC with milliseconds, rounded down, in the proleptic Gregorian calendar from year 1 to 9999", arguments: [
         (0.0, "1970-01-01T00:00:00.000Z"), (0.0009, "1970-01-01T00:00:00.000Z"), (-0.5, "1969-12-31T23:59:59.500Z"),
-        (1_795_442_607.125, "2026-11-23T14:03:27.125Z"), (-12_212_553_600, "1583-01-01T00:00:00.000Z"),
+        (1_795_442_607.125, "2026-11-23T14:03:27.125Z"), (-62_135_596_800, "0001-01-01T00:00:00.000Z"),
+        (-12_219_379_200, "1582-10-14T00:00:00.000Z"), (-12_219_292_800, "1582-10-15T00:00:00.000Z"),
         (253_402_300_799.5, "9999-12-31T23:59:59.500Z"),
     ])
     func timestamp(seconds: Double, expected: String) throws {

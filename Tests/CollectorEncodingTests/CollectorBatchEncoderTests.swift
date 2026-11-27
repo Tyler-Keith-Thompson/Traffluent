@@ -187,6 +187,23 @@ struct CollectorBatchEncoderTests {
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
     }
 
+    @Test("A timestamp before the Gregorian reform of 1582 is in the proleptic Gregorian calendar, as ISO 8601 counts")
+    func timestampBeforeReform() throws {
+        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
+        let sut = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
+        let record = EventRecord(
+            id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
+            event: CheckoutStarted(cartSize: 1, coupon: nil),
+            timestamp: Date(timeIntervalSince1970: -62_135_596_800),
+            sourceLocation: nil
+        )
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"0001-01-01T00:00:00.000Z"}]}"#
+
+        let actual = try #require(sut.batch(of: [record]).body)
+
+        #expect(String(decoding: actual.body, as: UTF8.self) == expected)
+    }
+
     @Test("HTTPDestination sends the encoder's body with its content type")
     func throughHTTPDestination() async throws {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])

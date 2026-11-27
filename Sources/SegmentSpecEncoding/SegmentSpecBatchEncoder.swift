@@ -122,11 +122,9 @@ public struct SegmentSpecBatchEncoder: BatchEncoder {
     /// a call over 32 KB, so the encoder keeps within the smallest of each.
     public static let batchLimit = (try? BatchLimit(maximumRecordCount: 2_500, maximumByteCount: 500_000, maximumRecordByteCount: 31_999)) ?? .unlimited
 
-    /// The seconds from 1970 to 1583-01-01T00:00:00Z, the first year wholly in the Gregorian
-    /// calendar. ISO 8601 counts dates in the Gregorian calendar, but Foundation writes a date
-    /// before the reform of October 1582 in the Julian one, days off (0001-01-01 as 0001-01-03),
-    /// so an earlier timestamp has no ISO 8601 form the encoder can write.
-    private static let earliestSeconds: Double = -12_212_553_600
+    /// The seconds from 1970 to 0001-01-01T00:00:00Z: an earlier timestamp has no four-digit
+    /// ISO 8601 year.
+    private static let earliestSeconds: Double = -62_135_596_800
 
     /// The seconds from 1970 to 10000-01-01T00:00:00Z: a timestamp from then on has no four-digit
     /// ISO 8601 year.

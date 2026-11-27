@@ -28,6 +28,33 @@ struct PropertyReaderTests {
         #expect(actual == expected)
     }
 
+    @Event(name: "dated", version: 1)
+    struct Dated {
+        var at: Date
+        var stamp: Stamp
+    }
+
+    /// A type of the app's own, which `@Event` doesn't reach, so the CBOR package writes its date
+    /// itself, as a tagged one.
+    struct Stamp: Codable {
+        var at: Date
+    }
+
+    @Test("A Date property of 0001-01-01T00:00:00Z, and one inside a type of the app's own, are written in the proleptic Gregorian calendar")
+    func dateBeforeReform() throws {
+        let sut = PropertyReader(plan: try TrackingPlan(schemas: [Dated.schema]))
+        let yearOne = Date(timeIntervalSince1970: -62_135_596_800)
+        let record = EventRecord(event: Dated(at: yearOne, stamp: Stamp(at: yearOne)), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expected: [String: JSON] = [
+            "at": .string("0001-01-01T00:00:00.000Z"),
+            "stamp": .object(["at": .string("0001-01-01T00:00:00.000Z")]),
+        ]
+
+        let actual = try sut.properties(of: record, includingSensitiveValues: false)
+
+        #expect(actual == expected)
+    }
+
     @Test("A Sensitive value is written only when asked for and the record reveals it", arguments: [(false, false), (false, true), (true, false), (true, true)])
     func sensitiveRule(including: Bool, reveals: Bool) throws {
         let sut = PropertyReader(plan: try TrackingPlan(schemas: [SignedUp.schema]))

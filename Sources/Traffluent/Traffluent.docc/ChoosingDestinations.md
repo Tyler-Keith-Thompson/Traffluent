@@ -371,9 +371,9 @@ which act on the person rather than record what they did: `User Deleted`, `User 
 `Relationship Deleted` and `Report Delivery Event`. It leaves those out for Segment and RudderStack
 too, as either can forward track calls to a Customer.io destination; rename such an event to send
 it. The encoder logs a notice for each such name in the plan when the destination is made.
-It also leaves out a record whose timestamp has no ISO 8601 form (before 1583, the first year
-wholly in the Gregorian calendar, or after 9999), and one too large for a call. The destination
-reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
+It also leaves out a record whose timestamp has no four-digit ISO 8601 year (before year 1 or
+after 9999), and one too large for a call. The destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`.
 
 The endpoints don't report every loss. Segment answers 200 for every request but one too large or
 not JSON, so a wrong region, a write key of no source, or a batch of more calls than it takes may

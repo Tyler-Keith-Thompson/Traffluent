@@ -57,7 +57,7 @@ MUTANTS = [
     Mutant("earliestexclusive", B, "seconds >= Self.earliestSeconds", "seconds > Self.earliestSeconds"),
     Mutant("lateaccepted", B, "seconds < Self.endSeconds", "true"),
     Mutant("endinclusive", B, "seconds < Self.endSeconds", "seconds <= Self.endSeconds"),
-    Mutant("earliestyearone", B, "-12_212_553_600", "-62_135_596_800"),
+    Mutant("earliestreform", B, "-62_135_596_800", "-12_212_553_600"),
     # Limits.
     Mutant("countlimit", B, "2_500", "2_501"),
     Mutant("bytelimit", B, "500_000", "512_000"),

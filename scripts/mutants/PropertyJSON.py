@@ -38,7 +38,6 @@ MUTANTS = [
     Mutant("neverwrites", R, "writingSensitiveValues", "false", nth=2),
     Mutant("readernotredacting", R, "!writingSensitiveValues", "false"),
     Mutant("encodingfailurepropagates", R, "throw .unrepresentableValue(event: name, property: \"\")", "throw .notEncodable(name: name)", mode="stmt"),
-    Mutant("wholeseconds", D, "true", "false"),
     # Properties.
     Mutant("redactedpropertynull", P, "members[name] = try json(value, as: types[name] ?? nil)", "members[name] = try json(value, as: types[name] ?? nil) ?? .null", mode="stmt"),
     Mutant("missingoptionalnotnull", P, "                members[name] = .null", "", mode="stmt"),
@@ -67,6 +66,16 @@ MUTANTS = [
     Mutant("readerignoresrequest", READER, "includingSensitiveValues && record.revealsSensitiveValues", "record.revealsSensitiveValues"),
     Mutant("readerignoresversion", READER, "EventVersion(name: record.name, version: type(of: record.event).schemaVersion)", "EventVersion(name: record.name, version: 1)"),
     # Timestamps.
+    # Foundation's ISO 8601 style, whose default Gregorian calendar turns Julian before 1582-10-15.
+    Mutant("defaultcalendar", D, "String(decoding: text, as: UTF8.self)", "formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))"),
+    Mutant("clampsswapped", D, "timeIntervalSince1970 > 0 ? .max : .min", "timeIntervalSince1970 > 0 ? .min : .max"),
+    Mutant("remaindernotfloored", D, "remainder < 0 ? (quotient - 1, remainder + divisor) : (quotient, remainder)", "(quotient, remainder)"),
+    Mutant("eratruncated", D, "shifted >= 0 ? shifted : shifted - 146_096", "shifted"),
+    Mutant("nocenturyrule", D, "dayOfEra / 36_524", "0"),
+    Mutant("februaryinyear", D, "month <= 2 ? 1 : 0", "month < 2 ? 1 : 0"),
+    Mutant("nominussign", D, 'text.append(UInt8(ascii: "-"))', "", mode="stmt", nth=0),
+    Mutant("yearunpadded", D, "text.appendDecimal(date.year.magnitude, digits: 4)", "text.appendDecimal(date.year.magnitude, digits: 1)", mode="stmt"),
+    Mutant("longyearcut", D, "Swift.max(digits, count)", "digits"),
     Mutant("millisecondsrounded", D, "(timeIntervalSince1970 * 1000).rounded(.down)", "(timeIntervalSince1970 * 1000).rounded()"),
     Mutant("millisecondstruncated", D, "(timeIntervalSince1970 * 1000).rounded(.down)", "(timeIntervalSince1970 * 1000).rounded(.towardZero)"),
     Mutant("millisecondsasseconds", D, "(timeIntervalSince1970 * 1000).rounded(.down)", "timeIntervalSince1970.rounded(.down)"),

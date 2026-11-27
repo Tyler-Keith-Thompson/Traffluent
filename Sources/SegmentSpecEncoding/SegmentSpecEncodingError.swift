@@ -15,9 +15,8 @@ public enum SegmentSpecEncodingError: Error, Sendable, Hashable {
     /// the event's `Encodable` conformance, one of the app's own, doesn't write a map of its
     /// properties, or throws.
     case unrepresentableValue(event: String, property: String)
-    /// The record's timestamp has no ISO 8601 form the spec takes: it is NaN, infinite, before
-    /// 1583-01-01, the first year wholly in the Gregorian calendar ISO 8601 counts in, or from
-    /// 10000-01-01 on, which has no four-digit year.
+    /// The record's timestamp has no ISO 8601 form the spec takes: it is NaN, infinite, or outside
+    /// the four-digit years, before 0001-01-01 or from 10000-01-01 on.
     case unrepresentableTimestamp
     /// The call's JSON is `byteCount` bytes, more than the endpoint takes for one call, or than
     /// one request holds beside the envelope (``SegmentSpecBatchEncoder/batchLimit``); only

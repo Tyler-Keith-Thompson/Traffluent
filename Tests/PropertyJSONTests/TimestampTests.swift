@@ -1,6 +1,8 @@
 import Foundation
+import Generators
 import PropertyBased
 import PropertyJSON
+import Sampling
 import Testing
 import TraffluentTestSupport
 
@@ -105,6 +107,108 @@ struct TimestampTests {
 
             #expect(actual == expected)
             #expect(actualFraction == expectedFraction)
+        }
+    }
+
+    @Test("0001-01-01T00:00:00Z, 62,135,596,800 seconds before 1970, is 0001-01-01T00:00:00.000Z, in the proleptic Gregorian calendar")
+    func yearOne() {
+        let sut = Date(timeIntervalSince1970: -62_135_596_800)
+        let expected = "0001-01-01T00:00:00.000Z"
+
+        let actual = sut.iso8601Timestamp
+
+        #expect(actual == expected)
+    }
+
+    @Test("The days either side of the Gregorian reform, 1582-10-14 and 1582-10-15, are one day apart, not eleven", arguments: [
+        (-12_219_379_200.0, "1582-10-14T00:00:00.000Z"), (-12_219_292_800, "1582-10-15T00:00:00.000Z"),
+    ])
+    func reform(seconds: Double, expected: String) {
+        let sut = Date(timeIntervalSince1970: seconds)
+
+        let actual = sut.iso8601Timestamp
+
+        #expect(actual == expected)
+    }
+
+    @Test("Leap days follow the Gregorian rule before the reform too: 1500 has no February 29, 0004 and 2000 have one, 1900 none", arguments: [
+        (-14_826_758_400.0, "1500-02-28T00:00:00.000Z"), (-14_826_672_000, "1500-03-01T00:00:00.000Z"),
+        (-62_035_891_200, "0004-02-29T00:00:00.000Z"), (951_782_400, "2000-02-29T00:00:00.000Z"),
+        (-2_203_891_200.5, "1900-02-28T23:59:59.500Z"), (-2_203_891_200, "1900-03-01T00:00:00.000Z"),
+    ])
+    func leapDays(seconds: Double, expected: String) {
+        let sut = Date(timeIntervalSince1970: seconds)
+
+        let actual = sut.iso8601Timestamp
+
+        #expect(actual == expected)
+    }
+
+    @Test("Outside the four-digit years, year 0 is 0000, an earlier year is negative, and a later one has five digits", arguments: [
+        (-62_135_596_800.001, "0000-12-31T23:59:59.999Z"), (-62_167_219_200, "0000-01-01T00:00:00.000Z"),
+        (-62_198_755_200, "-0001-01-01T00:00:00.000Z"), (-377_705_116_800, "-9999-01-01T00:00:00.000Z"),
+        (253_402_300_799.5, "9999-12-31T23:59:59.500Z"), (253_402_300_800, "10000-01-01T00:00:00.000Z"),
+    ])
+    func beyondFourDigits(seconds: Double, expected: String) {
+        let sut = Date(timeIntervalSince1970: seconds)
+
+        let actual = sut.iso8601Timestamp
+
+        #expect(actual == expected)
+    }
+
+    @Test("A date more than Int64.max milliseconds from 1970 is written as the nearest one that isn't, and NaN as the earliest", arguments: [
+        (Double.infinity, "292278994-08-17T07:12:55.807Z"), (0x1p63 / 1000, "292278994-08-17T07:12:55.807Z"),
+        (-Double.infinity, "-292275055-05-16T16:47:04.192Z"), (-0x1p64 / 1000, "-292275055-05-16T16:47:04.192Z"),
+        (Double.nan, "-292275055-05-16T16:47:04.192Z"),
+    ])
+    func outsideMilliseconds(seconds: Double, expected: String) {
+        let sut = Date(timeIntervalSince1970: seconds)
+
+        let actual = sut.iso8601Timestamp
+
+        #expect(actual == expected)
+    }
+
+    @Test("For any day and time from year -9999 to 19999, the ISO 8601 timestamp is the proleptic Gregorian date a naive count of days gives", .tags(.randomized))
+    func prolepticGregorian() async {
+        await propertyCheck(count: 500, input: Gen.uint64(in: .min ... .max)) { seed in
+            check(seed: seed)
+        }
+
+        // Howard Hinnant's days_from_civil
+        // (https://howardhinnant.github.io/date_algorithms.html#days_from_civil): the days from
+        // 1970-01-01 to a proleptic Gregorian date, counting years from March in 400-year eras.
+        func daysFromCivil(year: Int, month: Int, day: Int) -> Int {
+            let marchYear = month <= 2 ? year - 1 : year
+            let era = (marchYear >= 0 ? marchYear : marchYear - 399) / 400
+            let yearOfEra = marchYear - era * 400
+            let dayOfYear = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1
+            let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+            return era * 146_097 + dayOfEra - 719_468
+        }
+
+        func daysInMonth(_ month: Int, of year: Int) -> Int {
+            let isLeap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+            return [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+        }
+
+        func check(seed: UInt64) {
+            var random = Xoshiro256StarStar(seed: seed)
+            let year = random.integer(in: -9_999 ... 19_999)
+            let month = random.integer(in: 1 ... 12)
+            let day = random.integer(in: 1 ... daysInMonth(month, of: year))
+            let millisecond = random.integer(in: 0 ... 86_399_999)
+            // Half a millisecond past a whole one, so rounding down is unambiguous at a Double's
+            // precision: within 2^49 milliseconds of 1970, a Double's step is under 0.1 ms.
+            let milliseconds = Double(daysFromCivil(year: year, month: month, day: day)) * 86_400_000 + Double(millisecond) + 0.5
+            let sut = Date(timeIntervalSince1970: milliseconds / 1000)
+            let expectedYear = (year < 0 ? "-" : "") + String(format: "%04ld", abs(year))
+            let expected = expectedYear + String(format: "-%02ld-%02ldT%02ld:%02ld:%02ld.%03ldZ", month, day, millisecond / 3_600_000, millisecond / 60_000 % 60, millisecond / 1_000 % 60, millisecond % 1_000)
+
+            let actual = sut.iso8601Timestamp
+
+            #expect(actual == expected)
         }
     }
 }

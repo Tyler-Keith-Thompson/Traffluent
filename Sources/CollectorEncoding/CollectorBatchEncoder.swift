@@ -155,7 +155,7 @@ public struct CollectorBatchEncoder: BatchEncoder {
         return .object([
             "id": .string(record.id.uuidString),
             "name": .string(record.name),
-            "timestamp": .string(record.timestamp.collectorTimestamp),
+            "timestamp": .string(record.timestamp.iso8601Timestamp),
             "properties": .object(try record.properties(types: types)),
             "context": .object(record.collectorContext(instrument: instrument)),
             "isRedelivered": .boolean(record.isRedelivered),
