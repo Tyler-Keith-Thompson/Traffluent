@@ -251,6 +251,49 @@ bad row in a dashboard.
   doesn't provide. With `bulk_requests_require_authentication` on, Matomo 6.0 answers 400
   (dropped, reported) and 5.14 answers 500 (retried until cancelled), so the docs say to leave it
   off.
+  Heap (TRAF-109, decided 2026-11-27): `HeapEncoding` posts Heap's server-side bulk track
+  request, `{"app_id":…,"events":[…]}`, to `https://heapanalytics.com/api/track`, or
+  `https://c.eu.heap-api.com/api/track` for the EU data center (`HeapRegion`, no default), from
+  every platform. The track API's OpenAPI definition has no security scheme and needs only the
+  environment's `app_id`, which Heap's SDKs ship in every app; only the user deletion API takes an
+  API key, which the module never accepts (developers.heap.io/reference/track-1, /bulk-track,
+  /server-side-apis-overview and /user-deletion, read 2026-11-27). Contentsquare, which owns Heap,
+  documents no newer server-side ingestion. The app ID must be ASCII digits (environment IDs are
+  numbers), trimmed first. Each record is an event: `event` the event's name, `identity` the
+  session as a lowercase UUID (the record ID when sessionless), `idempotency_key` the record ID,
+  `timestamp` ISO 8601 with milliseconds; no `user_id` (a Heap SDK's numeric ID), `session_id`
+  (an SDK session, which server-side events can't link to) or standard context (Heap keeps no
+  built-in property of a server-side event, so it would mix into the event's own properties).
+  Heap makes and keeps a user per identity, so its users are sessions (D4), and the docs say so.
+  Properties are flattened with `.`, as the siblings do, booleans sent as `"true"`/`"false"`
+  (the reference lists numbers and strings only) and `nil` left out. Rejected: sending arrays for
+  Heap to join with `||` (it cuts the joined string at 1,024 characters silently, and an array
+  of objects has no such form). Skipped, as Heap answers 400 to a bad request and documents
+  nothing of what it does past its limits: an event name over 1,024 characters, a property named
+  exactly `user_id`, `session_id` or `screen_name`, a flattened name or string value of 1,024
+  characters or more (UTF-16 units, JavaScript's count; rejected: bytes, which refuse ordinary
+  non-Latin text far sooner), values that flatten to one name, and a timestamp outside years 1 to
+  9999. Heap documents no timestamp window, so requests have no deadline and no record is skipped
+  for its age. Batching is 1,000 events (Bulk Track's maximum) and 1,000,000 bytes a request (the
+  encoder's own bound; Heap documents none). The docs say that server-side events don't join Heap's
+  SDK sessions, that Heap shows a user of only server-side events with them hidden, and to confirm
+  events appear in charts after setup, as the docs don't say what Heap answers to an unknown app ID.
+  Review follow-up (2026-11-27): the server-side API complements Heap's SDKs and "you can only send
+  events to identified users" (developers.heap.io/reference/server-side-apis-overview); a user with
+  only server-side events shows "events are hidden" (help.heap.io article 37271959816465), its
+  events aren't sessionized, so the Sessions list stays empty (37271954812049), and user-property
+  session filters see only SDK sessions (37271885557265). Every user this destination makes is
+  such a user, so the landing article's Overview and ChoosingDestinations' row and section say so
+  first, and tell adopters to confirm events in charts, not only in the Live data feed. Still no
+  standard context as properties (rejected: flattening app and device fields into each event's
+  properties, which Heap has no built-in keys for and which would collide with adopters' names).
+  The 15,000 events a minute per app_id is shared by every device (about 21.6M a day at a steady
+  rate); Heap doesn't say whether it answers 429 (retried on the backoff, no jitter, no
+  `Retry-After`, so a backlog can grow) or 400 (the whole request dropped as rejected), and the
+  docs describe both. A session's own backlog of over 1,000 events passes the per-identity limit;
+  kept 1,000 events a request (rejected: smaller batches, which don't pace requests).
+  Deduplication holds within one identity, so a record recovered after a relaunch, sent under its
+  record ID, may be stored twice, as for Amplitude (TRAF-122).
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

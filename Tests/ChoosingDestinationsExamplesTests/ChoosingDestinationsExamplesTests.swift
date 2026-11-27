@@ -5,6 +5,7 @@
 import AmplitudeEncoding
 import Foundation
 import GoogleAnalyticsEncoding
+import HeapEncoding
 import Instrumentation
 import MatomoEncoding
 import MixpanelEncoding
@@ -351,6 +352,32 @@ struct ChoosingDestinationsMatomoExamplesTests {
             plan: plan)
         let tracker = Tracker(enrichers: [.sessions()])
         let delivery = tracker.records.batch().deliver(to: matomo)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw.
+@Suite("Choosing destinations examples: Heap", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsHeapExamplesTests {
+    @Test("Heap")
+    func heap() async throws {
+        let appID = "12343283"
+
+        let plan = try TrackingPlan()
+        let heap = try HTTPDestination.heap(
+            appID: appID,  // the environment's ID, from Heap's project settings
+            region: .us,  // or .eu, where the project's data resides
+            plan: plan)
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: heap)
 
         // Nothing is tracked, so nothing is sent and the example runs without a network.
         await tracker.finish()

@@ -36,7 +36,9 @@ server, with `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:pla
 `HTTPDestination.snowplow(collector:vendor:appID:plan:)` (module `SnowplowEncoding`); for
 TelemetryDeck, with `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` (module
 `TelemetryDeckEncoding`); for Matomo, with
-`HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` (module `MatomoEncoding`). To read events inside the app or in a test, use
+`HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` (module `MatomoEncoding`); for
+Heap, with `HTTPDestination.heap(appID:region:plan:)` (module `HeapEncoding`). To read events
+inside the app or in a test, use
 `InMemoryDestination` (module `Destinations`) instead.
 
 ```swift

@@ -118,6 +118,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Snowplow | ``/SnowplowEncoding`` | `HTTPDestination.snowplow(collector:vendor:appID:plan:)` | Each record as a self-describing event whose schema, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, your plan's Iglu export writes: its session as `sid` and nothing else to identify it, its identifier as `eid`, its time in epoch milliseconds as `dtm` and `ttm`, its properties through your plan, and the standard context as Snowplow's `mobile_context` and `application` entities; no `duid`, `uid` or cookie, as every request carries `SP-Anonymous` |
 | TelemetryDeck | ``/TelemetryDeckEncoding`` | `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` | Each record as an Ingest API v3 signal: its session, hashed with SHA-256, as `clientUser` and the session itself as `sessionID`, so user counts are session counts; its time in ISO 8601 as `receivedAt`, its properties through your plan, flattened to dotted names, the standard context as TelemetryDeck's built-in `TelemetryDeck.` parameters, and `isTestMode` as you pass it; no other identifier |
 | Matomo | ``/MatomoEncoding`` | `HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` | Each record as a Matomo event in a bulk tracking request: your category as `e_c` and its name as `e_a`, the last 64 bits of its session as the visitor `_id`, so visitors are sessions, its time in Unix seconds as `cdt`, its locale as `lang`, and the properties you map as numbered custom dimensions; no `uid`, `cid` or `token_auth`, so a record over 23 hours old is skipped |
+| Heap | ``/HeapEncoding`` | `HTTPDestination.heap(appID:region:plan:)` | Each record as a custom event through Heap's server-side bulk track API: its session as `identity`, so users are sessions, its identifier as `idempotency_key`, its time in ISO 8601, and its properties through your plan, flattened to dotted names of strings and numbers; no `user_id`, `session_id`, API key or standard context. Heap's server-side API complements its SDKs: every user it makes has only server-side events, which Heap shows as hidden and doesn't sessionize, so confirm they appear in your charts |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -661,6 +662,70 @@ a request (`oversized`). The destination reports each on `dropReports` as
 Matomo answers 200 to any bulk request it can read, so a wrong site ID loses every event without
 an error: check that the first ones reach the site's Visits Log. It doesn't remove duplicates, so
 a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
+
+### Heap
+
+To send to Heap, make the destination with `HTTPDestination.heap(appID:region:plan:)` (module
+``/HeapEncoding``). It posts to Heap's server-side bulk track API at
+`https://heapanalytics.com/api/track`, or `https://c.eu.heap-api.com/api/track` for a project in
+Heap's EU data center, sends no trace context in the header fields, and splits each batch into
+requests of at most 1,000 events, the most the API takes, and 1,000,000 bytes, the encoder's own
+bound, as Heap documents none. The API takes the environment's app ID and no API key, and Heap's
+own SDKs ship the app ID in every app, so the destination builds on every platform. The factory
+throws for an app ID that is empty, only whitespace, or anything but ASCII digits. `region` has no
+default.
+
+Heap's server-side API complements its SDKs, and Heap says "you can only send events to
+identified users". Every user this destination makes has only server-side events, so Heap shows
+the user's events as hidden (its Hidden Events category), leaves them out of its Sessions list, as
+it doesn't sessionize them, and matches none of them with a session filter on a user property.
+Seeing events in Heap's Live data feed isn't enough: confirm that they appear in the charts you
+mean to use.
+
+```swift
+let plan = try TrackingPlan()
+let heap = try HTTPDestination.heap(
+    appID: appID,  // the environment's ID, from Heap's project settings
+    region: .us,  // or .eu, where the project's data resides
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: heap)
+```
+
+The record's session (`Enricher.sessions()`) is its `identity`, as a lowercase UUID. Nothing
+else identifies it: no `user_id`, `session_id`, vendor identifier, device identifier, account or
+trace context. Heap makes a user of each identity it hasn't seen and keeps it, so its users are
+sessions, and its user counts and retention describe sessions, not people. A record with no
+session, such as one a store recovered, is its own user, by its identifier.
+
+Each event's `event` is the event's name, its `timestamp` the record's, and its
+`idempotency_key` the record's identifier, so Heap stores a record sent twice under the same
+identity once. A record a store recovered keeps no context and goes under its own identifier, so
+Heap may store it twice. Its properties
+are flattened into dotted names (`cart.size`, `tags.0`), as Heap takes only numbers and strings: a
+boolean is the string `true` or `false`, and `nil` is left out. The standard context isn't sent,
+as Heap keeps no built-in property of a server-side event, and app and device fields among the
+event's own properties could collide with your names. A `Sensitive` value is never sent,
+whatever the record reveals.
+
+The encoder leaves out the same records as the collector's encoder, and also one whose event name
+is over the 1,024 characters Heap takes; one with a property named `user_id`, `session_id` or
+`screen_name`, which Heap reserves; one with a property name or string value of 1,024 characters
+or more, counted in UTF-16, as Heap takes fewer; one whose values flatten to one name twice; one
+whose timestamp is outside the years 1 to 9999; and one too large for a request (`oversized`). The
+destination reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
+
+Heap answers 400 to a request it can't take, which the destination drops and reports whole. Its
+docs don't say what it answers to an app ID of no environment, so confirm that the first events
+appear in your charts.
+
+Heap takes 15,000 events a minute from one environment, shared by every device sending to it:
+about 21.6 million events a day at a steady rate, and less in a burst. It takes 1,000 events a
+minute from one identity, which here is one session, so a session whose own backlog holds more than
+1,000 events goes past it. Heap's docs don't say what it answers past either limit. A 429 is
+retried on the destination's backoff, without jitter or `Retry-After`, so a backlog can grow; a 400
+drops the whole request, reported as rejected. Requests keep Heap's bulk maximum of 1,000 events,
+as a smaller batch doesn't pace requests and so wouldn't avoid the limit.
 
 ### Memory
 

@@ -69,6 +69,7 @@ docc_archive(
         "//Sources/SnowplowEncoding:SnowplowEncodingDocumentation",
         "//Sources/TelemetryDeckEncoding:TelemetryDeckEncodingDocumentation",
         "//Sources/MatomoEncoding:MatomoEncodingDocumentation",
+        "//Sources/HeapEncoding:HeapEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/DestinationTesting:DestinationTestingDocumentation",
