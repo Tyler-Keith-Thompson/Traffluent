@@ -619,7 +619,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved d93537dbc90b9db0b09e8975d733ab7847c1b2ebd85b2e59631446794703c774"
+          "FILE:@@//swift/Package.resolved 5e501dc033b05cb2f929529f1c052b380add85ca4dc90fc020dd7a12b7c27484"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -720,9 +720,9 @@
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
               "bazel_package_name": "swiftpkg_afluent",
-              "commit": "91c18f6664f56a8eca9bab9d6bb72cfbd01b9e6d",
+              "commit": "7e7957c3c0a372e45f24c487b335766799e053e8",
               "remote": "https://github.com/Tyler-Keith-Thompson/Afluent",
-              "version": "1.1.46",
+              "version": "1.1.49",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
