@@ -95,16 +95,16 @@ struct GettingStartedExamplesTests {
             endpoint: collectorURL,
             headerFields: [.authorization: "Bearer \(apiKey)"],
             encoder: CollectorBatchEncoder(plan: plan))
-        let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
         let delivery = tracker.records
             .batch()
-            .deliver(to: collector.redactingSensitiveValues(), bufferDropReporter: bufferDropReporter)
+            .deliver(to: collector.redactingSensitiveValues())
         let delivering = Task { try await delivery.execute() }
 
         let rejections = tracker.rejectionReports
         let consentDrops = consent.dropReports
         let storeDrops = store.dropReports
         let collectorDrops = collector.dropReports
+        let bufferDrops = delivery.bufferDropReports
         Task {
             await withDiscardingTaskGroup { group in
                 group.addTask { for await report in rejections { print("Rejected: \(report)") } }
@@ -120,7 +120,6 @@ struct GettingStartedExamplesTests {
         // tracker records SessionStarted and SessionEnded around the others.
         await tracker.finish()
         try await delivering.value
-        bufferDropReporter.finish()
         let memory = InMemoryDestination()
         let recording = Tracker(enrichers: [.sessions()])
         let recordingDelivery = recording.records.batch().deliver(to: memory.redactingSensitiveValues())

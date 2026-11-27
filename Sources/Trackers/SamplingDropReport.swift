@@ -42,8 +42,18 @@ extension SamplingDropReport {
             waiting.append(report)
             return
         }
-        let merged = waiting[index]
-        waiting[index].recordCount = merged.recordCount + report.recordCount
-        waiting[index].timestamps = min(merged.timestamps.lowerBound, report.timestamps.lowerBound) ... max(merged.timestamps.upperBound, report.timestamps.upperBound)
+        waiting[index] = waiting[index].merged(with: report)
+    }
+
+    /// This report and `report`, of the same event, as one: their counts added, held at
+    /// `Int.max`, and the range of times spanning both.
+    ///
+    /// - Parameter report: A later report of the same event.
+    /// - Returns: The report counting both.
+    package func merged(with report: SamplingDropReport) -> SamplingDropReport {
+        var merged = self
+        merged.recordCount = recordCount.saturatingAdd(report.recordCount)
+        merged.timestamps = min(timestamps.lowerBound, report.timestamps.lowerBound) ... max(timestamps.upperBound, report.timestamps.upperBound)
+        return merged
     }
 }

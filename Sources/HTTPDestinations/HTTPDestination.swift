@@ -62,10 +62,10 @@ import Logging
 /// reported, and the batch's next request is sent.
 ///
 /// While a batch is retried, the delivery's later batches wait in this destination's buffer,
-/// which drops its oldest batch when full and reports it
-/// (`deliver(to:batchBufferLimit:bufferDropReporter:)`). With a store, a dropped batch's records
-/// aren't lost: once this destination has caught up, the delivery reads them back from the store
-/// and hands them to it again, in the same run, so they are sent once the endpoint answers.
+/// which drops its oldest batch when full and reports it on the delivery's `bufferDropReports`.
+/// With a store, a dropped batch's records aren't lost: once this destination has caught up, the
+/// delivery reads them back from the store and hands them to it again, in the same run, so they
+/// are sent once the endpoint answers.
 /// Without a store, the records of a dropped batch are lost.
 ///
 /// ```swift

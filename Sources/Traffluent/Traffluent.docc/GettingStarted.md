@@ -219,10 +219,9 @@ let collector = HTTPDestination(
     endpoint: collectorURL,
     headerFields: [.authorization: "Bearer \(apiKey)"],
     encoder: CollectorBatchEncoder(plan: plan))
-let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
 let delivery = tracker.records
     .batch()
-    .deliver(to: collector.redactingSensitiveValues(), bufferDropReporter: bufferDropReporter)
+    .deliver(to: collector.redactingSensitiveValues())
 let delivering = Task { try await delivery.execute() }
 ```
 
@@ -245,6 +244,7 @@ let rejections = tracker.rejectionReports
 let consentDrops = consent.dropReports
 let storeDrops = store.dropReports
 let collectorDrops = collector.dropReports
+let bufferDrops = delivery.bufferDropReports
 Task {
     await withDiscardingTaskGroup { group in
         group.addTask { for await report in rejections { print("Rejected: \(report)") } }
@@ -260,8 +260,9 @@ One task reads each stream at a time: a second reader waits, with a warning in t
 first one's iteration ends or its iterator is released. A reader that stops calling `next()` but
 keeps its iterator keeps the turn, so read each stream in one place and fan its reports out from
 there. The task
-reads the streams, not their owners, so it keeps no store or destination alive. The store app
-merges them into one stream of its own type, `AnalyticsDrop`, and logs each one.
+reads the streams, not their owners, so it keeps no store, destination or delivery alive. The
+store app merges them into one `AsyncQueue` of its own type, `AnalyticsDrop`, so a second reader
+of that waits its turn too, and logs each one.
 
 ### Export and check the tracking plan
 

@@ -36,11 +36,11 @@ rate and trace), which the delivery holds on to while the events wait in the sto
 so far behind that more than ten buffers' worth of its batches are dropped gets the oldest of them
 on the next launch instead. Without a store, a dropped batch's records are gone, so give the
 tracker a store if the app may be offline for long (<doc:PersistingRecords>). To hear about each
-drop, pass the delivery a `bufferDropReporter`:
+drop, read the delivery's `bufferDropReports`:
 
 ```swift
-let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-let delivery = tracker.records.batch().deliver(to: collector, bufferDropReporter: bufferDropReporter)
+let delivery = tracker.records.batch().deliver(to: collector)
+let bufferDrops = delivery.bufferDropReports
 let watching = Task {
     for await drop in bufferDrops where drop.storedRecordCount < drop.recordCount {
         print("Lost \(drop.recordCount - drop.storedRecordCount) events tracked from \(drop.timestamps.lowerBound)")
@@ -49,9 +49,17 @@ let watching = Task {
 ```
 
 A report names the destination by its place in `deliver(to:)`'s list, counting from 0. It also
-gives how many records the batch held, when they were tracked, and how many of them a store keeps
-to send again. The delivery logs each drop too, and never finishes the reporter, so one reporter
-can serve every delivery that replaces the last.
+gives how many records were dropped, when they were tracked, and how many of them a store keeps
+to send again. Drops no one has read yet merge into one report per destination, so a report may
+count several batches. The delivery logs each drop too. Its reports end once the delivery is
+gone, and a delivery built to replace one has reports of its own. One task reads them at a time,
+as with every report stream the library hands out: a second reader waits its turn.
+
+An app that builds a new delivery each time one stops, to restart it after a failure or as it
+returns to the foreground, forwards each delivery's reports into one queue of its own, an
+`AsyncQueue` it writes through `AsyncQueue.Continuation`, and reads that queue in one place. Hand
+the queue each delivery's `bufferDropReports` as the delivery starts, and read each in a task of a
+task group, so the queue ends only once every delivery's reports have.
 
 Some batches won't succeed if sent again, so they are dropped: one the endpoint answers with any
 other status, one whose request the transport can never send (a malformed URL, a scheme it doesn't

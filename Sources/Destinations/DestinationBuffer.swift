@@ -22,7 +22,7 @@ final class DestinationBuffer: Sendable {
     /// What a yield dropped: the batch, for its report, and any dropped batch the bound on
     /// `State.dropped` discarded to make room.
     private struct Drop {
-        let batch: Delivery
+        let batch: OutgoingBatch
         let discarded: DroppedBatch?
     }
 
@@ -33,9 +33,9 @@ final class DestinationBuffer: Sendable {
     /// discarded, left in its store for a later launch, so a destination that never catches up
     /// doesn't grow this without a bound.
     private let droppedLimit: Int
-    private let deliveries: AsyncStream<Delivery>
-    private let buffer: AsyncStream<Delivery>.Continuation
-    private let reporter: AsyncStream<BufferDropReport>.Continuation?
+    private let deliveries: AsyncStream<OutgoingBatch>
+    private let buffer: AsyncStream<OutgoingBatch>.Continuation
+    private let reporter: BufferDropReporter
     // A Mutex rather than an actor: the delivery's loop and the destination's task each take it
     // briefly, synchronously, once per batch, and nothing waits while holding it. The yield runs
     // inside it, which is safe as AsyncStream's yield never suspends or calls back.
@@ -45,7 +45,7 @@ final class DestinationBuffer: Sendable {
 
     /// The buffer of `destination`, at `index` among the delivery's destinations, holding up to
     /// `limit` waiting batches and reporting each it drops to `reporter`.
-    init(destination: any Destination, index: Int, limit: Int, reporter: AsyncStream<BufferDropReport>.Continuation?) {
+    init(destination: any Destination, index: Int, limit: Int, reporter: BufferDropReporter) {
         self.destination = destination
         self.index = index
         self.limit = limit
@@ -57,11 +57,11 @@ final class DestinationBuffer: Sendable {
         // in it are read back later rather than held here. AsyncStream, rather than an Afluent
         // subject or `share()`, because those buffer each subscriber without a bound and have no
         // drop-oldest policy.
-        (deliveries, buffer) = AsyncStream.makeStream(of: Delivery.self, bufferingPolicy: .bufferingNewest(limit))
+        (deliveries, buffer) = AsyncStream.makeStream(of: OutgoingBatch.self, bufferingPolicy: .bufferingNewest(limit))
     }
 
     /// Adds `delivery` to the waiting batches, dropping the oldest when `limit` are waiting.
-    func yield(_ delivery: Delivery) {
+    func yield(_ delivery: OutgoingBatch) {
         let drop: Drop? = state.withLock { state in
             state.waitingCount += 1
             guard case .dropped(let oldest) = buffer.yield(delivery) else { return nil }
@@ -127,7 +127,7 @@ final class DestinationBuffer: Sendable {
     }
 
     /// Reports and logs the buffer's drop of `dropped`.
-    private func report(_ dropped: Delivery) {
+    private func report(_ dropped: OutgoingBatch) {
         let stored = dropped.batch.count { $0.deliveryTag != nil }
         let report = BufferDropReport(
             destinationIndex: index,
@@ -142,7 +142,7 @@ final class DestinationBuffer: Sendable {
             let readBack = stored == 0 ? "" : "; the other \(stored), stored, are read back once it catches up"
             Self.logger.error("Destination \(index)'s full buffer dropped a batch, losing \(lost) of its \(dropped.batch.count) records, kept in memory only\(readBack)")
         }
-        reporter?.yield(report)
+        reporter.report(report)
     }
 }
 
@@ -174,7 +174,7 @@ struct DroppedBatch: Sendable {
     let acknowledgement: BatchAcknowledgement
 
     /// `delivery`, dropped, or `nil` when no store keeps any of its records.
-    init?(_ delivery: Delivery) {
+    init?(_ delivery: OutgoingBatch) {
         guard let acknowledgement = delivery.acknowledgement else { return nil }
         records = delivery.batch.compactMap { record in
             record.deliveryTag.map { tag in

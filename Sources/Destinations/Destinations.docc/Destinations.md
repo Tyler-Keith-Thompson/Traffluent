@@ -7,14 +7,15 @@ Where tracked events go: the `Destination` protocol, the modifiers that narrow w
 A ``Destination`` is a plain sink with one requirement, ``Destination/receive(_:)``, which is given
 a batch of records, oldest first. Delivering is a chain of operators over a tracker's records:
 `batch()` gathers them into batches of 20, and every 30 seconds while any are pending, and
-`deliver(to:batchBufferLimit:bufferDropReporter:)` hands each batch to every destination as a
-lazy unit of work that runs once you call `execute()`.
+`deliver(to:batchBufferLimit:)` makes a ``Delivery``, which hands each batch to every
+destination. It holds a lazy unit of work, ``Delivery/work``, that runs once you call `execute()`.
 
 Each destination receives its batches in order, one at a time, from a buffer of its own, so a
 slow one delays only itself. A full buffer drops its oldest batch and reports it as a
-``BufferDropReport``. When the tracker has a store, the delivery reads the dropped batch's records
-back for that destination once it catches up, and tells the store when each batch has reached
-every destination.
+``BufferDropReport`` on the delivery's ``Delivery/bufferDropReports``, which one task reads at a
+time, as every report stream does. When the tracker has a store, the delivery reads the dropped
+batch's records back for that destination once it catches up, and tells the store when each batch
+has reached every destination.
 
 What a destination receives is narrowed by modifiers: ``Destination/accepting(_:)`` for the
 consent categories it serves, ``Destination/redactingSensitiveValues()`` and
@@ -63,7 +64,8 @@ The umbrella guide on this area is
 ### Delivering
 
 - ``_Concurrency/AsyncSequence/batch(clock:)``
-- ``_Concurrency/AsyncSequence/deliver(to:bufferDropReporter:)``
-- ``_Concurrency/AsyncSequence/deliver(to:batchBufferLimit:bufferDropReporter:)``
+- ``_Concurrency/AsyncSequence/deliver(to:)``
+- ``_Concurrency/AsyncSequence/deliver(to:batchBufferLimit:)``
+- ``Delivery``
 - ``InvalidBatchBufferLimit``
 - ``BufferDropReport``

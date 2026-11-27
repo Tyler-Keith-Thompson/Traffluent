@@ -1,4 +1,4 @@
-public import Afluent
+import Afluent
 public import Events
 import Foundation
 import Synchronization
@@ -17,7 +17,8 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
     /// Each destination receives its batches in order, one at a time, from a buffer of its own,
     /// so a slow destination delays only itself. When a batch arrives while a destination's
     /// buffer already holds `batchBufferLimit` batches, the oldest waiting batch is dropped,
-    /// logged and reported on `bufferDropReporter` as a ``BufferDropReport``. Its records kept in
+    /// logged and reported on the delivery's ``Delivery/bufferDropReports``, where the drops no
+    /// one has read yet wait as one ``BufferDropReport`` per destination. Its records kept in
     /// memory only are lost. Those a store keeps are not: once that destination has received
     /// every batch waiting in its buffer, the delivery reads them back from the store and hands
     /// them to that destination alone, one dropped batch at a time, oldest first. Read back, a
@@ -51,51 +52,42 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
     ///   - batchBufferLimit: How many batches each destination may have waiting while it is
     ///     still receiving an earlier one. A tenth of how many dropped batches it keeps track of
     ///     to read back.
-    ///   - bufferDropReporter: Where a report of each batch a destination's full buffer drops is
-    ///     yielded, as it is dropped; none by default. The delivery never finishes it, so one
-    ///     reporter can serve the deliveries that replace one another.
-    /// - Returns: A unit of work that completes once the last batch is delivered, and throws what
-    ///   the sequence throws, or `CancellationError` when cancelled.
+    /// - Returns: The delivery, holding the unit of work that completes once the last batch is
+    ///   delivered, and throws what the sequence throws, or `CancellationError` when cancelled;
+    ///   its ``Delivery/bufferDropReports`` report the batches full buffers drop.
     /// - Throws: ``InvalidBatchBufferLimit`` when `batchBufferLimit` is below 1.
     public func deliver(
         to destinations: any Destination...,
-        batchBufferLimit: Int,
-        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation? = nil
-    ) throws(InvalidBatchBufferLimit) -> some AsynchronousUnitOfWork<Void> {
+        batchBufferLimit: Int
+    ) throws(InvalidBatchBufferLimit) -> Delivery {
         guard batchBufferLimit >= 1 else { throw InvalidBatchBufferLimit() }
-        return delivery(to: destinations, batchBufferLimit: batchBufferLimit, bufferDropReporter: bufferDropReporter)
+        return delivery(to: destinations, batchBufferLimit: batchBufferLimit)
     }
 
     /// The work of delivering each batch of this sequence to every destination, until the
-    /// sequence ends, as `deliver(to:batchBufferLimit:bufferDropReporter:)` does, with a buffer of
-    /// 100 batches for each destination.
+    /// sequence ends, as `deliver(to:batchBufferLimit:)` does, with a buffer of 100 batches for
+    /// each destination.
     ///
-    /// - Parameters:
-    ///   - destinations: Where each batch goes.
-    ///   - bufferDropReporter: Where a report of each batch a destination's full buffer drops is
-    ///     yielded, as it is dropped; none by default.
-    /// - Returns: A unit of work that completes once the last batch is delivered, and throws what
-    ///   the sequence throws, or `CancellationError` when cancelled.
-    public func deliver(
-        to destinations: any Destination...,
-        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation? = nil
-    ) -> some AsynchronousUnitOfWork<Void> {
-        delivery(to: destinations, batchBufferLimit: 100, bufferDropReporter: bufferDropReporter)
+    /// - Parameter destinations: Where each batch goes.
+    /// - Returns: The delivery, holding the unit of work that completes once the last batch is
+    ///   delivered, and throws what the sequence throws, or `CancellationError` when cancelled;
+    ///   its ``Delivery/bufferDropReports`` report the batches full buffers drop.
+    public func deliver(to destinations: any Destination...) -> Delivery {
+        delivery(to: destinations, batchBufferLimit: 100)
     }
 
     /// The delivery to `destinations`, each with a buffer of `batchBufferLimit` batches, at least
     /// 1.
-    private func delivery(
-        to destinations: [any Destination],
-        batchBufferLimit: Int,
-        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation?
-    ) -> some AsynchronousUnitOfWork<Void> {
-        DeferredTask { [self] in
+    private func delivery(to destinations: [any Destination], batchBufferLimit: Int) -> Delivery {
+        // The work holds the reporter, so its reports end once the work and its runs are gone.
+        let reporter = BufferDropReporter()
+        let reports = reporter.reports
+        let work = DeferredTask { [self] in
             try await withThrowingDiscardingTaskGroup { group in
                 // The bound is the caller's, 100 batches by default: at 20 events a batch, 2,000
                 // events. DestinationBuffer says why the oldest is the one dropped.
                 let buffers = destinations.enumerated().map { index, destination in
-                    DestinationBuffer(destination: destination, index: index, limit: batchBufferLimit, reporter: bufferDropReporter)
+                    DestinationBuffer(destination: destination, index: index, limit: batchBufferLimit, reporter: reporter)
                 }
                 for buffer in buffers {
                     group.addTask { await buffer.run() }
@@ -108,16 +100,17 @@ extension AsyncSequence where Self: Sendable, Element == [EventRecord] {
                     // pending. Telling the store it is being delivered would mark records no
                     // destination will get as redelivered on the next launch.
                     if Task.isCancelled { break }
-                    guard let delivery = Delivery(of: batch, destinationCount: buffers.count) else { continue }
-                    for buffer in buffers { buffer.yield(delivery) }
+                    guard let outgoing = OutgoingBatch(of: batch, destinationCount: buffers.count) else { continue }
+                    for buffer in buffers { buffer.yield(outgoing) }
                 }
             }
         }
+        return Delivery(work: work, reports: reports)
     }
 }
 
 /// A batch on its way to one destination, with the acknowledgement it counts towards.
-struct Delivery: Sendable {
+struct OutgoingBatch: Sendable {
     let batch: [EventRecord]
     /// The earliest and the latest of the batch's timestamps.
     let timestamps: ClosedRange<Date>

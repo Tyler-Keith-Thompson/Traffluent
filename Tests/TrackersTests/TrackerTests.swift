@@ -350,7 +350,7 @@ struct TrackerTests {
         let recorder = InMemoryDestination()
         let sut = Tracker()
         let expected = [1]
-        let work = sut.records.batch(strategy: .either(.count(5), FailsOnce(retried: retried))).deliver(to: recorder).retry(1)
+        let work = sut.records.batch(strategy: .either(.count(5), FailsOnce(retried: retried))).deliver(to: recorder).work.retry(1)
         let running = Task { try await work.execute() }
         try await retried.execute()
 

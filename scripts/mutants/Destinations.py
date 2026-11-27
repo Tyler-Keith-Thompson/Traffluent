@@ -22,6 +22,9 @@
 # - Dropping enriched(by:)'s warning for an enricher that adds records: tests don't pin logs.
 # - A store returning records at positions nobody asked for: ReadBack looks each batch's records
 #   up by position, so the extra ones are never sent.
+# - Delivery's execute(priority:) and run(priority:) forwarding no priority: the task's priority
+#   is not observable to a destination.
+# - saturatingAdd's Int.min branch: a delivery's reports never hold a negative count.
 
 TESTS = ["DestinationsTests"]
 
@@ -30,6 +33,9 @@ D = "Deliver.swift"
 U = "DestinationBuffer.swift"
 B = "Batch.swift"
 M = "InMemoryDestination.swift"
+V = "Delivery.swift"
+R = "BufferDropReport.swift"
+Z = "Int+SaturatingAdd.swift"
 
 MUTANTS = [
     # A batch handed over after cancellation (TRAF-71).
@@ -42,11 +48,30 @@ MUTANTS = [
     Mutant("defaultbufferlimit", D, "100", "99", nth=1),
     Mutant("bufferlimitzeroallowed", D, "batchBufferLimit >= 1", "batchBufferLimit >= 0"),
     Mutant("bufferonemore", U, ".bufferingNewest(limit)", ".bufferingNewest(limit + 1)"),
-    Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(delivery) }", "buffers.first?.yield(delivery)", mode="stmt"),
+    Mutant("firstdestinationonly", D, "for buffer in buffers { buffer.yield(outgoing) }", "buffers.first?.yield(outgoing)", mode="stmt"),
     Mutant("nodelivery", U, "await destination.receive(delivery.batch)", "", mode="stmt"),
     Mutant("buffersneverfinish", D, "for buffer in buffers { buffer.finish() }", "", mode="stmt"),
     # A full buffer's drop: reported with its destination, records and timestamps (TRAF-66).
-    Mutant("dropnotreported", U, "reporter?.yield(report)", "", mode="stmt"),
+    Mutant("dropnotreported", U, "reporter.report(report)", "", mode="stmt"),
+    # The delivery's buffer-drop reports (TRAF-115): each buffer reports to a queue no one reads,
+    # the queue never ends once the delivery is gone, or its unread reports never merge.
+    Mutant("reportsnotshared", U, "self.reporter = reporter", "self.reporter = BufferDropReporter()", mode="stmt"),
+    Mutant("bufferdropsneverend", V, "reports.finish()", "", mode="stmt"),
+    Mutant("bufferdropsunmerged", V, ".init(adding: BufferDropReport.add(_:to:))", ".unbounded"),
+    # Delivery forwarding to its work.
+    Mutant("runnotforwarded", V, "work.run(priority: priority)", "", mode="stmt"),
+    Mutant("cancelnotforwarded", V, "work.cancel()", "", mode="stmt"),
+    # Merging a destination's unread reports: into another destination's, never, or with a count
+    # or a bound of the times lost, or the counts wrapping past Int.max.
+    Mutant("mergesacrossdestinations", R, "$0.destinationIndex == report.destinationIndex", "true"),
+    Mutant("mergeappends", R, "waiting[index] = waiting[index].merged(with: report)", "waiting.append(report)", mode="stmt"),
+    Mutant("mergedcountkept", R, "recordCount.saturatingAdd(report.recordCount)", "recordCount"),
+    Mutant("mergedstoredkept", R, "storedRecordCount.saturatingAdd(report.storedRecordCount)", "storedRecordCount"),
+    Mutant("mergedcountwraps", R, "recordCount.saturatingAdd(report.recordCount)", "recordCount &+ report.recordCount"),
+    Mutant("mergedstoredwraps", R, "storedRecordCount.saturatingAdd(report.storedRecordCount)", "storedRecordCount &+ report.storedRecordCount"),
+    Mutant("mergedlowerkept", R, "min(timestamps.lowerBound, report.timestamps.lowerBound)", "timestamps.lowerBound"),
+    Mutant("mergedupperkept", R, "max(timestamps.upperBound, report.timestamps.upperBound)", "timestamps.upperBound"),
+    Mutant("saturatesbelowmax", Z, "return Int.max", "return Int.max - 1", mode="stmt"),
     Mutant("dropindexfixed", U, "self.index = index", "self.index = 0", mode="stmt"),
     # The first is the stored records' count; the second is the report's.
     Mutant("droprecordcountone", U, "dropped.batch.count", "1", nth=1),

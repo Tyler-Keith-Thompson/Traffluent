@@ -56,7 +56,8 @@ let targets: [Target] = [
     .testTarget(name: "StoreAnalyticsTests", dependencies: [
         "StoreAnalytics", "StoreEvents", "StoreModel",
         library("CollectorEncoding"), library("Events"), library("HTTPDestinations"), library("Persistence"), library("Trackers"),
-        library("TrackingPlans"), httpTypes, system,
+        library("AsyncQueues"), library("TrackingPlans"), httpTypes, system,
+        .product(name: "Afluent", package: "afluent"),
     ]),
     .testTarget(name: "StoreViewsTests", dependencies: [
         "StoreViews", "StoreAnalytics", "StoreModel", "StoreEvents",
@@ -79,6 +80,8 @@ let package = Package(
     dependencies: [
         // Named, so the identity does not depend on the checkout directory's name.
         .package(name: "Traffluent", path: ".."),
+        // The analytics tests' gates (SingleValueSubject); the library pins the same version.
+        .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.49"),
         .package(url: "https://github.com/hummingbird-project/hummingbird", from: "2.29.0"),
         // The server example's tracer, which joins each batch's request to the app's trace.
         .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),

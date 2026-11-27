@@ -20,6 +20,7 @@ Q = "AsyncQueue.swift"
 B = "AsyncQueue+Buffering.swift"
 S = "QueueStorage.swift"
 L = "ReadLock.swift"
+C = "AsyncQueue+Continuation.swift"
 
 MUTANTS = [
     # The queue's elements: dropped after the end, never handed to a waiting read, lost when taken.
@@ -48,6 +49,13 @@ MUTANTS = [
     # The iterator: the turn kept once its iteration ends.
     Mutant("endedreaderkeepsturn", Q, "reader.release()", "", mode="stmt"),
     Mutant("finishednotfinished", Q, "queue.finish()", "", mode="stmt"),
+    # An app's continuation (TRAF-115): its queue bounded, its elements or its finish dropped, or
+    # the queue left open once the last copy is gone.
+    Mutant("continuationbounded", C, "AsyncQueue(name: name)", "AsyncQueue(name: name, buffering: .newest(1))"),
+    Mutant("continuationenqueuedropped", C, "writer.queue.enqueue(element)", "", mode="stmt"),
+    # The deinit's, the second occurrence; the first is finish()'s, which the next mutant plants.
+    Mutant("continuationneverends", C, "queue.finish()", "", mode="stmt", nth=1),
+    Mutant("continuationfinishignored", C, "writer.queue.finish()", "", mode="stmt"),
     # The turn granted while another reader holds it, so it takes the holder's elements; or not
     # granted again to the reader holding it, which then waits on itself.
     Mutant("turnalwaysgranted", L, "guard owner == nil || owner == reader else { return false }", "", mode="stmt"),

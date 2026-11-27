@@ -72,4 +72,36 @@ struct AsyncQueuesModuleExamplesTests {
 
         #expect(actual == expectedReport && logged.isEmpty || actual.isEmpty && logged == expectedLogged)
     }
+
+    @Test("An app's own queue gets each store drop report the task forwards, and ends once the store's reports do")
+    func queueOfYourOwn() async throws {
+        let directory = FilePath(NSTemporaryDirectory()).appending("AsyncQueuesModuleExamplesTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let expected = ["Not stored: \(DropReport.notPersisted(event: "Scrolled"))"]
+        let read: AsyncQueue<String>
+        do {
+            let store = try SegmentStore(events: [SignedUp.self], directory: directory)
+            _ = store.append(EventRecord(event: Scrolled(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil))
+
+            let drops = AsyncQueue<String>.Continuation(name: "the app's drop reports")
+            let storeReports = store.dropReports
+            Task {
+                for await report in storeReports {
+                    drops.enqueue("Not stored: \(report)")
+                }
+                drops.finish()
+            }
+            let reads = drops.queue
+
+            read = reads
+        }
+
+        // The store is gone, so its reports end, and the task finishes the queue after the one.
+        var actual: [String] = []
+        for await drop in read {
+            actual.append(drop)
+        }
+
+        #expect(actual == expected)
+    }
 }

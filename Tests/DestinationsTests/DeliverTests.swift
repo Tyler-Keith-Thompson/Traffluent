@@ -433,11 +433,11 @@ struct DeliverTests {
         let recorder = InMemoryDestination()
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try batches.deliver(to: recorder, stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        var sut: Delivery? = try batches.deliver(to: recorder, stuck, batchBufferLimit: 1)
+        let reports = try #require(sut?.bufferDropReports)
         let expected = BufferDropReport(destinationIndex: 1, recordCount: 2, timestamps: start + 2 ... start + 3, storedRecordCount: 0)
         let expectedReceived = [[1], [4]]
-        let running = Task { try await sut.execute() }
+        let running = Task { [sut] in try await sut?.execute() }
         var deliveries = recorder.deliveries.makeAsyncIterator()
         input.yield([record(1, at: 1)])
         _ = await deliveries.next()
@@ -453,7 +453,8 @@ struct DeliverTests {
         try stuck.gate.send()
         input.finish()
         try await running.value
-        reporter.finish()
+        // Once the delivery and its run are gone, the reports end after the one read.
+        sut = nil
         let actualAfter = await received.next()
 
         let actualReceived = stuck.batches.withLock { $0 }
@@ -483,8 +484,8 @@ struct DeliverTests {
         }
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReport = BufferDropReport(destinationIndex: 0, recordCount: 1, timestamps: timestamp ... timestamp, storedRecordCount: 1)
         let expectedReceived = [[1], [3]]
         let expectedAcknowledged: [UInt64] = [1, 3]
@@ -617,8 +618,8 @@ struct DeliverTests {
         checkout[ScreenKey.self] = "Checkout"
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReceived = [[1], [3], [2]]
         let expectedScreen: String? = "Checkout"
         let running = Task { try await sut.execute() }
@@ -671,8 +672,8 @@ struct DeliverTests {
         _ = other.record(Tapped(number: 2), at: 2, timestamp: timestamp)
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReceived = [[1], [3]]
         let expectedAcknowledged: [UInt64] = [1, 3]
         let running = Task { try await sut.execute() }
@@ -699,8 +700,8 @@ struct DeliverTests {
         let timestamp = Date(timeIntervalSince1970: 1_000)
         let stuck = Stuck()
         let (batches, input) = AsyncStream.makeStream(of: [EventRecord].self)
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try batches.deliver(to: stuck, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         // 1 is received, 2 to 12 dropped in turn, 13 waits; 10 dropped batches are kept.
         let dropCount = 11
         let expectedReceived = [[1], [13]] + (3 ... 12).map { [$0] }
@@ -712,8 +713,10 @@ struct DeliverTests {
         for number in 2 ... 13 {
             input.yield([shelf.record(Tapped(number: number), at: UInt64(number), timestamp: timestamp)])
         }
-        for _ in 0 ..< dropCount {
-            _ = await received.next()
+        // Drops no one has read merge, so the reports are read until they count every one.
+        var dropped = 0
+        while dropped < dropCount, let report = await received.next() {
+            dropped += report.recordCount
         }
 
         try stuck.gate.send()

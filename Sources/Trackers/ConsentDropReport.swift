@@ -33,12 +33,16 @@ extension ConsentDropReport {
         }
     }
 
-    /// This report and `next` as one, when both are held-record-limit drops; otherwise `nil`.
-    fileprivate func merging(_ next: ConsentDropReport) -> ConsentDropReport? {
+    /// This report and `next` as one, when both are held-record-limit drops: their counts added,
+    /// held at `Int.max`, and the range of times spanning both; otherwise `nil`.
+    ///
+    /// - Parameter next: The report that follows this one.
+    /// - Returns: The report counting both, or `nil` when they don't merge.
+    package func merging(_ next: ConsentDropReport) -> ConsentDropReport? {
         guard case .heldRecordLimit(let count, let timestamps) = self,
             case .heldRecordLimit(let nextCount, let nextTimestamps) = next
         else { return nil }
         let merged = min(timestamps.lowerBound, nextTimestamps.lowerBound) ... max(timestamps.upperBound, nextTimestamps.upperBound)
-        return .heldRecordLimit(recordCount: count + nextCount, timestamps: merged)
+        return .heldRecordLimit(recordCount: count.saturatingAdd(nextCount), timestamps: merged)
     }
 }

@@ -408,7 +408,9 @@ library with none of that can skip this section.
   (`DeferredTask`, `AsynchronousUnitOfWork`) built from operators: `flatMap` to the next step,
   `tryMap` to validate, `decode`, `handleEvents` for side effects (caching, logging), `tryCatch`
   for a fallback, `shareFromCache` so simultaneous identical requests make one call. Nothing runs
-  until `execute()`, so callers compose, retry and cancel it freely.
+  until `execute()`, so callers compose, retry and cancel it freely. A call that returns more
+  than the work (`deliver(to:)`'s `Delivery`, with its reports) holds it as a `work` property
+  and forwards `execute`, `run` and `cancel`, rather than conforming to `AsynchronousUnitOfWork`.
 - **Time is a dependency.** Code that waits, debounces or times out takes a clock registered on
   `Container` (`AnyClock<Duration>`), never an inline `Task.sleep` or `ContinuousClock()`. Tests
   register a `TestClock` (swift-clocks) and advance it.

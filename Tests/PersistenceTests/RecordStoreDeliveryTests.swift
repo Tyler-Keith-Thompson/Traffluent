@@ -208,8 +208,8 @@ struct RecordStoreDeliveryTests {
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store, now: { timestamp })
         let destination = Stuck()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReport = BufferDropReport(destinationIndex: 0, recordCount: 1, timestamps: timestamp...timestamp, storedRecordCount: 1)
         let expectedReceived = [[1], [3], [2]]
         let expectedPendingWhileBehind = 3
@@ -248,8 +248,8 @@ struct RecordStoreDeliveryTests {
         let tracker = Tracker(store: store)
         let fast = InMemoryDestination()
         let slow = Stuck()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: fast, slow, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: fast, slow, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedSlow = [[1], [3], [2]]
         let expectedNumbers = [1, 2, 3]
         // 1 is still being received by the slow destination, 2 was dropped, 3 waits.
@@ -295,8 +295,8 @@ struct RecordStoreDeliveryTests {
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store, now: { timestamp })
         let destination = Stuck()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(2)).deliver(to: destination, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(2)).deliver(to: destination, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReport = BufferDropReport(destinationIndex: 0, recordCount: 2, timestamps: timestamp...timestamp, storedRecordCount: 1)
         let expectedReceived = [[1, 2], [5, 6], [3]]
         let expectedRecordCounts = [2, 2, 1]
@@ -338,8 +338,8 @@ struct RecordStoreDeliveryTests {
         let store = opened.store
         let tracker = Tracker(store: store, now: { timestamp })
         let destination = Stuck()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(2)).deliver(to: destination, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(2)).deliver(to: destination, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         // [1, 2] is received; [3, 4] and then [5, 6] are dropped; [7, 8] waits. Tracking 6, 7 and
         // 8 makes the bound drop 1, 2 and 3.
         let expectedReceived = [[1, 2], [7, 8], [4], [5, 6]]
@@ -352,8 +352,11 @@ struct RecordStoreDeliveryTests {
         for number in 3 ... 8 {
             tracker.track(Tapped(number: number))
         }
-        _ = await received.next()
-        _ = await received.next()
+        // Drops no one has read merge, so the reports are read until they count both batches.
+        var dropped = 0
+        while dropped < 4, let report = await received.next() {
+            dropped += report.recordCount
+        }
         await tracker.flush()
 
         try destination.gate.send()
@@ -372,8 +375,8 @@ struct RecordStoreDeliveryTests {
         let store = try kind.open(at: path, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let destination = Turnstile()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedRedelivered = [2]
         let expectedPending = 1
         let delivery = Task { try await sut.execute() }
@@ -420,8 +423,8 @@ struct RecordStoreDeliveryTests {
         let store = try kind.open(at: copy, events: [Tapped.self]).store
         let tracker = Tracker(store: store)
         let destination = Stuck()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: destination, batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expectedReceived = [[1], [3], [2]]
         let expectedRedelivered = [true, false, true]
         let expectedPending = 0
@@ -450,8 +453,8 @@ struct RecordStoreDeliveryTests {
         let tracker = Tracker(store: store)
         let revealing = Stuck()
         let redacted = InMemoryDestination()
-        let (reports, reporter) = AsyncStream.makeStream(of: BufferDropReport.self)
-        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: revealing, redacted.redactingSensitiveValues(), batchBufferLimit: 1, bufferDropReporter: reporter)
+        let sut = try tracker.records.batch(strategy: .count(1)).deliver(to: revealing, redacted.redactingSensitiveValues(), batchBufferLimit: 1)
+        let reports = sut.bufferDropReports
         let expected = "ada@example.com"
         let delivery = Task { try await sut.execute() }
         var received = reports.makeAsyncIterator()

@@ -27,6 +27,7 @@ R = "SampleRate.swift"
 P = "Sampler.swift"
 A = "SamplingStage.swift"
 O = "SamplingDropReport.swift"
+Z = "Int+SaturatingAdd.swift"
 
 # Consent mutants that only a store can catch (a recovered record's gating, a store forgetting what
 # the hold drops) are in Persistence.py, whose suites have stores.
@@ -190,7 +191,9 @@ MUTANTS = [
     # How the drop reports merge while unread. The queue holding them is AsyncQueues', whose spec
     # plants its bugs.
     Mutant("reportsnotmerged", N, "last.merging(report)", "nil"),
-    Mutant("mergedcountlost", N, "count + nextCount", "count"),
+    Mutant("mergedcountlost", N, "count.saturatingAdd(nextCount)", "count"),
+    # Merged counts saturate (TRAF-115): a plain sum traps on a count of Int.max.
+    Mutant("mergedcountunsaturated", N, "count.saturatingAdd(nextCount)", "count + nextCount"),
     Mutant("mergedtimestampsfirst", N, "max(timestamps.upperBound, nextTimestamps.upperBound)", "timestamps.upperBound"),
     # Subscription.
     Mutant("subjectnotfinished", S, "subject.send(completion: .finished)", "", mode="stmt"),
@@ -216,9 +219,10 @@ MUTANTS = [
     Mutant("rejectionsnotmerged", J, "waiting.firstIndex(where: { $0.eventName == report.eventName && $0.violation == report.violation })", "nil"),
     Mutant("mergedacrossevents", J, "$0.eventName == report.eventName && $0.violation == report.violation", "$0.violation == report.violation"),
     Mutant("mergedacrossviolations", J, "$0.eventName == report.eventName && $0.violation == report.violation", "$0.eventName == report.eventName"),
-    Mutant("mergedrejectioncountlost", J, "merged.recordCount + report.recordCount", "merged.recordCount"),
-    Mutant("mergedrejectionlowerlatest", J, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
-    Mutant("mergedrejectionupperlatest", J, "max(merged.timestamps.upperBound, report.timestamps.upperBound)", "report.timestamps.upperBound"),
+    Mutant("mergedrejectioncountlost", J, "recordCount.saturatingAdd(report.recordCount)", "recordCount"),
+    Mutant("mergedrejectionunsaturated", J, "recordCount.saturatingAdd(report.recordCount)", "recordCount + report.recordCount"),
+    Mutant("mergedrejectionlowerlatest", J, "min(timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
+    Mutant("mergedrejectionupperlatest", J, "max(timestamps.upperBound, report.timestamps.upperBound)", "report.timestamps.upperBound"),
     # Sampling: the keep or drop draw, the rate's 0 and 1 boundaries, a group's one decision, the
     # rate stamped on kept records, the stage before the consent and the store, and the drops counted.
     Mutant("drawinverted", A, "generator.bernoulli(samplers[index].rate.value)", "!generator.bernoulli(samplers[index].rate.value)"),
@@ -240,8 +244,15 @@ MUTANTS = [
     Mutant("dropnotreported", K, "samplingDrops.enqueue(SamplingDropReport(eventName: record.name, recordCount: 1, timestamps: record.timestamp ... record.timestamp))", "", mode="stmt"),
     Mutant("dropsneverend", K, "samplingDrops.finish()", "", mode="stmt"),
     Mutant("dropsmergedacrossevents", O, "waiting.firstIndex(where: { $0.eventName == report.eventName })", "waiting.indices.last"),
-    Mutant("mergeddropcountlost", O, "merged.recordCount + report.recordCount", "merged.recordCount"),
-    Mutant("mergeddroplowerlatest", O, "min(merged.timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
+    Mutant("mergeddropcountlost", O, "recordCount.saturatingAdd(report.recordCount)", "recordCount"),
+    Mutant("mergeddropunsaturated", O, "recordCount.saturatingAdd(report.recordCount)", "recordCount + report.recordCount"),
+    Mutant("mergeddroplowerlatest", O, "min(timestamps.lowerBound, report.timestamps.lowerBound)", "report.timestamps.lowerBound"),
+    # Saturating addition (TRAF-115). The upper guard dropped is the *unsaturated mutants above,
+    # as each merge's sum then traps. Equivalent, so left out: `<` for `<=` and `>` for `>=` in the
+    # guards, or a bound one nearer, which differ only where the sum is exactly that bound, which
+    # both branches return; and `other > 0` for `other >= 0`, as adding 0 gives `self` either way.
+    Mutant("saturatesbelowmax", Z, "return Int.max", "return Int.max - 1", mode="stmt"),
+    Mutant("saturatingunderflows", Z, "guard self >= Int.min - other else { return Int.min }", "", mode="stmt"),
     Mutant("rejectiondescribed", J, '"\\(eventName): \\(violation) (\\(recordCount) rejected)"', '"\\(eventName): \\(violation)"'),
     # A view's tracker that was never set (TRAF-94): the preview check, whole, then its test.
     Mutant("previewignored", T, VIEW_DEFAULT, "unset"),

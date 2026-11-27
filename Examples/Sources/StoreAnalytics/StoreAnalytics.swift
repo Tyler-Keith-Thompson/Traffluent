@@ -1,5 +1,5 @@
 import Afluent
-import AsyncQueues
+public import AsyncQueues
 import AutomaticControlTracking
 import CollectorEncoding
 import Destinations
@@ -33,9 +33,14 @@ public import TrackingPlans
 public struct StoreAnalytics: Sendable {
     /// What the app tracks its events through.
     public let tracker: Tracker
-    /// Every drop report of the tracker, its consent, its store, the collector and the delivery,
-    /// in the order each source reports them. It has one reader.
-    public let drops: AsyncStream<AnalyticsDrop>
+    /// Every drop report of the tracker, its consent, its store, the collector and each delivery,
+    /// in the order each source reports them.
+    ///
+    /// One task reads it at a time: a second reader waits its turn, logging a warning once, until
+    /// the first one's iteration ends or its iterator is released, then reads on from the next
+    /// drop. It ends once the tracker, its consent, its store and the collector are gone and
+    /// every drop has been read.
+    public let drops: AsyncQueue<AnalyticsDrop>
     // A closure building a new delivery on each call, rather than the delivery itself: a
     // delivery that was cancelled can't run again, and the collector's generic type stays out of
     // this one's.
@@ -77,19 +82,26 @@ public struct StoreAnalytics: Sendable {
     ) {
         let store = Self.store(in: directory)
         let tracker = Self.tracker(store: store, consent: consent, enrichers: enrichers)
-        let (bufferDrops, bufferDropReporter) = AsyncStream.makeStream(of: BufferDropReport.self)
+        // The writing ends stay here: the app reads `drops`, and only step 5 writes to it.
+        let drops = AsyncQueue<AnalyticsDrop>.Continuation(name: "the store's analytics drops")
+        // Each delivery's buffer-drop reports, handed to step 5 as the delivery starts. The
+        // delivery closure holds this continuation, so the queue ends once the closure is gone.
+        let bufferDrops = AsyncQueue<AsyncQueue<BufferDropReport>>.Continuation(name: "the store's deliveries' buffer-drop reports")
         self.tracker = tracker
+        self.drops = drops.queue
         do throws(TrackingPlanError) {
             let collector = try Self.collector(at: endpoint, plan: trackingPlan(), transport: transport, backoff: backoff, clock: clock)
-            delivery = Self.delivery(of: tracker, to: collector, clock: clock, bufferDropReporter: bufferDropReporter)
-            drops = AsyncStream(merging: tracker.rejectionReports, consent.dropReports, store?.dropReports, collector.dropReports, bufferDrops)
+            delivery = Self.delivery(of: tracker, to: collector, clock: clock, bufferDrops: bufferDrops)
+            drops.merge(tracker.rejectionReports, consent.dropReports, store?.dropReports, collector.dropReports, bufferDrops.queue)
         } catch {
             // The store's plan is built from this app's own schemas, so this is a bug in the release. The
             // tracker still keeps every record in the store, for a release with a valid plan to
             // deliver, and deliver() throws the plan's error rather than sending nothing silently.
             Self.logger.error("Not delivering: the store's tracking plan is invalid (\(error))")
             delivery = { throw error }
-            drops = AsyncStream(merging: tracker.rejectionReports, consent.dropReports, store?.dropReports, nil, bufferDrops)
+            // No delivery runs, so nothing holds `bufferDrops` past this initializer, and its
+            // queue ends with it.
+            drops.merge(tracker.rejectionReports, consent.dropReports, store?.dropReports, nil, bufferDrops.queue)
         }
     }
 
@@ -145,7 +157,8 @@ extension StoreAnalytics {
     }
 
     /// Step 4: the delivery, a new one each time it runs: batches of 20, every 30 seconds, and
-    /// as the app goes to the background.
+    /// as the app goes to the background. Each delivery's buffer-drop reports go to
+    /// `bufferDrops`, for step 5 to read.
     ///
     /// The collector never sees a sensitive value. A record without `SignedUp.email` still
     /// matches the plan, which never requires a `Sensitive` property.
@@ -153,44 +166,55 @@ extension StoreAnalytics {
         of tracker: Tracker,
         to collector: HTTPDestination<Transport, CollectorBatchEncoder>,
         clock: some Clock<Duration>,
-        bufferDropReporter: AsyncStream<BufferDropReport>.Continuation
+        bufferDrops: AsyncQueue<AsyncQueue<BufferDropReport>>.Continuation
     ) -> @Sendable () async throws -> Void {
         {
-            // One reporter serves every delivery, so the buffer drops arrive on one stream.
-            try await tracker.records
+            let delivery = tracker.records
                 .batch(strategy: .either(.count(20), .time(interval: .seconds(30), clock: clock), .lifecycle))
-                .deliver(to: collector.redactingSensitiveValues(), bufferDropReporter: bufferDropReporter)
-                .execute()
+                .deliver(to: collector.redactingSensitiveValues())
+            // Each delivery has buffer-drop reports of its own, which end once it is gone.
+            bufferDrops.enqueue(delivery.bufferDropReports)
+            try await delivery.execute()
         }
     }
 }
 
-extension AsyncStream where Element == AnalyticsDrop {
-    /// Step 5: every drop report, as one stream, each source's in its order. The sources are
-    /// passed as streams, not their owners, so the reading task holds no collector or store.
-    fileprivate init(
-        merging rejections: AsyncQueue<RejectionReport>,
+extension AsyncQueue<AnalyticsDrop>.Continuation {
+    /// Step 5: every drop report, added to this queue, each source's in its order, and the queue
+    /// finished once every source, each delivery's buffer drops included, has ended and been
+    /// read. The sources are passed as queues, not their owners, so the reading task holds no
+    /// collector, store or delivery.
+    ///
+    /// An `AsyncQueue` rather than an `AsyncStream`, so a second reader of the drops waits its
+    /// turn instead of trapping.
+    fileprivate func merge(
+        _ rejections: AsyncQueue<RejectionReport>,
         _ consentDrops: AsyncQueue<ConsentDropReport>,
         _ storeDrops: AsyncQueue<DropReport>?,
         _ collectorDrops: AsyncQueue<HTTPDropReport<CollectorEncodingError>>?,
-        _ bufferDrops: AsyncStream<BufferDropReport>
+        _ bufferDrops: AsyncQueue<AsyncQueue<BufferDropReport>>
     ) {
-        let (drops, continuation) = AsyncStream.makeStream(of: AnalyticsDrop.self)
-        let forwarding = Task {
+        Task {
             await withDiscardingTaskGroup { group in
-                group.addTask { for await report in rejections { continuation.yield(.rejected(report)) } }
-                group.addTask { for await report in consentDrops { continuation.yield(.notConsented(report)) } }
+                // One reader per delivery, added as each starts; the child ends once the
+                // deliveries do and each one's reports are read.
+                group.addTask {
+                    await withDiscardingTaskGroup { deliveries in
+                        for await reports in bufferDrops {
+                            deliveries.addTask { for await report in reports { enqueue(.bufferFull(report)) } }
+                        }
+                    }
+                }
+                group.addTask { for await report in rejections { enqueue(.rejected(report)) } }
+                group.addTask { for await report in consentDrops { enqueue(.notConsented(report)) } }
                 if let storeDrops {
-                    group.addTask { for await report in storeDrops { continuation.yield(.notStored(report)) } }
+                    group.addTask { for await report in storeDrops { enqueue(.notStored(report)) } }
                 }
                 if let collectorDrops {
-                    group.addTask { for await report in collectorDrops { continuation.yield(.notSent(report)) } }
+                    group.addTask { for await report in collectorDrops { enqueue(.notSent(report)) } }
                 }
-                group.addTask { for await report in bufferDrops { continuation.yield(.bufferFull(report)) } }
             }
-            continuation.finish()
+            finish()
         }
-        continuation.onTermination = { _ in forwarding.cancel() }
-        self = drops
     }
 }

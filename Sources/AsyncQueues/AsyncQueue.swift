@@ -1,7 +1,9 @@
 internal import Logging
 
-/// The reports or deliveries a library type makes, in the order it makes them, kept until they
-/// are read; one reader at a time reads them.
+/// Elements in the order they are enqueued, kept until they are read; one reader at a time reads
+/// them.
+///
+/// Every report stream the library hands out is one, such as a store's drop reports:
 ///
 /// ```swift
 /// let reports = store.dropReports
@@ -12,9 +14,27 @@ internal import Logging
 /// }
 /// ```
 ///
-/// Elements made while no one reads wait for the next read, as the type that makes them buffers
-/// them: without a bound, merged into one another, or the newest only, as its documentation says.
-/// The sequence ends once its maker finishes it and every element before the end has been read.
+/// An app makes one through a ``Continuation`` where it hands out a stream of its own, such as
+/// the library's reports merged into one, so a second reader of it waits its turn rather than
+/// trapping:
+///
+/// ```swift
+/// let drops = AsyncQueue<String>.Continuation(name: "the app's drop reports")
+/// let storeReports = store.dropReports
+/// Task {
+///     for await report in storeReports {
+///         drops.enqueue("Not stored: \(report)")
+///     }
+///     drops.finish()
+/// }
+/// let reads = drops.queue
+/// ```
+///
+/// Only the queue's maker writes to it: the library's queues take elements from the library
+/// alone, and an app's from its continuation. Elements enqueued while no one reads wait for the
+/// next read: without a bound in a queue an app makes; in the library's, without a bound, merged
+/// into one another, or the newest only, as the documentation of the type that makes them says.
+/// The sequence ends once it is finished and every element before the end has been read.
 ///
 /// One task reads at a time. The first iterator to read holds the queue until its iteration ends
 /// or the iterator is released, as it is when its task ends. An iterator that reads meanwhile

@@ -31,8 +31,8 @@ record to the tracker's `records`, an `AsyncSequence`.
 
 Delivering is a chain of operators over that sequence. `batch()` gathers the records into batches
 of 20, or every 30 seconds while any are waiting, and `deliver(to:)` hands each batch to every
-destination. The chain is a lazy Afluent unit of work: nothing runs until `execute()`. Run it for as
-long as the app tracks events. `finish()` waits for the worker to catch up, then ends the records,
+destination. The chain makes a delivery holding a lazy Afluent unit of work, its `work`: nothing
+runs until `execute()`. Run it for as long as the app tracks events. `finish()` waits for the worker to catch up, then ends the records,
 so the delivery sends what is still pending and completes. Records tracked before the delivery
 starts, or between two deliveries, wait for the next one, so none is lost.
 
@@ -52,10 +52,10 @@ wall-clock source records are stamped with, the system's unless you pass another
 clock and fixed dates. Each destination receives its batches in order from a buffer of its own,
 `batchBufferLimit` batches deep (100 by default), so a slow destination holds up only itself. When
 its buffer is full, its oldest waiting batch is dropped and reported on the delivery's
-`bufferDropReporter`, if you pass one. Once the destination catches up, the delivery reads that
+`bufferDropReports`. Once the destination catches up, the delivery reads that
 batch's records back from the store and sends them to it (<doc:ChoosingDestinations>). A delivery
-that finished or failed can be executed again, as a retry. Cancelling one is permanent, as it is for every Afluent unit of work, so
-after a cancellation build a new delivery. Starting it at once is safe, even while the cancelled
+that finished or failed can be executed again, as a retry. Cancelling one is permanent, as it is
+for every Afluent unit of work, so after a cancellation build a new delivery. Starting it at once is safe, even while the cancelled
 one is still stopping: it waits for the cancelled one's turn to end, then delivers every record the
 cancelled one hadn't read.
 
