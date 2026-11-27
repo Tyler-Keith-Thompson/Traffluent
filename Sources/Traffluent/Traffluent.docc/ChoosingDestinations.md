@@ -119,6 +119,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | TelemetryDeck | ``/TelemetryDeckEncoding`` | `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` | Each record as an Ingest API v3 signal: its session, hashed with SHA-256, as `clientUser` and the session itself as `sessionID`, so user counts are session counts; its time in ISO 8601 as `receivedAt`, its properties through your plan, flattened to dotted names, the standard context as TelemetryDeck's built-in `TelemetryDeck.` parameters, and `isTestMode` as you pass it; no other identifier |
 | Matomo | ``/MatomoEncoding`` | `HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` | Each record as a Matomo event in a bulk tracking request: your category as `e_c` and its name as `e_a`, the last 64 bits of its session as the visitor `_id`, so visitors are sessions, its time in Unix seconds as `cdt`, its locale as `lang`, and the properties you map as numbered custom dimensions; no `uid`, `cid` or `token_auth`, so a record over 23 hours old is skipped |
 | Heap | ``/HeapEncoding`` | `HTTPDestination.heap(appID:region:plan:)` | Each record as a custom event through Heap's server-side bulk track API: its session as `identity`, so users are sessions, its identifier as `idempotency_key`, its time in ISO 8601, and its properties through your plan, flattened to dotted names of strings and numbers; no `user_id`, `session_id`, API key or standard context. Heap's server-side API complements its SDKs: every user it makes has only server-side events, which Heap shows as hidden and doesn't sessionize, so confirm they appear in your charts |
+| Aptabase | ``/AptabaseEncoding`` | `HTTPDestination.aptabase(appKey:host:isDebug:plan:)` | Each record as an event through Aptabase's events API, in its EU or US cloud by the app key's region or on your own server: its session as `sessionId` and nothing else to identify it, its time in ISO 8601, its properties through your plan, flattened to dotted names, the standard context as Aptabase's `systemProps`, and `isDebug` as you pass it. Aptabase counts users itself, from a daily hash of each request's IP address and `User-Agent`, and keeps no event's identifier, so a record sent twice counts twice |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -726,6 +727,68 @@ minute from one identity, which here is one session, so a session whose own back
 retried on the destination's backoff, without jitter or `Retry-After`, so a backlog can grow; a 400
 drops the whole request, reported as rejected. Requests keep Heap's bulk maximum of 1,000 events,
 as a smaller batch doesn't pace requests and so wouldn't avoid the limit.
+
+### Aptabase
+
+To send to Aptabase, make the destination with
+`HTTPDestination.aptabase(appKey:host:isDebug:plan:)` (module ``/AptabaseEncoding``). The app
+key says where it posts: an `A-EU-` key to `https://eu.aptabase.com/api/v0/events`, an `A-US-` key
+to `https://us.aptabase.com/api/v0/events`, and a self-hosted `A-SH-` key to `/api/v0/events`
+under the `host` you pass, which must be `https`. It sends the key in the `App-Key` header field
+and no trace context, and splits each batch into requests of at most 25 events, the most Aptabase
+takes, and 1,000,000 bytes, the encoder's own bound. Aptabase's own SDKs ship the app key in every
+app, so it is no secret, and the destination builds on every platform. The factory throws for a
+key that is empty or only whitespace, isn't `A-`, a region, `-` and ASCII letters and digits, or
+has a region other than `EU`, `US`, `SH` and `DEV`; for a self-hosted key without a host, or a
+cloud key with one; and for a host that isn't a plain `https` URL. `isDebug` has no default: pass
+`true` for builds whose events only Aptabase's Debug mode should show, such as debug builds.
+
+```swift
+let plan = try TrackingPlan()
+let aptabase = try HTTPDestination.aptabase(
+    appKey: appKey,  // from the app's Instructions page: A-EU-…, A-US-… or A-SH-…
+    isDebug: false,  // true for builds whose events only Debug mode should show
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale()])
+let delivery = tracker.records.batch().deliver(to: aptabase)
+```
+
+Aptabase counts users itself: its server hashes each request's IP address and `User-Agent` with a
+salt it changes every day, so a user is one address and client on one day, and no identifier the
+app sends changes that. It also looks up each request's IP address and stores its country and
+region with every event in the request. The record's session (`Enricher.sessions()`) is its `sessionId`, as a
+lowercase UUID, and nothing else identifies it: no vendor identifier, device identifier, account
+or trace context. A record with no session, such as one a store recovered, is a session of its
+own, by its identifier.
+
+Each event's `eventName` is the event's name and its `timestamp` the record's. Its `props` are its
+properties, flattened into dotted names (`cart.size`, `tags.0`), as Aptabase keeps only a
+placeholder for an object or array: a boolean stays a boolean, which Aptabase stores as `true` or
+`false`, and `nil` is left out. Its `systemProps` are the standard context: `osName`, `osVersion`,
+`appVersion`, `appBuildNumber`, `deviceModel` and `locale`, which Aptabase's dashboard breaks its
+counts down by, so give the tracker the standard context enrichers, or those breakdowns are empty.
+A value longer than Aptabase takes, such as a build number over 20 characters, is left out and
+the event sent without it, as Aptabase would refuse the whole request. They also hold `isDebug`, as you pass it, as Aptabase shows debug events only in its Debug mode
+and keeps them for months rather than years, and `sdkVersion`, `Traffluent`, which Aptabase
+requires and keeps but its events dashboard doesn't show. A `Sensitive` value is never sent,
+whatever the record reveals.
+
+The encoder leaves out the same records as the collector's encoder, and also one whose event name
+is only whitespace or over the 60 characters Aptabase takes, for which it would refuse the whole
+request; one with a property name that is empty, only whitespace or over 40 characters, or a
+string value over 180, counted in UTF-16, which Aptabase would drop or cut short; one with a
+number of magnitude 2⁹⁶ or more, past the .NET `decimal` Aptabase stores; one whose values
+flatten to one name twice; one whose timestamp is outside the years 1 to 9999; one tracked more than 23 hours before its
+batch is encoded, as Aptabase drops an event more than a day old while answering 200; and one too
+large for a request (`oversized`). The destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`, and a request still failing 23 hours after its oldest record as
+`HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`.
+
+Aptabase answers 200 to a key of no app, and to one of an account it has locked, such as one past
+its plan's monthly events, and stores nothing, so check that the first events reach the app's
+Live View. It doesn't remove duplicates, so a record sent again, after a retry whose answer was
+lost or a store's redelivery, is counted twice. It takes 20 requests a second from one IP
+address and answers 429 past it, which the destination retries on its backoff.
 
 ### Memory
 

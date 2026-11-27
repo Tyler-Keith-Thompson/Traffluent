@@ -294,6 +294,49 @@ bad row in a dashboard.
   kept 1,000 events a request (rejected: smaller batches, which don't pace requests).
   Deduplication holds within one identity, so a record recovered after a relaunch, sent under its
   record ID, may be stored twice, as for Amplitude (TRAF-122).
+  Aptabase (TRAF-110, decided 2026-11-27): `AptabaseEncoding` posts a JSON array of events to
+  `/api/v0/events` with the app key in `App-Key`, from every platform: the key is public (the
+  SDKs ship it, and the server's own comment says anyone can send any key). Sources, read
+  2026-11-27: the server at github.com/aptabase/aptabase 89d36185 (EventsController,
+  EventBody, ResolveAppKeyAttribute, DailyUserHasher, EnvSettings, AppsController, Program.cs)
+  and the Swift SDK at github.com/aptabase/aptabase-swift a1ee53e9. The server's code is the
+  authority where its wiki (How-to-build-your-own-SDK) disagrees: the wiki says a session ID must
+  be epoch seconds and 8 digits, the code takes any string of up to 36 characters that isn't a
+  number. The key is `A-<region>-<body>`; `EU` and `US` map to `eu.aptabase.com` and
+  `us.aptabase.com` and refuse a host (rejected: allowing one, which would send a cloud key
+  elsewhere), `SH` and `DEV` need an `https` host (rejected: http, which would send the key in
+  the clear; a server run in development takes one only behind TLS). Region case-sensitive and
+  the body ASCII letters and digits, as the SDK and the server make keys; trimmed first. API
+  shape: `host: URL? = nil` (rejected: a host enum, a factory per key kind). `isDebug` has no
+  default, like TelemetryDeck's `testMode`. Each record: `eventName`, `sessionId` the session as
+  a lowercase UUID (36 characters, the record ID when sessionless, D4; rejected: the SDK's numeric
+  form, which the server checks against a 7-day window and a record ID can't fill), `timestamp`
+  ISO 8601 with milliseconds, `systemProps` from the standard context (OS name and version, app
+  version and build, device model, locale as `lang-REGION` or the language alone, to fit 10)
+  plus `isDebug` and `sdkVersion` `"Traffluent"`, and `props` flattened with `.`. Aptabase hashes
+  IP and User-Agent daily for users, so no identifier is sent and the User-Agent is left as the
+  transport sets it. Booleans stay JSON booleans (the server stores them as "true"/"false", as
+  the SDKs send them). Skipped, since each would fail the whole request or be dropped while
+  answering 200: an event name blank or over 60, a property name blank or over 40, a string value
+  over 180 (rejected: letting Aptabase cut it to 177 and "..."), a number of magnitude 2^96 or
+  more (the server's decimal read throws, 500, retried forever), a flattened-name collision, a
+  timestamp outside years 1 to 9999, and a record more
+  than 23 hours old (the server drops one over a day old with 200; the hour covers queueing and
+  clock skew), with each request's deadline 23 hours after its oldest record. A future timestamp
+  is sent, as the server clamps it to arrival. Batching is 25 events (the server's maximum) and
+  1,000,000 bytes (under nginx's default 1 MiB in front of self-hosted servers). A wrong, deleted
+  or locked key is answered 200 with nothing stored, and there is no deduplication, so the docs
+  say to check Live View and that redelivery counts twice.
+  Review follow-up (2026-11-27): a system property over its model limit (osName 30, osVersion
+  100, appVersion 50, appBuildNumber 20, deviceModel 100) is left out of the event, which is
+  sent, with a notice logged once per member per encoder (rejected: skipping the record, as the
+  standard context is the install's, so a CFBundleVersion such as 2026.11.27.1432-abc1234 would
+  skip every event of the build). The server's members are all optional. The docs also say that
+  Aptabase answers 418 when a body arrives under 60 bytes a second after a 10-second grace
+  (src/Program.cs MinRequestBodyDataRate, ExceptionMiddleware), which HTTPDestination drops as
+  rejected; that Aptabase geolocates each request's IP and stores country and region per event;
+  that a device clock about a day behind loses events silently; and that `A-DEV-` keys need an
+  https development server, as the SDKs' default http://localhost:3000 is refused.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

@@ -3,6 +3,7 @@
 // drift from the code.
 
 import AmplitudeEncoding
+import AptabaseEncoding
 import Foundation
 import GoogleAnalyticsEncoding
 import HeapEncoding
@@ -378,6 +379,32 @@ struct ChoosingDestinationsHeapExamplesTests {
             plan: plan)
         let tracker = Tracker(enrichers: [.sessions()])
         let delivery = tracker.records.batch().deliver(to: heap)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw.
+@Suite("Choosing destinations examples: Aptabase", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsAptabaseExamplesTests {
+    @Test("Aptabase")
+    func aptabase() async throws {
+        let appKey = "A-EU-1234567890"
+
+        let plan = try TrackingPlan()
+        let aptabase = try HTTPDestination.aptabase(
+            appKey: appKey,  // from the app's Instructions page: A-EU-…, A-US-… or A-SH-…
+            isDebug: false,  // true for builds whose events only Debug mode should show
+            plan: plan)
+        let tracker = Tracker(enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale()])
+        let delivery = tracker.records.batch().deliver(to: aptabase)
 
         // Nothing is tracked, so nothing is sent and the example runs without a network.
         await tracker.finish()

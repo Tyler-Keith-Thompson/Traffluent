@@ -18,6 +18,7 @@ LIBRARY_DIRECTORIES = [
     "Plugins/ExportTrackingPlan",
     "Sources/AmplitudeEncoding",
     "Sources/AppKitTracking",
+    "Sources/AptabaseEncoding",
     "Sources/AsyncQueues",
     "Sources/AutomaticControlTracking",
     "Sources/AutomaticScreenTracking",

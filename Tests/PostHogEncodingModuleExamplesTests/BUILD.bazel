@@ -33,6 +33,7 @@ swift_library(
         "//Sources/TelemetryDeckEncoding",
         "//Sources/MatomoEncoding",
         "//Sources/HeapEncoding",
+        "//Sources/AptabaseEncoding",
         "//Sources/PropertyJSON",
         "//Sources/JSONValues",
         "//Sources/DestinationTesting",

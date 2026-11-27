@@ -70,6 +70,7 @@ docc_archive(
         "//Sources/TelemetryDeckEncoding:TelemetryDeckEncodingDocumentation",
         "//Sources/MatomoEncoding:MatomoEncodingDocumentation",
         "//Sources/HeapEncoding:HeapEncodingDocumentation",
+        "//Sources/AptabaseEncoding:AptabaseEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/DestinationTesting:DestinationTestingDocumentation",

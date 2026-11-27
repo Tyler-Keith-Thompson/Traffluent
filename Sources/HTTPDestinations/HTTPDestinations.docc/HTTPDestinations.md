@@ -37,7 +37,8 @@ server, with `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:pla
 TelemetryDeck, with `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` (module
 `TelemetryDeckEncoding`); for Matomo, with
 `HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` (module `MatomoEncoding`); for
-Heap, with `HTTPDestination.heap(appID:region:plan:)` (module `HeapEncoding`). To read events
+Heap, with `HTTPDestination.heap(appID:region:plan:)` (module `HeapEncoding`); for Aptabase, with
+`HTTPDestination.aptabase(appKey:host:isDebug:plan:)` (module `AptabaseEncoding`). To read events
 inside the app or in a test, use
 `InMemoryDestination` (module `Destinations`) instead.
 
