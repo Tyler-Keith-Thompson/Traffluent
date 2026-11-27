@@ -24,5 +24,6 @@ let package = Package(
         .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
         .package(url: "https://github.com/brokenhandsio/swift-cbor", exact: "1.0.0-rc.1"),
         .package(url: "https://github.com/valpackett/SwiftCBOR", from: "0.6.0"),
+        .package(url: "https://github.com/apple/swift-crypto", "1.0.0"..<"6.0.0"),
     ]
 )

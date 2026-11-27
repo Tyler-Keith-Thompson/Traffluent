@@ -109,6 +109,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Customer.io Data Pipelines | ``/SegmentSpecEncoding`` | `HTTPDestination.customerIO(apiKey:region:plan:)` | The same track calls as Segment, in strict mode |
 | Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time |
 | Snowplow | ``/SnowplowEncoding`` | `HTTPDestination.snowplow(collector:vendor:appID:plan:)` | Each record as a self-describing event whose schema, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, your plan's Iglu export writes: its session as `sid` and nothing else to identify it, its identifier as `eid`, its time in epoch milliseconds as `dtm` and `ttm`, its properties through your plan, and the standard context as Snowplow's `mobile_context` and `application` entities; no `duid`, `uid` or cookie, as every request carries `SP-Anonymous` |
+| TelemetryDeck | ``/TelemetryDeckEncoding`` | `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` | Each record as an Ingest API v3 signal: its session, hashed with SHA-256, as `clientUser` and the session itself as `sessionID`, so user counts are session counts; its time in ISO 8601 as `receivedAt`, its properties through your plan, flattened to dotted names, the standard context as TelemetryDeck's built-in `TelemetryDeck.` parameters, and `isTestMode` as you pass it; no other identifier |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -526,6 +527,63 @@ or is larger than the pipeline's stream takes becomes a failed event, kept out o
 though the destination counted it as delivered. Watch the pipeline's failed events after a change
 to the plan. Snowplow doesn't remove duplicates as they arrive: a record sent again keeps its
 `eid`, so Snowplow's data models, which deduplicate on `event_id`, count it once.
+
+### TelemetryDeck
+
+To send to TelemetryDeck, make the destination with
+`HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` (module ``/TelemetryDeckEncoding``).
+It posts to Ingest API v3 at `https://nom.telemetrydeck.com/v3/<namespace>/`, sends no trace
+context in the header fields, and splits each batch into requests of at most 100 signals, as
+TelemetryDeck's SwiftSDK sends them, and 1,000,000 bytes, the encoder's own bound, as TelemetryDeck
+documents no limit on a request. The app ID is in every app TelemetryDeck's own
+SDKs ship, so it is no secret, and the destination builds on every platform. The factory throws
+for an app ID that is empty or only whitespace, and for a namespace that holds anything but ASCII
+letters, digits, `.`, `_` and `-`, or is `w`, `.` or `..`. `testMode` has no default: pass `true`
+for builds whose signals only TelemetryDeck's Test Mode should show, such as debug builds.
+
+```swift
+let plan = try TrackingPlan()
+let telemetryDeck = try HTTPDestination.telemetryDeck(
+    appID: appID,  // from the app's settings in the TelemetryDeck dashboard
+    namespace: "com.example",  // your organization's namespace
+    testMode: false,  // true for builds whose signals only Test Mode should show
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: telemetryDeck)
+```
+
+The record's session (`Enricher.sessions()`) is its `sessionID`, and, hashed as TelemetryDeck's
+SDKs hash a user identifier (SHA-256 of the lowercase UUID, in lowercase hex, with the SDKs'
+default, empty salt), its `clientUser`. TelemetryDeck salts and hashes it again on its server, and
+the `sessionID` holds the same session in the clear, so the destination takes no salt of its own. Nothing else identifies it: no vendor identifier, device identifier,
+account or trace context. TelemetryDeck counts users by `clientUser`, so its user counts are
+session counts, and its retention shows how long a session lasts. To count devices, put
+`VendorIdentifierKey` in the records' context and send them through a destination that reads it,
+or write your own enricher and encoder. A record with no session, such as one a store recovered,
+is its own user: its `clientUser` is the hash of its identifier, and it has no `sessionID`.
+
+Each signal's `type` is the event's name and its `receivedAt` the record's timestamp. Its
+properties sit beside them, each keeping its JSON type. An object or array is flattened into
+dotted names (`cart.size`, `tags.0`), as TelemetryDeck doesn't index nested values. The standard
+context becomes TelemetryDeck's built-in parameters: `TelemetryDeck.AppInfo.version` and
+`.buildNumber`, `TelemetryDeck.Device.modelName`, `.operatingSystem`, `.platform` and the system
+versions, `TelemetryDeck.RunContext.locale` and `.language`, and
+`TelemetryDeck.UserPreference.region`. A `Sensitive` value is never sent, whatever the record
+reveals.
+
+The encoder leaves out the same records as the collector's encoder, and also one whose event name
+or parameter name holds anything but ASCII letters, digits, `.`, `_` and `-`, for which
+TelemetryDeck would refuse the whole request, or that starts with `TelemetryDeck.`, in any case,
+the scope TelemetryDeck reserves for its SDKs and its server; one with a parameter named exactly as
+a signal's own member (`appID`, `clientUser`, `receivedAt`, `type`, `sessionID`, `isTestMode` or
+`floatValue`), which it would replace in the flat signal; one whose values flatten to one name
+twice; one whose timestamp is outside the years 1 to 9999; and one whose JSON is over 333,333 bytes
+(`oversized`), a third of TelemetryDeck's limit of 1,000,000 bytes a signal, leaving room for the
+escapes a re-encoder commonly adds. The destination reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
+
+TelemetryDeck answers 200 to any namespace and app ID, so a typo in either loses every signal
+without an error: check that the first ones reach the dashboard. It doesn't remove duplicates, so
+a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
 
 ### Memory
 

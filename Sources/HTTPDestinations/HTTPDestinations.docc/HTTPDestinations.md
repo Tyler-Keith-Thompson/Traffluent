@@ -31,7 +31,9 @@ for Segment, RudderStack or Customer.io Data Pipelines, with
 `customerIO(apiKey:region:plan:)` (module `SegmentSpecEncoding`); for Google Analytics 4, from a
 server, with `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` (module
 `GoogleAnalyticsEncoding`); for Snowplow, with
-`HTTPDestination.snowplow(collector:vendor:appID:plan:)` (module `SnowplowEncoding`). To read events inside the app or in a test, use
+`HTTPDestination.snowplow(collector:vendor:appID:plan:)` (module `SnowplowEncoding`); for
+TelemetryDeck, with `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` (module
+`TelemetryDeckEncoding`). To read events inside the app or in a test, use
 `InMemoryDestination` (module `Destinations`) instead.
 
 ```swift

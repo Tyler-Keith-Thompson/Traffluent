@@ -619,7 +619,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 1a7c7c6342fde42ae4e8ebc1a394e210b578521ce58399e617ec3f0c5de38b63"
+          "FILE:@@//swift/Package.resolved 86e14fffe55e33724f17fab975e0ee54a7ff6a561fa7c01a462b4c50a9e6ff93"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -641,7 +641,8 @@
                 "@swiftpkg_swift_syntax//:pkg_info.json": "swift-syntax",
                 "@swiftpkg_swift_json_schema//:pkg_info.json": "swift-json-schema",
                 "@swiftpkg_swift_cbor//:pkg_info.json": "swift-cbor",
-                "@swiftpkg_swiftcbor//:pkg_info.json": "swiftcbor"
+                "@swiftpkg_swiftcbor//:pkg_info.json": "swiftcbor",
+                "@swiftpkg_swift_crypto//:pkg_info.json": "swift-crypto"
               }
             }
           },
@@ -659,10 +660,12 @@
                 "swiftpkg_afluent",
                 "swiftpkg_grdb.swift",
                 "swiftpkg_linkersets",
+                "swiftpkg_swift_asn1",
                 "swiftpkg_swift_cbor",
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_collections",
                 "swiftpkg_swift_concurrency_extras",
+                "swiftpkg_swift_crypto",
                 "swiftpkg_swift_distributed_tracing",
                 "swiftpkg_swift_http_types",
                 "swiftpkg_swift_issue_reporting",
@@ -1012,6 +1015,48 @@
               "binary_target_deps": false
             }
           },
+          "swiftpkg_swift_crypto": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_crypto",
+              "commit": "b0b1963823fe828065ef49c09c8c9489f43cf7be",
+              "remote": "https://github.com/apple/swift-crypto",
+              "version": "5.2.0",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
+              "system_sdk_deps": false,
+              "binary_target_deps": false
+            }
+          },
+          "swiftpkg_swift_asn1": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_asn1",
+              "commit": "97fd57437fc94cfa6b62f2b8f84c50f433534e17",
+              "remote": "https://github.com/apple/swift-asn1.git",
+              "version": "1.7.5",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
+              "system_sdk_deps": false,
+              "binary_target_deps": false
+            }
+          },
           "swiftpkg_swift_issue_reporting": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -1052,6 +1097,7 @@
             "swiftpkg_swift_json_schema",
             "swiftpkg_swift_cbor",
             "swiftpkg_swiftcbor",
+            "swiftpkg_swift_crypto",
             "swift_deps_info",
             "swift_package"
           ],

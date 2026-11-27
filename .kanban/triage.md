@@ -167,6 +167,38 @@ bad row in a dashboard.
   safety matters only to GET), and sending `stm` (a retry keeps the first attempt's, shifting
   `derived_tstamp`). The collector answers 200 before validation, so the docs say that an event
   failing validation is lost to the warehouse though delivered.
+  TelemetryDeck (TRAF-107, decided 2026-11-27): `TelemetryDeckEncoding` sends Ingest API v3, a
+  JSON array of flat signals posted to `https://nom.telemetrydeck.com/v3/<namespace>/`, from every
+  platform, as the app ID is public (TelemetryDeck's SDKs ship it in every app). Rejected: v2,
+  which TelemetryDeck no longer extends and which stringifies values. `clientUser` is SHA-256 of
+  the lowercase session, in lowercase hex, as the SDKs hash a user identifier with their default,
+  empty salt, computed with swift-crypto `1.0.0..<6.0.0` (CryptoKit on Apple platforms, BoringSSL
+  on Linux; every major from 1 builds under Swift 6.4, so servers capped below 5 still resolve;
+  CommonCrypto is Apple-only, and a hand-written SHA-256 is rejected). No `salt:` is taken:
+  `sessionID` sends the same UUID in the clear, so a salt hides nothing, and the server salts and
+  hashes `clientUser` again. Rejected: keeping a salt documented as doing nothing (unused API). `sessionID` is the
+  session, and nothing else identifies a record (D4), so TelemetryDeck's user counts are session
+  counts; the docs say so, and that an adopter who wants devices puts `VendorIdentifierKey` in the
+  context and sends through a destination that reads it, or writes their own enricher and encoder.
+  A record with no session is hashed by its own ID and sent with no `sessionID`. Rejected: a made-up
+  session (joins unrelated records) and skipping the record. `testMode:` is required. Rejected: a
+  `#if DEBUG` default in the library (it would be the library's build, not the app's) and a
+  default of `false` (debug builds would pollute production counts). Properties keep their JSON
+  type, flattened with `.` (TelemetryDeck doesn't index nested values), with `nil` left out. A name
+  outside ASCII `[A-Za-z0-9._-]` makes TelemetryDeck refuse the whole request with 422, so the
+  record is skipped; so is an event or parameter name in the `TelemetryDeck.` scope, in any case,
+  which v3 reserves for the SDKs and the server, and a parameter named exactly as one of v3's
+  event members (`appID`, `clientUser`, `receivedAt`, `type`, `sessionID`, `isTestMode`,
+  `floatValue`), which it would replace in the flat event. v3 doesn't rename or clean keys and
+  rejects no other name, so the SwiftSDK's list of reserved v2 keys (`platform`, `count` and the
+  rest) is not refused. Rejected: renaming such keys (two names could collide, and the dashboard
+  would show names the plan doesn't have). A timestamp outside the years 1 to 9999, which the
+  server can't parse, is skipped. Batching is 100 signals a request (the SwiftSDK's) and
+  1,000,000 bytes a request (the encoder's own bound; TelemetryDeck documents none), with 333,333
+  bytes a signal, a third of v3's 1,000,000, leaving room for the escapes a re-encoder commonly
+  adds. No `floatValue` is sent. The server answers 200 for any namespace and app
+  ID and doesn't deduplicate, so the docs say a typo loses everything silently and a resent record
+  counts twice.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

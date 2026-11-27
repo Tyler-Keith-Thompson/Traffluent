@@ -10,6 +10,7 @@ import MixpanelEncoding
 import PostHogEncoding
 import SegmentSpecEncoding
 import SnowplowEncoding
+import TelemetryDeckEncoding
 import Testing
 import TrackingPlans
 import Traffluent
@@ -294,6 +295,33 @@ struct ChoosingDestinationsSnowplowExamplesTests {
             plan: plan)
         let tracker = Tracker(enrichers: [.sessions()])
         let delivery = tracker.records.batch().deliver(to: snowplow)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw.
+@Suite("Choosing destinations examples: TelemetryDeck", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsTelemetryDeckExamplesTests {
+    @Test("TelemetryDeck")
+    func telemetryDeck() async throws {
+        let appID = "B97579B6-FFB8-4AC5-AAA7-DA5796CC5DCE"
+
+        let plan = try TrackingPlan()
+        let telemetryDeck = try HTTPDestination.telemetryDeck(
+            appID: appID,  // from the app's settings in the TelemetryDeck dashboard
+            namespace: "com.example",  // your organization's namespace
+            testMode: false,  // true for builds whose signals only Test Mode should show
+            plan: plan)
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: telemetryDeck)
 
         // Nothing is tracked, so nothing is sent and the example runs without a network.
         await tracker.finish()

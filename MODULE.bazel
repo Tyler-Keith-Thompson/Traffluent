@@ -49,6 +49,7 @@ use_repo(
     "swiftpkg_swift_collections",
     "swiftpkg_swift_cbor",
     "swiftpkg_swift_concurrency_extras",
+    "swiftpkg_swift_crypto",
     "swiftpkg_swift_distributed_tracing",
     "swiftpkg_swift_http_types",
     "swiftpkg_swift_json_schema",

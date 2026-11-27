@@ -36,6 +36,7 @@ No Traffluent module calls an API on Apple's list of required-reason APIs, so ev
 | ``/Trackers`` | `Date.now` | Wall-clock time, not boot time. |
 | ``/Destinations`` | `ContinuousClock`, the default clock of `batch()` | The Swift runtime's clock, which isn't on the list. |
 | ``/GRDBPersistence`` | GRDB | GRDB ships a privacy manifest of its own. |
+| ``/TelemetryDeckEncoding`` | swift-crypto's `SHA256`, which is CryptoKit's on Apple platforms | Hashing is on no list. swift-crypto's `Crypto` bundles a privacy manifest of its own on Apple platforms, declaring no tracking, no required-reason API and no collected data. |
 
 Every other module calls nothing near the list. Of the packages Traffluent depends on,
 swift-system's `Stat` API (`FilePath.stat()`, `FileDescriptor.stat()`) calls `stat`, `fstat`,
@@ -67,7 +68,7 @@ The rest ship no manifest: ``/Events``, ``/Trackers``, ``/Persistence``, ``/GRDB
 ``/Checksums``, ``/Destinations``, ``/LoggingDestinations``, ``/TracingDestinations``,
 ``/HTTPDestinations``, ``/CollectorEncoding``, ``/PostHogEncoding``, ``/AmplitudeEncoding``,
 ``/MixpanelEncoding``, ``/SegmentSpecEncoding``, ``/GoogleAnalyticsEncoding``, ``/SnowplowEncoding``,
-``/PropertyJSON``, ``/JSONValues``, ``/EventMacros``, ``/TrackingPlans`` and ``/TrackingPlanTesting`` neither call a
+``/TelemetryDeckEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/EventMacros``, ``/TrackingPlans`` and ``/TrackingPlanTesting`` neither call a
 required-reason API nor make data of their own. They carry, store and send the events and context
 your app and the modules above make.
 
