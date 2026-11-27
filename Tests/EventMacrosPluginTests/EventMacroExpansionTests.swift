@@ -53,7 +53,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.plan), keywords: Events.ValidationKeyword.keywords(of: \\Self.plan)),
@@ -135,7 +135,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension CartViewed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension CartViewed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.currency), keywords: Events.ValidationKeyword.keywords(of: \\Self.currency)),
@@ -219,7 +219,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension AdClicked: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension AdClicked: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var name: String {
                         "ad_clicked"
                     }
@@ -301,7 +301,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -324,6 +324,67 @@ struct EventMacroExpansionTests {
     }
     #endif
 
+    // On a generic struct, which gets no discovery record, so the test runs on every swift-syntax
+    // the plugin accepts.
+    @Test("The extension is nonisolated, so a struct marked @MainActor conforms off the main actor, and so would one isolated by a module's default if a compiler applied it to the expansion")
+    func nonisolatedExtension() {
+        assertMacroExpansion(
+            """
+            @MainActor
+            @Event(name: "opened")
+            struct Opened<Value> {
+                var screen: String
+            }
+            """,
+            expandedSource: """
+                @MainActor
+                struct Opened<Value> {
+                    var screen: String
+                }
+
+                nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        "opened"
+                    }
+
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
+                            Events.EventSchema.Property(name: "screen", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.screen), keywords: Events.ValidationKeyword.keywords(of: \\Self.screen)),
+                        ])
+                    }
+
+                    private static func requireCodable(screen: KeyPath<Self, some Swift.Codable>) {
+                    }
+
+                    private static var codableRequirements: Void {
+                        requireCodable(screen: \\.screen)
+                    }
+
+                    private enum CodingKeys: Swift.String, Swift.CodingKey {
+                        case screen
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        try container.encode(self.screen, forKey: .screen)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.screen = try container.decode(String.self, forKey: .screen)
+                    }
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@Event can't give a generic struct the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)",
+                    line: 3, column: 14, severity: .note),
+            ],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
     @Test(
         "A version literal is read in its radix, without its underscores",
         // On a generic struct, which gets no discovery record, so the test runs on every
@@ -342,7 +403,7 @@ struct EventMacroExpansionTests {
                 struct Opened<Value> {
                 }
 
-                extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schemaVersion: Int {
                         \(expectedVersion)
                     }
@@ -408,7 +469,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Crashed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Crashed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var name: String {
                         #"crash"#
                     }
@@ -501,7 +562,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension A: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension A: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     public static var name: String {
                         "a"
                     }
@@ -522,7 +583,7 @@ struct EventMacroExpansionTests {
                     }
                 }
 
-                extension B: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension B: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     package static var consentCategory: Events.ConsentCategory {
                         .functional
                     }
@@ -610,7 +671,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Shapes: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Shapes: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.assigned), keywords: Events.ValidationKeyword.keywords(of: \\Self.assigned)),
@@ -722,7 +783,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Spellings: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Spellings: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "a", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.a), keywords: Events.ValidationKeyword.keywords(of: \\Self.a)),
@@ -860,7 +921,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Keywords: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Keywords: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "default", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.`default`), keywords: Events.ValidationKeyword.keywords(of: \\Self.`default`)),
@@ -944,7 +1005,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Purchased: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Purchased: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "at", typeName: "Date", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.at), keywords: Events.ValidationKeyword.keywords(of: \\Self.at)),
@@ -1038,7 +1099,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Scheduled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Scheduled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "slots", typeName: "[Date]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.slots), keywords: Events.ValidationKeyword.keywords(of: \\Self.slots)),
@@ -1136,7 +1197,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Counted: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Counted: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "label", typeName: "Swift.String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.label), keywords: Events.ValidationKeyword.keywords(of: \\Self.label)),
@@ -1226,7 +1287,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Opened: Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Opened: Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -1284,7 +1345,7 @@ struct EventMacroExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Closed {
+                nonisolated extension Closed {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -1346,7 +1407,7 @@ struct EventMacroExpansionTests {
                     #endif
                 }
 
-                extension Checkout.Started: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Checkout.Started: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }

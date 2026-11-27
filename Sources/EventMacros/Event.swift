@@ -19,7 +19,9 @@
 /// }
 /// ```
 ///
-/// The macro adds an extension holding:
+/// The macro adds a `nonisolated` extension, so the conformance works off the main actor, where
+/// the tracker encodes events, even when the struct is marked `@MainActor`; such a struct's stored
+/// properties must then be `Sendable`. The extension holds:
 ///
 /// - `static var name`, when `name` is given; otherwise the type's name, `Event`'s default.
 /// - `static var consentCategory`, when `consent` is given; otherwise ``/Events/ConsentCategory/analytics``.

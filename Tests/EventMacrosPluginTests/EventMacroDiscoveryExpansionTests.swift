@@ -50,7 +50,7 @@ struct EventMacroDiscoveryExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var name: String {
                         "signed_up"
                     }
@@ -112,7 +112,7 @@ struct EventMacroDiscoveryExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Opened: Events.__DiscoverableEvent {
+                nonisolated extension Opened: Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -147,7 +147,7 @@ struct EventMacroDiscoveryExpansionTests {
                 struct Tapped<Value> {
                 }
 
-                extension Tapped: Events.Event, Swift.Encodable, Swift.Decodable {
+                nonisolated extension Tapped: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -195,7 +195,7 @@ struct EventMacroDiscoveryExpansionTests {
                     }
                 }
 
-                extension Box.Inner.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                nonisolated extension Box.Inner.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -248,7 +248,7 @@ struct EventMacroDiscoveryExpansionTests {
                     }
                 }
 
-                extension open.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                nonisolated extension open.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }

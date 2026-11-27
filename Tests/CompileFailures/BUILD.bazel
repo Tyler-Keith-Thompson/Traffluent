@@ -124,6 +124,109 @@ swift_compile_failure_test(
     deps = ["//Sources/EventMacros"],
 )
 
+# @Event structs in a module whose default isolation is the main actor, the default for a new app
+# target in Xcode 26 and later, used from nonisolated code, among them structs marked @MainActor and
+# one nested in a @MainActor class. Swift 6.4 doesn't apply the module's default isolation to a
+# macro's expansion, so the structs isolated by the default alone compile with or without the
+# nonisolated extension; those marked @MainActor need it, as an extension's members take the
+# struct's global actor, and without it their conformances cross into main-actor code. The
+# keyword also keeps the default-isolated structs compiling should a later Swift apply the
+# default to expansions.
+#
+# These isolation fixtures type-check in library mode, as app code compiles, and run the SIL stage's
+# checks, region isolation among them: -emit-sil, after the rule's -typecheck, is the mode the
+# compiler takes, and its output goes nowhere.
+swift_compile_failure_test(
+    name = "EventDefaultMainActorControl",
+    size = "small",
+    src = "EventDefaultMainActorControl.swift",
+    copts = [
+        "-parse-as-library",
+        "-emit-sil",
+        "-o",
+        "/dev/null",
+        "-default-isolation",
+        "MainActor",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same file with Xcode 26's Approachable Concurrency setting as well, which a new app target
+# also turns on: conformances of main-actor types are inferred isolated, and nonisolated async
+# functions run on their caller's actor.
+swift_compile_failure_test(
+    name = "EventApproachableConcurrencyControl",
+    size = "small",
+    src = "EventDefaultMainActorControl.swift",
+    copts = [
+        "-parse-as-library",
+        "-emit-sil",
+        "-o",
+        "/dev/null",
+        "-default-isolation",
+        "MainActor",
+        "-enable-upcoming-feature",
+        "InferIsolatedConformances",
+        "-enable-upcoming-feature",
+        "NonisolatedNonsendingByDefault",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# A struct of the app's own that an event holds, in the same module: it is main-actor isolated
+# there, and so is its Codable conformance, which the event's nonisolated coding can't use. The
+# event's coding failed the same way before its extension was nonisolated: the default doesn't
+# reach the expansion, so its members were nonisolated already. Declaring the struct nonisolated
+# fixes it.
+swift_compile_failure_test(
+    name = "EventMainActorPropertyType",
+    size = "small",
+    src = "EventMainActorPropertyType.swift",
+    copts = [
+        "-parse-as-library",
+        "-emit-sil",
+        "-o",
+        "/dev/null",
+        "-default-isolation",
+        "MainActor",
+    ],
+    expected_errors = [
+        "error: main actor-isolated conformance of 'Coordinate' to 'Decodable' cannot be used in nonisolated context",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# A struct marked @MainActor with a stored property whose type isn't Sendable: nonisolated code,
+# which the event's coding and schema are, may read a main-actor struct's stored property only
+# when its type is Sendable (SE-0434), so the expansion can't form its key path.
+swift_compile_failure_test(
+    name = "EventMainActorNonSendableProperty",
+    size = "small",
+    src = "EventMainActorNonSendableProperty.swift",
+    copts = [
+        "-parse-as-library",
+        "-emit-sil",
+        "-o",
+        "/dev/null",
+    ],
+    expected_errors = [
+        "error: cannot form key path to main actor-isolated property 'box'",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
 # @Event on a struct declared in a function: the compiler's refusal of an extension macro on a local
 # type is the only error. LinkerSets refuses the record there too; the macro writes none and leaves
 # the refusal unsaid, rather than adding a second error.

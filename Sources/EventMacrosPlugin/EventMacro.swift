@@ -4,7 +4,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// `@Event`: an extension of the struct it is attached to that conforms it to `Event`,
+/// `@Event`: a nonisolated extension of the struct it is attached to that conforms it to `Event`,
 /// `Encodable` and `Decodable`, with its `name`, `consentCategory`, `schemaVersion`, `schema`
 /// and, when a property declares constraints with `@Constrained`, its `constraintViolation()`,
 /// and its coding: a keyed container of its stored properties, each under its name, an optional's
@@ -72,7 +72,14 @@ public struct EventMacro: ExtensionMacro, LinkerSetMacro {
         ] + decodeFunctions(of: properties)
         let body = members.compactMap { $0 }.joined(separator: "\n\n")
         // The expansion is formatted after it returns, which indents the members.
-        let source = "extension \(type.trimmedDescription)\(inheritance) {\n\(body)\n}"
+        // Nonisolated, as the tracker's worker uses the conformance off the main actor: without it,
+        // the members of a struct marked with a global actor (@MainActor) take that actor, and the
+        // conformance crosses into its code. Swift 6.4 doesn't apply a module's default isolation
+        // (-default-isolation MainActor, Xcode 26's for an app target) to a macro's expansion, so
+        // such a module needs nothing today; the keyword keeps it working should a later Swift
+        // apply the default there. On the extension rather than on each member, so the coding keys
+        // and the helper functions are covered too, and any member the macro adds later.
+        let source = "nonisolated extension \(type.trimmedDescription)\(inheritance) {\n\(body)\n}"
         return [DeclSyntax(stringLiteral: source).cast(ExtensionDeclSyntax.self)]
     }
 

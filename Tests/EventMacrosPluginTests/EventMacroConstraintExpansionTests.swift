@@ -59,7 +59,7 @@ struct EventMacroConstraintExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Searched: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Searched: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.ValidationKeyword])),
@@ -325,7 +325,7 @@ struct EventMacroConstraintExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Searched {
+                nonisolated extension Searched {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.query), keywords: Events.ValidationKeyword.keywords(of: \\Self.query) + ([.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] as [Events.ValidationKeyword])),
@@ -460,7 +460,7 @@ struct EventMacroConstraintExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Searched {
+                nonisolated extension Searched {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.pattern(#"^\d+$"#, example: "12")] as [Events.ValidationKeyword])),

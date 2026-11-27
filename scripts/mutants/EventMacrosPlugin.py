@@ -45,6 +45,10 @@ MUTANTS = [
     Mutant("packagenotcopied", M, "[.keyword(.public), .keyword(.package)]", "[.keyword(.public)]"),
     Mutant("conformanceinverted", M, '$0.trimmedDescription.split(separator: ".").last.map(String.init) == name', '$0.trimmedDescription.split(separator: ".").last.map(String.init) != name'),
     Mutant("conformancesfirstonly", M, 'conformances.joined(separator: ", ")', 'conformances.first ?? ""'),
+    # TRAF-118: the extension is nonisolated. The expansion tests catch the mutant, as every
+    # expected expansion holds the keyword. //Tests/CompileFailures:EventDefaultMainActorControl
+    # compiles the real expansion, which no mutant run reaches.
+    Mutant("extensionisolated", M, '"nonisolated extension \\(type.trimmedDescription)\\(inheritance) {\\n\\(body)\\n}"', '"extension \\(type.trimmedDescription)\\(inheritance) {\\n\\(body)\\n}"'),
     Mutant("nameignored", M, 'arguments.name.map { "\\(access)static var name: String {\\n    \\($0)\\n}" }', "nil"),
     Mutant("consentignored", M, 'arguments.consent.map { "\\(access)static var consentCategory: Events.ConsentCategory {\\n    \\($0)\\n}" }', "nil"),
     Mutant("versionfixed", M, "arguments.version", "Int?.some(1)"),

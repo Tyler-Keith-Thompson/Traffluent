@@ -65,7 +65,7 @@ struct EventMacroEnumerationExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "reason", typeName: "Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.reason), keywords: Events.ValidationKeyword.keywords(of: \\Self.reason), enumeration: Events.EventSchema.Enumeration(cases: [.`paymentDeclined`, .`outOfStock`, .`networkUnavailable`] as [Self.Reason])),
@@ -177,7 +177,7 @@ struct EventMacroEnumerationExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Spelled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Spelled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "own", typeName: "Self.Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.own), keywords: Events.ValidationKeyword.keywords(of: \\Self.own), enumeration: Events.EventSchema.Enumeration(cases: [.`a`] as [Self.Reason])),
@@ -333,7 +333,7 @@ struct EventMacroEnumerationExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "Plan", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.plan), keywords: Events.ValidationKeyword.keywords(of: \\Self.plan), enumeration: Events.EventSchema.Enumeration(of: \\Self.plan)),
@@ -473,7 +473,7 @@ struct EventMacroEnumerationExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "reason", typeName: "Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.reason), keywords: Events.ValidationKeyword.keywords(of: \\Self.reason), enumeration: Events.EventSchema.Enumeration(cases: [.`declined`] as [Self.Reason])),
@@ -591,7 +591,7 @@ struct EventMacroEnumerationExpansionTests {
                     }, 0, 0)
                 #endif
 
-                extension Shape: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                nonisolated extension Shape: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "kind", typeName: "Kind", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.kind), keywords: Events.ValidationKeyword.keywords(of: \\Self.kind), enumeration: Events.EventSchema.Enumeration(cases: [.`Type`, .`self`, .`plain`] as [Self.Kind])),

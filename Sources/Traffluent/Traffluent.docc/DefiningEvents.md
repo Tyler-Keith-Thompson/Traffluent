@@ -42,6 +42,26 @@ A stored property whose type isn't `Codable` is a compile error that names it:
 So are `@Event` on anything but a struct, and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
 
+### Main-actor isolation
+
+The conformance `@Event` adds is `nonisolated`, because the tracker encodes events off the main
+actor. `@Event` works in an app target whose default isolation is the main actor
+(`-default-isolation MainActor`, the default for a new app target in Xcode 26 and later), and on a
+struct marked `@MainActor`.
+
+A struct marked `@MainActor` (or another global actor) can hold only `Sendable` stored properties:
+Swift lets nonisolated code, the event's coding and schema included, read a stored property of a
+main-actor struct only when its type is `Sendable`. A property of a non-`Sendable` type fails to
+compile inside the expansion (`cannot form key path to main actor-isolated property`); make the
+type `Sendable`, or drop `@MainActor` from the event.
+
+In a target whose default isolation is the main actor, a `Codable` type of your own that an event
+holds is main-actor isolated too, and so is its `Codable` conformance, which the event's coding
+can't use. The error reads
+`main actor-isolated conformance of 'Coordinate' to 'Decodable' cannot be used in nonisolated context`.
+Declare the type `nonisolated` (`nonisolated struct Coordinate: Codable`). An enum with a raw
+value needs nothing, as its coding comes from the standard library.
+
 ### Finding every event
 
 You never list your events. `@Event` places a small record of the event in the compiled binary, and

@@ -7,7 +7,9 @@ source compiles, or the output lacks one, and prints the output. Checking the te
 failure, keeps a fixture that fails for another reason (a missing module, a typo) from passing.
 With no `expected_errors` it passes only when the source compiles: a control, which shows that
 the search paths and the plugin work. `error_count`, when set, is how many errors the compiler must
-report, for a fixture whose rule is that nothing adds a second.
+report, for a fixture whose rule is that nothing adds a second. `copts` are passed to the compiler
+as they are, for a fixture that must type-check under a setting of its own
+(`["-default-isolation", "MainActor"]`).
 
 Fixtures and their tests live in `Tests/CompileFailures` (hand-written BUILD.bazel), which the root
 BUILD.bazel leaves out of the test bundles by name and no Package.swift target holds:
@@ -100,7 +102,7 @@ def _swift_compile_failure_test_impl(ctx):
                     # under external/; the test runs from the main repository's runfiles, beside
                     # the others'.
                     arguments += ["-Xcc", "-I" + ("../" + include.removeprefix("external/") if include.startswith("external/") else include)]
-    arguments = ["-I " + _quote(directory) for directory in directories] + [_quote(argument) for argument in arguments]
+    arguments = ["-I " + _quote(directory) for directory in directories] + [_quote(argument) for argument in arguments + ctx.attr.copts]
     if ctx.attr.plugin:
         plugin = ctx.executable.plugin
         files.append(plugin)
@@ -135,6 +137,7 @@ swift_compile_failure_test = rule(
         "plugin": attr.label(executable = True, cfg = "exec"),
         "plugin_module_name": attr.string(doc = "The plugin's module name, which `-load-plugin-executable` pairs with it."),
         "expected_errors": attr.string_list(doc = "Text the compiler's output must hold; none for a source that must compile."),
+        "copts": attr.string_list(doc = "Flags passed to the compiler as they are, after the search paths."),
         "error_count": attr.int(doc = "How many errors the compiler must report, or 0 to leave the count unchecked."),
     },
     test = True,
