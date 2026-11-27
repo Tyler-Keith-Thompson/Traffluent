@@ -28,6 +28,7 @@ swift_library(
         "//Sources/AmplitudeEncoding",
         "//Sources/MixpanelEncoding",
         "//Sources/SegmentSpecEncoding",
+        "//Sources/GoogleAnalyticsEncoding",
         "//Sources/PropertyJSON",
         "//Sources/JSONValues",
         "//Sources/DestinationTesting",

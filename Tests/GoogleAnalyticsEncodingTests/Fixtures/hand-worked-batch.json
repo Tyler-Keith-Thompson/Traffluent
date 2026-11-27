@@ -1,0 +1,2 @@
+{"client_id":"117666126233631294.10037780774133961268","consent":{"ad_personalization":"DENIED","ad_user_data":"DENIED"},"events":[{"name":"signed_up","params":{"discount":0.25,"plan":"pro","seats":3,"session_id":1795442600000,"tags_0":"beta","tags_1":"ios","trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp_micros":1795442607500000}]}
+{"client_id":"16384.9223372036854775820","consent":{"ad_personalization":"DENIED","ad_user_data":"DENIED"},"events":[{"name":"checkout_started","params":{"cartSize":2},"timestamp_micros":1795442608250000}]}

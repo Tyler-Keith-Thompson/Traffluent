@@ -200,4 +200,6 @@ func acmeConformance(check: ConformanceCheck) async throws {
 ```
 
 Each check records a Swift Testing issue for each rule the destination breaks. The kit is a
-shared assertion on purpose, so every vendor module runs the same checks.
+shared assertion on purpose, so every vendor module runs the same checks. Every check's records are
+tracked at `setup.timestamp`; if your encoder leaves out records older than the vendor takes, give
+it that as the time it encodes at, as `GoogleAnalyticsEncoding`'s tests do.

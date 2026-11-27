@@ -115,8 +115,8 @@ bad row in a dashboard.
   factory on `HTTPDestination` that fills in the endpoint, encoder and limits, builds
   on `PropertyJSON`'s shared pieces, and passes `DestinationTesting`'s conformance checks. The
   vendors, after PostHog: Amplitude (TRAF-102), Mixpanel (TRAF-103), the Segment spec (Segment,
-  RudderStack and Customer.io; TRAF-104), GA4's Measurement Protocol (TRAF-105, pending the
-  `api_secret` decision), Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap
+  RudderStack and Customer.io; TRAF-104), GA4's Measurement Protocol (TRAF-105, server-side only;
+  see below), Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap
   (TRAF-109) and Aptabase (TRAF-110). This reverses the rejection of Segment above: as a plain
   sink, one more destination the pipeline delivers to, it duplicates nothing. The rejection of
   Firebase's and Amplitude's SDKs stands; Amplitude's destination uses its HTTP API.
@@ -126,6 +126,24 @@ bad row in a dashboard.
   (not `SegmentEncoding`, which reads as an encoding of `SegmentStore`'s segments), with a
   factory per endpoint. It sends track calls only: no `identify`, traits or `userId` (D4). The
   rejection of Segment above stands only for Segment as Traffluent's pipeline itself.
+  GA4 (TRAF-105, decided 2026-11-27): the Measurement Protocol takes only requests carrying the
+  stream's `api_secret`, and Google's docs say not to expose it in an app, as anyone holding it can
+  send events to the property. `GoogleAnalyticsEncoding` is therefore server-side only. The whole
+  module (factory, encoder, region and errors) is compiled under `#if os(macOS) || os(Linux)`, so
+  an app for iOS, iPadOS, tvOS, watchOS, visionOS or Mac Catalyst that uses it fails to compile.
+  A Mac app (AppKit or SwiftUI) compiles the factory, as a Mac server must, but the factory
+  refuses it at run time: it throws `GoogleAnalyticsSetupError.appBundle` when the main bundle is
+  an `.app` or `.appex`. The docs say what shipping the secret exposes, and that the secret sits in
+  every request's URL. An app's events reach GA4 through the adopter's server, which remakes each
+  `EventRecord` with the app's `SessionKey` and calls the destination's `receive`; Traffluent
+  doesn't provide that server yet (TraffluentCollector doesn't forward to GA4, and there is no
+  collector-batch decoder). The encoder writes a web or data stream's request (`measurement_id`,
+  `client_id` from the session, else the record ID) and nothing beyond the session (D4): no
+  Firebase `app_instance_id`, `user_id`, user properties, IP, device or advertising ID, with ad
+  consent sent as denied. Rejected: shipping the secret in apps with a warning; a factory on every
+  platform that takes the secret at run time (both put a credential that writes to the property
+  into a binary anyone can read); and a SwiftPM trait or `-D` define to opt in to the factory,
+  which adopters miss and Bazel would have to match.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):
@@ -243,6 +261,6 @@ bad row in a dashboard.
   right for a library that apps adopt, or should they go lower?
 - Which vendors, if any, beyond D1 should get first-party destinations here (N4)? Answered on
   2026-11-26 (TRAF-101): Amplitude (TRAF-102), Mixpanel (TRAF-103), the Segment spec (Segment,
-  RudderStack, Customer.io; TRAF-104), GA4 Measurement Protocol (TRAF-105, `api_secret` decision
-  pending), Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap (TRAF-109) and
+  RudderStack, Customer.io; TRAF-104), GA4 Measurement Protocol (TRAF-105, server-side only),
+  Snowplow (TRAF-106), TelemetryDeck (TRAF-107), Matomo (TRAF-108), Heap (TRAF-109) and
   Aptabase (TRAF-110). See D1.

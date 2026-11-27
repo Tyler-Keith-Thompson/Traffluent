@@ -28,8 +28,10 @@ Amplitude, with `HTTPDestination.amplitude(apiKey:region:plan:)` (module `Amplit
 Mixpanel, with `HTTPDestination.mixpanel(projectToken:region:plan:)` (module `MixpanelEncoding`);
 for Segment, RudderStack or Customer.io Data Pipelines, with
 `HTTPDestination.segment(writeKey:region:plan:)`, `rudderStack(writeKey:dataPlane:plan:)` or
-`customerIO(apiKey:region:plan:)` (module `SegmentSpecEncoding`). To read events inside the app
-or in a test, use `InMemoryDestination` (module `Destinations`) instead.
+`customerIO(apiKey:region:plan:)` (module `SegmentSpecEncoding`); for Google Analytics 4, from a
+server, with `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` (module
+`GoogleAnalyticsEncoding`). To read events inside the app or in a test, use
+`InMemoryDestination` (module `Destinations`) instead.
 
 ```swift
 import HTTPDestinations

@@ -118,8 +118,9 @@ struct CartView: View {
 ```
 
 `import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``,
-``/AmplitudeEncoding``, ``/MixpanelEncoding``, ``/SegmentSpecEncoding``, ``/PropertyJSON``,
-``/JSONValues``, ``/GRDBPersistence`` and the testing modules, which are products of their own.
+``/AmplitudeEncoding``, ``/MixpanelEncoding``, ``/SegmentSpecEncoding``,
+``/GoogleAnalyticsEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/GRDBPersistence`` and the
+testing modules, which are products of their own.
 
 ### Where to go next
 
@@ -138,7 +139,8 @@ struct CartView: View {
 - Export the events' schemas and catch breaking changes in CI: <doc:TrackingPlanWorkflow>.
 - Test what your code tracks: <doc:TestingWhatYouTrack>.
 - Send to logs, traces, your own server, PostHog, Amplitude, Mixpanel, Segment, RudderStack,
-  Customer.io or memory, with values for one destination alone: <doc:ChoosingDestinations>.
+  Customer.io, Google Analytics from a server or memory, with values for one destination alone:
+  <doc:ChoosingDestinations>.
 - Send to an analytics vendor not yet covered, from a module of your own:
   <doc:WritingAVendorDestination>.
 - Decide what belongs in an event and what stays out of it: <doc:WhatGoesWhere>,
@@ -193,6 +195,7 @@ struct CartView: View {
 - ``/AmplitudeEncoding``
 - ``/MixpanelEncoding``
 - ``/SegmentSpecEncoding``
+- ``/GoogleAnalyticsEncoding``
 - ``/PropertyJSON``
 - ``/JSONValues``
 - ``/Persistence``

@@ -15,8 +15,10 @@ Check from Swift Testing that a vendor destination keeps the library's rules and
 - no request carries a trace context in its header fields, even while a tracer is active.
 
 Make it with the vendor's limit and a closure that calls the vendor's factory with the
-``DestinationSetup``'s plan, transport and backoff. Run each ``ConformanceCheck`` as a test case of
-its own:
+``DestinationSetup``'s plan, transport and backoff. Every check's records are tracked at the
+setup's `timestamp`; a factory whose encoder leaves out records by their age takes it as the time
+it encodes at, so the checks pass whenever the test runs. Run each ``ConformanceCheck`` as a test
+case of its own:
 
 ```swift
 import DestinationTesting

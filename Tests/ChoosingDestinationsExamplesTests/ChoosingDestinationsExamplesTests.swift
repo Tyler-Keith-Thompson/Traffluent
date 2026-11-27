@@ -4,6 +4,7 @@
 
 import AmplitudeEncoding
 import Foundation
+import GoogleAnalyticsEncoding
 import Instrumentation
 import MixpanelEncoding
 import PostHogEncoding
@@ -243,3 +244,35 @@ struct ChoosingDestinationsSegmentSpecExamplesTests {
         #expect(expected.allSatisfy(actual.contains))
     }
 }
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw. The factory is compiled for macOS and Linux
+// alone, as is the example.
+#if os(macOS) || os(Linux)
+@Suite("Choosing destinations examples: Google Analytics", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsGoogleAnalyticsExamplesTests {
+    @Test("Google Analytics")
+    func googleAnalytics() async throws {
+        let measurementID = "G-TEST000000"
+        let apiSecret = "testapisecret"
+
+        let plan = try TrackingPlan()
+        let googleAnalytics = try HTTPDestination.googleAnalytics(
+            measurementID: measurementID,  // the web or data stream's, G-…
+            apiSecret: apiSecret,  // from the server's configuration, never an app's
+            region: .global,  // or .eu, to have Google collect the data in the EU
+            plan: plan)
+        // A server tracking its own events: its sessions are the server's.
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: googleAnalytics)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}
+#endif

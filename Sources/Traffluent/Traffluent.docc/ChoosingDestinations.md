@@ -107,6 +107,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Segment | ``/SegmentSpecEncoding`` | `HTTPDestination.segment(writeKey:region:plan:)` | Each record as a Segment-spec track call of an anonymous user: its session as `anonymousId`, its identifier as `messageId`, its time in ISO 8601, its properties through your plan, the standard context in the spec's `context` fields, and `context.ip` as `0.0.0.0`; no `userId`, `identify` or traits |
 | RudderStack | ``/SegmentSpecEncoding`` | `HTTPDestination.rudderStack(writeKey:dataPlane:plan:)` | The same track calls as Segment, at your data plane, with `request_ip` as `0.0.0.0` too |
 | Customer.io Data Pipelines | ``/SegmentSpecEncoding`` | `HTTPDestination.customerIO(apiKey:region:plan:)` | The same track calls as Segment, in strict mode |
+| Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -387,6 +388,82 @@ unless it is in strict mode, so the destination sends `X-Strict-Mode: 1`: it the
 key with 401 and a call it won't take with 400, which the destination reports. In strict mode it
 refuses a whole batch for one bad call, so the encoder leaves out each call Customer.io documents
 refusing; a 400 for anything else drops the whole request.
+
+### Google Analytics
+
+To send to a Google Analytics 4 web or data stream from a server, make the destination with
+`HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` (module
+``/GoogleAnalyticsEncoding``). It posts to the Measurement Protocol's `/mp/collect` endpoint:
+`.global` for Google's default, or `.eu` to have Google collect the data in the EU. The
+destination sends no trace context in the header fields, and splits each batch into requests of
+one client's events, at most 25 events and 100 KB each.
+
+The Measurement Protocol takes only requests carrying one of the stream's API secrets, and anyone
+who holds that secret can send events to the property, spam included. An app's binary can be read,
+so a secret shipped in one is public. The module is therefore compiled for macOS and Linux alone:
+an app for iOS, iPadOS, tvOS, watchOS, visionOS or Mac Catalyst that calls the factory fails to
+compile. A Mac app compiles the factory, but the factory refuses it at run time, throwing
+`GoogleAnalyticsSetupError.appBundle` when the main bundle is an `.app` or an `.appex`. The factory
+also throws for an empty measurement ID, for one that isn't `G-` followed by uppercase letters and
+digits, and for an empty API secret. The secret is in every request's URL, so don't log the
+destination, its requests or a transport's URLs.
+
+An app's events reach Google Analytics only through a server of yours, which Traffluent doesn't
+provide yet: TraffluentCollector doesn't forward to Google Analytics, and Traffluent has no decoder
+that turns a collector batch back into records. That server decodes each event the app sent into
+the same `@Event` type, remakes its `EventRecord` with the app's identifier, timestamp and a
+context whose `SessionKey` is the app's session, and hands the records to the destination's
+`receive(_:)`. It doesn't track them again through a tracker with `.sessions()`, which would send
+every user of the app as one `client_id`. A server that tracks its own events does use a tracker:
+
+```swift
+let plan = try TrackingPlan()
+let googleAnalytics = try HTTPDestination.googleAnalytics(
+    measurementID: measurementID,  // the web or data stream's, G-…
+    apiSecret: apiSecret,  // from the server's configuration, never an app's
+    region: .global,  // or .eu, to have Google collect the data in the EU
+    plan: plan)
+// A server tracking its own events: its sessions are the server's.
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: googleAnalytics)
+```
+
+Each request's `client_id` is the record's session (`Enricher.sessions()`), written as the two
+halves of its UUID in decimal joined by a period, the form the Measurement Protocol asks for, and
+each event's `session_id` parameter is the session's start in Unix milliseconds. No `user_id`,
+user properties, location, IP address, device or user agent is sent, nor the vendor identifier,
+the trace context, the standard context or your own context keys. Every request sends ad consent
+as denied. Google Analytics counts a user per `client_id`, so each session is one user in its
+reports, and so is each record sent without a session, which goes out under its own record
+identifier. Without `engagement_time_msec`, which Traffluent doesn't measure, the events don't
+count toward engagement time or engaged sessions, and the Realtime and Users reports can show no
+users while events arrive: check the event counts instead.
+
+The Measurement Protocol has no field that identifies an event, so Google Analytics counts every
+event it receives. A record sent again, by a retry after Google stored it, by a delivery that
+sends a cancelled batch again, or by a store's redelivery after a relaunch, is counted twice.
+
+A `Sensitive` value is never sent, whatever the record reveals. Google Analytics takes only
+strings, numbers and booleans as parameters, so a nested value is spread into a parameter for each
+value it holds, named after its path joined by `_`. The encoder leaves out the same records as the
+collector's encoder, and also one that breaks a Measurement Protocol rule: an event or parameter
+name longer than 40 bytes, not starting with a letter, or holding anything but letters, numbers
+and `_`; a name Google Analytics keeps for itself, or takes only from an app stream
+(`session_start`, `error`, `screen_view`, a `firebase_`, `ga_` or `google_` parameter); more than
+25 parameters; a string longer than 100 bytes, though a Google Analytics 360 property takes 500
+characters; and a record tracked more than 72 hours before its batch is encoded, or more than 15
+minutes after. Google Analytics answers 2xx to such an event and, under its default relaxed
+validation, stores it without the offending parameter or under a name it never checked, so the
+encoder reports the record rather than send it. The destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`, and the encoder logs a notice for each such name in the plan when the
+destination is made.
+
+The Measurement Protocol doesn't report any loss. It answers 2xx to every request it receives,
+including one it can't read and one with a wrong measurement ID or API secret, and stores nothing
+for them, so check the property's Realtime event counts after setting the destination up. Its
+validation server, `/debug/mp/collect`, checks a body's shape but not the measurement ID or the
+API secret. A record retried for long after its batch was encoded can arrive past the 72 hours,
+and Google Analytics then stores it as if it happened 72 hours ago.
 
 ### Memory
 

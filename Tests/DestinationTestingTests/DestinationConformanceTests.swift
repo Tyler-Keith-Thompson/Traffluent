@@ -51,6 +51,9 @@ struct DestinationConformanceTests {
         let limit: BatchLimit
         let flaw: Flaw
         let revealing: Bool
+        /// When set, the time the encoder encodes at: like a vendor's that takes only recent
+        /// events, it leaves out a record tracked at any other time.
+        var encodedAt: Date? = nil
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
             if flaw == .neverSplits {
@@ -79,6 +82,9 @@ struct DestinationConformanceTests {
         }
 
         private func json(of record: EventRecord) throws(Failure) -> JSON {
+            if let encodedAt, record.timestamp != encodedAt {
+                throw Failure(reason: "tracked at \(record.timestamp), not \(encodedAt)")
+            }
             var revealed = record
             if flaw == .sendsSensitiveValues || (revealing && flaw == .revealsRedactedValuesWhenOptedIn) {
                 revealed.revealsSensitiveValues = true
@@ -103,10 +109,10 @@ struct DestinationConformanceTests {
 
     static let limit = (try? BatchLimit(maximumRecordCount: 10, maximumByteCount: 4_096, maximumRecordByteCount: 1_024)) ?? .unlimited
 
-    static func conformance(_ flaw: Flaw, optingIn: Bool = true) -> DestinationConformance<ToyEncoder> {
+    static func conformance(_ flaw: Flaw, optingIn: Bool = true, encodingAtSetupTimestamp: Bool = false, timestamp: Date? = nil) -> DestinationConformance<ToyEncoder> {
         @Sendable func destination(_ setup: DestinationSetup, revealing: Bool) throws -> HTTPDestination<ScriptedTransport, ToyEncoder> {
             let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
-            let encoder = ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: limit, flaw: flaw, revealing: revealing)
+            let encoder = ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: limit, flaw: flaw, revealing: revealing, encodedAt: encodingAtSetupTimestamp ? (setup.timestamp == (timestamp ?? setup.timestamp) ? setup.timestamp : .distantPast) : nil)
             if flaw == .forwardsTraceContext {
                 // The default instrument, the bootstrapped or active one.
                 return HTTPDestination(endpoint: endpoint, transport: setup.transport, encoder: encoder, backoff: setup.backoff)
@@ -118,6 +124,11 @@ struct DestinationConformanceTests {
             return HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: encoder, backoff: setup.backoff)
         }
         let revealing: DestinationConformance<ToyEncoder>.Factory = { try destination($0, revealing: true) }
+        if let timestamp {
+            return DestinationConformance(limit: limit, timestamp: timestamp, makeRevealingDestination: optingIn ? revealing : nil) { setup in
+                try destination(setup, revealing: false)
+            }
+        }
         return DestinationConformance(limit: limit, makeRevealingDestination: optingIn ? revealing : nil) { setup in
             try destination(setup, revealing: false)
         }
@@ -126,6 +137,21 @@ struct DestinationConformanceTests {
     @Test("A destination that keeps every rule passes every check", arguments: ConformanceCheck.allCases)
     func conforming(check: ConformanceCheck) async throws {
         let sut = Self.conformance(.none)
+
+        try await sut.expect(check)
+    }
+
+    @Test("Every check stamps its records with the setup's timestamp, so a destination that leaves out records tracked at any other time passes every check", arguments: ConformanceCheck.allCases)
+    func recordsStampedAtSetupTimestamp(check: ConformanceCheck) async throws {
+        let sut = Self.conformance(.none, encodingAtSetupTimestamp: true)
+
+        try await sut.expect(check)
+    }
+
+    @Test("A timestamp given to the kit is the setup's and every check's records', so a destination that leaves out records tracked at any other time passes every check", arguments: ConformanceCheck.allCases)
+    func givenTimestamp(check: ConformanceCheck) async throws {
+        // A day before the default, which the encoder would refuse.
+        let sut = Self.conformance(.none, encodingAtSetupTimestamp: true, timestamp: Date(timeIntervalSince1970: 1_795_356_207))
 
         try await sut.expect(check)
     }

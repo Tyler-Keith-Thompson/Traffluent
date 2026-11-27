@@ -65,6 +65,7 @@ docc_archive(
         "//Sources/AmplitudeEncoding:AmplitudeEncodingDocumentation",
         "//Sources/MixpanelEncoding:MixpanelEncodingDocumentation",
         "//Sources/SegmentSpecEncoding:SegmentSpecEncodingDocumentation",
+        "//Sources/GoogleAnalyticsEncoding:GoogleAnalyticsEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/DestinationTesting:DestinationTestingDocumentation",

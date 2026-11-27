@@ -33,6 +33,7 @@ TESTS = ["DestinationTestingTests", "PostHogEncodingTests"]
 
 T = "ScriptedTransport.swift"
 C = "DestinationConformance.swift"
+S = "DestinationSetup.swift"
 
 MUTANTS = [
     # The transport.
@@ -59,4 +60,8 @@ MUTANTS = [
     # Retries and rejections: the script's statuses.
     Mutant("retriednotfailing", C, "[failure, .status(.ok)]", "[ScriptedTransport.Answer.status(.ok)]"),
     Mutant("rejectednotrejecting", C, "[.status(status)]", "[ScriptedTransport.Answer.status(.ok)]"),
+    # Timestamps: every check's records at the setup's timestamp.
+    Mutant("consentrecordsnow", C, "Tracker(consent: consent, now: { [timestamp] in timestamp })", "Tracker(consent: consent)"),
+    Mutant("checkstimestampdefault", C, "self.timestamp = timestamp", "self.timestamp = .conformanceTimestamp", mode="stmt"),
+    Mutant("setuptimestampother", S, "self.timestamp = timestamp", "self.timestamp = .distantPast", mode="stmt"),
 ]

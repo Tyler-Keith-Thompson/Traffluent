@@ -30,6 +30,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/EventMacrosPlugin",
     "Sources/Events",
     "Sources/GRDBPersistence",
+    "Sources/GoogleAnalyticsEncoding",
     "Sources/HTTPDestinations",
     "Sources/JSONValues",
     "Sources/LifecycleTracking",

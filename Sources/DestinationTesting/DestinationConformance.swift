@@ -43,6 +43,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     public typealias Factory = @Sendable (DestinationSetup) throws -> HTTPDestination<ScriptedTransport, Encoding>
 
     private let limit: BatchLimit
+    private let timestamp: Date
     private let bodyText: @Sendable (Data) -> String
     private let makeDestination: Factory
     private let makeRevealingDestination: Factory?
@@ -51,6 +52,8 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     ///
     /// - Parameters:
     ///   - limit: The vendor's limit, the one its encoder splits batches to.
+    ///   - timestamp: When every record a check sends was tracked, and the setup's
+    ///     ``DestinationSetup/timestamp``; 2026-11-24 14:03:27 UTC by default.
     ///   - bodyText: A body as text the checks can search for an event's name and values; the
     ///     body's UTF-8 by default. A vendor whose bodies encode events again (in base64, say)
     ///     passes one that decodes them.
@@ -60,11 +63,13 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     ///     plan, transport and backoff.
     public init(
         limit: BatchLimit,
+        timestamp: Date = .conformanceTimestamp,
         bodyText: @escaping @Sendable (Data) -> String = { String(decoding: $0, as: UTF8.self) },
         makeRevealingDestination: Factory? = nil,
         makeDestination: @escaping Factory
     ) {
         self.limit = limit
+        self.timestamp = timestamp
         self.bodyText = bodyText
         self.makeDestination = makeDestination
         self.makeRevealingDestination = makeRevealingDestination
@@ -139,9 +144,9 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         let secret = "traffluent-conformance-secret"
         let plan = try TrackingPlan(schemas: [ConformanceSensitiveEvent.schema])
         let event = ConformanceSensitiveEvent(label: "traffluent-conformance-sensitive", secret: Sensitive(secret))
-        var revealing = EventRecord(event: event, timestamp: .conformanceTimestamp, sourceLocation: nil)
+        var revealing = EventRecord(event: event, timestamp: timestamp, sourceLocation: nil)
         revealing.revealsSensitiveValues = true
-        let redacted = EventRecord(event: event, timestamp: .conformanceTimestamp, sourceLocation: nil)
+        let redacted = EventRecord(event: event, timestamp: timestamp, sourceLocation: nil)
 
         let byDefault = try await send([revealing, redacted], plan: plan, script: [.status(.ok)], through: makeDestination)
         let defaultText = byDefault.requests.map { bodyText($0.body) }.joined(separator: "\n")
@@ -167,9 +172,11 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     private func expectConsentHolds(sourceLocation: Testing.SourceLocation) async throws {
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema, ConformanceFunctionalEvent.schema, ConformanceAdvertisingEvent.schema])
         let transport = ScriptedTransport([.status(.ok)])
-        let destination = try makeDestination(DestinationSetup(plan: plan, transport: transport, backoff: try .conformance))
+        let destination = try makeDestination(DestinationSetup(plan: plan, transport: transport, backoff: try .conformance, timestamp: timestamp))
         let consent = Consent([.analytics: .granted, .functional: .granted, .advertising: .denied])
-        let tracker = Tracker(consent: consent)
+        // Stamped as the other checks' records are, so a destination that leaves out records by
+        // their age measures them from the setup's timestamp too.
+        let tracker = Tracker(consent: consent, now: { [timestamp] in timestamp })
         let delivery = tracker.records.batch().deliver(to: destination.accepting(.analytics, .advertising))
 
         tracker.track(ConformanceAnalyticsEvent(label: "traffluent-conformance-granted"))
@@ -197,8 +204,8 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         // No cap the kit can exceed: nothing to check, which ConformanceCheck documents.
         guard labelByteCount <= 64 << 20 else { return }
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
-        let oversized = EventRecord(event: ConformanceAnalyticsEvent(label: String(repeating: "x", count: labelByteCount)), timestamp: .conformanceTimestamp, sourceLocation: nil)
-        let small = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-small"), timestamp: .conformanceTimestamp, sourceLocation: nil)
+        let oversized = EventRecord(event: ConformanceAnalyticsEvent(label: String(repeating: "x", count: labelByteCount)), timestamp: timestamp, sourceLocation: nil)
+        let small = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-small"), timestamp: timestamp, sourceLocation: nil)
 
         let sent = try await send([oversized, small], plan: plan, script: [.status(.ok)], through: makeDestination)
 
@@ -220,7 +227,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
         let failures: [ScriptedTransport.Answer] = [.noResponse, .status(.requestTimeout), .status(.tooManyRequests), .status(.internalServerError), .status(.serviceUnavailable)]
         for failure in failures {
-            let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-retried"), timestamp: .conformanceTimestamp, sourceLocation: nil)
+            let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-retried"), timestamp: timestamp, sourceLocation: nil)
 
             let sent = try await send([record], plan: plan, script: [failure, .status(.ok)], through: makeDestination)
 
@@ -239,7 +246,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
         let rejections: [HTTPResponse.Status] = [.badRequest, .unauthorized, .forbidden, .notFound, .contentTooLarge, .unprocessableContent]
         for status in rejections {
-            let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-rejected"), timestamp: .conformanceTimestamp, sourceLocation: nil)
+            let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-rejected"), timestamp: timestamp, sourceLocation: nil)
 
             let sent = try await send([record], plan: plan, script: [.status(status)], through: makeDestination)
 
@@ -261,7 +268,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         // instrument, `InstrumentationSystem.instrument`, gets this tracer.
         let tracer = InMemoryTracer()
         let span = tracer.startSpan("traffluent-conformance")
-        let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-traced"), timestamp: .conformanceTimestamp, sourceLocation: nil, context: span.context)
+        let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-traced"), timestamp: timestamp, sourceLocation: nil, context: span.context)
 
         let sent = try await withTracer(tracer) { () async throws -> Sent in
             try await send([record], plan: plan, script: [.status(.ok)], through: makeDestination)
@@ -284,7 +291,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
     /// `script`, and returns what it sent and every drop it reported.
     private func send(_ records: [EventRecord], plan: TrackingPlan, script: [ScriptedTransport.Answer], through factory: Factory) async throws -> Sent {
         let transport = ScriptedTransport(script)
-        let reports = try await receive(records, setup: DestinationSetup(plan: plan, transport: transport, backoff: .conformance), through: factory)
+        let reports = try await receive(records, setup: DestinationSetup(plan: plan, transport: transport, backoff: .conformance, timestamp: timestamp), through: factory)
         // The destination is gone, so its reports end once read.
         var collected: [HTTPDropReport<Encoding.Failure>] = []
         for await report in reports {
@@ -318,6 +325,8 @@ extension ExponentialBackoff {
 }
 
 extension Date {
-    /// The time every check's records are stamped with.
-    fileprivate static let conformanceTimestamp = Date(timeIntervalSince1970: 1_795_442_607)
+    /// The time every check's records are stamped with, and `DestinationSetup`'s timestamp, by
+    /// default.
+    @usableFromInline
+    static let conformanceTimestamp = Date(timeIntervalSince1970: 1_795_442_607)
 }

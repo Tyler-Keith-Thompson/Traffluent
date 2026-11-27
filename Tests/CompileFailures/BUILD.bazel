@@ -207,3 +207,38 @@ swift_compile_failure_test(
     tags = ["debug-only"],
     deps = ["//Sources/Traffluent"],
 )
+
+# The googleAnalytics factories take an API secret, so they are compiled for macOS and Linux alone.
+# This rule compiles for the host, not iOS, so it pins the server half: a declaration of each
+# factory's very name and parameters, returning another type, makes a call ambiguous, which shows
+# the library's are there. GoogleAnalyticsAvailabilityTests declares the same in the iOS simulator,
+# where they compile because the library's are not.
+swift_compile_failure_test(
+    name = "GoogleAnalyticsFactoryOnServer",
+    size = "small",
+    src = "GoogleAnalyticsFactoryOnServer.swift",
+    expected_errors = [
+        "error: ambiguous use of 'googleAnalytics(measurementID:apiSecret:region:plan:transport:backoff:clock:now:)'",
+        "error: ambiguous use of 'googleAnalytics(measurementID:apiSecret:region:plan:backoff:clock:now:)'",
+    ],
+    error_count = 2,
+    tags = ["debug-only"],
+    deps = [
+        "//Sources/GoogleAnalyticsEncoding",
+        "//Sources/HTTPDestinations",
+        "//Sources/TrackingPlans",
+    ],
+)
+
+# The same calls without the declarations compile: the library's factories are found on the host.
+swift_compile_failure_test(
+    name = "GoogleAnalyticsFactoryOnServerControl",
+    size = "small",
+    src = "GoogleAnalyticsFactoryOnServerControl.swift",
+    tags = ["debug-only"],
+    deps = [
+        "//Sources/GoogleAnalyticsEncoding",
+        "//Sources/HTTPDestinations",
+        "//Sources/TrackingPlans",
+    ],
+)
