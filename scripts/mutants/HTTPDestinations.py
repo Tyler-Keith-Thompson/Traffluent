@@ -44,14 +44,16 @@ S = "HTTPDestination+URLSessionTransport.swift"
 E = "ExponentialBackoff.swift"
 R = "TransientFailureRetry.swift"
 
-# TransientFailureRetry's maxCount below Int32.max (AFLU-69) has no mutant: only a 2^31st retry
-# would tell it from Afluent's default.
-#
 # The deadline mutants that retry a request past its deadline (deadlineretried, deadlinenanpasses,
 # and the ones that sleep a backoff after a send fails past it, *pastdeadlineretried and
 # faileddeadlinenanpasses), and faileddeadlineexclusive, which reports one the test waits to see
 # sleep, leave its tests waiting on a test clock nobody advances, so they are caught by the
 # suite's time limit.
+#
+# So are the backoff mutants that wait longer or stop retrying (backofftripled, retriescapped,
+# uncappedwaits, afluentinitialismaximum): the retry tests, waitsMatchDelayBeforeRetry among them,
+# advance the clock by the expected waits only, so a longer wait or a missing attempt leaves them
+# waiting. afluentcapsooner, whose waits are shorter, fails an assertion on the waits.
 MUTANTS = [
     Mutant("methodput", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .put, url: endpoint, headerFields: headerFields)", mode="stmt"),
     Mutant("noheaderfields", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .post, url: endpoint)", mode="stmt"),
@@ -120,9 +122,14 @@ MUTANTS = [
     Mutant("norequesttimeoutretried", R, "self == .requestTimeout", "false"),
     Mutant("notoomanyrequestsretried", R, "self == .tooManyRequests", "false"),
     Mutant("rejectionretried", R, "return false", "return try await backoff.handle(error: error, beforeRetry: beforeRetry)", mode="stmt"),
-    Mutant("backoffbase3", R, "ExponentialBackoffStrategy(base: 2, maxCount: UInt(Int32.max) - 1, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(base: 3, maxCount: UInt(Int32.max) - 1, maxDelay: backoff.maximumDelay)"),
-    Mutant("afluentcapsooner", R, "backoff.maximumDelay", "backoff.initialDelay", nth=1),
-    Mutant("retryoffbyone", R, "power.trailingZeroBitCount", "power.trailingZeroBitCount + 1"),
+    # Each mutant of the strategy's expression puts its own copy before the original's, so a later
+    # one's `nth` skips those copies: for afluentcapsooner, backofftripled's and retriescapped's
+    # (uncappedwaits' has no maxDelay); for afluentinitialismaximum, all three.
+    Mutant("backofftripled", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 3, maxDelay: backoff.maximumDelay)"),
+    Mutant("retriescapped", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxCount: 5, maxDelay: backoff.maximumDelay)"),
+    Mutant("uncappedwaits", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2)"),
+    Mutant("afluentcapsooner", R, "backoff.maximumDelay", "backoff.initialDelay", nth=2),
+    Mutant("afluentinitialismaximum", R, "backoff.initialDelay", "backoff.maximumDelay", nth=3),
     # ExponentialBackoff.
     # The defaults: the first .seconds(1) is the doc comment's.
     Mutant("defaultinitial", E, "initialDelay = .seconds(1)", "initialDelay = .seconds(2)", mode="stmt"),

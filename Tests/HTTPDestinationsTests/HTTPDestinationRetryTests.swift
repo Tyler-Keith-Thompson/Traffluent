@@ -3,8 +3,11 @@ import Clocks
 import Destinations
 import Events
 import Foundation
+import Generators
 import HTTPDestinations
 import HTTPTypes
+import PropertyBased
+import Sampling
 import Synchronization
 import Testing
 import Trackers
@@ -204,6 +207,36 @@ struct HTTPDestinationRetryTests {
 
         let actual = transport.sentAt.withLock { sentAt in zip(sentAt.dropFirst(), sentAt).map { $0 - $1 } }
         #expect(actual == expectedWaits)
+    }
+
+    @Test("For any backoff of whole milliseconds under 295 s, each wait on the clock is exactly the backoff's delay(beforeRetry:) for that retry")
+    func waitsMatchDelayBeforeRetry() async throws {
+        await propertyCheck(count: 100, input: Gen.uint64(in: .min ... .max)) { seed in
+            var random = Xoshiro256StarStar(seed: seed)
+            let initialMilliseconds = random.integer(in: 1 ... 10_000)
+            let maximumMilliseconds = random.integer(in: initialMilliseconds ... 295_000)
+            let retries = random.integer(in: 1 ... 10)
+            let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+            let clock = TestClock()
+            let backoff = try ExponentialBackoff(initialDelay: .milliseconds(initialMilliseconds), maximumDelay: .milliseconds(maximumMilliseconds))
+            let expectedWaits = try (1 ... retries).map { try backoff.delay(beforeRetry: $0) }
+            let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.failure(.failed(reason: "offline")), count: retries)
+            let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)
+            let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: backoff, clock: clock)
+            let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+            var attempts = transport.attempts.makeAsyncIterator()
+            let receiving = Task { await sut.receive(batch) }
+
+            for wait in expectedWaits {
+                _ = await attempts.next()
+                while (try? await clock.checkSuspension()) != nil {}
+                await clock.advance(by: wait)
+            }
+            await receiving.value
+
+            let actual = transport.sentAt.withLock { sentAt in zip(sentAt.dropFirst(), sentAt).map { $0 - $1 } }
+            #expect(actual == expectedWaits, "seed \(seed)")
+        }
     }
 
     @Test("Each batch's waits start again at the backoff's first, however many the batch before it took")

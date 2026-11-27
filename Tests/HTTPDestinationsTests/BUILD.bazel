@@ -28,6 +28,8 @@ swift_library(
         "@swiftpkg_swift_http_types//:HTTPTypes",
         "@swiftpkg_swift_property_based//:PropertyBased",
         "@swiftpkg_swift_system//:SystemPackage",
+        "@swiftpkg_swiftprng//:Generators",
+        "@swiftpkg_swiftprng//:Sampling",
         "//Tests/TraffluentTestSupport",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_distributed_tracing//:Tracing",

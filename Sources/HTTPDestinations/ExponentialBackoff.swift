@@ -8,6 +8,10 @@
 /// let backoff = try ExponentialBackoff(initialDelay: .seconds(1), maximumDelay: .seconds(60))
 /// ```
 ///
+/// ``HTTPDestination`` sleeps exactly ``delay(beforeRetry:)`` before each retry when both delays
+/// count their attoseconds in 53 significant bits or fewer, as any whole number of milliseconds
+/// under 295 seconds does. Otherwise each wait it sleeps is within about one part in 2⁵³ of it.
+///
 /// The waits have no jitter. Each device starts retrying when its own send fails, and its sends
 /// come at moments set by its own batches, so devices don't retry in step; a fixed schedule also
 /// keeps the waits the same from one run to the next.
