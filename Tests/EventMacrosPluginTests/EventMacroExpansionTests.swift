@@ -271,6 +271,59 @@ struct EventMacroExpansionTests {
         )
     }
 
+    @Test(
+        "A version literal is read in its radix, without its underscores",
+        arguments: [("0b11", 3), ("0o12", 10), ("0x1F", 31), ("1_0", 10), ("0x7FFF_FFFF", 2_147_483_647)]
+    )
+    func versionLiteralRadix(literal: String, expectedVersion: Int) {
+        assertMacroExpansion(
+            """
+            @Event(version: \(literal))
+            struct Opened {
+            }
+            """,
+            expandedSource: """
+                struct Opened {
+                }
+
+                extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var schemaVersion: Int {
+                        \(expectedVersion)
+                    }
+
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
+                    }
+
+                    private enum CodingKeys: Swift.CodingKey {
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
+                    }
+                }
+
+                extension Opened {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Opened.self, schema: Opened.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
+                """,
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
     @Test("A raw string literal name and a custom consent category are copied as written")
     func literalsAsWritten() {
         assertMacroExpansion(

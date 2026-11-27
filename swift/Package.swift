@@ -19,7 +19,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.12.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.7.6"),
-        .package(url: "https://github.com/swiftlang/swift-syntax", "603.0.0"..<"605.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", "600.0.0"..<"605.0.0"),
         .package(url: "https://github.com/ajevans99/swift-json-schema", .upToNextMinor(from: "0.15.0")),
         .package(url: "https://github.com/brokenhandsio/swift-cbor", exact: "1.0.0-rc.1"),
         .package(url: "https://github.com/valpackett/SwiftCBOR", from: "0.6.0"),

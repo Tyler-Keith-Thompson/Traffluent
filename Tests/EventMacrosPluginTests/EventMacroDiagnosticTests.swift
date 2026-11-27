@@ -153,7 +153,7 @@ struct EventMacroDiagnosticTests {
         )
     }
 
-    @Test("A version that isn't a positive integer literal is an error at the argument", arguments: ["0", "-1", "latest"])
+    @Test("A version that isn't a positive integer literal, or overflows Int, is an error at the argument", arguments: ["0", "0x0", "-1", "latest", "0x8000_0000_0000_0000"])
     func versionNotAPositiveLiteral(version: String) {
         assertMacroExpansion(
             """

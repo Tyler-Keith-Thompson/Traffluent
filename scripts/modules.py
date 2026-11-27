@@ -73,10 +73,19 @@ PACKAGES = [
     # once the hold is full. Foundation has no double-ended queue.
     ("swift-collections", "https://github.com/apple/swift-collections", "1.7.6"),
     # The @Event macro's compiler plugin (MACROS) and its expansion tests. Only the plugin and its
-    # tests depend on it, so an app that doesn't use the macro never builds it. A range down to 603:
-    # Mockable 0.6.5 caps swift-syntax below 604, and an adopter's package that uses both must
-    # resolve; the plugin builds against 603 and 604.
-    ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "range:603.0.0..<605.0.0"),
+    # tests depend on it, but the umbrella re-exports EventMacros, so nearly every adopter builds it.
+    # The range is as wide as the plugin compiles and passes its expansion tests against, so an app
+    # resolves beside another macro package capped at an older major (`from: "600.0.0"` means
+    # below 601). The floor is 600: 509 and 510 have no MacroExpansionContext.lexicalContext, which
+    # @Constrained's placement check and the generic-event note read, nor the
+    # SwiftSyntaxMacrosGenericTestSupport the expansion tests use. 600's differences sit under
+    # `#if canImport(SwiftSyntax601)` in Sources/EventMacrosPlugin. The upper bound is one past the
+    # newest release, 604. Tested (TRAF-120) with Swift 6.4 in a SwiftPM package of the plugin and
+    # EventMacrosPluginTests pinned exactly to 600.0.0, 600.0.1, 601.0.1, 602.0.0, 603.0.0 and
+    # 604.0.0; this repository resolves the newest. Mockable 0.6.5 caps swift-syntax below 604
+    # (509..<604), so an adopter's package using both resolves within 600..<604. Mockable is no
+    # dependency here (its row below is commented out), so it never narrows this resolution.
+    ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "range:600.0.0..<605.0.0"),
     # Tests only: validates the tracking plans TrackingPlans writes against JSON Schema 2020-12's
     # meta-schema, and events against them. Its JSONSchema product needs only swift-collections; it
     # is reported on Bowtie's conformance suite.

@@ -12,6 +12,15 @@
 #
 # Known equivalent mutants (left out, as they would survive by design): none.
 #
+# Left out because no mutant run compiles it: IntegerLiteralExprSyntax+RepresentedLiteralValue.swift,
+# swift-syntax 600's backport of representedLiteralValue, sits under
+# `#if !canImport(SwiftSyntax601)`, and this repository resolves a newer swift-syntax. Checked by
+# hand instead (TRAF-120), in a SwiftPM package of the plugin and its tests pinned to 600.0.0: a
+# wrong radix for 0b, 0o or 0x, a radix prefix kept, and underscores kept are each caught by
+# versionLiteralRadix. Dropping the `hasError` guard survives, equivalent: every integer literal
+# the parser flags (a prefix without digits, a digit outside its radix) is text `Int(_:radix:)`
+# rejects too; the guard stays to read literals as 601's own property does.
+#
 # Left out because a schema can't switch it: the schema's `consentCategory: Self.consentCategory`,
 # text inside a multi-line string literal. //Tests/EventMacrosTests pins each event's schema
 # category, and Events.py's schemaconsentfixed the stored field.

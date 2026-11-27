@@ -203,8 +203,14 @@ extension TypeSyntax {
 extension GenericArgumentClauseSyntax {
     /// The clause's first argument when it is a type: `Optional`'s only one.
     fileprivate var onlyType: TypeSyntax? {
+        // From 601 an argument may be an expression (an integer generic argument); 600's is always
+        // a type.
+        #if canImport(SwiftSyntax601)
         guard case .type(let type) = arguments.first?.argument else { return nil }
         return type
+        #else
+        return arguments.first?.argument
+        #endif
     }
 }
 
