@@ -124,6 +124,23 @@ swift_compile_failure_test(
     deps = ["//Sources/EventMacros"],
 )
 
+# @Event on a struct declared in a function: the compiler's refusal of an extension macro on a local
+# type is the only error. LinkerSets refuses the record there too; the macro writes none and leaves
+# the refusal unsaid, rather than adding a second error.
+swift_compile_failure_test(
+    name = "EventInFunction",
+    size = "small",
+    src = "EventInFunction.swift",
+    error_count = 1,
+    expected_errors = [
+        "error: local type cannot have attached extension macro",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
 # Another package's top-level `JSON`, for the two checks below; only they reach it.
 swift_library(
     name = "OtherJSON",
@@ -161,4 +178,32 @@ swift_compile_failure_test(
         "//Sources/JSONValues",
         "//Sources/Traffluent",
     ],
+)
+
+# A file that imports Traffluent alone declares @Event structs and compiles: their records name
+# LinkerSetsRuntime.LinkerSetRecord, which the umbrella re-exports through EventMacros.
+swift_compile_failure_test(
+    name = "UmbrellaEventControl",
+    size = "small",
+    src = "UmbrellaEventControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/Traffluent"],
+)
+
+# The same file naming LinkerSet and LinkerSetKind fails: EventMacros re-exports LinkerSetRecord
+# alone, so the rest of LinkerSetsRuntime stays out of an adopter's scope.
+swift_compile_failure_test(
+    name = "UmbrellaHidesLinkerSet",
+    size = "small",
+    src = "UmbrellaHidesLinkerSet.swift",
+    expected_errors = [
+        "error: cannot find 'LinkerSetKind' in scope",
+        "error: cannot find 'LinkerSet' in scope",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/Traffluent"],
 )

@@ -44,6 +44,7 @@ use_repo(
     "swift_package",
     "swiftpkg_afluent",
     "swiftpkg_grdb.swift",
+    "swiftpkg_linkersets",
     "swiftpkg_swift_clocks",
     "swiftpkg_swift_collections",
     "swiftpkg_swift_cbor",

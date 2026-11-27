@@ -1,3 +1,5 @@
+internal import LinkerSetsRuntime
+
 /// An event type found in the running program: one declared with `@Event`, or one of the
 /// library's own events, with its schema.
 ///
@@ -27,17 +29,15 @@
 ///
 /// ## Limits
 ///
-/// - On Linux and the other ELF platforms, only the image that links `Events` is read, which is
-///   the whole program as SwiftPM and Bazel link Swift there. Events in a library loaded on its
-///   own, a dynamic library or a plugin, aren't found.
 /// - An object file in a static archive that nothing references brings no record into the
 ///   program: the linker leaves it out. That happens with CocoaPods' static libraries, a static
 ///   XCFramework, or a Bazel library with `alwayslink = False`. SwiftPM, and Bazel's
-///   `alwayslink = True`, link every object file.
-/// - ``all`` holds the events of the images loaded when it is called; a framework loaded later
-///   adds its events from then on.
-/// - Object formats other than Mach-O and ELF, such as COFF on Windows and WebAssembly's, have no
-///   events found: ``all`` is empty there.
+///   `alwayslink = True`, link every object file. Link such a library whole (`-force_load` on
+///   Apple platforms, `--whole-archive` on Linux) to have its events found.
+/// - ``all`` holds the events of the images loaded when it is called: the program and the
+///   dynamic libraries it links. A library opened later with `dlopen` adds its events from then on.
+/// - A module that declares events, linked into two images, lists each of its events twice, and
+///   stores and plans refuse the duplicate. Link each such module into one image.
 public struct DiscoveredEvent: Sendable {
     /// The event's type.
     public let type: any (Event & Codable).Type
@@ -62,8 +62,9 @@ public struct DiscoveredEvent: Sendable {
         // object file linked into one image twice. A store or plan built from the list would refuse
         // the second as a duplicate name, so each type is listed once.
         var seen = Set<ObjectIdentifier>()
-        return __EventDiscovery.events()
-            .filter { seen.insert(ObjectIdentifier($0.type)).inserted }
+        return LinkerSet<any __DiscoverableEvent.Type>(kind: .events).values
+            .filter { seen.insert(ObjectIdentifier($0)).inserted }
+            .map { DiscoveredEvent(type: $0, schema: $0.schema) }
             .map { (event: $0, typeName: String(reflecting: $0.type)) }
             .sorted { $0.event.precedes($1.event, typeNames: ($0.typeName, $1.typeName)) }
             .map(\.event)

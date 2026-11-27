@@ -13,6 +13,7 @@ swift_library(
     module_name = "AutomaticControlTracking",
     deps = [
         "//Sources/Events",
+        "@swiftpkg_linkersets//:LinkerSets",
         "//Sources/Trackers",
         "//Sources/SwiftUITracking",
         "//Sources/UIKitTracking",

@@ -23,7 +23,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event applies only to a struct", line: 1, column: 1)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -45,7 +45,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event needs the type of every stored property written out; add a type annotation", line: 3, column: 9)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -72,7 +72,7 @@ struct EventMacroDiagnosticTests {
                 DiagnosticSpec(message: "@Event needs the type of every stored property written out; add a type annotation", line: 4, column: 9),
                 DiagnosticSpec(message: "@Event needs the type of every stored property written out; add a type annotation", line: 4, column: 12),
             ],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -92,7 +92,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event can't encode a lazy property; make it a stored or a computed property", line: 3, column: 5)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -112,7 +112,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event can't encode a destructuring pattern; declare each property on its own", line: 3, column: 9)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -130,7 +130,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event's name must be a string literal without interpolation", line: 1, column: 14)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -148,7 +148,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event's name must not be empty", line: 1, column: 14)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -166,7 +166,7 @@ struct EventMacroDiagnosticTests {
                 }
                 """,
             diagnostics: [DiagnosticSpec(message: "@Event's version must be a positive integer literal", line: 1, column: 17)],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
@@ -193,7 +193,7 @@ struct EventMacroDiagnosticTests {
                 DiagnosticSpec(message: "@Event needs the type of every stored property written out; add a type annotation", line: 3, column: 9),
                 DiagnosticSpec(message: "@Event can't encode a lazy property; make it a stored or a computed property", line: 4, column: 5),
             ],
-            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }

@@ -55,6 +55,7 @@ let dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/x-sheep/swift-property-based", from: "2.0.1"),
     .package(url: "https://github.com/Tyler-Keith-Thompson/SwiftPRNG", from: "0.0.6"),
     .package(url: "https://github.com/Tyler-Keith-Thompson/Afluent", from: "1.1.49"),
+    .package(url: "https://github.com/Tyler-Keith-Thompson/LinkerSets", from: "0.0.23"),
     .package(url: "https://github.com/apple/swift-distributed-tracing", from: "1.7.4"),
     .package(url: "https://github.com/apple/swift-log", from: "1.17.2"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.1.0"),
@@ -72,7 +73,7 @@ let dependencies: [Package.Dependency] = [
 let targets: [Target] = [
     // Pipeline
     .target(name: "AsyncQueues", dependencies: [.product(name: "DequeModule", package: "swift-collections"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
-    .target(name: "Events", dependencies: [.product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
+    .target(name: "Events", dependencies: [.product(name: "LinkerSetsRuntime", package: "linkersets"), .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles),
     .target(name: "Destinations", dependencies: ["AsyncQueues", "Events", .product(name: "Afluent", package: "afluent"), .product(name: "DequeModule", package: "swift-collections"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "LoggingDestinations", dependencies: ["Events", "Destinations", .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "TracingDestinations", dependencies: ["Events", "Destinations", .product(name: "Tracing", package: "swift-distributed-tracing")], exclude: bazelFiles),
@@ -87,26 +88,26 @@ let targets: [Target] = [
     .target(name: "TrackerTesting", dependencies: ["Events", "Trackers"], exclude: bazelFiles),
     .target(name: "DestinationTesting", dependencies: ["AsyncQueues", "Events", "Destinations", "HTTPDestinations", "PropertyJSON", "Trackers", "TrackingPlans", .product(name: "Afluent", package: "afluent"), .product(name: "InMemoryTracing", package: "swift-distributed-tracing"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "Tracing", package: "swift-distributed-tracing"), .product(name: "HTTPTypes", package: "swift-http-types")], exclude: bazelFiles),
     // Instrumentation
-    .target(name: "SwiftUITracking", dependencies: ["Events", "Trackers", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
+    .target(name: "SwiftUITracking", dependencies: ["Events", .product(name: "LinkerSets", package: "linkersets"), "Trackers", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     .target(name: "UIKitTracking", dependencies: ["Events", "Trackers"], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     .target(name: "AppKitTracking", dependencies: ["Events", "Trackers"], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     .target(name: "AutomaticScreenTracking", dependencies: ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking"], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
-    .target(name: "AutomaticControlTracking", dependencies: ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
-    .target(name: "LifecycleTracking", dependencies: ["Events", "Persistence", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
-    .target(name: "Sessions", dependencies: ["Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
+    .target(name: "AutomaticControlTracking", dependencies: ["Events", .product(name: "LinkerSets", package: "linkersets"), "Trackers", "SwiftUITracking", "UIKitTracking", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
+    .target(name: "LifecycleTracking", dependencies: ["Events", .product(name: "LinkerSets", package: "linkersets"), "Persistence", "Trackers", .product(name: "Afluent", package: "afluent"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
+    .target(name: "Sessions", dependencies: ["Events", .product(name: "LinkerSets", package: "linkersets"), "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     .target(name: "StandardContext", dependencies: ["Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     // Persistence
     .target(name: "Checksums", exclude: bazelFiles),
     .target(name: "Persistence", dependencies: ["AsyncQueues", "Events", "Checksums", .product(name: "CBOR", package: "swift-cbor"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "GRDBPersistence", dependencies: ["AsyncQueues", "Events", "Persistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     // Schema
-    .target(name: "EventMacros", dependencies: ["Events", "EventMacrosPlugin"], exclude: bazelFiles),
+    .target(name: "EventMacros", dependencies: ["Events", "EventMacrosPlugin", .product(name: "LinkerSetsRuntime", package: "linkersets")], exclude: bazelFiles),
     .target(name: "JSONValues", exclude: bazelFiles),
     .target(name: "TrackingPlans", dependencies: ["Events", "JSONValues"], exclude: bazelFiles),
     .target(name: "TrackingPlanTesting", dependencies: ["TrackingPlans"], exclude: bazelFiles),
     .target(name: "DiscoveryFixtures", dependencies: ["EventMacros"], exclude: bazelFiles),
     // Schema: compiler plugin
-    .macro(name: "EventMacrosPlugin", dependencies: [.product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftCompilerPlugin", package: "swift-syntax"), .product(name: "SwiftDiagnostics", package: "swift-syntax")], exclude: bazelFiles),
+    .macro(name: "EventMacrosPlugin", dependencies: [.product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftCompilerPlugin", package: "swift-syntax"), .product(name: "SwiftDiagnostics", package: "swift-syntax"), .product(name: "LinkerSetsMacroSupport", package: "linkersets")], exclude: bazelFiles),
 
     // Command plugins (PLUGINS in scripts/modules.py), which Bazel doesn't build
     .plugin(name: "ExportTrackingPlan", capability: .command(intent: .custom(verb: "export-tracking-plan", description: "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files."), permissions: [.writeToPackageDirectory(reason: "Writes the tracking plan's JSON Schema files into the package")])),
@@ -123,7 +124,7 @@ let targets: [Target] = [
     .testTarget(name: "JSONValuesTests", dependencies: ["JSONValues", .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlansTests", dependencies: ["TrackingPlans", "EventMacros", "Events", .product(name: "JSONSchema", package: "swift-json-schema"), .product(name: "PropertyBased", package: "swift-property-based"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "TrackingPlanTestingTests", dependencies: ["TrackingPlanTesting", "TrackingPlans", "Events"], exclude: bazelFiles),
-    .testTarget(name: "EventDiscoveryTests", dependencies: ["Events", "EventMacros", "DiscoveryFixtures", "Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "TrackingPlans", "Sessions", "LifecycleTracking", "SwiftUITracking", "AutomaticControlTracking", .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
+    .testTarget(name: "EventDiscoveryTests", dependencies: ["Events", "EventMacros", "DiscoveryFixtures", .product(name: "LinkerSets", package: "linkersets"), "Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "TrackingPlans", "Sessions", "LifecycleTracking", "SwiftUITracking", "AutomaticControlTracking", .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
     .testTarget(name: "EventDiscoveryDuplicateTests", dependencies: ["Events", "EventMacros", "Persistence", "GRDBPersistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), "TrackingPlans", .product(name: "SystemPackage", package: "swift-system")], exclude: bazelFiles),
     .testTarget(name: "TrackerTestingTests", dependencies: ["TrackerTesting", "Trackers", "Events", .product(name: "PropertyBased", package: "swift-property-based"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), "TraffluentTestSupport"], exclude: bazelFiles),
     .testTarget(name: "EventMacrosPluginTests", dependencies: ["EventMacrosPlugin", .product(name: "SwiftSyntax", package: "swift-syntax"), .product(name: "SwiftSyntaxMacros", package: "swift-syntax"), .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"), .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax")], exclude: bazelFiles),

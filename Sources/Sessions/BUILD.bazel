@@ -13,6 +13,7 @@ swift_library(
     module_name = "Sessions",
     deps = [
         "//Sources/Events",
+        "@swiftpkg_linkersets//:LinkerSets",
         "//Sources/Trackers",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
     ],

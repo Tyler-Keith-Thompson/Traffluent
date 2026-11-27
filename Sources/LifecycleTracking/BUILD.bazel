@@ -13,6 +13,7 @@ swift_library(
     module_name = "LifecycleTracking",
     deps = [
         "//Sources/Events",
+        "@swiftpkg_linkersets//:LinkerSets",
         "//Sources/Persistence",
         "//Sources/Trackers",
         "@swiftpkg_afluent//:Afluent",

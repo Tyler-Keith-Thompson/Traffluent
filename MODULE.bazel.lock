@@ -619,7 +619,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 5e501dc033b05cb2f929529f1c052b380add85ca4dc90fc020dd7a12b7c27484"
+          "FILE:@@//swift/Package.resolved 1a7c7c6342fde42ae4e8ebc1a394e210b578521ce58399e617ec3f0c5de38b63"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -629,6 +629,7 @@
                 "@swiftpkg_swift_property_based//:pkg_info.json": "swift-property-based",
                 "@swiftpkg_swiftprng//:pkg_info.json": "swiftprng",
                 "@swiftpkg_afluent//:pkg_info.json": "afluent",
+                "@swiftpkg_linkersets//:pkg_info.json": "linkersets",
                 "@swiftpkg_swift_distributed_tracing//:pkg_info.json": "swift-distributed-tracing",
                 "@swiftpkg_swift_log//:pkg_info.json": "swift-log",
                 "@swiftpkg_swift_clocks//:pkg_info.json": "swift-clocks",
@@ -657,6 +658,7 @@
               "repo_names": [
                 "swiftpkg_afluent",
                 "swiftpkg_grdb.swift",
+                "swiftpkg_linkersets",
                 "swiftpkg_swift_cbor",
                 "swiftpkg_swift_clocks",
                 "swiftpkg_swift_collections",
@@ -723,6 +725,27 @@
               "commit": "7e7957c3c0a372e45f24c487b335766799e053e8",
               "remote": "https://github.com/Tyler-Keith-Thompson/Afluent",
               "version": "1.1.49",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
+              "system_sdk_deps": false,
+              "binary_target_deps": false
+            }
+          },
+          "swiftpkg_linkersets": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_linkersets",
+              "commit": "b1b31aa7c2391121490a5b31d5d2f3c4f32774cb",
+              "remote": "https://github.com/Tyler-Keith-Thompson/LinkerSets",
+              "version": "0.0.23",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -1016,6 +1039,7 @@
             "swiftpkg_swift_property_based",
             "swiftpkg_swiftprng",
             "swiftpkg_afluent",
+            "swiftpkg_linkersets",
             "swiftpkg_swift_distributed_tracing",
             "swiftpkg_swift_log",
             "swiftpkg_swift_clocks",

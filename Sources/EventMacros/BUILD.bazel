@@ -10,6 +10,7 @@ swift_library(
     module_name = "EventMacros",
     deps = [
         "//Sources/Events",
+        "@swiftpkg_linkersets//:LinkerSetsRuntime",
     ],
     plugins = [
         "//Sources/EventMacrosPlugin",

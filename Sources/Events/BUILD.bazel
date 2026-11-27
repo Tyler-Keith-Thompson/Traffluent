@@ -9,6 +9,7 @@ swift_library(
     srcs = glob(["**/*.swift"]),
     module_name = "Events",
     deps = [
+        "@swiftpkg_linkersets//:LinkerSetsRuntime",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
     ],
     visibility = ["//visibility:public"],

@@ -1,3 +1,4 @@
+import LinkerSetsMacroSupport
 import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
@@ -9,9 +10,23 @@ import SwiftSyntaxMacros
 /// and its coding: a keyed container of its stored properties, each under its name, an optional's
 /// `nil` left out, read back with each property's default value when its key is missing.
 ///
+/// Beside the struct it places a LinkerSets record of Traffluent's event kind, `"evnt"`, holding the
+/// struct as an `any Events.__DiscoverableEvent.Type`, which `DiscoveredEvent.all` reads, and
+/// conforms the struct to `__DiscoverableEvent`; a generic struct, or one nested in a generic type,
+/// gets a note instead.
+///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
-public struct EventMacro: ExtensionMacro {
+public struct EventMacro: ExtensionMacro, LinkerSetMacro {
+    // The kind Events reads, LinkerSetKind.events: the two must stay the same number, which
+    // DiscoveredEventTests' everyEvent checks.
+    public static func kind(of attribute: AttributeSyntax) -> UInt32 { 0x6576_6E74 }  // "evnt"
+
+    // Qualified with its module, so a type of the same name where @Event is used can't stand in.
+    public static func requiredConformance(of attribute: AttributeSyntax) -> TypeSyntax? {
+        "Events.__DiscoverableEvent"
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -27,23 +42,18 @@ public struct EventMacro: ExtensionMacro {
         let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
         let enums = RawValueEnum.enums(in: structure.memberBlock.members)
         let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
-        // Once per enum, however many properties hold it. An enum nested in the event must declare
-        // Codable in its inheritance clause: one that adds it in an extension is reported too, a
-        // deliberate limit, as the macro sees only the struct. An enum declared elsewhere is left
-        // to the requirement below, as is one whose clause lists a protocol the macro doesn't know.
-        let lacking = held.compactMap { $0?.lacksCodable == true ? $0?.name : nil }
-        let uncodable = Set(lacking).sorted()
-        let enumDiagnostics = uncodable.compactMap { name in
-            enums[name].map { Diagnostic(node: $0.inheritance, message: EventMacroDiagnostic.enumNotCodable(name: name)) }
-        }
-        let diagnostics = argumentDiagnostics + propertyDiagnostics + enumDiagnostics
+        let diagnostics = argumentDiagnostics + propertyDiagnostics + enumDiagnostics(of: held, in: enums)
         guard diagnostics.isEmpty else {
             diagnostics.forEach(context.diagnose)
             return []
         }
+        let discovery = try discovery(of: node, structure, in: context)
+        discovery.note.map(context.diagnose)
         let access = structure.modifiers.first { [.keyword(.public), .keyword(.package)].contains($0.name.tokenKind) }
             .map { "\($0.name.text) " } ?? ""
-        let conformances = [("Event", "Events.Event"), ("Encodable", "Swift.Encodable"), ("Decodable", "Swift.Decodable")]
+        // __DiscoverableEvent only where the peer places a record, which holds the struct as one.
+        let discoverable = discovery.isRecorded ? [("__DiscoverableEvent", "Events.__DiscoverableEvent")] : []
+        let conformances = ([("Event", "Events.Event"), ("Encodable", "Swift.Encodable"), ("Decodable", "Swift.Decodable")] + discoverable)
             .filter { name, _ in protocols.contains { $0.trimmedDescription.split(separator: ".").last.map(String.init) == name } }
             .map { $0.1 }
         let inheritance = conformances.isEmpty ? "" : ": " + conformances.joined(separator: ", ")
@@ -63,46 +73,63 @@ public struct EventMacro: ExtensionMacro {
         let body = members.compactMap { $0 }.joined(separator: "\n\n")
         // The expansion is formatted after it returns, which indents the members.
         let source = "extension \(type.trimmedDescription)\(inheritance) {\n\(body)\n}"
-        let undiscoverable = undiscoverableNote(structure, in: context)
-        undiscoverable.map(context.diagnose)
-        let record = undiscoverable == nil ? discoveryRecord(of: type.trimmedDescription) : nil
-        return ([source] + [record].compactMap { $0 }).map { DeclSyntax(stringLiteral: $0).cast(ExtensionDeclSyntax.self) }
+        return [DeclSyntax(stringLiteral: source).cast(ExtensionDeclSyntax.self)]
     }
 
-    /// The extension placing the event's record in the binary, which `DiscoveredEvent.all` reads:
-    /// in the library's section of each object format, kept by `@used` from being stripped.
-    private static func discoveryRecord(of type: String) -> String {
-        """
-        extension \(type) {
-            #if objectFormat(MachO)
-            @section("__DATA_CONST,__trfl_events")
-            #elseif objectFormat(ELF)
-            @section("trfl_events")
-            #endif
-            @used
-            private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in Events.__EventDiscovery.load(\(type).self, schema: \(type).schema, into: outValue, ofType: type) }, 0, 0)
+    /// The struct's record, beside it. None for a struct LinkerSets can't give a record, or for one
+    /// the extension isn't added to: the record holds the struct as the `__DiscoverableEvent` the
+    /// extension conforms it to.
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        // The extension reports each of these; a record beside them would only add an error.
+        guard let structure = declaration.as(StructDeclSyntax.self) else { return [] }
+        let isRecorded = try discovery(of: node, structure, in: context).isRecorded
+        let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
+        let enums = RawValueEnum.enums(in: structure.memberBlock.members)
+        let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
+        let argumentDiagnostics = EventArguments.arguments(of: node).diagnostics
+        let expands = argumentDiagnostics.isEmpty && propertyDiagnostics.isEmpty && enumDiagnostics(of: held, in: enums).isEmpty
+        guard isRecorded && expands else { return [] }
+        return try recordPeers(of: node, providingPeersOf: declaration, in: context)
+    }
+
+    /// An error at each enum declared in the struct that a property holds and that doesn't list
+    /// `Codable` in its inheritance clause, once per enum, however many properties hold it.
+    // An enum nested in the event must declare Codable in its inheritance clause: one that adds it
+    // in an extension is reported too, a deliberate limit, as the macro sees only the struct. An
+    // enum declared elsewhere is left to the coding's requirement, as is one whose clause lists a
+    // protocol the macro doesn't know.
+    private static func enumDiagnostics(of held: [RawValueEnum?], in enums: [String: RawValueEnum]) -> [Diagnostic] {
+        let lacking = held.compactMap { $0?.lacksCodable == true ? $0?.name : nil }
+        return Set(lacking).sorted().compactMap { name in
+            enums[name].map { Diagnostic(node: $0.inheritance, message: EventMacroDiagnostic.enumNotCodable(name: name)) }
         }
-        """
     }
 
-    /// A note saying `DiscoveredEvent.all` can't find the event, when `structure` can't hold its
-    /// record, a static stored property, which neither a generic type nor one nested in a generic
-    /// type can; `nil` when it can.
+    /// Whether `structure` gets its record, from LinkerSets' refusal of it: a generic struct, or
+    /// one nested in a generic type's declaration, gets a note saying `DiscoveredEvent.all` can't
+    /// find the event, as a record holds one concrete type.
     // A note rather than a warning: first-party builds treat warnings as errors, and Swift has no
     // way to silence one diagnostic at its site, so a warning would make every generic @Event fail
     // to build, this repository's own fixtures included. The note still shows where the event is
-    // declared.
-    // Only generic declarations are checked: a type declared in a function can't take an
-    // extension macro at all. A type nested in an extension of a generic type isn't seen as generic
-    // from here (an extension's syntax doesn't say whether the type it extends is generic), so it
-    // gets the record and fails to compile, naming the static stored property;
-    // //Tests/CompileFailures:EventInGenericExtension pins that error.
-    private static func undiscoverableNote(_ structure: StructDeclSyntax, in context: some MacroExpansionContext) -> Diagnostic? {
-        if let clause = structure.genericParameterClause {
-            return Diagnostic(node: clause, message: EventMacroDiagnostic.genericNotDiscovered)
+    // declared. Any other refusal gets no record and nothing said: a type declared in a function
+    // can't take an extension macro, and the compiler says so once. A type nested in an extension
+    // of a generic type isn't seen as generic (an extension's syntax doesn't say whether the type
+    // it extends is generic), so it gets its record, a static stored property beside it, and fails
+    // to compile; //Tests/CompileFailures:EventInGenericExtension pins that error.
+    private static func discovery(of node: AttributeSyntax, _ structure: StructDeclSyntax, in context: some MacroExpansionContext) throws -> Discovery {
+        guard let refusal = try refusal(of: node, providingPeersOf: structure, in: context) else { return .recorded }
+        switch refusal.reason {
+        case .genericType:
+            return .noted(Diagnostic(node: structure.genericParameterClause.map(Syntax.init) ?? refusal.node, message: EventMacroDiagnostic.genericNotDiscovered))
+        case .memberOfGenericType:
+            return .noted(Diagnostic(node: structure.name, message: EventMacroDiagnostic.nestedInGenericNotDiscovered))
+        default:
+            return .refused
         }
-        guard context.lexicalContext.contains(where: \.isGenericType) else { return nil }
-        return Diagnostic(node: structure.name, message: EventMacroDiagnostic.nestedInGenericNotDiscovered)
     }
 
     /// `schema`, each property with the enum declared in the struct it holds, if any.
@@ -296,13 +323,28 @@ extension String {
     }
 }
 
-extension Syntax {
-    /// Whether this node declares a generic struct, class, enum or actor.
-    fileprivate var isGenericType: Bool {
-        let genericParameters = self.as(StructDeclSyntax.self)?.genericParameterClause
-            ?? self.as(ClassDeclSyntax.self)?.genericParameterClause
-            ?? self.as(EnumDeclSyntax.self)?.genericParameterClause
-            ?? self.as(ActorDeclSyntax.self)?.genericParameterClause
-        return genericParameters != nil
+/// Whether a struct gets its discovery record, and what the macro says when it doesn't.
+private enum Discovery {
+    /// The peer places the record, and the extension conforms the struct to `__DiscoverableEvent`.
+    case recorded
+    /// No record, with a note saying `DiscoveredEvent.all` can't find the event.
+    case noted(Diagnostic)
+    /// No record and nothing said: the compiler reports the declaration's own error.
+    case refused
+}
+
+extension Discovery {
+    fileprivate var isRecorded: Bool {
+        switch self {
+        case .recorded: true
+        case .noted, .refused: false
+        }
+    }
+
+    fileprivate var note: Diagnostic? {
+        switch self {
+        case .noted(let note): note
+        case .recorded, .refused: nil
+        }
     }
 }

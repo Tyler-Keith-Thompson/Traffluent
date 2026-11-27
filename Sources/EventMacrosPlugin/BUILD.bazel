@@ -13,6 +13,7 @@ swift_compiler_plugin(
         "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
         "@swiftpkg_swift_syntax//:SwiftCompilerPlugin",
         "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_linkersets//:LinkerSetsMacroSupport",
     ],
     visibility = ["//visibility:public"],
 )

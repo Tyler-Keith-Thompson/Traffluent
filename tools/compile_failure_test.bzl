@@ -6,7 +6,8 @@ when the compiler fails and its output holds every string in `expected_errors`; 
 source compiles, or the output lacks one, and prints the output. Checking the text, not just the
 failure, keeps a fixture that fails for another reason (a missing module, a typo) from passing.
 With no `expected_errors` it passes only when the source compiles: a control, which shows that
-the search paths and the plugin work.
+the search paths and the plugin work. `error_count`, when set, is how many errors the compiler must
+report, for a fixture whose rule is that nothing adds a second.
 
 Fixtures and their tests live in `Tests/CompileFailures` (hand-written BUILD.bazel), which the root
 BUILD.bazel leaves out of the test bundles by name and no Package.swift target holds:
@@ -61,6 +62,11 @@ while IFS= read -r expected; do
 done <<'EXPECTED'
 %s
 EXPECTED
+count="$(printf '%%s\n' "$output" | grep -c ': error: ')"
+if [ %s -ne 0 ] && [ "$count" -ne %s ]; then
+    echo "The compiler reported $count errors, not %s."
+    missing=1
+fi
 if [ "$missing" -ne 0 ]; then
     echo
     echo "$output"
@@ -109,6 +115,9 @@ def _swift_compile_failure_test_impl(ctx):
             ctx.file.src.short_path,
             ctx.file.src.short_path,
             "\n".join(ctx.attr.expected_errors),
+            ctx.attr.error_count,
+            ctx.attr.error_count,
+            ctx.attr.error_count,
         ),
         is_executable = True,
     )
@@ -126,6 +135,7 @@ swift_compile_failure_test = rule(
         "plugin": attr.label(executable = True, cfg = "exec"),
         "plugin_module_name": attr.string(doc = "The plugin's module name, which `-load-plugin-executable` pairs with it."),
         "expected_errors": attr.string_list(doc = "Text the compiler's output must hold; none for a source that must compile."),
+        "error_count": attr.int(doc = "How many errors the compiler must report, or 0 to leave the count unchecked."),
     },
     test = True,
 )

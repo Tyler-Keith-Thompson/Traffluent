@@ -47,10 +47,10 @@ and computed properties are left out. The struct keeps its memberwise initialize
 You never list your events. `@Event` places a small record of the event in the compiled binary, and
 `DiscoveredEvent.all` reads those records at run time: every `@Event` struct in the modules
 linked into the program, the app's own and its packages', with each one's schema, ordered by name
-and then version. On Apple platforms that includes the frameworks the app has loaded; "Limits"
-below says what isn't found. The library's own events are in it too, once their modules are linked:
-`SessionStarted` and `SessionEnded`, `ScreenViewed`, `ControlActivated` and the `Application`
-events of `trackLifecycle`.
+and then version. That includes the frameworks and dynamic libraries the app has loaded;
+"Limits" below says what isn't found. The library's own events are in it too, once their modules
+are linked: `SessionStarted` and `SessionEnded`, `ScreenViewed`, `ControlActivated` and the
+`Application` events of `trackLifecycle`.
 
 `SegmentStore()`, `DatabaseStore(database:)` and `TrackingPlan()` each take that list, so a new
 event is stored and described as soon as it is declared. To keep only some events on disk, list them:
@@ -62,8 +62,8 @@ An event that conforms to `Event` by hand, without `@Event`, has no record, so i
 discovered. Add it to the discovered ones where it is needed:
 `SegmentStore(events: DiscoveredEvent.all.map(\.type) + [Legacy.self])` and
 `TrackingPlan(schemas: DiscoveredEvent.all.map(\.schema) + [Legacy.schema])`. A generic `@Event`
-struct, or one nested in a generic type's declaration, isn't discovered either, as a generic type
-can't hold the record: the macro adds a note where it is declared, and you list it the same way.
+struct, or one nested in a generic type's declaration, isn't discovered either, as a record holds
+one concrete type: the macro adds a note where it is declared, and you list it the same way.
 An `@Event` struct declared in an extension of a generic type doesn't compile (`static stored
 properties not supported in generic types`), as the macro can't tell from the extension that the
 type is generic; declare it outside the generic type instead.
@@ -84,17 +84,17 @@ declares one (<doc:TrackingPlanWorkflow>).
 
 #### Limits
 
-- On Linux and the other ELF platforms, only the image that links the `Events` module is read,
-  which is the whole program as SwiftPM and Bazel link Swift there. Events in a library loaded on
-  its own, a dynamic library or a plugin, aren't found.
 - An object file in a static archive that nothing references brings no record into the program,
   as the linker leaves it out: CocoaPods' static libraries, a static XCFramework, or a Bazel
   library with `alwayslink = False`. SwiftPM, and Bazel's `alwayslink = True`, link every object
-  file.
-- `DiscoveredEvent.all` holds the events of the images loaded when it is called. A framework
-  loaded later adds its events from then on, so build the store and plan after it loads.
-- Object formats other than Mach-O and ELF, COFF on Windows and WebAssembly's among them, find no
-  events: `DiscoveredEvent.all` is empty, and Traffluent doesn't target them.
+  file. To have such a library's events found, link it whole: `-force_load` on Apple platforms,
+  `--whole-archive` on Linux.
+- `DiscoveredEvent.all` holds the events of the images loaded when it is called: the program and
+  the dynamic libraries and frameworks it links. A library or plug-in opened later with `dlopen`
+  adds its events from then on, so build the store and plan after it loads.
+- A module that declares events, linked into two images (a framework and the app, each holding a
+  static copy), lists each of its events twice, and stores and plans refuse the duplicate. Link
+  each such module into one image.
 
 ### Enum properties
 

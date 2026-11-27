@@ -12,18 +12,16 @@
 #   unique in the file to plant; EventConstraintTests pins the default.
 # - A pattern check's fallback when the pattern doesn't compile: the factory compiled it already,
 #   so the fallback can't run.
-# - Discovery's ELF reader (`sections()` under `#if objectFormat(ELF)`) and `placeholderRecord` have
-#   no mutants: mutation runs on the Mac, which compiles the Mach-O reader alone, so a mutant there
-#   would never be built. The placeholder is load-bearing on ELF: without a record in the section,
-#   the linker defines no `__start_trfl_events`/`__stop_trfl_events` and a program with no events
-#   fails to link. The Linux CI run of EventDiscoveryTests covers both.
-# - Discovery's skip of the shared cache's images (`MH_DYLIB_IN_CACHE`): those system images hold
-#   no events section, so reading them finds nothing either; only the walk's time differs.
-# - Discovery's `size > 0` guard: an empty section is an empty buffer, which holds no records.
+#
+# Left out because a schema can't switch it: the kind in each of the library's own records,
+# `@LinkerSetEntry(kind: 0x6576_6E74)` in Sessions, SwiftUITracking, AutomaticControlTracking and
+# LifecycleTracking. The macro takes the kind as a literal, so a switch around it doesn't compile.
+# DiscoveredEventTests.everyEvent names each of those events, so a wrong kind there fails it.
 
-# EventDiscoveryTests, then EventDiscoveryDuplicateTests, reach discovery (EventDiscovery.swift,
-# DiscoveredEvent.swift) and the list-free spellings it feeds in Persistence, GRDBPersistence and
-# TrackingPlans (module=).
+# EventDiscoveryTests, then EventDiscoveryDuplicateTests, reach discovery (DiscoveredEvent.swift,
+# LinkerSetKind+Events.swift, the library's own records in Sessions and the other modules) and the
+# list-free spellings it feeds in Persistence, GRDBPersistence and TrackingPlans (module=). Reading
+# the records, and an accessor's check of the type it is asked for, are LinkerSets', tested there.
 TESTS = ["EventsTests", "EventDiscoveryTests", "EventDiscoveryDuplicateTests"]
 
 L = "SourceLocation.swift"
@@ -160,8 +158,8 @@ MUTANTS = [
     Mutant("enumintegerlost", "EventSchema+Enumeration.swift", "self = .integer(exact)", "self = .integer(0)", mode="stmt"),
     Mutant("schemaenumerationdropped", S, "self.enumeration = enumeration", "self.enumeration = nil", mode="stmt"),
     # Discovery: the records read, their order, and the list-free spellings built on them.
-    Mutant("discoverykindignored", "EventDiscovery.swift", "$0.kind == kind", "true"),
-    Mutant("discoverytypeunchecked", "EventDiscovery.swift", "expectedType.load(as: Any.Type.self) == DiscoveredEvent.self", "true"),
+    Mutant("discoverykindwrong", "LinkerSetKind+Events.swift", "0x6576_6E74", "0x6576_6E75"),
+    Mutant("discoveryotherkindread", "LinkerSetKind+Events.swift", "0x6576_6E74", "0x7465_7374"),
     Mutant("discoverynamesreversed", "DiscoveredEvent.swift", "name.utf8.lexicographicallyPrecedes(otherName.utf8)", "otherName.utf8.lexicographicallyPrecedes(name.utf8)"),
     Mutant("discoveryversionsreversed", "DiscoveredEvent.swift", "type.schemaVersion < other.type.schemaVersion", "type.schemaVersion > other.type.schemaVersion"),
     Mutant("discoverytypenamesreversed", "DiscoveredEvent.swift", "typeNames.0.utf8.lexicographicallyPrecedes(typeNames.1.utf8)", "typeNames.1.utf8.lexicographicallyPrecedes(typeNames.0.utf8)"),
@@ -170,5 +168,7 @@ MUTANTS = [
     Mutant("plandiscoversnone", "TrackingPlan.swift", "try self.init(events: DiscoveredEvent.all.map { (schema: $0.schema, typeName: String(reflecting: $0.type)) })", "try self.init(events: [])", mode="stmt", module="TrackingPlans"),
     Mutant("plantypesunnamed", "TrackingPlan.swift", "String(reflecting: $0.type)", "nil", module="TrackingPlans"),
     Mutant("plantiesreversed", "TrackingPlan.swift", "$0.offset < $1.offset", "$0.offset > $1.offset", module="TrackingPlans"),
-    Mutant("discoveryrepeated", "DiscoveredEvent.swift", "seen.insert(ObjectIdentifier($0.type)).inserted", "true"),
+    Mutant("discoveryrepeated", "DiscoveredEvent.swift", "seen.insert(ObjectIdentifier($0)).inserted", "true"),
+    # The schema each discovered event carries is its type's, properties included.
+    Mutant("discoveryschemabare", "DiscoveredEvent.swift", "$0.schema", "EventSchema(name: $0.name, version: $0.schemaVersion, consentCategory: $0.consentCategory, properties: [])"),
 ]

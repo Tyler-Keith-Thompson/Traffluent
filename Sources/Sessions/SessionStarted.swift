@@ -1,4 +1,5 @@
 public import Events
+internal import LinkerSets
 
 /// A session started: what `Enricher.sessions(timeout:kinds:)` tracks before the first event of
 /// each session, stamped with that event's time and carrying the new session's ``SessionKey``.
@@ -18,14 +19,9 @@ public struct SessionStarted: Event, Codable, Hashable {
     public init() {}
 }
 
-// The record DiscoveredEvent.all finds this event by, written as @Event writes one: the library's
-// own modules don't depend on the macro.
-extension SessionStarted {
-    #if objectFormat(MachO)
-        @section("__DATA_CONST,__trfl_events")
-    #elseif objectFormat(ELF)
-        @section("trfl_events")
-    #endif
-    @used
-    private nonisolated static let __discoveryRecord: __EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in __EventDiscovery.load(SessionStarted.self, schema: SessionStarted.schema, into: outValue, ofType: type) }, 0, 0)
+// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
+// the library's own modules don't depend on the macro.
+extension SessionStarted: __DiscoverableEvent {
+    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
+    private static let discoveryRecord: any __DiscoverableEvent.Type = SessionStarted.self
 }

@@ -3,6 +3,7 @@ import DiscoveryFixtures
 import EventMacros
 import Events
 import LifecycleTracking
+import LinkerSets
 import Sessions
 import SwiftUITracking
 import Testing
@@ -33,34 +34,33 @@ struct DiscoveryHandWritten: Event, Codable {
     static let schema = EventSchema(name: name, version: schemaVersion, consentCategory: consentCategory, properties: [])
 }
 
-/// An event conforming by hand whose record, in the events' section, is of another kind.
-struct DiscoveryOtherKind: Event, Codable {
+/// An event conforming by hand whose record, in LinkerSets' section, is of another kind.
+struct DiscoveryOtherKind: __DiscoverableEvent {
     static let name = "discovery_other_kind"
     static let schema = EventSchema(name: name, version: schemaVersion, consentCategory: consentCategory, properties: [])
 }
 
-// A record that would load DiscoveryOtherKind but carries a kind other than __EventDiscovery.kind,
-// as another tool's records in the same section might, so the reader must skip it.
+// A record that holds DiscoveryOtherKind as an event's record would, but of a kind other than
+// the events' ("test", not "evnt"), as another library's records in the same section are, so
+// the reader must skip it.
 extension DiscoveryOtherKind {
-    #if objectFormat(MachO)
-        @section("__DATA_CONST,__trfl_events")
-    #elseif objectFormat(ELF)
-        @section("trfl_events")
-    #endif
-    @used
-    private nonisolated static let otherKindRecord: __EventDiscovery.Record = (0x7465_7374, 0, { outValue, type, _, _ in __EventDiscovery.load(DiscoveryOtherKind.self, schema: DiscoveryOtherKind.schema, into: outValue, ofType: type) }, 0, 0)
+    @LinkerSetEntry(kind: 0x7465_7374)
+    private static let otherKindRecord: any __DiscoverableEvent.Type = DiscoveryOtherKind.self
 }
 
 // A second record of DiscoverySignedUp, beside the one @Event gave it, as a type whose record's
 // object file is linked twice would have.
 extension DiscoverySignedUp {
-    #if objectFormat(MachO)
-        @section("__DATA_CONST,__trfl_events")
-    #elseif objectFormat(ELF)
-        @section("trfl_events")
-    #endif
-    @used
-    private nonisolated static let repeatedRecord: __EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in __EventDiscovery.load(DiscoverySignedUp.self, schema: DiscoverySignedUp.schema, into: outValue, ofType: type) }, 0, 0)
+    @LinkerSetEntry(kind: 0x6576_6E74)
+    private static let repeatedRecord: any __DiscoverableEvent.Type = DiscoverySignedUp.self
+}
+
+// A record of the events' kind that holds a String, as another library that picked the same number
+// would place: LinkerSet hands over only values of the type it is asked for, so all skips it, and
+// everyEvent's list is the same with it.
+enum DiscoveryForeignRecords {
+    @LinkerSetEntry(kind: 0x6576_6E74)
+    static let foreign = "x"
 }
 
 @Suite("DiscoveredEvent")
@@ -157,27 +157,5 @@ struct DiscoveredEventTests {
         let actual = DiscoveredEvent.all.map { $0.type.name }
 
         #expect(!actual.contains(skipped))
-    }
-
-    @Test("A record's loader writes the event only for the reader asking for this module's DiscoveredEvent")
-    func loaderChecksTheType() {
-        func load(asking expectedType: Any.Type) -> DiscoveredEvent? {
-            withUnsafeTemporaryAllocation(of: DiscoveredEvent.self, capacity: 1) { buffer in
-                withUnsafePointer(to: expectedType) { expectedType in
-                    guard let outValue = buffer.baseAddress,
-                        __EventDiscovery.load(DiscoverySignedUp.self, schema: DiscoverySignedUp.schema, into: outValue, ofType: expectedType)
-                    else { return nil }
-                    return outValue.move()
-                }
-            }
-        }
-        let expectedSchema = DiscoverySignedUp.schema
-
-        let actual = load(asking: DiscoveredEvent.self)
-        let refused = load(asking: Int.self)
-
-        #expect(actual?.schema == expectedSchema)
-        #expect(actual.map { ObjectIdentifier($0.type) } == ObjectIdentifier(DiscoverySignedUp.self))
-        #expect(refused == nil)
     }
 }

@@ -1,6 +1,9 @@
-// The generated code names this module's types, so a file that imports EventMacros alone can
-// expand the macro.
+// The generated code names these modules' types, so a file that imports EventMacros alone can
+// expand the macro: Events', and LinkerSetsRuntime's in the discovery record. Only the record's
+// type is re-exported from LinkerSetsRuntime, so LinkerSet and LinkerSetKind stay out of an
+// adopter's scope: Traffluent reads the set itself, through DiscoveredEvent.all.
 @_exported public import Events
+@_exported public import struct LinkerSetsRuntime.LinkerSetRecord
 
 /// Makes a struct an event: derives its `Event` and `Codable` conformances, its name and its
 /// ``/Events/EventSchema`` from its declaration.
@@ -45,14 +48,16 @@
 ///   ``/Events/Sensitive`` property goes through its own conformance, so only a store writes its
 ///   value.
 ///
-/// A second extension holds a private `__discoveryRecord`, which the compiler places in the binary
-/// so ``/Events/DiscoveredEvent/all`` lists the event at run time, and `SegmentStore()`,
-/// `DatabaseStore(database:)` and `TrackingPlan()` take it without a list. A generic struct, or
-/// one nested in a generic type's declaration, gets no record, as a generic type can't hold a
-/// static stored property: it isn't discovered, and the macro adds a note saying to list it. A
-/// struct declared in an extension of a generic type doesn't compile (`static stored properties
-/// not supported in generic types`), as the extension doesn't say the type is generic; declare
-/// it outside the generic type.
+/// Beside the struct the macro adds a private record, which the compiler places in the binary so
+/// ``/Events/DiscoveredEvent/all`` lists the event at run time, and `SegmentStore()`,
+/// `DatabaseStore(database:)` and `TrackingPlan()` take it without a list. The record holds the
+/// struct as an `__DiscoverableEvent`, an underscored protocol the macro conforms it to and
+/// discovery reads, which the event's code doesn't use. A generic struct, or
+/// one nested in a generic type's declaration, gets no record, as a record holds one concrete
+/// type: it isn't discovered, and the macro adds a note saying to list it. A struct declared in an
+/// extension of a generic type doesn't compile (`static stored properties not supported in
+/// generic types`), as the extension doesn't say the type is generic; declare it outside the
+/// generic type.
 ///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
@@ -124,11 +129,12 @@
 ///     each breaking change; 1 by default.
 @attached(
     extension,
-    conformances: Event, Encodable, Decodable,
+    conformances: Event, Encodable, Decodable, __DiscoverableEvent,
     names: named(name), named(consentCategory), named(schemaVersion), named(schema), named(constraintViolation), named(CodingKeys),
     named(encode(to:)), named(init(from:)), named(decodeValue), named(decodeIfPresentValue),
-    named(requireCodable), named(codableRequirements), named(__discoveryRecord)
+    named(requireCodable), named(codableRequirements)
 )
+@attached(peer)
 public macro Event(
     name: String? = nil,
     consent: ConsentCategory? = nil,

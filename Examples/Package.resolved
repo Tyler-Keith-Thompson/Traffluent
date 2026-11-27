@@ -1,5 +1,5 @@
 {
-  "originHash" : "4f72f0521a89bbe8e35445847836d915add46988647c14b1afdd58ce446d912f",
+  "originHash" : "a96b97193d1d40d46e7e74dde17d1cf13ad113778a462b367e3626e0eaa709f3",
   "pins" : [
     {
       "identity" : "afluent",
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "aa61ccf3fe6e6c012823a0c08a45d79855a26ee0",
         "version" : "2.29.0"
+      }
+    },
+    {
+      "identity" : "linkersets",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Tyler-Keith-Thompson/LinkerSets",
+      "state" : {
+        "revision" : "b1b31aa7c2391121490a5b31d5d2f3c4f32774cb",
+        "version" : "0.0.23"
       }
     },
     {

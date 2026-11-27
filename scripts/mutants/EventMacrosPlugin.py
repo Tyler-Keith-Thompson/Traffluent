@@ -191,13 +191,25 @@ MUTANTS = [
     Mutant("leafqualifiedkept", P, "wrapper.modules.contains(member.baseType.trimmedDescription)", "false"),
     Mutant("leafsensitivekept", P, '"Sensitive"', '"Mine"'),
     Mutant("leafarraynamekept", P, '"Array"', '"Mine"'),
-    # EventMacro: the discovery record.
-    Mutant("recordalwaysdropped", M, "undiscoverable == nil ? discoveryRecord(of: type.trimmedDescription) : nil", "nil"),
-    Mutant("genericrecorded", M, "structure.genericParameterClause", "nil"),
-    Mutant("discoverynoteunsaid", M, "undiscoverable.map(context.diagnose)", "", mode="stmt"),
-    Mutant("genericcontextrecorded", M, "context.lexicalContext.contains(where: \\.isGenericType)", "false"),
-    Mutant("genericstructcontextrecorded", M, "self.as(StructDeclSyntax.self)?.genericParameterClause", "nil"),
-    Mutant("genericclasscontextrecorded", M, "self.as(ClassDeclSyntax.self)?.genericParameterClause", "nil"),
-    Mutant("genericenumcontextrecorded", M, "self.as(EnumDeclSyntax.self)?.genericParameterClause", "nil"),
-    Mutant("genericactorcontextrecorded", M, "self.as(ActorDeclSyntax.self)?.genericParameterClause", "nil"),
+    # EventMacro: the discovery record, the peer LinkerSets' expansion writes (recordPeers, from
+    # EventMacro's own LinkerSetMacro conformance), the __DiscoverableEvent conformance the record
+    # holds the struct as, and the mapping of LinkerSets' refusals to the note or to silence.
+    Mutant("recordalwaysdropped", M, "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", "return []", mode="stmt"),
+    # The peer's guard: anything but a struct gets no record (the extension reports notAStruct).
+    Mutant("recordbesidenonstruct", M, "return []", "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", mode="stmt", nth=2),
+    Mutant("recordbesideargumenterrors", M, "argumentDiagnostics.isEmpty", "true"),
+    Mutant("recordbesidepropertyerrors", M, "propertyDiagnostics.isEmpty", "true"),
+    Mutant("recordbesideenumerrors", M, "enumDiagnostics(of: held, in: enums).isEmpty", "true"),
+    Mutant("recordbesideundiscoverable", M, "isRecorded && expands", "expands"),
+    Mutant("discoverableunconformed", M, 'discovery.isRecorded ? [("__DiscoverableEvent", "Events.__DiscoverableEvent")] : []', "[]"),
+    Mutant("undiscoverableconformed", M, 'discovery.isRecorded ? [("__DiscoverableEvent", "Events.__DiscoverableEvent")] : []', '[("__DiscoverableEvent", "Events.__DiscoverableEvent")]'),
+    Mutant("recordkindwrong", M, "0x6576_6E74", "0x6576_6E75"),
+    Mutant("recordholdsany", M, '"Events.__DiscoverableEvent"', "nil", nth=0),
+    Mutant("discoverynoteunsaid", M, "discovery.note.map(context.diagnose)", "", mode="stmt"),
+    # Any other refusal (a local struct's) recorded: recordPeers then throws LinkerSets' error.
+    Mutant("otherrefusalrecorded", M, "return .refused", "return .recorded", mode="stmt"),
+    Mutant("genericrefusalsilent", M, "return .noted(Diagnostic(node: structure.genericParameterClause.map(Syntax.init) ?? refusal.node, message: EventMacroDiagnostic.genericNotDiscovered))", "return .refused", mode="stmt"),
+    Mutant("genericnoteatdeclaration", M, "structure.genericParameterClause.map(Syntax.init) ?? refusal.node", "refusal.node"),
+    Mutant("nestedrefusalsilent", M, "return .noted(Diagnostic(node: structure.name, message: EventMacroDiagnostic.nestedInGenericNotDiscovered))", "return .refused", mode="stmt"),
+    Mutant("nestednotedasgeneric", M, "EventMacroDiagnostic.nestedInGenericNotDiscovered", "EventMacroDiagnostic.genericNotDiscovered"),
 ]
