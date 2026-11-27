@@ -18,8 +18,8 @@ struct READMEExamplesTests {
 
     @Test("The quick start's tracker, through the collector's modifiers, sends records its plan encodes")
     func recordsEncodeWithThePlan() async throws {
-        let plan = try TrackingPlan(
-            schemas: [ProductAddedToCart.schema, SessionStarted.schema, SessionEnded.schema])
+        // Every @Event in the app, and the library's own, such as the sessions'.
+        let plan = try TrackingPlan()
         // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
         let tracker = Tracker(
             enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()])

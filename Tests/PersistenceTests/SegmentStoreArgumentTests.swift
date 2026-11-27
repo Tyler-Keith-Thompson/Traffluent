@@ -58,12 +58,15 @@ struct SegmentStoreArgumentTests {
         #expect(sut.pendingRecordCount == expected)
     }
 
-    @Test("Two event types under one name throw duplicateEventName, and create no directory")
+    @Test("Two event types under one name throw duplicateEventName naming it and both types, in list order, and create no directory")
     func duplicateNames() {
         let directory = FilePath(NSTemporaryDirectory()).appending("SegmentStoreArgumentTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let expected = SegmentStoreError.duplicateEventName(
+            "Tapped", firstType: "PersistenceTests.SegmentStoreArgumentTests.Tapped",
+            secondType: "PersistenceTests.SegmentStoreArgumentTests.Renamed")
 
-        #expect(throws: SegmentStoreError.duplicateEventName) {
+        #expect(throws: expected) {
             _ = try SegmentStore(events: [Tapped.self, Renamed.self], directory: directory)
         }
         #expect(!FileManager.default.fileExists(atPath: directory.string))

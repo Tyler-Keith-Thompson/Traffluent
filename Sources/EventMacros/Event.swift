@@ -45,6 +45,15 @@
 ///   ``/Events/Sensitive`` property goes through its own conformance, so only a store writes its
 ///   value.
 ///
+/// A second extension holds a private `__discoveryRecord`, which the compiler places in the binary
+/// so ``/Events/DiscoveredEvent/all`` lists the event at run time, and `SegmentStore()`,
+/// `DatabaseStore(database:)` and `TrackingPlan()` take it without a list. A generic struct, or
+/// one nested in a generic type's declaration, gets no record, as a generic type can't hold a
+/// static stored property: it isn't discovered, and the macro adds a note saying to list it. A
+/// struct declared in an extension of a generic type doesn't compile (`static stored properties
+/// not supported in generic types`), as the extension doesn't say the type is generic; declare
+/// it outside the generic type.
+///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
 /// The struct keeps its memberwise initializer.
@@ -118,7 +127,7 @@
     conformances: Event, Encodable, Decodable,
     names: named(name), named(consentCategory), named(schemaVersion), named(schema), named(constraintViolation), named(CodingKeys),
     named(encode(to:)), named(init(from:)), named(decodeValue), named(decodeIfPresentValue),
-    named(requireCodable), named(codableRequirements)
+    named(requireCodable), named(codableRequirements), named(__discoveryRecord)
 )
 public macro Event(
     name: String? = nil,

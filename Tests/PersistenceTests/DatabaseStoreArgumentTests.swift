@@ -39,18 +39,24 @@ struct DatabaseStoreArgumentTests {
         #expect(sut.byteCount == expected)
     }
 
-    @Test("Two event types under one name throw duplicateEventName")
+    @Test("Two event types under one name throw duplicateEventName naming it and both types, in list order")
     func duplicateNames() throws {
         let database = try DatabaseQueue()
+        let expectedName = "Tapped"
+        let expectedFirstType = "PersistenceTests.DatabaseStoreArgumentTests.Renamed"
+        let expectedSecondType = "PersistenceTests.DatabaseStoreArgumentTests.Tapped"
 
         let actual = #expect(throws: DatabaseStoreError.self) {
-            _ = try DatabaseStore(events: [Tapped.self, Renamed.self], database: database)
+            _ = try DatabaseStore(events: [Renamed.self, Tapped.self], database: database)
         }
 
-        guard case .duplicateEventName = actual else {
+        guard case .duplicateEventName(let name, let firstType, let secondType) = actual else {
             Issue.record("Expected duplicateEventName, not \(String(describing: actual))")
             return
         }
+        #expect(name == expectedName)
+        #expect(firstType == expectedFirstType)
+        #expect(secondType == expectedSecondType)
     }
 
     @Test("One event type listed twice is one type, and accepted")

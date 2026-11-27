@@ -26,7 +26,8 @@ Read the app's code in this order, which is the order it builds up in:
    `CollectorBatchEncoder` and `redactingSensitiveValues()`. Its `drops` stream merges every drop
    report: rejections, consent, the store, the collector and the delivery's buffer.
    `ConsentPreferences` saves the shopper's decisions and restores them at launch.
-   `TrackingPlan.store` lists every event the app tracks, the library's included.
+   `TrackingPlan.store` is `TrackingPlan()`: every event the app declares, the library's
+   included, found in the modules it links; the store keeps the same events with no list.
 4. `Sources/StoreViews` holds the SwiftUI screens. Each reads the tracker from the environment and
    is placed with `trackScreen(_:)`. A tracker set for a view tree with `.tracker(_:)`, such as the
    one `trackScreen(_:)` adds the screen's name to or a preview's, doesn't reach code that reads

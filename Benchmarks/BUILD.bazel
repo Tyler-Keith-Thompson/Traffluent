@@ -24,6 +24,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/CollectorEncoding",
     "Sources/DestinationTesting",
     "Sources/Destinations",
+    "Sources/DiscoveryFixtures",
     "Sources/EventMacros",
     "Sources/EventMacrosPlugin",
     "Sources/Events",

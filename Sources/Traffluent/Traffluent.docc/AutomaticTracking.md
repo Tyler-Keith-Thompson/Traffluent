@@ -91,7 +91,7 @@ is tracked until the app turns it on as it launches, and keeps what that returns
 ```swift
 import LifecycleTracking
 
-let store = try SegmentStore(events: [ApplicationOpened.self, ApplicationBackgrounded.self, SignedUp.self])
+let store = try SegmentStore()  // every @Event, and the lifecycle's own events
 let tracker = Tracker(store: store)
 // In the application delegate's application(_:didFinishLaunchingWithOptions:), kept beside the tracker:
 let lifecycle = tracker.trackLifecycle(

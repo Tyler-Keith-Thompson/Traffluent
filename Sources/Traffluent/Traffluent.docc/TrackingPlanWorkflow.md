@@ -102,14 +102,17 @@ downstream can break. A plan describes events that have a schema, which `@Event`
 ### Making a plan
 
 `TrackingPlan` (module ``/TrackingPlans``, a product of its own that `import Traffluent` leaves out)
-turns schemas into the plan's files, one document per event and an index, as values:
+turns schemas into the plan's files, one document per event and an index, as values.
+`TrackingPlan()` takes the schema of every event the program declares with `@Event`, and of the
+library's own, so an event is in the plan as soon as it is declared
+(<doc:DefiningEvents#Finding-every-event>); `TrackingPlan(schemas:)` takes a list instead:
 
 ```swift
 import TrackingPlans
 
-let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
+let plan = try TrackingPlan()
 let paths = plan.files.map(\.path)
-// ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
+// ["tracking-plan.json", ..., "checkout_started.v2.schema.json", "checkout_started.v2.example.json", ...]
 ```
 
 The bytes depend on the schemas alone: keys sorted, two-space indentation, a trailing newline and
@@ -142,7 +145,7 @@ platform's client can encode the same event and compare it against the example.
 ### Exporting the plan
 
 A tool can only read the schemas of types it is compiled against, so the plan is written by a small
-executable in your package that lists your events:
+executable in your package that links every module declaring your events:
 
 ```swift
 // Package.swift
@@ -152,9 +155,9 @@ executable in your package that lists your events:
 ]),
 ```
 
-The example package's executable, `StoreTrackingPlan`, is one. Its plan, `TrackingPlan.store`,
-lists the store's own events and the ones the library tracks for it, such as screen views and
-sessions:
+The example package's executable, `StoreTrackingPlan`, is one. Its plan, `TrackingPlan.store`, is
+`TrackingPlan()`: the store's own events and the ones the library tracks for it, such as screen
+views and sessions, found in the modules it links:
 
 ```swift
 import StoreAnalytics

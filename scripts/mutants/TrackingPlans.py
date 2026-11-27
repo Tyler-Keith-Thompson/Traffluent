@@ -39,9 +39,11 @@ MUTANTS = [
     # TrackingPlan: the rules, the order and the index.
     Mutant("emptynameallowed", T, "!schema.name.isEmpty", "true"),
     Mutant("duplicatepropertyallowed", T, "schema.hasDistinctPropertyNames", "true"),
-    Mutant("duplicateeventallowed", T, "fileNames.insert(schema.fileName.lowercased()).inserted", "true"),
+    Mutant("duplicateeventallowed", T, "fileNames[fileName]", "nil", nth=0),
+    Mutant("duplicateeventforgotten", T, "fileNames[fileName] = typeName", "", mode="stmt"),
+    Mutant("duplicateversionlost", T, "throw .duplicateEvent(schema.name, version: schema.version, firstType: firstType, secondType: typeName)", "throw .duplicateEvent(schema.name, version: 0, firstType: firstType, secondType: typeName)", mode="stmt"),
     Mutant("casesensitive", T, "schema.fileName.lowercased()", "schema.fileName"),
-    Mutant("unsorted", T, "schemas.sorted(by: EventSchema.precedesInPlan)", "schemas"),
+    Mutant("unsorted", T, "EventSchema.precedesInPlan($0.element.schema, $1.element.schema) || (!EventSchema.precedesInPlan($1.element.schema, $0.element.schema) && $0.offset < $1.offset)", "$0.offset < $1.offset"),
     # nth=1: PlanEntry's index order comes first in the file, then the schemas'.
     Mutant("versionsreversed", T, "first.version < second.version", "first.version > second.version", nth=1),
     Mutant("namesreversed", T, "first.name.utf8.lexicographicallyPrecedes(second.name.utf8)", "second.name.utf8.lexicographicallyPrecedes(first.name.utf8)", nth=1),

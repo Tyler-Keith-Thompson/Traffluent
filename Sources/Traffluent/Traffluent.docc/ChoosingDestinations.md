@@ -74,8 +74,8 @@ its properties read through the event's schema in your `TrackingPlan`, and its s
 trace context. A `Sensitive` value is sent only while the record reveals it.
 
 A record the encoder can't write is left out of the request, and the rest of its batch is sent.
-That happens when the plan has no schema for the record's event at its version (an event the
-library tracks, such as `SessionStarted`, that the plan doesn't list), when the event isn't
+That happens when the plan has no schema for the record's event at its version (an event that
+conforms to `Event` by hand, left out of a list-free `TrackingPlan()`), when the event isn't
 `Encodable`, or when a value has no JSON form, such as a NaN. The destination logs each skipped
 record at error level and reports it on `dropReports` as `HTTPDropReport.skipped(_:)`. A batch with
 no record the encoder can write sends nothing.
@@ -108,7 +108,7 @@ keeps its `uuid`. A batch with no record the encoder can write, an empty one inc
 request.
 
 ```swift
-let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+let plan = try TrackingPlan()
 let postHog = try HTTPDestination.postHog(
     projectToken: projectToken,
     host: postHogHost,  // https://us.i.posthog.com, https://eu.i.posthog.com or your own

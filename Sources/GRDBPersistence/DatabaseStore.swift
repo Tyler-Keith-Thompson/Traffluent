@@ -9,7 +9,7 @@ public import Persistence
 ///
 /// ```swift
 /// let database = try DatabasePool(path: databasePath)
-/// let store = try DatabaseStore(events: [SignedUp.self, CheckedOut.self], database: database)
+/// let store = try DatabaseStore(database: database)
 /// let tracker = Tracker(store: store)
 /// let delivery = tracker.records.batch().deliver(to: vendor)
 /// ```
@@ -31,11 +31,11 @@ public import Persistence
 ///   Tracking inside one of the app's own writes to the same database is allowed: the record
 ///   doesn't join the app's transaction, and the worker inserts it once that write is done, even
 ///   if it rolls back.
-/// - **What is kept.** Only events of the types in `events`, which conform to `Codable`,
-///   in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
+/// - **What is kept.** Every event `DiscoveredEvent.all` lists, or only the `Codable` types in
+///   `events`, in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
 ///   they are delivered in this run like any other, are never written, and are lost if the app
 ///   ends first. The first record of each such type is reported as
-///   `DropReport.notPersisted(event:)`, so a type left out of `events` by mistake shows up. A
+///   `DropReport.notPersisted(event:)`, so a type left out by mistake shows up. A
 ///   record's context is not kept: a recovered record is in the top-level `ServiceContext`, as
 ///   its span ended with the earlier run.
 /// - **Deleting.** A record's row is deleted once every destination has received it, so a
@@ -83,7 +83,7 @@ public struct DatabaseStore: RecordStore {
     ///     double quote.
     ///   - byteBound: The most bytes of encoded records the table may hold.
     /// - Throws: ``DatabaseStoreError/nonPositiveByteBound`` when `byteBound` isn't positive,
-    ///   ``DatabaseStoreError/duplicateEventName`` when two of `events` share an `Event.name`,
+    ///   ``DatabaseStoreError/duplicateEventName(_:firstType:secondType:)`` when two of `events` share an `Event.name`,
     ///   and ``DatabaseStoreError/database(_:)`` when the table can't be created (the database is
     ///   read-only, or `table` holds a double quote) or read, or the rows recovery drops can't be
     ///   deleted.
@@ -95,16 +95,42 @@ public struct DatabaseStore: RecordStore {
     ) throws(DatabaseStoreError) {
         guard byteBound > 0 else { throw .nonPositiveByteBound }
         let registry: EventRegistry
-        do {
+        do throws(DuplicateEventName) {
             registry = try EventRegistry(events)
         } catch {
-            throw .duplicateEventName
+            throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)
         }
         do throws(DatabaseError) {
             log = try DatabaseLog(writer: database, table: table, registry: registry, byteBound: byteBound)
         } catch {
             throw .database(error)
         }
+    }
+
+    /// A store keeping events of every type the program declares with `@Event`, and the
+    /// library's own, in `table` of `database`; it creates the table if it is missing, and
+    /// recovers the records already there.
+    ///
+    /// The types are `DiscoveredEvent.all`'s, found in every module the program links. An event
+    /// that conforms to `Event` by hand isn't among them; to keep one too, list the types with
+    /// ``init(events:database:table:byteBound:)``: `DiscoveredEvent.all.map(\.type) + [Legacy.self]`.
+    ///
+    /// - Parameters:
+    ///   - database: The app's database: a `DatabaseQueue` or a `DatabasePool`.
+    ///   - table: The table the records go in; ``defaultTable`` unless given. It may not hold a
+    ///     double quote.
+    ///   - byteBound: The most bytes of encoded records the table may hold.
+    /// - Throws: ``DatabaseStoreError/nonPositiveByteBound`` when `byteBound` isn't positive,
+    ///   ``DatabaseStoreError/duplicateEventName(_:firstType:secondType:)`` when two of the program's event types share an
+    ///   `Event.name`, and ``DatabaseStoreError/database(_:)`` when the table can't be created (the
+    ///   database is read-only, or `table` holds a double quote) or read, or the rows recovery
+    ///   drops can't be deleted.
+    public init(
+        database: some DatabaseWriter,
+        table: String = DatabaseStore.defaultTable,
+        byteBound: Int = DatabaseStore.defaultByteBound
+    ) throws(DatabaseStoreError) {
+        try self.init(events: DiscoveredEvent.all.map(\.type), database: database, table: table, byteBound: byteBound)
     }
 
     /// The table the store keeps its records in.

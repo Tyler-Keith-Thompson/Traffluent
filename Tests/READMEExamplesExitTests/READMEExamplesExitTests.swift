@@ -30,8 +30,8 @@ struct READMEExamplesExitTests {
             let expectedError: TrackerAlreadyBootstrapped? = TrackerAlreadyBootstrapped()
 
             func startAnalytics() throws {
-                let plan = try TrackingPlan(
-                    schemas: [ProductAddedToCart.schema, SessionStarted.schema, SessionEnded.schema])
+                // Every @Event in the app, and the library's own, such as the sessions'.
+                let plan = try TrackingPlan()
                 // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
                 let tracker = Tracker(
                     enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()])

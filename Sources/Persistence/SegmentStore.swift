@@ -6,7 +6,7 @@ public import SystemPackage
 /// size, until they are delivered.
 ///
 /// ```swift
-/// let store = try SegmentStore(events: [SignedUp.self, CheckedOut.self])
+/// let store = try SegmentStore()
 /// let tracker = Tracker(store: store)
 /// let delivery = tracker.records.batch().deliver(to: vendor)
 /// ```
@@ -20,11 +20,12 @@ public import SystemPackage
 ///   A record whose write fails (the disk is full, say) is kept in memory only, and reported as
 ///   ``DropReport/writeFailed(recordCount:timestamps:)``, and so is one whose event's
 ///   `encode(to:)` throws.
-/// - **What is kept.** Only events of the types in `events`, which conform to `Codable`.
+/// - **What is kept.** Every event `DiscoveredEvent.all` lists, the `@Event` structs of every
+///   module the program links and the library's own, or only the `Codable` types in `events`.
 ///   Events of any other type are kept in memory only: they are delivered in this run like any
 ///   other, are never written, and are lost if the app ends first. The first record of each such
-///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out of `events` by
-///   mistake shows up.
+///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out by mistake,
+///   such as one that conforms to `Event` by hand, shows up.
 ///   A record's context is not kept: a recovered record is in the top-level `ServiceContext`,
 ///   as its span ended with the earlier run.
 /// - **Deleting.** A segment is deleted as a whole once every record in it is delivered, so a
@@ -86,7 +87,7 @@ public struct SegmentStore: RecordStore {
     ///     eighth of `byteBound` when `nil`.
     /// - Throws: ``SegmentStoreError/byteBoundTooSmall`` when `byteBound` is no more than 8
     ///   bytes (a segment's header), ``SegmentStoreError/nonPositiveSegmentByteCount`` when
-    ///   `segmentByteCount` is given and isn't positive, ``SegmentStoreError/duplicateEventName``
+    ///   `segmentByteCount` is given and isn't positive, ``SegmentStoreError/duplicateEventName(_:firstType:secondType:)``
     ///   when two of `events` share an `Event.name`, and ``SegmentStoreError/fileSystem(_:)`` when
     ///   the directory can't be created or read, or a segment in it can't be opened, read or
     ///   truncated.
@@ -99,10 +100,10 @@ public struct SegmentStore: RecordStore {
         guard byteBound > SegmentFormat.header.count else { throw .byteBoundTooSmall }
         guard segmentByteCount.map({ $0 > 0 }) ?? true else { throw .nonPositiveSegmentByteCount }
         let registry: EventRegistry
-        do {
+        do throws(DuplicateEventName) {
             registry = try EventRegistry(events)
         } catch {
-            throw .duplicateEventName
+            throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)
         }
         do throws(Errno) {
             log = try SegmentLog(
@@ -114,6 +115,34 @@ public struct SegmentStore: RecordStore {
         } catch {
             throw .fileSystem(error)
         }
+    }
+
+    /// A store keeping events of every type the program declares with `@Event`, and the
+    /// library's own, in `directory`; it recovers the records already there.
+    ///
+    /// The types are `DiscoveredEvent.all`'s, found in every module the program links. An event
+    /// that conforms to `Event` by hand isn't among them; to keep one too, list the types with
+    /// ``init(events:directory:byteBound:segmentByteCount:)``:
+    /// `DiscoveredEvent.all.map(\.type) + [Legacy.self]`.
+    ///
+    /// - Parameters:
+    ///   - directory: Where the segment files go; created, with its parents, if missing.
+    ///     ``defaultDirectory`` unless given.
+    ///   - byteBound: The most bytes the log may hold.
+    ///   - segmentByteCount: The size at which a segment is closed and a new one started; an
+    ///     eighth of `byteBound` when `nil`.
+    /// - Throws: ``SegmentStoreError/byteBoundTooSmall`` when `byteBound` is no more than 8
+    ///   bytes (a segment's header), ``SegmentStoreError/nonPositiveSegmentByteCount`` when
+    ///   `segmentByteCount` is given and isn't positive, ``SegmentStoreError/duplicateEventName(_:firstType:secondType:)``
+    ///   when two of the program's event types share an `Event.name`, and
+    ///   ``SegmentStoreError/fileSystem(_:)`` when the directory can't be created or read, or a
+    ///   segment in it can't be opened, read or truncated.
+    public init(
+        directory: FilePath = SegmentStore.defaultDirectory,
+        byteBound: Int = SegmentStore.defaultByteBound,
+        segmentByteCount: Int? = nil
+    ) throws(SegmentStoreError) {
+        try self.init(events: DiscoveredEvent.all.map(\.type), directory: directory, byteBound: byteBound, segmentByteCount: segmentByteCount)
     }
 
     /// Where the store keeps its segments.

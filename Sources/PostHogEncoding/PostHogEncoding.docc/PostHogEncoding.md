@@ -36,7 +36,7 @@ import HTTPDestinations
 import PostHogEncoding
 import TrackingPlans
 
-let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+let plan = try TrackingPlan()
 let postHog = try HTTPDestination.postHog(
     projectToken: projectToken,
     host: postHogHost,  // https://us.i.posthog.com, https://eu.i.posthog.com or your own

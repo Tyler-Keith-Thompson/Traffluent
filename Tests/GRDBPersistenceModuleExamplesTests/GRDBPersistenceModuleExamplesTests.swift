@@ -26,7 +26,7 @@
             let vendor = InMemoryDestination()
 
             let database = try DatabaseQueue(path: databasePath)
-            let store = try DatabaseStore(events: [SignedUp.self], database: database, table: "analyticsRecord")
+            let store = try DatabaseStore(database: database, table: "analyticsRecord")
             let tracker = Tracker(store: store)
             let delivery = tracker.records.batch().deliver(to: vendor)
             tracker.track(SignedUp(plan: "pro"))

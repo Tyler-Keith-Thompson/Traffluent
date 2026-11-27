@@ -122,7 +122,8 @@ MUTANTS = [
     Mutant("anymoduleoptional", P, 'member.baseType.trimmedDescription == "Swift"', "true"),
     Mutant("qualifiedoptionalmissed", P, 'member.name.text == "Optional"', "false"),
     # EventMacroDiagnostic: errors, not warnings.
-    Mutant("warningsonly", D, "        .error", "        .warning", mode="stmt"),
+    Mutant("warningsonly", D, "isNote ? .note : .error", ".warning"),
+    Mutant("notesaserrors", D, "isNote ? .note : .error", ".error"),
     # @Constrained: what @Event generates from it.
     Mutant("noconstraintviolation", M, "constraintViolation(of: properties, access: access),", "nil,"),
     # Constraints that throw as they are built: the event breaks the first, rather than passing.
@@ -181,4 +182,13 @@ MUTANTS = [
     Mutant("leafqualifiedkept", P, "wrapper.modules.contains(member.baseType.trimmedDescription)", "false"),
     Mutant("leafsensitivekept", P, '"Sensitive"', '"Mine"'),
     Mutant("leafarraynamekept", P, '"Array"', '"Mine"'),
+    # EventMacro: the discovery record.
+    Mutant("recordalwaysdropped", M, "undiscoverable == nil ? discoveryRecord(of: type.trimmedDescription) : nil", "nil"),
+    Mutant("genericrecorded", M, "structure.genericParameterClause", "nil"),
+    Mutant("discoverynoteunsaid", M, "undiscoverable.map(context.diagnose)", "", mode="stmt"),
+    Mutant("genericcontextrecorded", M, "context.lexicalContext.contains(where: \\.isGenericType)", "false"),
+    Mutant("genericstructcontextrecorded", M, "self.as(StructDeclSyntax.self)?.genericParameterClause", "nil"),
+    Mutant("genericclasscontextrecorded", M, "self.as(ClassDeclSyntax.self)?.genericParameterClause", "nil"),
+    Mutant("genericenumcontextrecorded", M, "self.as(EnumDeclSyntax.self)?.genericParameterClause", "nil"),
+    Mutant("genericactorcontextrecorded", M, "self.as(ActorDeclSyntax.self)?.genericParameterClause", "nil"),
 ]

@@ -43,30 +43,6 @@ public struct StoreAnalytics: Sendable {
 
     private static let logger = Logger(label: "StoreAnalytics.StoreAnalytics")
 
-    /// The event types the store keeps on disk: every event the app tracks, so none is lost when
-    /// the app ends before delivering it.
-    public static let storedEvents: [any (Event & Codable).Type] = storeEvents + libraryEvents
-
-    private static let storeEvents: [any (Event & Codable).Type] = [
-        ProductAddedToCart.self,
-        PromotionTapped.self,
-        CheckoutStarted.self,
-        OrderCompleted.self,
-        SignedUp.self,
-    ]
-
-    private static let libraryEvents: [any (Event & Codable).Type] = [
-        ScreenViewed.self,
-        ControlActivated.self,
-        SessionStarted.self,
-        SessionEnded.self,
-        ApplicationInstalled.self,
-        ApplicationUpdated.self,
-        ApplicationOpened.self,
-        ApplicationBackgrounded.self,
-        ApplicationTerminated.self,
-    ]
-
     /// What every record's context gains: its session, and the app, device, operating system,
     /// locale and network it was tracked on.
     public static var enrichers: [Enricher] {
@@ -132,10 +108,11 @@ public struct StoreAnalytics: Sendable {
 
 extension StoreAnalytics {
     /// Step 1: a store, so a record survives the app ending before it is delivered; `nil`, and
-    /// logged, when it can't be opened in `directory`.
+    /// logged, when it can't be opened in `directory`. It keeps every event the app declares and
+    /// the library's own, found in the modules the app links, so a new event needs no list.
     fileprivate static func store(in directory: FilePath) -> SegmentStore? {
         do {
-            return try SegmentStore(events: storedEvents, directory: directory)
+            return try SegmentStore(directory: directory)
         } catch {
             logger.error("Keeping records in memory only: the store couldn't open (\(error))")
             return nil

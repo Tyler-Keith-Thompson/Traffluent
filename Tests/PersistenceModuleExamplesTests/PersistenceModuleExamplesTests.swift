@@ -22,7 +22,7 @@ struct PersistenceModuleExamplesTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         let vendor = InMemoryDestination()
 
-        let store = try SegmentStore(events: [SignedUp.self], directory: directory, byteBound: 1024 * 1024)
+        let store = try SegmentStore(directory: directory, byteBound: 1024 * 1024)
         let tracker = Tracker(store: store)
         let delivery = tracker.records.batch().deliver(to: vendor)
         tracker.track(SignedUp(plan: "pro", seats: 3))

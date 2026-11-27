@@ -113,6 +113,18 @@ struct EventMacroConstraintExpansionTests {
                         self.page = try container.decode(Int.self, forKey: .page)
                     }
                 }
+
+                extension Searched {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Searched.self, schema: Searched.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """#,
             macroSpecs: [
                 "Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"]),
@@ -337,6 +349,18 @@ struct EventMacroConstraintExpansionTests {
                         self.query = try container.decode(String.self, forKey: .query)
                     }
                 }
+
+                extension Searched {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Searched.self, schema: Searched.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self)],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -423,6 +447,18 @@ struct EventMacroConstraintExpansionTests {
                         let container = try decoder.container(keyedBy: CodingKeys.self)
                         self.query = try container.decode(String.self, forKey: .query)
                     }
+                }
+
+                extension Searched {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Searched.self, schema: Searched.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """##,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self)],

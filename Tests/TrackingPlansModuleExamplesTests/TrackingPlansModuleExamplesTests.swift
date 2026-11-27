@@ -15,13 +15,14 @@ struct TrackingPlansModuleExamplesTests {
 
     @Test("A plan's files, checked against themselves")
     func trackingPlans() throws {
-        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan()  // every @Event in the program, and the library's own
         let check = plan.check(against: plan.files)  // .matches
         let paths = plan.files.map(\.path)
-        // ["tracking-plan.json", "signed_up.v1.schema.json", "signed_up.v1.example.json"]
+        // ["tracking-plan.json", ..., "signed_up.v1.schema.json", "signed_up.v1.example.json"]
 
         let expectedPaths = ["tracking-plan.json", "signed_up.v1.schema.json", "signed_up.v1.example.json"]
         #expect(check == .matches)
-        #expect(paths == expectedPaths)
+        #expect(paths.first == expectedPaths.first)
+        #expect(expectedPaths.allSatisfy(paths.contains))
     }
 }

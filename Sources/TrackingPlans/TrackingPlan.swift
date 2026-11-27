@@ -13,8 +13,17 @@ public import Events
 ///     var coupon: String?
 /// }
 ///
-/// let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
+/// let plan = try TrackingPlan()
 /// plan.files.map(\.path)
+/// // ["tracking-plan.json", ..., "checkout_started.v2.schema.json", "checkout_started.v2.example.json", ...]
+/// ```
+///
+/// ``init()`` takes every event `DiscoveredEvent.all` lists: the `@Event` structs of every module
+/// the program links, and the library's own. ``init(schemas:)`` takes a list instead:
+///
+/// ```swift
+/// let checkout = try TrackingPlan(schemas: [CheckoutStarted.schema])
+/// checkout.files.map(\.path)
 /// // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 /// ```
 ///
@@ -97,22 +106,51 @@ public struct TrackingPlan: Sendable, Hashable {
     /// - Throws: ``TrackingPlanError/emptyEventName`` for a schema with an empty name,
     ///   ``TrackingPlanError/duplicateProperty`` for one that lists two properties of the same
     ///   name, ``TrackingPlanError/invalidKeyword`` for one with a keyword no JSON Schema can
-    ///   state, and ``TrackingPlanError/duplicateEvent`` for two schemas whose files would have
+    ///   state, and ``TrackingPlanError/duplicateEvent(_:version:firstType:secondType:)`` for two schemas whose files would have
     ///   the same name on a case-insensitive file system.
     public init(schemas: [EventSchema]) throws(TrackingPlanError) {
-        for schema in schemas {
+        try self.init(events: schemas.map { (schema: $0, typeName: nil) })
+    }
+
+    /// The plan of `events`' schemas, each with the name of its event type when it is known, for
+    /// a duplicate's error to name.
+    private init(events: [(schema: EventSchema, typeName: String?)]) throws(TrackingPlanError) {
+        for schema in events.map(\.schema) {
             guard !schema.name.isEmpty else { throw .emptyEventName }
             guard schema.hasDistinctPropertyNames else { throw .duplicateProperty }
             guard schema.properties.allSatisfy({ !$0.hasInvalidConstraint && $0.keywords.allSatisfy(\.isStatable) }) else { throw .invalidKeyword }
         }
-        let sorted = schemas.sorted(by: EventSchema.precedesInPlan)
+        // Ties keep the order given, so a duplicate's first type is the one listed first.
+        let sorted = events.enumerated()
+            .sorted { EventSchema.precedesInPlan($0.element.schema, $1.element.schema) || (!EventSchema.precedesInPlan($1.element.schema, $0.element.schema) && $0.offset < $1.offset) }
+            .map(\.element)
         // Neighbours after sorting by name are enough for exact duplicates, but names that differ
-        // only in case needn't be neighbours, so every file name is compared case-folded.
-        var fileNames = Set<String>()
-        for schema in sorted {
-            guard fileNames.insert(schema.fileName.lowercased()).inserted else { throw .duplicateEvent }
+        // only in case needn't be neighbours, so every file name is compared case-folded. Each
+        // maps to the type name of the schema that took it, for the error.
+        var fileNames: [String: String?] = [:]
+        for (schema, typeName) in sorted {
+            let fileName = schema.fileName.lowercased()
+            if let firstType = fileNames[fileName] {
+                throw .duplicateEvent(schema.name, version: schema.version, firstType: firstType, secondType: typeName)
+            }
+            fileNames[fileName] = typeName
         }
-        self.schemas = sorted
+        self.schemas = sorted.map(\.schema)
+    }
+
+    /// The plan of every event the program declares with `@Event`, and of the library's own, or
+    /// an error naming the first rule they break.
+    ///
+    /// The schemas are `DiscoveredEvent.all`'s, found in every module the program links, so a
+    /// plan built in an executable holds the events of the modules it links. An event that
+    /// conforms to `Event` by hand isn't among them; to describe one too, list the schemas with
+    /// ``init(schemas:)``: `DiscoveredEvent.all.map(\.schema) + [Legacy.schema]`.
+    ///
+    /// - Throws: ``TrackingPlanError/duplicateEvent(_:version:firstType:secondType:)`` for two event types whose files would have
+    ///   the same name on a case-insensitive file system, such as two of one name and version,
+    ///   and the other errors of ``init(schemas:)`` for a schema that breaks its rules.
+    public init() throws(TrackingPlanError) {
+        try self.init(events: DiscoveredEvent.all.map { (schema: $0.schema, typeName: String(reflecting: $0.type)) })
     }
 
     /// The plan's files: the index, `tracking-plan.json`, then each event's document and its

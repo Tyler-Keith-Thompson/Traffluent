@@ -10,14 +10,16 @@ publishing it, and starts its records with the ones the store kept from earlier 
 ``SegmentStore`` is the store this module ships: a directory of append-only segment files, bounded at 5 MiB unless you pass another `byteBound`. A segment is
 deleted once every record in it is delivered.
 
-A store keeps only the event types you list in `events`, which conform to `Codable`. Each record
+`SegmentStore()` keeps every event type declared with `@Event` in the program's modules, and the
+library's own; `SegmentStore(events:)` keeps only the `Codable` types it lists. Each record
 is a CBOR (RFC 8949) map, its event a map of its properties under their names, written through the
 event's `Codable` conformance. `@Event` (module `EventMacros`, part of `import Traffluent`) writes
 the conformance, and Swift's synthesized one works too. `@Event` writes a `Date` property, and each
 date in a `[Date]` or `[Date?]`, as the seconds since 2001 it stores, so it reads back exactly. A
 `Date` written through the CBOR package's own form, in a `Codable` type of your own or in a
 synthesized conformance, reads back to within a rounding of a microsecond's scale. Events of other
-types are delivered in this run but never written.
+types, such as one that conforms to `Event` by hand without being listed, are delivered in this
+run but never written, and reported once as ``DropReport/notPersisted(event:)``.
 
 A store doesn't read the records Traffluent 0.0.44 or earlier wrote, in an earlier format:
 ``SegmentStore`` deletes their segments and reports each as a corruption.
@@ -40,7 +42,7 @@ struct SignedUp {
     var seats: Int = 1
 }
 
-let store = try SegmentStore(events: [SignedUp.self], directory: directory, byteBound: 1024 * 1024)
+let store = try SegmentStore(directory: directory, byteBound: 1024 * 1024)
 let tracker = Tracker(store: store)
 let delivery = tracker.records.batch().deliver(to: vendor)
 tracker.track(SignedUp(plan: "pro", seats: 3))

@@ -83,28 +83,14 @@ struct GettingStartedExamplesTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
 
         let consent = Consent(savedDecisions)
-        let store = try SegmentStore(
-            events: [
-                ProductAddedToCart.self,
-                SignedUp.self,
-                ScreenViewed.self,
-                SessionStarted.self,
-                SessionEnded.self,
-            ],
-            directory: directory)
+        let store = try SegmentStore(directory: directory)
         let tracker = Tracker(
             store: store,
             consent: consent,
             enrichers: [.sessions(), .application(), .device(), .operatingSystem(), .locale(), .network()]
         )
 
-        let plan = try TrackingPlan(schemas: [
-            ProductAddedToCart.schema,
-            SignedUp.schema,
-            ScreenViewed.schema,
-            SessionStarted.schema,
-            SessionEnded.schema,
-        ])
+        let plan = try TrackingPlan()
         let collector = HTTPDestination(
             endpoint: collectorURL,
             headerFields: [.authorization: "Bearer \(apiKey)"],

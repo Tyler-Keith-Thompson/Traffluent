@@ -16,7 +16,7 @@ public import TrackingPlans
 /// import HTTPDestinations
 /// import TrackingPlans
 ///
-/// let plan = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
+/// let plan = try TrackingPlan()
 /// let collector = HTTPDestination(
 ///     endpoint: collectorURL,  // https://collector.example.com/v1/batches
 ///     headerFields: [.authorization: "Bearer \(apiKey)"],

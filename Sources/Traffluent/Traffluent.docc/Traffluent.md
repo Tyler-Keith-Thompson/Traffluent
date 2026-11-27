@@ -36,13 +36,10 @@ Build the tracker and start its delivery once, as the app launches:
 
 ```swift
 func startAnalytics(consent: Consent) throws -> Tracker {
-    let plan = try TrackingPlan(schemas: [
-        ProductAddedToCart.schema, SignedUp.schema, SessionStarted.schema, SessionEnded.schema,
-    ])
+    // The plan and the store each take every @Event in the app, and the library's own.
+    let plan = try TrackingPlan()
     // Records wait on disk until they are delivered, across launches.
-    let store = try SegmentStore(events: [
-        ProductAddedToCart.self, SignedUp.self, SessionStarted.self, SessionEnded.self,
-    ])
+    let store = try SegmentStore()
     // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
     let tracker = Tracker(
         store: store,

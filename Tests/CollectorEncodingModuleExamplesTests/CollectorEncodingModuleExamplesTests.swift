@@ -29,7 +29,7 @@ struct CollectorEncodingModuleExamplesTests {
         await recording.finish()
         try await recordingDelivery.execute()
 
-        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+        let plan = try TrackingPlan()
         let encoder = CollectorBatchEncoder(plan: plan)
         let collector = HTTPDestination(
             endpoint: collectorURL,  // https://collector.example.com/v1/batches

@@ -26,7 +26,9 @@ the event, the property and the change, and says whether it is breaking.
 Only code compiled against the app's event types can read their schemas, so the app writes a small
 executable of its own: a type that conforms to ``TrackingPlanCommand``, marked `@main`. It writes
 the plan to a directory, or checks it with `check`. To run the check from the app's tests instead,
-use `TrackingPlanTesting`. The schemas usually come from `@Event` (module `EventMacros`).
+use `TrackingPlanTesting`. The schemas usually come from `@Event` (module `EventMacros`):
+``TrackingPlan/init()`` takes every `@Event` in the program and the library's own events, found at
+run time, and ``TrackingPlan/init(schemas:)`` takes a list.
 
 The module is a product of its own that `import Traffluent` leaves out.
 
@@ -39,10 +41,10 @@ struct SignedUp {
     var plan: String
 }
 
-let plan = try TrackingPlan(schemas: [SignedUp.schema])
+let plan = try TrackingPlan()  // every @Event in the program, and the library's own
 let check = plan.check(against: plan.files)  // .matches
 let paths = plan.files.map(\.path)
-// ["tracking-plan.json", "signed_up.v1.schema.json", "signed_up.v1.example.json"]
+// ["tracking-plan.json", ..., "signed_up.v1.schema.json", "signed_up.v1.example.json"]
 ```
 
 The guide [Exporting and Checking a Tracking Plan](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow)

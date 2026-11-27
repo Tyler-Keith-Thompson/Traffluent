@@ -75,13 +75,7 @@ session and with the app, device, operating system, locale and network it was tr
 
 ```swift
 let consent = Consent(savedDecisions)
-let store = try SegmentStore(events: [
-    ProductAddedToCart.self,
-    SignedUp.self,
-    ScreenViewed.self,
-    SessionStarted.self,
-    SessionEnded.self,
-])
+let store = try SegmentStore()
 let tracker = Tracker(
     store: store,
     consent: consent,
@@ -91,8 +85,9 @@ let tracker = Tracker(
 
 `Consent` keeps decisions in memory only. `savedDecisions` is what the user chose at an earlier
 launch, which the app saved (the store app's `ConsentPreferences` saves them to a file). The store
-lists the events the library tracks for the app too: screen views and the sessions' start and end.
-See <doc:PersistingRecords>, <doc:ConsentGating> and <doc:SessionsAndStandardContext>.
+keeps every event the app declares with `@Event`, in any of its modules, and the events the
+library tracks for it, such as screen views and the sessions' start and end, with no list to keep
+up to date. See <doc:PersistingRecords>, <doc:ConsentGating> and <doc:SessionsAndStandardContext>.
 
 ### Make the tracker reachable
 
@@ -212,20 +207,14 @@ themselves.
 
 A delivery batches the tracker's records and hands each batch to its destinations. To send them
 to a TraffluentCollector, deliver to an `HTTPDestination` with a `CollectorBatchEncoder`, which
-writes each record's properties through the event's schema in a `TrackingPlan`. The plan lists
-every event the tracker can see, the library's included. `redactingSensitiveValues()` keeps the
-email address off this destination:
+writes each record's properties through the event's schema in a `TrackingPlan`. Like the store,
+the plan holds every event the app declares and the library's own. `redactingSensitiveValues()`
+keeps the email address off this destination:
 
 ```swift
 import TrackingPlans
 
-let plan = try TrackingPlan(schemas: [
-    ProductAddedToCart.schema,
-    SignedUp.schema,
-    ScreenViewed.schema,
-    SessionStarted.schema,
-    SessionEnded.schema,
-])
+let plan = try TrackingPlan()
 let collector = HTTPDestination(
     endpoint: collectorURL,
     headerFields: [.authorization: "Bearer \(apiKey)"],

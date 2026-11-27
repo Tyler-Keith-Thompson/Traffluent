@@ -17,3 +17,15 @@ public struct ApplicationBackgrounded: Event, Codable, Hashable {
     /// The event for a move to the background.
     public init() {}
 }
+
+// The record DiscoveredEvent.all finds this event by, written as @Event writes one: the library's
+// own modules don't depend on the macro.
+extension ApplicationBackgrounded {
+    #if objectFormat(MachO)
+        @section("__DATA_CONST,__trfl_events")
+    #elseif objectFormat(ELF)
+        @section("trfl_events")
+    #endif
+    @used
+    private nonisolated static let __discoveryRecord: __EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in __EventDiscovery.load(ApplicationBackgrounded.self, schema: ApplicationBackgrounded.schema, into: outValue, ofType: type) }, 0, 0)
+}

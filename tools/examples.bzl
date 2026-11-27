@@ -3,4 +3,5 @@
 # The source packages of example modules, which have no DocC archive: the root BUILD.bazel
 # leaves them out of the docs.
 EXAMPLE_PACKAGES = [
+    "Sources/DiscoveryFixtures",
 ]

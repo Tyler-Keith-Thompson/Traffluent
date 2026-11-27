@@ -20,7 +20,7 @@ struct PersistingRecordsExamplesTests {
         // test leaves nothing behind.
         let directory = FilePath(NSTemporaryDirectory()).appending("PersistingRecordsExamplesTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [SignedUp.self], directory: directory)
+        let store = try SegmentStore(directory: directory)
         let tracker = Tracker(store: store)
         let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
         tracker.track(SignedUp(plan: "pro"))

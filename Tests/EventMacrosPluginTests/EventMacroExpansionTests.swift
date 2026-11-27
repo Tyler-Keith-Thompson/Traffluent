@@ -61,6 +61,18 @@ struct EventMacroExpansionTests {
                         self.seats = try container.decodeIfPresent(Int.self, forKey: .seats)
                     }
                 }
+
+                extension SignedUp {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(SignedUp.self, schema: SignedUp.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -123,6 +135,18 @@ struct EventMacroExpansionTests {
                         }
                     }
                 }
+
+                extension CartViewed {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(CartViewed.self, schema: CartViewed.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -183,6 +207,18 @@ struct EventMacroExpansionTests {
                         self.campaign = try container.decode(String.self, forKey: .campaign)
                     }
                 }
+
+                extension AdClicked {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(AdClicked.self, schema: AdClicked.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """#,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -216,6 +252,18 @@ struct EventMacroExpansionTests {
                     init(from decoder: any Swift.Decoder) throws {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
+                }
+
+                extension Opened {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Opened.self, schema: Opened.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -258,6 +306,18 @@ struct EventMacroExpansionTests {
                     init(from decoder: any Swift.Decoder) throws {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
+                }
+
+                extension Crashed {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Crashed.self, schema: Crashed.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """##,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -303,6 +363,18 @@ struct EventMacroExpansionTests {
                     }
                 }
 
+                extension A {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(A.self, schema: A.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
+
                 extension B: Events.Event, Swift.Encodable, Swift.Decodable {
                     package static var consentCategory: Events.ConsentCategory {
                         .functional
@@ -322,6 +394,18 @@ struct EventMacroExpansionTests {
                     package init(from decoder: any Swift.Decoder) throws {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
+                }
+
+                extension B {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(B.self, schema: B.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -420,6 +504,18 @@ struct EventMacroExpansionTests {
                             self.observed = try container.decode(Int32.self, forKey: .observed)
                         }
                     }
+                }
+
+                extension Shapes {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Shapes.self, schema: Shapes.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -547,6 +643,18 @@ struct EventMacroExpansionTests {
                         try container.decodeIfPresent(Decoded.self, forKey: key)
                     }
                 }
+
+                extension Spellings {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Spellings.self, schema: Spellings.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -604,6 +712,18 @@ struct EventMacroExpansionTests {
                         self.`default` = try container.decode(Int.self, forKey: .`default`)
                         self.`var` = try container.decode(Int.self, forKey: .`var`)
                     }
+                }
+
+                extension Keywords {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Keywords.self, schema: Keywords.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -674,6 +794,18 @@ struct EventMacroExpansionTests {
                             self.refunded = try container.decodeIfPresent(Swift.Double.self, forKey: .refunded).map(Date.init(timeIntervalSinceReferenceDate:))
                         }
                     }
+                }
+
+                extension Purchased {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Purchased.self, schema: Purchased.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -749,6 +881,18 @@ struct EventMacroExpansionTests {
                         }
                     }
                 }
+
+                extension Scheduled {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Scheduled.self, schema: Scheduled.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -821,6 +965,18 @@ struct EventMacroExpansionTests {
                         try container.decode(Decoded.self, forKey: key)
                     }
                 }
+
+                extension Counted {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Counted.self, schema: Counted.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -855,6 +1011,18 @@ struct EventMacroExpansionTests {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
                 }
+
+                extension Opened {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Opened.self, schema: Opened.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Swift.Encodable", "Swift.Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -888,6 +1056,18 @@ struct EventMacroExpansionTests {
                     init(from decoder: any Swift.Decoder) throws {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
+                }
+
+                extension Closed {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Closed.self, schema: Closed.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self)],
@@ -926,6 +1106,18 @@ struct EventMacroExpansionTests {
                     init(from decoder: any Swift.Decoder) throws {
                         _ = try decoder.container(keyedBy: CodingKeys.self)
                     }
+                }
+
+                extension Checkout.Started {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Checkout.Started.self, schema: Checkout.Started.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],

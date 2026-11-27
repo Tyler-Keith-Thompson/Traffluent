@@ -26,6 +26,9 @@ Tests/<Module>Tests/             One test target per module; Performance/ holds 
 tools/test_host/                 The empty app every simulator test runs inside, so windows get a scene
 Tests/TraffluentTests/          The README's and the umbrella catalog's examples, verbatim, one file
                                  per article, and SwiftPM's privacy manifest check
+Tests/<Article>ExamplesTests/    An examples file whose article builds a store or plan from every
+                                 discovered event: a target of its own (LIST_FREE_EXAMPLES_TESTS),
+                                 as the articles reuse event names a single binary would clash on
 Tests/TraffluentTestSupport/    Shared test fixtures (data only)
 Tests/CompileFailures/           Sources that must not compile, each checked for its errors
                                  (tools/compile_failure_test.bzl); Bazel only
@@ -285,8 +288,12 @@ have.
      test in the module's suite, then its file is deleted.
 3. **A guide**: the umbrella catalog's article on the feature's area (`Sources/Traffluent/
    Traffluent.docc`), or a new one listed in `Traffluent.md`'s topics and the README's guides, with
-   its examples copied verbatim into `Tests/TraffluentTests/<Article>ExamplesTests.swift`. Change
-   the README's one example only if the feature changes how the package is introduced.
+   its examples copied verbatim into `Tests/TraffluentTests/<Article>ExamplesTests.swift`. An
+   article whose example builds a store or plan from every discovered event (`SegmentStore()`,
+   `TrackingPlan()`) gets a target of its own instead, `Tests/<Article>ExamplesTests/`, listed in
+   `LIST_FREE_EXAMPLES_TESTS` (then `just modules`): the articles reuse event names, which would
+   clash in one test binary. Change the README's one example only if the feature changes how the
+   package is introduced.
 4. **A benchmark** in `Benchmarks/Benchmarks/<Module>Benchmarks` (a row in `BENCHMARKS`, then
    `just modules`) where speed matters, starting with a `BASELINE` entry: the hand-written form the code must keep pace with. Measure in
    release, and add a ratio test in `Tests/<Module>Tests/Performance/` where siblings have one.

@@ -65,10 +65,12 @@ struct TrackingPlanWorkflowExamplesTests {
 
     @Test("Exporting a tracking plan")
     func exportingATrackingPlan() throws {
-        let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
+        let plan = try TrackingPlan()
         let paths = plan.files.map(\.path)
-        // ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
+        // ["tracking-plan.json", ..., "checkout_started.v2.schema.json", "checkout_started.v2.example.json", ...]
+        let expectedPaths = ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"]
 
-        #expect(paths == ["tracking-plan.json", "checkout_started.v2.schema.json", "checkout_started.v2.example.json"])
+        #expect(paths.first == expectedPaths.first)
+        #expect(expectedPaths.allSatisfy(paths.contains))
     }
 }

@@ -384,14 +384,15 @@ struct TrackingPlanTests {
         }
     }
 
-    @Test("The initializer throws duplicateEvent for two schemas of one name and version")
+    @Test("The initializer throws duplicateEvent for two schemas of one name and version, naming them and no types")
     func duplicateEvent() {
         let schemas = [
             EventSchema(name: "signed_up", version: 1, consentCategory: .analytics, properties: []),
             EventSchema(name: "signed_up", version: 1, consentCategory: .advertising, properties: []),
         ]
+        let expected = TrackingPlanError.duplicateEvent("signed_up", version: 1, firstType: nil, secondType: nil)
 
-        #expect(throws: TrackingPlanError.duplicateEvent) {
+        #expect(throws: expected) {
             try TrackingPlan(schemas: schemas)
         }
     }
@@ -401,8 +402,9 @@ struct TrackingPlanTests {
         let schemas = ["SignedUp", "Search", "signedUp"].map {
             EventSchema(name: $0, version: 1, consentCategory: .analytics, properties: [])
         }
+        let expected = TrackingPlanError.duplicateEvent("signedUp", version: 1, firstType: nil, secondType: nil)
 
-        #expect(throws: TrackingPlanError.duplicateEvent) {
+        #expect(throws: expected) {
             try TrackingPlan(schemas: schemas)
         }
     }

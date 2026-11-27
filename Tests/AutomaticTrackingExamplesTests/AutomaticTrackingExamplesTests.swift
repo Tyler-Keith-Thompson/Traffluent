@@ -22,7 +22,7 @@ struct AutomaticTrackingExamplesTests {
         // test leaves nothing behind.
         let directory = FilePath(NSTemporaryDirectory()).appending("AutomaticTrackingExamplesTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
-        let store = try SegmentStore(events: [ApplicationOpened.self, ApplicationBackgrounded.self, SignedUp.self], directory: directory)
+        let store = try SegmentStore(directory: directory)  // every @Event, and the lifecycle's own events
         let tracker = Tracker(store: store)
         // In the application delegate's application(_:didFinishLaunchingWithOptions:), kept beside the tracker:
         let lifecycle = tracker.trackLifecycle(

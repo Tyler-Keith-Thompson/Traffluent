@@ -34,15 +34,10 @@ struct TraffluentExamplesTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
 
         func startAnalytics(consent: Consent) throws -> Tracker {
-            let plan = try TrackingPlan(schemas: [
-                ProductAddedToCart.schema, SignedUp.schema, SessionStarted.schema, SessionEnded.schema,
-            ])
+            // The plan and the store each take every @Event in the app, and the library's own.
+            let plan = try TrackingPlan()
             // Records wait on disk until they are delivered, across launches.
-            let store = try SegmentStore(
-                events: [
-                    ProductAddedToCart.self, SignedUp.self, SessionStarted.self, SessionEnded.self,
-                ],
-                directory: directory)
+            let store = try SegmentStore(directory: directory)
             // Every event gets its session, and the app, device, OS, locale and network it was tracked on.
             let tracker = Tracker(
                 store: store,
@@ -92,9 +87,7 @@ struct TraffluentExamplesTests {
 
     @Test("The page's events, through the collector's modifiers, encode with its plan, the email address left out")
     func eventsEncodeWithThePlan() async throws {
-        let plan = try TrackingPlan(schemas: [
-            ProductAddedToCart.schema, SignedUp.schema, SessionStarted.schema, SessionEnded.schema,
-        ])
+        let plan = try TrackingPlan()
         let memory = InMemoryDestination()
         let tracker = Tracker(enrichers: [.sessions()])
         let delivery = tracker.records.batch().deliver(

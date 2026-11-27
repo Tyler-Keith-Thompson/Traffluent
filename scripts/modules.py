@@ -103,10 +103,11 @@ PACKAGES = [
 # `#if canImport`. //:package_swift_test leaves their products out of its comparison.
 APPLE_ONLY_PACKAGES = ["grdb.swift"]
 
-# Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`), by
+# Test targets with nothing to run off Apple platforms (all their tests under `#if os(macOS)`, or
+# `#if canImport(GRDB)`, as GRDB is Apple-only), by
 # name. Bazel runs them on macOS alone: elsewhere they are incompatible, so `bazel test //...` skips
 # them, where a test binary that ran no tests would fail. SwiftPM still builds them, empty, on Linux.
-APPLE_ONLY_TESTS = ["AppKitTrackingTests", "AutomaticScreenTrackingTests"]
+APPLE_ONLY_TESTS = ["AppKitTrackingTests", "AutomaticScreenTrackingTests", "GRDBPersistenceModuleExamplesTests"]
 
 # Test targets that also run in the iOS simulator, by name: tests of a module every platform builds
 # that holds code for UIKit alone (`#if canImport(UIKit)`). Each stays in Package.swift and keeps
@@ -114,7 +115,7 @@ APPLE_ONLY_TESTS = ["AppKitTrackingTests", "AutomaticScreenTrackingTests"]
 # test library hosted by tools/test_host, which Bazel runs on macOS alone. A target that depends on
 # an iOS module or a Bazel label runs in the simulator alone already and isn't listed. Needs the
 # test host and .bazelrc's simulator settings, which the app type, --ios and --simulator ship.
-SIMULATOR_TESTS = ["SwiftUITrackingTests", "AutomaticScreenTrackingTests"]
+SIMULATOR_TESTS = ["SwiftUITrackingTests", "AutomaticScreenTrackingTests", "EventDiscoveryTests"]
 
 # Environment variables a test target's tests read, by test target name: Bazel runs a test with
 # almost none of the caller's environment, so each name listed is handed through to that target's
@@ -167,6 +168,9 @@ MODULES = [
     ("TrackingPlans", "Schema", "TrackingPlan: the JSON Schema (draft 2020-12) of every event an app tracks, one document per event and an index, exported from their EventSchema values; TrackingPlanCommand, the executable that writes or checks one; TrackingPlanCheck, a comparison with the committed plan naming every TrackingPlanDifference.", ["Events"]),
     # Imports Testing, so it is a product of its own that an app adds to its test target alone.
     ("TrackingPlanTesting", "Schema", "expectTrackingPlan(_:matches:): records a Swift Testing issue with the check's report when an app's events no longer match its committed tracking plan.", ["TrackingPlans"]),
+    # A second module of events for EventDiscoveryTests, which checks that discovery reaches every
+    # module a program links. An example module, so it has no product and only tests reach it.
+    ("DiscoveryFixtures", "Schema", "Events declared with @Event in a module of their own, for the tests that check DiscoveredEvent.all finds the events of every module a program links.", ["EventMacros"]),
 ]
 
 # Modules only iOS builds: SwiftUI views and what they draw with. Bazel builds them for the
@@ -181,7 +185,7 @@ IOS_MINIMUM = "18.0"
 # Package.swift offers no library product for them, and the umbrella and the docs leave them out,
 # so neither they nor their dependencies ship in `import Traffluent`. Only executables, test
 # targets and other example modules may depend on one.
-EXAMPLE_MODULES = []
+EXAMPLE_MODULES = ["DiscoveryFixtures"]
 
 # Modules offered as products of their own but left out of the umbrella, by name from MODULES:
 # ones an adopter imports on purpose rather than with `import Traffluent`, such as a test-support
@@ -280,6 +284,29 @@ PLUGINS = [
 EXECUTABLES = [
 ]
 
+# What the docs' examples tests link: the umbrella and the products it leaves out.
+EXAMPLES_TEST_DEPENDENCIES = [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "PropertyJSON", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]
+
+# Examples tests whose article builds a store or plan from every discovered event
+# (`SegmentStore()`, `TrackingPlan()`). A test binary is the program those discover events in, and
+# the articles reuse names such as `signed_up`, so each file is a target of its own in
+# Tests/<name>/: in one binary, two events of one name would make the list-free spellings throw.
+LIST_FREE_EXAMPLES_TESTS = [
+    "AutomaticTrackingExamplesTests",
+    "ChoosingDestinationsExamplesTests",
+    "CollectorEncodingModuleExamplesTests",
+    "GettingStartedExamplesTests",
+    "GRDBPersistenceModuleExamplesTests",
+    "PersistenceModuleExamplesTests",
+    "PersistingRecordsExamplesTests",
+    "PostHogEncodingModuleExamplesTests",
+    "READMEExamplesExitTests",
+    "READMEExamplesTests",
+    "TrackingPlansModuleExamplesTests",
+    "TrackingPlanWorkflowExamplesTests",
+    "TraffluentExamplesTests",
+]
+
 # Test targets. SwiftPM rejects a target with no sources, so list a target only once its directory
 # holds tests. (name, dependencies)
 TEST_TARGETS = [
@@ -287,6 +314,12 @@ TEST_TARGETS = [
     ("EventMacrosTests", ["EventMacros", "Events", "Persistence", "swift-cbor/CBOR", "Trackers", "Destinations", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     ("TrackingPlansTests", ["TrackingPlans", "EventMacros", "Events", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("TrackingPlanTestingTests", ["TrackingPlanTesting", "TrackingPlans", "Events"]),
+    # A target of its own: its binary holds no two events of one name, which a store or plan built
+    # from every discovered event would refuse, as the other targets' fixtures do.
+    ("EventDiscoveryTests", ["Events", "EventMacros", "DiscoveryFixtures", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "Sessions", "LifecycleTracking", "SwiftUITracking", "AutomaticControlTracking", "swift-system/SystemPackage"]),
+    # Holds two events of one name and version on purpose: a store or plan of every discovered
+    # event refuses them, which no other target's binary can show.
+    ("EventDiscoveryDuplicateTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
     ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
@@ -308,8 +341,8 @@ TEST_TARGETS = [
     ("PropertyJSONTests", ["PropertyJSON", "EventMacros", "Events", "HTTPDestinations", "Persistence", "TrackingPlans", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "HTTPDestinations", "PropertyJSON", "Events", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes"]),
     ("PostHogEncodingTests", ["PostHogEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    (f"{PROJECT}Tests", [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "PropertyJSON", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]),
-]
+    (f"{PROJECT}Tests", EXAMPLES_TEST_DEPENDENCIES),
+] + [(name, EXAMPLES_TEST_DEPENDENCIES) for name in LIST_FREE_EXAMPLES_TESTS]
 
 # The modules the test-support target depends on (fixtures are usually written against the
 # vocabulary module). Empty is fine.

@@ -15,7 +15,7 @@ struct SignedUp {
     var plan: String
 }
 
-let store = try SegmentStore(events: [SignedUp.self])
+let store = try SegmentStore()
 let tracker = Tracker(store: store)
 let delivery = tracker.records.batch().deliver(to: ConsoleDestination())
 ```
@@ -34,10 +34,15 @@ seconds since 1970, and reads back to within a rounding of a microsecond's scale
 
 ### What the store writes
 
-The store keeps only the event types in `events`, which conform to `Codable`. It writes each event
-through that conformance in CBOR (RFC 8949), a compact binary encoding, as a map of its properties
-under their names, which any CBOR decoder can read. A `Sensitive` value is written in full, as the
-store keeps it for destinations that reveal it, and read back only by the store. Any other event is kept in memory only: delivered in this run, never written.
+`SegmentStore()` keeps every event the app declares with `@Event`, in any of its modules, and the
+library's own, with no list to keep (<doc:DefiningEvents#Finding-every-event>). To keep only some,
+list them: `SegmentStore(events: [SignedUp.self])`. Any other event is kept in memory only:
+delivered in this run, never written, and reported once on `dropReports` as `notPersisted`.
+
+The store writes each event through its `Codable` conformance in CBOR (RFC 8949), a compact binary
+encoding, as a map of its properties under their names, which any CBOR decoder can read. A
+`Sensitive` value is written in full, as the store keeps it for destinations that reveal it, and
+read back only by the store.
 
 The log is a directory of append-only segment files: in Application Support on Apple platforms
 (excluded from backups), and in the XDG state directory on Linux, unless `directory:` says
@@ -86,9 +91,10 @@ kind of change.
 ### A GRDB database
 
 An app on Apple platforms that already keeps a GRDB database can keep its records there instead.
-`DatabaseStore(events:database:table:byteBound:)` (module ``/GRDBPersistence``, a product of its
-own that `import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a
-table name, creates the table with a migration of its own, and opens no second SQLite database.
+`DatabaseStore(database:table:byteBound:)` (module ``/GRDBPersistence``, a product of its own that
+`import Traffluent` leaves out) takes the app's `DatabaseQueue` or `DatabasePool` and a table name,
+keeps the same events as `SegmentStore()`, or those `DatabaseStore(events:database:)` lists,
+creates the table with a migration of its own, and opens no second SQLite database.
 
 It makes the same promises as `SegmentStore`, and it doesn't read the rows Traffluent 0.0.44 or
 earlier wrote either: each is deleted at recovery and reported as `.undecodable`, or as

@@ -96,3 +96,29 @@ swift_compile_failure_test(
     tags = ["debug-only"],
     deps = ["//Sources/EventMacros"],
 )
+
+# @Event on a struct declared in an extension of a generic type: the discovery record the macro
+# adds is a static stored property, which a type nested in a generic one can't hold.
+swift_compile_failure_test(
+    name = "EventInGenericExtension",
+    size = "small",
+    src = "EventInGenericExtension.swift",
+    expected_errors = [
+        "error: static stored properties not supported in generic types",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same event in an extension of a type that isn't generic compiles.
+swift_compile_failure_test(
+    name = "EventInExtensionControl",
+    size = "small",
+    src = "EventInExtensionControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)

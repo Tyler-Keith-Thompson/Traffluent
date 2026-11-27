@@ -234,11 +234,35 @@ struct StoreAnalyticsTests {
         #expect(actual == expected)
     }
 
-    @Test("The store keeps every event the tracking plan lists, and no other")
-    func storedEventsMatchThePlan() throws {
-        let expected = try TrackingPlan.store.schemas.map(\.name).sorted()
+    @Test("The plan holds every event the app declares and the ones the library tracks for it, with no list")
+    func planHoldsEveryEvent() throws {
+        let expected = [
+            "ApplicationBackgrounded",
+            "ApplicationInstalled",
+            "ApplicationOpened",
+            "ApplicationTerminated",
+            "ApplicationUpdated",
+            "ControlActivated",
+            "ScreenViewed",
+            "SessionEnded",
+            "SessionStarted",
+            "checkout_started",
+            "order_completed",
+            "product_added_to_cart",
+            "promotion_tapped",
+            "signed_up",
+        ]
 
-        let actual = StoreAnalytics.storedEvents.map { $0.name }.sorted()
+        let actual = try TrackingPlan.store.schemas.map(\.name)
+
+        #expect(actual == expected)
+    }
+
+    @Test("The store keeps the events the plan holds, as DiscoveredEvent.all lists both")
+    func storeMatchesThePlan() throws {
+        let expected = try TrackingPlan.store.schemas.map(\.name)
+
+        let actual = DiscoveredEvent.all.map { $0.type.name }
 
         #expect(actual == expected)
     }

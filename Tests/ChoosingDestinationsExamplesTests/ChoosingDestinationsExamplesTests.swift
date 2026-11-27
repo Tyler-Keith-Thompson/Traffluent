@@ -101,7 +101,7 @@ struct ChoosingDestinationsPostHogExamplesTests {
         let postHogHost = try #require(URL(string: "https://posthog.example.com"))
         let projectToken = "phc_example"
 
-        let plan = try TrackingPlan(schemas: [SignedUp.schema, SessionStarted.schema, SessionEnded.schema])
+        let plan = try TrackingPlan()
         let postHog = try HTTPDestination.postHog(
             projectToken: projectToken,
             host: postHogHost,  // https://us.i.posthog.com, https://eu.i.posthog.com or your own
@@ -112,8 +112,9 @@ struct ChoosingDestinationsPostHogExamplesTests {
         // Nothing is tracked, so nothing is sent and the example runs without a network.
         await tracker.finish()
         try await delivery.execute()
-        let expected = [SignedUp.name, SessionStarted.name, SessionEnded.name].sorted()
+        let expected = [SignedUp.name, SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
 
-        #expect(plan.schemas.map(\.name).sorted() == expected)
+        #expect(expected.allSatisfy(actual.contains))
     }
 }

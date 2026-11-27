@@ -63,7 +63,46 @@ public struct EventMacro: ExtensionMacro {
         let body = members.compactMap { $0 }.joined(separator: "\n\n")
         // The expansion is formatted after it returns, which indents the members.
         let source = "extension \(type.trimmedDescription)\(inheritance) {\n\(body)\n}"
-        return [DeclSyntax(stringLiteral: source).cast(ExtensionDeclSyntax.self)]
+        let undiscoverable = undiscoverableNote(structure, in: context)
+        undiscoverable.map(context.diagnose)
+        let record = undiscoverable == nil ? discoveryRecord(of: type.trimmedDescription) : nil
+        return ([source] + [record].compactMap { $0 }).map { DeclSyntax(stringLiteral: $0).cast(ExtensionDeclSyntax.self) }
+    }
+
+    /// The extension placing the event's record in the binary, which `DiscoveredEvent.all` reads:
+    /// in the library's section of each object format, kept by `@used` from being stripped.
+    private static func discoveryRecord(of type: String) -> String {
+        """
+        extension \(type) {
+            #if objectFormat(MachO)
+            @section("__DATA_CONST,__trfl_events")
+            #elseif objectFormat(ELF)
+            @section("trfl_events")
+            #endif
+            @used
+            private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in Events.__EventDiscovery.load(\(type).self, schema: \(type).schema, into: outValue, ofType: type) }, 0, 0)
+        }
+        """
+    }
+
+    /// A note saying `DiscoveredEvent.all` can't find the event, when `structure` can't hold its
+    /// record, a static stored property, which neither a generic type nor one nested in a generic
+    /// type can; `nil` when it can.
+    // A note rather than a warning: first-party builds treat warnings as errors, and Swift has no
+    // way to silence one diagnostic at its site, so a warning would make every generic @Event fail
+    // to build, this repository's own fixtures included. The note still shows where the event is
+    // declared.
+    // Only generic declarations are checked: a type declared in a function can't take an
+    // extension macro at all. A type nested in an extension of a generic type isn't seen as generic
+    // from here (an extension's syntax doesn't say whether the type it extends is generic), so it
+    // gets the record and fails to compile, naming the static stored property;
+    // //Tests/CompileFailures:EventInGenericExtension pins that error.
+    private static func undiscoverableNote(_ structure: StructDeclSyntax, in context: some MacroExpansionContext) -> Diagnostic? {
+        if let clause = structure.genericParameterClause {
+            return Diagnostic(node: clause, message: EventMacroDiagnostic.genericNotDiscovered)
+        }
+        guard context.lexicalContext.contains(where: \.isGenericType) else { return nil }
+        return Diagnostic(node: structure.name, message: EventMacroDiagnostic.nestedInGenericNotDiscovered)
     }
 
     /// `schema`, each property with the enum declared in the struct it holds, if any.
@@ -254,5 +293,16 @@ extension String {
             }
         }
         return "\"" + escaped + "\""
+    }
+}
+
+extension Syntax {
+    /// Whether this node declares a generic struct, class, enum or actor.
+    fileprivate var isGenericType: Bool {
+        let genericParameters = self.as(StructDeclSyntax.self)?.genericParameterClause
+            ?? self.as(ClassDeclSyntax.self)?.genericParameterClause
+            ?? self.as(EnumDeclSyntax.self)?.genericParameterClause
+            ?? self.as(ActorDeclSyntax.self)?.genericParameterClause
+        return genericParameters != nil
     }
 }

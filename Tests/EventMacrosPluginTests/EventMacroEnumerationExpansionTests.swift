@@ -89,6 +89,18 @@ struct EventMacroEnumerationExpansionTests {
                         try container.decodeIfPresent(Decoded.self, forKey: key)
                     }
                 }
+
+                extension CheckoutFailed {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(CheckoutFailed.self, schema: CheckoutFailed.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -200,6 +212,18 @@ struct EventMacroEnumerationExpansionTests {
                     private static func decodeIfPresentValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded? {
                         try container.decodeIfPresent(Decoded.self, forKey: key)
                     }
+                }
+
+                extension Spelled {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Spelled.self, schema: Spelled.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -313,6 +337,18 @@ struct EventMacroEnumerationExpansionTests {
                         try container.decode(Decoded.self, forKey: key)
                     }
                 }
+
+                extension Opened {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Opened.self, schema: Opened.schema, into: outValue, ofType: type)
+                        }, 0, 0)
+                }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
@@ -404,6 +440,18 @@ struct EventMacroEnumerationExpansionTests {
                     private static func decodeValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded {
                         try container.decode(Decoded.self, forKey: key)
                     }
+                }
+
+                extension CheckoutFailed {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(CheckoutFailed.self, schema: CheckoutFailed.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],
@@ -498,6 +546,18 @@ struct EventMacroEnumerationExpansionTests {
                     private static func decodeValue<Decoded: Swift.Decodable>(from container: Swift.KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Decoded {
                         try container.decode(Decoded.self, forKey: key)
                     }
+                }
+
+                extension Shape {
+                    #if objectFormat(MachO)
+                    @section("__DATA_CONST,__trfl_events")
+                    #elseif objectFormat(ELF)
+                    @section("trfl_events")
+                    #endif
+                    @used
+                    private nonisolated static let __discoveryRecord: Events.__EventDiscovery.Record = (0x6576_6E74, 0, { outValue, type, _, _ in
+                            Events.__EventDiscovery.load(Shape.self, schema: Shape.schema, into: outValue, ofType: type)
+                        }, 0, 0)
                 }
                 """,
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable"])],

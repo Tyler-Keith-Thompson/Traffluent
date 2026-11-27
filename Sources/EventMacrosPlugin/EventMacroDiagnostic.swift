@@ -1,6 +1,7 @@
 import SwiftDiagnostics
 
-/// Why `@Event` or `@Constrained` can't expand: each is an error at the node that causes it.
+/// Why `@Event` or `@Constrained` can't expand: each is an error at the node that causes it, but
+/// for the notes that a generic event isn't discovered.
 // An Error too, so a parse can return a Result whose failure is the diagnostic to report.
 enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case notAStruct
@@ -22,6 +23,8 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case boundRounds(keyword: String, type: String, rounded: String)
     case constrainedNotStoredProperty
     case enumNotCodable(name: String)
+    case genericNotDiscovered
+    case nestedInGenericNotDiscovered
 
     var message: String {
         switch self {
@@ -63,6 +66,10 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
             "@Constrained applies only to a stored instance property of an @Event struct"
         case .enumNotCodable(let name):
             "@Event writes enum \(name) as its raw value through Codable; add Codable to its inheritance clause"
+        case .genericNotDiscovered:
+            "@Event can't give a generic struct the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)"
+        case .nestedInGenericNotDiscovered:
+            "@Event can't give a struct nested in a generic type the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)"
         }
     }
 
@@ -87,11 +94,22 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .boundRounds: "boundRounds"
         case .constrainedNotStoredProperty: "constrainedNotStoredProperty"
         case .enumNotCodable: "enumNotCodable"
+        case .genericNotDiscovered: "genericNotDiscovered"
+        case .nestedInGenericNotDiscovered: "nestedInGenericNotDiscovered"
         }
         return MessageID(domain: "EventMacros", id: id)
     }
 
     var severity: DiagnosticSeverity {
-        .error
+        isNote ? .note : .error
+    }
+
+    /// Whether this is a note that a generic event isn't discovered, which doesn't stop the
+    /// expansion.
+    private var isNote: Bool {
+        switch self {
+        case .genericNotDiscovered, .nestedInGenericNotDiscovered: true
+        default: false
+        }
     }
 }

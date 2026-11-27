@@ -42,6 +42,60 @@ A stored property whose type isn't `Codable` is a compile error that names it:
 So are `@Event` on anything but a struct, and a stored property without a type annotation. Static
 and computed properties are left out. The struct keeps its memberwise initializer.
 
+### Finding every event
+
+You never list your events. `@Event` places a small record of the event in the compiled binary, and
+`DiscoveredEvent.all` reads those records at run time: every `@Event` struct in the modules
+linked into the program, the app's own and its packages', with each one's schema, ordered by name
+and then version. On Apple platforms that includes the frameworks the app has loaded; "Limits"
+below says what isn't found. The library's own events are in it too, once their modules are linked:
+`SessionStarted` and `SessionEnded`, `ScreenViewed`, `ControlActivated` and the `Application`
+events of `trackLifecycle`.
+
+`SegmentStore()`, `DatabaseStore(database:)` and `TrackingPlan()` each take that list, so a new
+event is stored and described as soon as it is declared. To keep only some events on disk, list them:
+`SegmentStore(events: [SignedUp.self])` writes `SignedUp` alone, and any other event stays in
+memory, delivered in this run and reported once as `notPersisted`. `TrackingPlan(schemas:)` takes
+a list the same way.
+
+An event that conforms to `Event` by hand, without `@Event`, has no record, so it isn't
+discovered. Add it to the discovered ones where it is needed:
+`SegmentStore(events: DiscoveredEvent.all.map(\.type) + [Legacy.self])` and
+`TrackingPlan(schemas: DiscoveredEvent.all.map(\.schema) + [Legacy.schema])`. A generic `@Event`
+struct, or one nested in a generic type's declaration, isn't discovered either, as a generic type
+can't hold the record: the macro adds a note where it is declared, and you list it the same way.
+An `@Event` struct declared in an extension of a generic type doesn't compile (`static stored
+properties not supported in generic types`), as the macro can't tell from the extension that the
+type is generic; declare it outside the generic type instead.
+
+Event names must be unique across the program. Two discovered events of one name make
+`SegmentStore()` and `DatabaseStore(database:)` throw `duplicateEventName`, as a store couldn't
+tell their records apart, and two of one name and version make `TrackingPlan()` throw
+`duplicateEvent`. Each error carries the name and both types' fully qualified names, such as
+`duplicateEventName("signed_up", firstType: "AppTests.SignupTests.SignedUp", secondType:
+"AppTests.CheckoutTests.SignedUp")`.
+
+A test target is a program of its own, whose events are the ones it declares and links. A test
+target whose fixtures reuse a name, two tests that each declare a `signed_up` event, gets that
+error from `SegmentStore()` or `TrackingPlan()`. Either build the store or plan in the test from
+an explicit list, `SegmentStore(events: [SignedUp.self])`, or rename one of the fixtures. A
+tracking plan executable holds the events of the modules it links, so it links every module that
+declares one (<doc:TrackingPlanWorkflow>).
+
+#### Limits
+
+- On Linux and the other ELF platforms, only the image that links the `Events` module is read,
+  which is the whole program as SwiftPM and Bazel link Swift there. Events in a library loaded on
+  its own, a dynamic library or a plugin, aren't found.
+- An object file in a static archive that nothing references brings no record into the program,
+  as the linker leaves it out: CocoaPods' static libraries, a static XCFramework, or a Bazel
+  library with `alwayslink = False`. SwiftPM, and Bazel's `alwayslink = True`, link every object
+  file.
+- `DiscoveredEvent.all` holds the events of the images loaded when it is called. A framework
+  loaded later adds its events from then on, so build the store and plan after it loads.
+- Object formats other than Mach-O and ELF, COFF on Windows and WebAssembly's among them, find no
+  events: `DiscoveredEvent.all` is empty, and Traffluent doesn't target them.
+
 ### Enum properties
 
 A property can hold an enum whose raw value is a `String` or an integer type. Give the enum

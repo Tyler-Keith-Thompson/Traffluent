@@ -38,11 +38,16 @@ package struct EventRegistry: Sendable {
     package init(_ types: [any (Event & Codable).Type]) throws(DuplicateEventName) {
         var byType: [ObjectIdentifier: Registration] = [:]
         var byName: [String: Registration] = [:]
+        // The type that registered each name, so a clash names both types.
+        var typeByName: [String: any (Event & Codable).Type] = [:]
         for type in types {
             let registration = Self.registration(of: type)
-            guard byName[registration.name] == nil || byType[ObjectIdentifier(type)] != nil else { throw DuplicateEventName() }
+            if let registered = typeByName[registration.name], ObjectIdentifier(registered) != ObjectIdentifier(type) {
+                throw DuplicateEventName(name: registration.name, firstType: String(reflecting: registered), secondType: String(reflecting: type))
+            }
             byType[ObjectIdentifier(type)] = registration
             byName[registration.name] = registration
+            typeByName[registration.name] = type
         }
         self.byType = byType
         self.byName = byName
@@ -81,5 +86,10 @@ package struct EventRegistry: Sendable {
 
 /// The error ``EventRegistry/init(_:)`` throws for two event types that share an `Event.name`.
 package struct DuplicateEventName: Error, Hashable, Sendable {
-    package init() {}
+    /// The name both types share.
+    package let name: String
+    /// The fully qualified name of the type listed first.
+    package let firstType: String
+    /// The fully qualified name of the type listed second.
+    package let secondType: String
 }

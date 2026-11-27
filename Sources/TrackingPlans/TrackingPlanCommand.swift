@@ -1,7 +1,7 @@
 import Foundation
 
 /// An executable that writes a tracking plan: the type marked `@main` in a target of the app's
-/// package that lists its events.
+/// package that links the modules declaring its events.
 ///
 /// ```swift
 /// import AppEvents
@@ -10,12 +10,7 @@ import Foundation
 /// @main
 /// struct AppTrackingPlan: TrackingPlanCommand {
 ///     static var trackingPlan: TrackingPlan {
-///         get throws(TrackingPlanError) {
-///             try TrackingPlan(schemas: [
-///                 CheckoutStarted.schema,
-///                 SignedUp.schema,
-///             ])
-///         }
+///         get throws(TrackingPlanError) { try TrackingPlan() }
 ///     }
 /// }
 /// ```
@@ -31,8 +26,8 @@ import Foundation
 /// (`swift package check-tracking-plan --plan <directory> --breaking-only`) it fails only when a
 /// difference is breaking, so CI can check the events against the base branch's plan.
 ///
-/// It is an executable of the app's own because only code compiled against the app's event types
-/// can read their schemas.
+/// It is an executable of the app's own because only a program that links the app's event types
+/// holds their schemas: `TrackingPlan()` finds the events of the modules it links.
 public protocol TrackingPlanCommand {
     /// The plan the command writes.
     ///
