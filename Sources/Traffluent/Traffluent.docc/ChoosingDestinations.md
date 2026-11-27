@@ -68,6 +68,13 @@ The destination logs each at error level and reports it on `dropReports`, with t
 identifiers and the status, the transport's reason or the encoder's error. Cancelling the delivery
 stops the retries.
 
+A request can carry a deadline, the latest time it may be sent, which an encoder sets for a vendor
+that misdates or ignores events past some age while still answering 2xx. The destination reads its
+`now:` clock before every attempt, the first included, and once the deadline has passed it stops
+sending the request and reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. The
+Google Analytics and Matomo encoders set one; a request without one is retried for as long as it
+takes.
+
 The bootstrapped tracing instrument, or the one you pass as `instrument:`, injects the trace
 context of each request's first record into its header fields, so a server that extracts it joins
 the request to the app's trace. The encoder's `Content-Type` always wins, and with no instrument
@@ -454,8 +461,8 @@ name longer than 40 bytes, not starting with a letter, or holding anything but l
 and `_`; a name Google Analytics keeps for itself, or takes only from an app stream
 (`session_start`, `error`, `screen_view`, a `firebase_`, `ga_` or `google_` parameter); more than
 25 parameters; a string longer than 100 bytes, though a Google Analytics 360 property takes 500
-characters; and a record tracked more than 72 hours before its batch is encoded, or more than 15
-minutes after. Google Analytics answers 2xx to such an event and, under its default relaxed
+characters; and a record tracked more than 71 hours before its batch is encoded, an hour short of
+the 72 Google Analytics takes, or more than 15 minutes after. Google Analytics answers 2xx to such an event and, under its default relaxed
 validation, stores it without the offending parameter or under a name it never checked, so the
 encoder reports the record rather than send it. The destination reports each on `dropReports` as
 `HTTPDropReport.skipped(_:)`, and the encoder logs a notice for each such name in the plan when the
@@ -465,8 +472,10 @@ The Measurement Protocol doesn't report any loss. It answers 2xx to every reques
 including one it can't read and one with a wrong measurement ID or API secret, and stores nothing
 for them, so check the property's Realtime event counts after setting the destination up. Its
 validation server, `/debug/mp/collect`, checks a body's shape but not the measurement ID or the
-API secret. A record retried for long after its batch was encoded can arrive past the 72 hours,
-and Google Analytics then stores it as if it happened 72 hours ago.
+API secret. A request is encoded once and retried as it is, so each request's deadline is 71 hours
+after its oldest record was tracked: one still failing by then isn't sent again, which would have
+Google Analytics store its oldest records as 72 hours old. The whole request is dropped, its younger
+records too, and reported as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`.
 
 ### Snowplow
 
@@ -633,11 +642,13 @@ uses it for are its privacy settings, which no app can override without a token.
 The destination never sends a `token_auth`: a token is a secret, and an app holds none. Without
 one, Matomo takes an event's time only when it is less than a day old, and answers 200 while
 storing nothing for an older one. So the encoder leaves out a record tracked more than 23 hours
-before or after the batch is encoded, an hour spare for retries and clocks, and reports it as
+before or after the batch is encoded, the hour to spare for a queue on the server and clocks that disagree, and reports it as
 `timestampOutsideWindow`: a record a store kept offline for longer, or that waited that long in
-the buffer. A request is encoded once and retried as it is, though, so one retried until about a
-day after its oldest record is answered 200 by Matomo and lost without a report. A clock that
-reads NaN or infinite has every record reported. To keep older records, send them to a server of
+the buffer. A request is encoded once and retried as it is, so each request's deadline is 23 hours
+after its oldest record was tracked: one still failing by then isn't sent again, which Matomo
+would answer with 200 while storing nothing. The whole request is dropped, its younger records
+too, and reported as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. A clock that reads NaN or infinite has
+every record reported. To keep older records, send them to a server of
 yours that forwards to Matomo with a token.
 
 The encoder leaves out the same records as the collector's encoder, and also one whose event name

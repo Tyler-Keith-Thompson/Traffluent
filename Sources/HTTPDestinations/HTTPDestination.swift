@@ -39,6 +39,12 @@ import Logging
 ///   takes. A `Retry-After` field is not read; the backoff alone sets the wait.
 /// - Any other status means the endpoint won't take the request, and it isn't sent again. The
 ///   batch's later requests are still sent.
+/// - A request with a deadline (``EncodedRequest/deadline``) is sent only while the destination's
+///   wall clock reads that time or earlier, checked before every attempt, the first included, and
+///   again when an attempt fails. One still undelivered once it has passed isn't sent again, and
+///   is reported without waiting out a backoff, so a vendor that would misdate or ignore records
+///   that old never receives them. The whole request is dropped, its younger records too; the
+///   batch's later requests are still sent.
 /// - A record can arrive twice: a request the server took whose response was lost is sent
 ///   again, and a record a store redelivers after the app was stopped mid-send
 ///   (`EventRecord/isRedelivered`) may have arrived before. Its `EventRecord/id` is the one it was
@@ -52,9 +58,10 @@ import Logging
 /// ``receive(_:)`` returns once the batch is delivered, dropped, or the delivery is cancelled, so
 /// a tracker's store keeps the records of a batch until it arrives, and a batch still being
 /// retried when the app ends is delivered again on the next launch. A request the endpoint
-/// rejects or that can't be sent, a batch the encoder can't encode, and a record the encoder
-/// leaves out of its requests are dropped: logged at error level and reported on
-/// ``dropReports``. Each failed attempt that will be retried is logged at notice level.
+/// rejects, that can't be sent or that passed its deadline, a batch the encoder can't encode, and
+/// a record the encoder leaves out of its requests are dropped: logged at error level and
+/// reported on ``dropReports``. Each failed attempt that will be retried is logged at notice
+/// level.
 /// Cancelling the delivery cancels the send in flight or the wait before the next one, and
 /// ``receive(_:)`` returns without logging or reporting it, or sending the batch's later
 /// requests. A request whose wait before the next attempt throws something other than
@@ -88,6 +95,11 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     // than an `any Clock<Duration>`, which Afluent's strategy can't take, and Swift won't open
     // into a `some Clock<Duration>` parameter. A new strategy per request, as each keeps its count.
     private let retryStrategy: @Sendable () -> any RetryStrategy
+    // A wall clock beside `clock`, as a deadline is a moment in the world (a record's timestamp
+    // plus a vendor's window) while the waits are durations; a `Clock<Duration>`'s instants can't
+    // be compared with a Date. The closure form is what `Tracker(now:)` and the vendor encoders
+    // take, so a factory hands one function to both its encoder and its destination.
+    private let now: @Sendable () -> Date
     private let reporter = DropReporter<Encoding.Failure>()
 
     /// A destination that sends batches to `endpoint` through `transport`, encoded by `encoder`,
@@ -105,6 +117,8 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up to
     ///     60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - now: The wall-clock time, read before each attempt at a request with a deadline
+    ///     (``EncodedRequest/deadline``); the system's clock by default.
     public init(
         endpoint: URL,
         headerFields: HTTPFields = [:],
@@ -112,13 +126,15 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         transport: Transport,
         encoder: Encoding,
         backoff: ExponentialBackoff = ExponentialBackoff(),
-        clock: some Clock<Duration> = ContinuousClock()
+        clock: some Clock<Duration> = ContinuousClock(),
+        now: @escaping @Sendable () -> Date = { Date.now }
     ) {
         request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)
         self.instrument = instrument
         self.transport = transport
         self.encoder = encoder
         retryStrategy = { TransientFailureRetry(backoff, clock: clock) }
+        self.now = now
     }
 
     /// A report of each batch dropped without being delivered, in the order they are dropped.
@@ -179,21 +195,24 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             case .invalidRequest(let reason):
                 logger.error("Dropped a request that can never be sent: \(reason)")
                 reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))
+            case .deadlineExceeded(let deadline):
+                logger.error("Dropped a request still undelivered at its deadline, \(deadline)")
+                reporter.report(.deadlineExceeded(deadline: deadline, recordIDs: request.recordIDs))
             case .abandoned(let error):
                 logger.error("Stopped sending a request, whose wait before the next attempt threw: \(error)")
             }
         }
     }
 
-    /// Sends `encoded` until it is delivered, rejected or cancelled, with the trace context of
-    /// `context` in its header fields, and says which.
+    /// Sends `encoded` until it is delivered, rejected, past its deadline or cancelled, with the
+    /// trace context of `context` in its header fields, and says which.
     package func send(_ encoded: EncodedRequest, context: ServiceContext?) async -> Outcome {
         var request = request
         if let context {
             instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
         request.headerFields[.contentType] = encoded.body.contentType
-        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body)
+        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body, deadline: encoded.deadline, now: now)
         do {
             // Built for this request alone: Afluent's strategy keeps its count of retries, and a
             // cancelled unit of work stays cancelled.
@@ -205,6 +224,8 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             return .rejected(response)
         } catch AttemptFailure.invalidRequest(let reason) {
             return .invalidRequest(reason)
+        } catch AttemptFailure.deadlineExceeded(let deadline) {
+            return .deadlineExceeded(deadline)
         } catch is CancellationError {
             return .cancelled
         } catch {
@@ -225,6 +246,8 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         case rejected(HTTPResponse)
         /// The transport can never send the request.
         case invalidRequest(String)
+        /// The request's deadline, `deadline`, passed before it was delivered.
+        case deadlineExceeded(Date)
         /// The delivery was cancelled before the request was delivered or dropped.
         case cancelled
         /// The clock's sleep before the next attempt threw `error`, not `CancellationError`.
@@ -237,10 +260,26 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
     let transport: Transport
     let request: HTTPRequest
     let body: Data
+    let deadline: Date?
+    let now: @Sendable () -> Date
 
     /// Sends the request; throws `CancellationError` when cancelled, so the retry stops, and an
     /// ``AttemptFailure`` when the batch wasn't delivered.
     func run() async throws -> HTTPResponse {
+        // Inside the retried unit of work, so every attempt, the first included, checks it, and
+        // the retry strategy ends the retries on what it throws. Rejected: a strategy that reads
+        // the clock before each retry, which would leave the first attempt unchecked and put the
+        // drop's report in two places.
+        if let deadline {
+            // A cancelled delivery is cancelled, not a drop: the batch comes back whole after a
+            // relaunch, and a report here would be the first of two for one request.
+            try Task.checkCancellation()
+            // Written as the window's inside, so a NaN reading, on either side, is past it and
+            // the request is reported (D10), rather than sent to a vendor that would misdate it.
+            guard now() <= deadline else {
+                throw AttemptFailure.deadlineExceeded(deadline)
+            }
+        }
         let response: HTTPResponse
         do {
             response = try await transport.send(request, body: body)
@@ -249,11 +288,9 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
         } catch .cancelled {
             // A transport that says it was cancelled while the delivery wasn't got no response;
             // ending the retries here would let a store forget a batch that never arrived.
-            logger.notice("A batch's send was cancelled by its transport, not the delivery, so it will be sent again")
-            throw AttemptFailure.unanswered(reason: "cancelled by the transport")
+            throw retried(.unanswered(reason: "cancelled by the transport"), "A batch's send was cancelled by its transport, not the delivery, so it will be sent again")
         } catch .failed(let reason) {
-            logger.notice("A batch got no response, so it will be sent again: \(reason)")
-            throw AttemptFailure.unanswered(reason: reason)
+            throw retried(.unanswered(reason: reason), "A batch got no response, so it will be sent again: \(reason)")
         } catch .invalidRequest(let reason) {
             throw AttemptFailure.invalidRequest(reason: reason)
         }
@@ -261,11 +298,23 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
         case let status where status.kind == .successful:
             return response
         case let status where status.isTransient:
-            logger.notice("The endpoint answered a batch with \(status), so it will be sent again")
-            throw AttemptFailure.unavailable(response)
+            throw retried(.unavailable(response), "The endpoint answered a batch with \(status), so it will be sent again")
         default:
             throw AttemptFailure.rejected(response)
         }
+    }
+
+    /// `failure`, which the retry strategy sends again after a backoff, or
+    /// ``AttemptFailure/deadlineExceeded(_:)`` when the deadline has passed by now.
+    ///
+    /// Checked when the send fails as well as before it, so a request whose deadline passed while
+    /// it was in flight is reported at once rather than after a backoff that ends in the drop.
+    private func retried(_ failure: AttemptFailure, _ notice: @autoclosure () -> Logger.Message) -> AttemptFailure {
+        if let deadline, !(now() <= deadline) {
+            return .deadlineExceeded(deadline)
+        }
+        logger.notice(notice())
+        return failure
     }
 }
 

@@ -18,9 +18,14 @@ extension HTTPDestination where Encoding == GoogleAnalyticsBatchEncoder {
     /// The destination posts to the Measurement Protocol's `/mp/collect` endpoint of `region`, with
     /// the measurement ID and API secret in its query, encoded by a ``GoogleAnalyticsBatchEncoder``
     /// of `plan` within ``GoogleAnalyticsBatchEncoder/batchLimit`` that leaves out each record
-    /// tracked more than 72 hours before, or more than 15 minutes after, the time `now` gives as a
-    /// batch is encoded. It sends no trace context in its header fields. It retries no response, a
-    /// 5xx, 408 or 429, and drops and reports any other status. The Measurement Protocol answers
+    /// tracked more than 71 hours before, or more than 15 minutes after, the time `now` gives as a
+    /// batch is encoded: Google Analytics takes 72, and the hour to spare is for the request to
+    /// reach Google and clocks that disagree. It sends no trace context in its header fields. It
+    /// retries no response, a 5xx, 408 or 429, and drops and reports any other status. A request
+    /// still undelivered 71 hours after its oldest record was tracked, by the time `now` gives,
+    /// isn't sent again: the whole request is dropped, its younger records too, and reported as
+    /// `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, as Google Analytics would store its
+    /// oldest records as 72 hours old. The Measurement Protocol answers
     /// 2xx to every request it receives, so a wrong measurement ID or API secret, or a request it
     /// can't read, is answered 2xx with nothing stored: check the property's Realtime report after
     /// setting it up.
@@ -53,7 +58,8 @@ extension HTTPDestination where Encoding == GoogleAnalyticsBatchEncoder {
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
     ///     to 60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
-    ///   - now: The wall-clock time a batch is encoded at; the system's clock by default.
+    ///   - now: The wall-clock time a batch is encoded at, and each request's deadline is checked
+    ///     against before it is sent; the system's clock by default.
     /// - Returns: The destination.
     /// - Throws: ``GoogleAnalyticsSetupError/appBundle`` in an app or an app extension,
     ///   ``GoogleAnalyticsSetupError/emptyMeasurementID`` for a measurement ID that is empty or only
@@ -98,7 +104,10 @@ extension HTTPDestination where Encoding == GoogleAnalyticsBatchEncoder {
             transport: transport,
             encoder: GoogleAnalyticsBatchEncoder(plan: plan, now: now),
             backoff: backoff,
-            clock: clock)
+            clock: clock,
+            // One clock for both, so the 71 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)
     }
 }
 
@@ -132,7 +141,8 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Go
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
     ///     to 60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
-    ///   - now: The wall-clock time a batch is encoded at; the system's clock by default.
+    ///   - now: The wall-clock time a batch is encoded at, and each request's deadline is checked
+    ///     against before it is sent; the system's clock by default.
     /// - Returns: The destination.
     /// - Throws: ``GoogleAnalyticsSetupError`` in an app, and for an empty or malformed measurement
     ///   ID or an empty API secret, as the other spelling says.

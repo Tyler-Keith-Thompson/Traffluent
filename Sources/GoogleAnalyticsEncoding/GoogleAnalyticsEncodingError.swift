@@ -52,9 +52,10 @@ public enum GoogleAnalyticsEncodingError: Error, Sendable, Hashable {
     /// The record's timestamp has no `timestamp_micros` form: it is NaN, infinite, or further from
     /// 1970 than `Int64.max` microseconds.
     case unrepresentableTimestamp
-    /// The record's timestamp is more than 72 hours before, or more than 15 minutes after, the
-    /// time its batch was encoded. Google Analytics stores an event from further back as if it
-    /// happened 72 hours ago, and its validation server refuses one from further ahead.
+    /// The record's timestamp is more than 71 hours before, or more than 15 minutes after, the
+    /// time its batch was encoded. Google Analytics stores an event from more than 72 hours back
+    /// as if it happened 72 hours ago, the hour to spare is for the request to reach Google and
+    /// clocks that disagree, and its validation server refuses one from further ahead.
     case timestampOutsideWindow
     /// The event's JSON is `byteCount` bytes, more than one request holds beside the envelope
     /// (``GoogleAnalyticsBatchEncoder/batchLimit``); only ``GoogleAnalyticsBatchEncoder/requests(for:)``

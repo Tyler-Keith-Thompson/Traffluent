@@ -143,7 +143,17 @@ bad row in a dashboard.
   consent sent as denied. Rejected: shipping the secret in apps with a warning; a factory on every
   platform that takes the secret at run time (both put a credential that writes to the property
   into a binary anyone can read); and a SwiftPM trait or `-D` define to opt in to the factory,
-  which adopters miss and Bazel would have to match.
+  which adopters miss and Bazel would have to match. A record more than 71 h before encode time
+  or 15 min after it is skipped (`timestampOutsideWindow`), the hour to spare under GA4's 72 for
+  the request to reach Google and clocks that disagree, and each request's
+  `EncodedRequest.deadline` is its oldest record plus the same 71 h, so one retried past it is
+  dropped whole, younger records too, and reported as `HTTPDropReport.deadlineExceeded` rather
+  than stored misdated (TRAF-134). Rejected: re-encoding a dropped request's younger records.
+  Source break for vendor destinations (TRAF-134): `HTTPDropReport` gains `deadlineExceeded`, so
+  an exhaustive `switch` needs the case; the deadline-setting split is
+  `requests(for:in:maximumAge:encoding:oversized:)`, which takes a `Duration` and throws
+  `NegativeMaximumAge`, beside the unchanged spelling without it; and `EncodedRequest`'s equality
+  now includes `deadline`.
   Snowplow (TRAF-106, decided 2026-11-27): `SnowplowEncoding` sends the tracker protocol's
   `payload_data` 1-0-4 to `<collector>/com.snowplowanalytics.snowplow/tp2`, one self-describing
   event (`e=ue`, data in `ue_pr`) per record, from every platform, as a collector needs no secret.
@@ -224,21 +234,23 @@ bad row in a dashboard.
   a SkippedRecord (it would drop the record and repeat each batch). A value is a string as it is,
   anything else minified JSON, `nil` never sent. Without a token Matomo refuses a `cdt` a day old
   or a day ahead yet answers 200, so a record more than 23 hours from encode time is skipped
-  (`timestampOutsideWindow`), the hour spare for retries and skew, and every record is when the
+  (`timestampOutsideWindow`), the hour to spare for a queue on the server and clocks that disagree, and every record is when the
   clock reads NaN or infinite (D10). Rejected: leaving a broken clock to Matomo, which drops them
-  unreported. A request retried until about a day after its oldest record is still lost
-  unreported, as HTTPDestination retries the bytes it first encoded (TRAF-134). `cdt` is whole
-  Unix seconds rounded down. Also skipped: an event name empty once trimmed or over the 4,096
-  characters `log_action.name` stores, and a dimension value over the 250 Matomo keeps, both
-  counted as Matomo stores them (line breaks and NULs removed, the five HTML entities, PHP's
-  trim), so nothing is silently cut. Batching is 20 requests (Matomo's iOS SDK's) and 1,000,000
-  bytes (under nginx's 1 MiB default; Matomo documents none). `lang` comes from `LocaleKey`; no
-  `rand`, `send_image`, `ua` or `res`. Matomo answers 200 to invalid requests and doesn't
-  deduplicate, so the docs say a wrong site ID loses everything silently and a resent record
-  counts twice; older records need a relay of the adopter's with a token, which the library
+  unreported. Each request's `EncodedRequest.deadline` is its oldest record plus the same 23 h,
+  so one retried that long is dropped whole, younger records too, and reported as
+  `HTTPDropReport.deadlineExceeded` rather than answered 200 and lost (TRAF-134); only the past
+  bound, as a retry only arrives later.
+  `cdt` is whole Unix seconds rounded down. Also skipped: an event name empty once trimmed or
+  over the 4,096 characters `log_action.name` stores, and a dimension value over the 250 Matomo
+  keeps, both counted as Matomo stores them (line breaks and NULs removed, the five HTML
+  entities, PHP's trim), so nothing is silently cut. Batching is 20 requests (Matomo's iOS SDK's)
+  and 1,000,000 bytes (under nginx's 1 MiB default; Matomo documents none). `lang` comes from
+  `LocaleKey`; no `rand`, `send_image`, `ua` or `res`. Matomo answers 200 to invalid requests and
+  doesn't deduplicate, so the docs say a wrong site ID loses everything silently and a resent
+  record counts twice; older records need a relay of the adopter's with a token, which the library
   doesn't provide. With `bulk_requests_require_authentication` on, Matomo 6.0 answers 400
-  (dropped, reported) and 5.14 answers 500 (retried until cancelled), so the docs say to leave
-  it off.
+  (dropped, reported) and 5.14 answers 500 (retried until cancelled), so the docs say to leave it
+  off.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

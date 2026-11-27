@@ -52,10 +52,10 @@ MUTANTS = [
     Mutant("parameters26", B, "parameters.count <= Self.parameterLimit", "parameters.count <= 26"),
     Mutant("parameters24", B, "parameters.count <= Self.parameterLimit", "parameters.count <= 24"),
     Mutant("countexclusive", B, "parameters.count <= Self.parameterLimit", "parameters.count < Self.parameterLimit"),
-    Mutant("noearliest", B, "offset < Self.earliestOffset", "false"),
-    Mutant("earliest73h", B, "offset < Self.earliestOffset", "offset < -73 * 60 * 60"),
-    Mutant("earliest71h", B, "offset < Self.earliestOffset", "offset < -71 * 60 * 60"),
-    Mutant("earliestinclusive", B, "offset < Self.earliestOffset", "offset <= Self.earliestOffset"),
+    Mutant("noearliest", B, "offset < -Self.maximumAgeSeconds", "false"),
+    Mutant("earliest72h", B, "offset < -Self.maximumAgeSeconds", "offset < -72 * 60 * 60"),
+    Mutant("earliest70h", B, "offset < -Self.maximumAgeSeconds", "offset < -70 * 60 * 60"),
+    Mutant("earliestinclusive", B, "offset < -Self.maximumAgeSeconds", "offset <= -Self.maximumAgeSeconds"),
     Mutant("nolatest", B, "offset > Self.latestOffset", "false"),
     Mutant("latest16m", B, "offset > Self.latestOffset", "offset > 16 * 60"),
     Mutant("latest14m", B, "offset > Self.latestOffset", "offset > 14 * 60"),
@@ -142,5 +142,31 @@ MUTANTS = [
     Mutant("debugendpoint", F, '"https://\\(host)/mp/collect?\\(query)"', '"https://\\(host)/debug/mp/collect?\\(query)"'),
     Mutant("secretunescaped", F, "apiSecret.percentEncodedForQuery", "apiSecret"),
     Mutant("plusunescaped", F, '"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"', '"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~+"'),
-    Mutant("nownotpassed", F, "GoogleAnalyticsBatchEncoder(plan: plan, now: now)", "GoogleAnalyticsBatchEncoder(plan: plan)"),
+    # Deadlines (TRAF-134). The first `Self.maximumAge` is the request's deadline; the catch that
+    # sends requests without one is reached only through a negative age, which deadlinenegative
+    # plants, so a mutant inside it would be the same as that one; it comes first, as the first
+    # `Self.maximumAge` after deadline72h's is the one inside its mutated branch.
+    # destinationnowignored comes before nownotpassed, whose original it holds twice, so
+    # nownotpassed picks the else branch's with `nth=1`.
+    Mutant("deadlinenegative", B, "Self.maximumAge", "Duration.seconds(-1)", nth=0),
+    Mutant("deadline72h", B, "Self.maximumAge", "Self.maximumAge + .seconds(60 * 60)", nth=0),
+    Mutant("window72h", B, "71 * 60 * 60", "72 * 60 * 60"),
+    Mutant("destinationnowignored", F, """return HTTPDestination(
+            endpoint: region.endpoint(measurementID: measurementID, apiSecret: apiSecret),
+            instrument: instrument,
+            transport: transport,
+            encoder: GoogleAnalyticsBatchEncoder(plan: plan, now: now),
+            backoff: backoff,
+            clock: clock,
+            // One clock for both, so the 71 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)""", """return HTTPDestination(
+            endpoint: region.endpoint(measurementID: measurementID, apiSecret: apiSecret),
+            instrument: instrument,
+            transport: transport,
+            encoder: GoogleAnalyticsBatchEncoder(plan: plan, now: now),
+            backoff: backoff,
+            clock: clock,
+            now: { Date.now })""", mode="stmt"),
+    Mutant("nownotpassed", F, "GoogleAnalyticsBatchEncoder(plan: plan, now: now)", "GoogleAnalyticsBatchEncoder(plan: plan)", nth=1),
 ]

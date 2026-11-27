@@ -16,7 +16,9 @@ destination takes the next batch only once this one is delivered or dropped, so 
 keeps the batch's records until then. A batch the endpoint answers with any other status, whose
 request can never be sent, or that the encoder can't encode is dropped, logged and reported on
 ``HTTPDestination/dropReports`` as an ``HTTPDropReport``, as is each record the encoder leaves out
-of its requests.
+of its requests. So is a request still undelivered at its ``EncodedRequest/deadline``, which an
+encoder sets for a vendor that misdates or ignores old events: the destination checks it on its
+`now:` clock before every attempt and sends nothing more once it has passed.
 
 The tracing instrument injects the trace context of each request's first record into its header
 fields, and `Content-Type` is always the encoder's.

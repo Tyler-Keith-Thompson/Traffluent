@@ -127,6 +127,15 @@ left out, as `requests(for:)` doesn't throw. `HTTPDestination` sends the request
 reports each record left out as `HTTPDropReport.skipped(_:)`. Pass `includingSensitiveValues: true` only if the
 vendor's terms allow the values, and then only through a factory the adopter opts in with.
 
+If the vendor misdates or ignores an event past some age but still answers 2xx, pass an age a
+little short of it to `limit.requests(for:in:maximumAge:encoding:oversized:)`, which throws
+`NegativeMaximumAge` for one below zero. The spare time covers a request's trip to the vendor and
+clocks that disagree. Each request then has a deadline that long after its oldest record was
+tracked, and `HTTPDestination` drops a request still being retried by then, all of its records, and
+reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, rather than send records the
+vendor would store wrongly. Have the factory pass its `now:` to both the encoder and the
+destination, so one clock decides what is encoded and what is sent.
+
 ### The factory
 
 The factory is a static method on `HTTPDestination` constrained to the encoder, so adopters write

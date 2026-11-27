@@ -62,4 +62,5 @@ builds a whole encoder from these.
 
 - ``BatchLimit``
 - ``InvalidBatchLimit``
+- ``NegativeMaximumAge``
 - ``JSONEnvelope``

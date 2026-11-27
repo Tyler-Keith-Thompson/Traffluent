@@ -64,6 +64,11 @@ public import TrackingPlans
 /// (``MatomoEncodingError``). ``requests(for:)`` returns them as `SkippedRecord`s, which
 /// `HTTPDestination` logs and reports on its `dropReports`.
 ///
+/// Each request's `EncodedRequest/deadline` is 23 hours after its oldest record was tracked, so
+/// `HTTPDestination` drops a request still being retried by then, every record of it, the younger
+/// ones included, and reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, rather
+/// than send it to a Matomo that would answer 200 and store nothing.
+///
 /// ``requests(for:)`` splits a batch into requests within the encoder's limit, ``batchLimit`` by
 /// default, and makes none for a batch with no record it can write, so `HTTPDestination` sends
 /// nothing for it. Matomo answers 200 to a bulk request it reads, counting the tracking requests
@@ -105,10 +110,13 @@ public struct MatomoBatchEncoder: BatchEncoder {
     /// ``MatomoEncodingError/oversized(byteCount:)``.
     public static let batchLimit = (try? BatchLimit(maximumRecordCount: 20, maximumByteCount: 1_000_000, maximumRecordByteCount: 1_000_000)) ?? .unlimited
 
-    /// How long before or after a batch is encoded a record may have been tracked: 23 hours.
-    /// Matomo takes a time up to a day old without a `token_auth`; the hour to spare is for the
-    /// request to arrive, through retries, a queue and clocks that disagree.
-    private static let window: TimeInterval = 23 * 60 * 60
+    /// How long before or after a batch is encoded, or before its request is sent, a record may
+    /// have been tracked, in seconds: 23 hours. Matomo takes a time up to a day old without a `token_auth`; the
+    /// hour to spare is for a queue on the server and clocks that disagree.
+    private static let windowSeconds: TimeInterval = 23 * 60 * 60
+
+    /// ``windowSeconds`` as the maximum age of a request's oldest record.
+    private static let window: Duration = .seconds(windowSeconds)
 
     /// The most characters Matomo stores of an event's category or action: its `log_action.name`
     /// column's 4,096.
@@ -189,10 +197,21 @@ public struct MatomoBatchEncoder: BatchEncoder {
     /// - Complexity: O(*n*) in the length of the batch's values, besides reading its properties.
     public func requests(for batch: [EventRecord]) -> BatchRequests<MatomoEncodingError> {
         let encodedAt = now()
-        return limit.requests(for: batch, in: Self.envelope) { record throws(MatomoEncodingError) in
+        // Each request's deadline is its oldest record's 23 hours. Only the past side: Matomo
+        // checks cdt against when the request arrives, and a retry only ever arrives later, so it
+        // can carry a record past a day old but never further ahead than it was when encoded.
+        let encoding = { (record: EventRecord) throws(MatomoEncodingError) -> JSON in
             try json(of: record, encodedAt: encodedAt)
-        } oversized: { byteCount in
+        }
+        let oversized = { (byteCount: Int) -> MatomoEncodingError in
             .oversized(byteCount: byteCount)
+        }
+        do {
+            return try limit.requests(for: batch, in: Self.envelope, maximumAge: Self.window, encoding: encoding, oversized: oversized)
+        } catch {
+            // Never reached: the window is a positive constant, and only a negative age throws.
+            // Requests without a deadline rather than a trap (D10).
+            return limit.requests(for: batch, in: Self.envelope, encoding: encoding, oversized: oversized)
         }
     }
 
@@ -226,7 +245,7 @@ public struct MatomoBatchEncoder: BatchEncoder {
         // infinite, is outside it and every record is reported (D10). Rejected: leaving such a
         // clock to Matomo, which would drop the records it refuses without a report.
         let offset = record.timestamp.timeIntervalSince(encodedAt)
-        guard offset >= -Self.window, offset <= Self.window else {
+        guard offset >= -Self.windowSeconds, offset <= Self.windowSeconds else {
             throw .timestampOutsideWindow
         }
         // D4: the session is the only identifier sent. A record without one (a recovered record

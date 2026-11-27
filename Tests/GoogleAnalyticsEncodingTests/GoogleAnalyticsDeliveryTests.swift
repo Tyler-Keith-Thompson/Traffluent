@@ -117,10 +117,10 @@ struct GoogleAnalyticsDeliveryTests {
         #expect(transport.requests.isEmpty)
     }
 
-    @Test("A record more than 72 hours older than the destination's clock isn't sent, and is reported as skipped with timestampOutsideWindow")
+    @Test("A record more than 71 hours older than the destination's clock isn't sent, and is reported as skipped with timestampOutsideWindow")
     func staleRecordReported() async throws {
         let transport = ScriptedTransport([.status(.noContent)])
-        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607 + 259_201) })
+        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607 + 255_601) })
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expected = HTTPDropReport<GoogleAnalyticsEncodingError>.skipped(SkippedRecord(recordID: batch[0].id, eventName: "checkout_started", schemaVersion: 1, reason: .timestampOutsideWindow))
 

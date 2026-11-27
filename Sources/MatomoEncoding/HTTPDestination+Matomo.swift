@@ -19,8 +19,10 @@ extension HTTPDestination where Encoding == MatomoBatchEncoder {
     /// builds on every platform. Without a token, Matomo takes no event tracked more than a day
     /// before it arrives, so the encoder leaves out a record tracked more than 23 hours before it
     /// is encoded (``MatomoEncodingError/timestampOutsideWindow``). A request is encoded once and
-    /// retried as it is, so one still being retried when its oldest record is a day old is
-    /// answered 200 by Matomo and lost without a report.
+    /// retried as it is, so one still undelivered 23 hours after its oldest record was tracked, by
+    /// the time `now` gives, isn't sent again: it is dropped and reported as
+    /// `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, rather than reach Matomo too late to
+    /// be stored.
     ///
     /// - Parameters:
     ///   - url: The URL Matomo is installed at (`https://analytics.example.com`), a path included
@@ -36,8 +38,9 @@ extension HTTPDestination where Encoding == MatomoBatchEncoder {
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
     ///     to 60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
-    ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from;
-    ///     the system's clock by default. When it reads NaN or infinite, every record is left out.
+    ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from,
+    ///     and each request's deadline is checked against before it is sent; the system's clock by
+    ///     default. When it reads NaN or infinite, every record is left out.
     /// - Returns: The destination.
     /// - Throws: ``MatomoSetupError/invalidURL`` for a URL that isn't `https`, has no host name,
     ///   has a user name or password, a query or fragment, or a path ending in a `.php` file, in
@@ -69,7 +72,10 @@ extension HTTPDestination where Encoding == MatomoBatchEncoder {
             transport: transport,
             encoder: encoder,
             backoff: backoff,
-            clock: clock)
+            clock: clock,
+            // One clock for both, so the 23 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)
     }
 }
 
@@ -101,8 +107,9 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Ma
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
     ///     to 60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
-    ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from;
-    ///     the system's clock by default. When it reads NaN or infinite, every record is left out.
+    ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from,
+    ///     and each request's deadline is checked against before it is sent; the system's clock by
+    ///     default. When it reads NaN or infinite, every record is left out.
     /// - Returns: The destination.
     /// - Throws: ``MatomoSetupError`` for a URL that isn't a plain `https` URL of the installation,
     ///   a site ID below 1, a category Matomo would empty or cut short, or a mapping that breaks a

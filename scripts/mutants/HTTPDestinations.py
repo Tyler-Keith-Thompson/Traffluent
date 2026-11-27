@@ -46,6 +46,12 @@ R = "TransientFailureRetry.swift"
 
 # TransientFailureRetry's maxCount below Int32.max (AFLU-69) has no mutant: only a 2^31st retry
 # would tell it from Afluent's default.
+#
+# The deadline mutants that retry a request past its deadline (deadlineretried, deadlinenanpasses,
+# and the ones that sleep a backoff after a send fails past it, *pastdeadlineretried and
+# faileddeadlinenanpasses), and faileddeadlineexclusive, which reports one the test waits to see
+# sleep, leave its tests waiting on a test clock nobody advances, so they are caught by the
+# suite's time limit.
 MUTANTS = [
     Mutant("methodput", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .put, url: endpoint, headerFields: headerFields)", mode="stmt"),
     Mutant("noheaderfields", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .post, url: endpoint)", mode="stmt"),
@@ -102,8 +108,8 @@ MUTANTS = [
     Mutant("nostatusdelivered", D, "status.kind == .successful", "false"),
     Mutant("below300delivered", D, "status.kind == .successful", "status.code < 300"),
     Mutant("only200delivered", D, "status.kind == .successful", "status.code == 200"),
-    Mutant("unansweredrejected", D, "throw AttemptFailure.unanswered(reason: reason)", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
-    Mutant("unavailablerejected", D, "throw AttemptFailure.unavailable(response)", "throw AttemptFailure.rejected(response)", mode="stmt"),
+    Mutant("unansweredrejected", D, """throw retried(.unanswered(reason: reason), "A batch got no response, so it will be sent again: \\(reason)")""", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
+    Mutant("unavailablerejected", D, """throw retried(.unavailable(response), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.rejected(response)", mode="stmt"),
     Mutant("transportcancelledendsretries", D, "Task.isCancelled", "true"),
     Mutant("cancelledunanswered", D, "throw CancellationError()", "throw AttemptFailure.unanswered(reason: \"cancelled\")", mode="stmt"),
     Mutant("invalidrequestretried", D, "throw AttemptFailure.invalidRequest(reason: reason)", "throw AttemptFailure.unanswered(reason: reason)", mode="stmt"),
@@ -141,14 +147,16 @@ MUTANTS = [
             transport: URLSessionTransport(),
             encoder: encoder,
             backoff: backoff,
-            clock: clock)""", """self.init(
+            clock: clock,
+            now: now)""", """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
             instrument: InstrumentationSystem.instrument,
             transport: URLSessionTransport(),
             encoder: encoder,
             backoff: backoff,
-            clock: clock)""", mode="stmt"),
+            clock: clock,
+            now: now)""", mode="stmt"),
     Mutant("urlsessionclockignored", S, """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
@@ -156,14 +164,55 @@ MUTANTS = [
             transport: URLSessionTransport(),
             encoder: encoder,
             backoff: backoff,
-            clock: clock)""", """self.init(
+            clock: clock,
+            now: now)""", """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
             instrument: instrument,
             transport: URLSessionTransport(),
             encoder: encoder,
             backoff: backoff,
-            clock: ContinuousClock())""", mode="stmt"),
+            clock: ContinuousClock(),
+            now: now)""", mode="stmt"),
+    Mutant("urlsessionnowignored", S, """self.init(
+            endpoint: endpoint,
+            headerFields: headerFields,
+            instrument: instrument,
+            transport: URLSessionTransport(),
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            now: now)""", """self.init(
+            endpoint: endpoint,
+            headerFields: headerFields,
+            instrument: instrument,
+            transport: URLSessionTransport(),
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            now: { Date.now })""", mode="stmt"),
+    # Deadlines (TRAF-134).
+    Mutant("nowignored", D, "self.now = now", "self.now = { Date.now }", mode="stmt"),
+    Mutant("deadlinenotpassed", D, "encoded.deadline", "nil"),
+    Mutant("deadlineunchecked", D, """guard now() <= deadline else {
+                throw AttemptFailure.deadlineExceeded(deadline)
+            }""", "", mode="stmt"),
+    # The first `now() <= deadline` is the check before an attempt, the second the one when it fails.
+    Mutant("deadlineexclusive", D, "now() <= deadline", "now() < deadline", nth=0),
+    Mutant("deadlinenanpasses", D, "now() <= deadline", "!(now() > deadline)", nth=0),
+    Mutant("failedpastdeadlineretried", D, "!(now() <= deadline)", "deadline < .distantPast"),
+    Mutant("faileddeadlineexclusive", D, "!(now() <= deadline)", "!(now() < deadline)"),
+    Mutant("faileddeadlinenanpasses", D, "!(now() <= deadline)", "now() > deadline"),
+    Mutant("unansweredpastdeadlineretried", D, """throw retried(.unanswered(reason: reason), "A batch got no response, so it will be sent again: \\(reason)")""", "throw AttemptFailure.unanswered(reason: reason)", mode="stmt"),
+    Mutant("transportcancelledpastdeadlineretried", D, """throw retried(.unanswered(reason: "cancelled by the transport"), "A batch's send was cancelled by its transport, not the delivery, so it will be sent again")""", "throw AttemptFailure.unanswered(reason: \"cancelled by the transport\")", mode="stmt"),
+    Mutant("unavailablepastdeadlineretried", D, """throw retried(.unavailable(response), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.unavailable(response)", mode="stmt"),
+    Mutant("deadlineretried", D, "throw AttemptFailure.deadlineExceeded(deadline)", "throw AttemptFailure.unanswered(reason: \"past its deadline\")", mode="stmt"),
+    Mutant("deadlinerejected", D, "throw AttemptFailure.deadlineExceeded(deadline)", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
+    Mutant("deadlinecancellationunchecked", D, "try Task.checkCancellation()", "", mode="stmt"),
+    Mutant("deadlineascancelled", D, "return .deadlineExceeded(deadline)", "return .cancelled", mode="stmt", nth=0),
+    Mutant("deadlinenotreported", D, "reporter.report(.deadlineExceeded(deadline: deadline, recordIDs: request.recordIDs))", "", mode="stmt"),
+    Mutant("deadlineidsofbatch", D, "reporter.report(.deadlineExceeded(deadline: deadline, recordIDs: request.recordIDs))", "reporter.report(.deadlineExceeded(deadline: deadline, recordIDs: batch.map(\\.id)))", mode="stmt"),
+    Mutant("deadlinelost", D, "reporter.report(.deadlineExceeded(deadline: deadline, recordIDs: request.recordIDs))", "reporter.report(.deadlineExceeded(deadline: .distantPast, recordIDs: request.recordIDs))", mode="stmt"),
     # The transport and injector, unchanged by retries.
     Mutant("invalidnametraps", I, """guard let name = HTTPField.Name(key) else {
             return

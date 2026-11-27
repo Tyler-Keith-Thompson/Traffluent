@@ -1,4 +1,5 @@
 import Afluent
+import Foundation
 import HTTPTypes
 
 /// Why one attempt at sending a batch didn't deliver it.
@@ -12,6 +13,8 @@ enum AttemptFailure: Error {
     case rejected(HTTPResponse)
     /// The transport can never send the request; not retried.
     case invalidRequest(reason: String)
+    /// The request's deadline passed before this attempt; not retried.
+    case deadlineExceeded(Date)
 }
 
 extension HTTPResponse.Status {
@@ -53,7 +56,7 @@ struct TransientFailureRetry<BackoffClock: Clock<Duration>>: RetryStrategy {
         switch error as? AttemptFailure {
         case .unanswered, .unavailable:
             return try await backoff.handle(error: error, beforeRetry: beforeRetry)
-        case .rejected, .invalidRequest, nil:
+        case .rejected, .invalidRequest, .deadlineExceeded, nil:
             return false
         }
     }

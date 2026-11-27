@@ -2,9 +2,12 @@
 // makes batches of records whose JSON is a string of 0 to 12 repeats of a letter (x, é, an emoji,
 // a quote or a backslash, so one to four bytes and escapes), or an encoding that throws, a
 // limit of 1 to 5 records, 1 to 60 bytes and 1 to 24 bytes a record, and a bare array or an object
-// envelope. After every batch the requests are the model's, in order, each body the model's text
-// within the limit, and each record left out is the model's, in order, with its reason. The
-// limits are small, so records at a boundary, and envelopes that leave no room, are common.
+// envelope; each record tracked 0 to 100 seconds after 1970 or at NaN, and no maximum age or one of
+// 0 to 50 seconds. After every batch the requests are the model's, in order, each body the model's
+// text within the limit, each deadline the age after the earliest of its records' times, or NaN
+// when one of them is, and each
+// record left out is the model's, in order, with its reason. The limits are small, so records at
+// a boundary, and envelopes that leave no room, are common.
 
 import Events
 import Foundation
@@ -72,13 +75,27 @@ enum FuzzPropertyJSON {
                 let recordCount = input.int(in: 0 ... 12)
                 let sizes = (0 ..< recordCount).map { _ in input.int(in: -1 ... 12) }
                 let letterIndices = (0 ..< recordCount).map { _ in input.int(below: letters.count) }
-                let batch = zip(sizes, letterIndices).map { EventRecord(event: Sized(size: $0, letter: $1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil) }
+                // One record in eight is tracked at NaN.
+                let seconds = (0 ..< recordCount).map { _ in input.int(below: 8) == 0 ? TimeInterval.nan : TimeInterval(input.int(in: 0 ... 100)) }
+                let maximumAge = input.int(below: 2) == 0 ? nil : input.int(in: 0 ... 50)
+                let batch = (0 ..< recordCount).map { EventRecord(event: Sized(size: sizes[$0], letter: letterIndices[$0]), timestamp: Date(timeIntervalSince1970: seconds[$0]), sourceLocation: nil) }
 
-                let actual = limit.requests(for: batch, in: envelope) { record throws(Failure) in
+                func encoding(_ record: EventRecord) throws(Failure) -> JSON {
                     let sized = (record.event as? Sized) ?? Sized(size: 0, letter: 0)
                     guard sized.size >= 0 else { throw Failure(reason: "negative") }
                     return .string(String(repeating: letters[sized.letter].text, count: sized.size))
-                } oversized: { Failure(reason: "oversized \($0)") }
+                }
+                let split: BatchRequests<Failure>
+                if let maximumAge {
+                    guard let requests = try? limit.requests(for: batch, in: envelope, maximumAge: .seconds(maximumAge), encoding: encoding, oversized: { Failure(reason: "oversized \($0)") }) else {
+                        check(false, "a maximum age of \(maximumAge) seconds threw")
+                        return
+                    }
+                    split = requests
+                } else {
+                    split = limit.requests(for: batch, in: envelope, encoding: encoding, oversized: { Failure(reason: "oversized \($0)") })
+                }
+                let actual = split
 
                 let expected = model(sizes: sizes, letterIndices: letterIndices, count: count, bytes: bytes, recordBytes: recordBytes, wrap: wrap)
                 let actualIDs = actual.requests.map(\.recordIDs)
@@ -87,6 +104,15 @@ enum FuzzPropertyJSON {
                 let actualBodies = actual.requests.map { String(decoding: $0.body.body, as: UTF8.self) }
                 check(actualBodies == expected.bodies, "bodies \(actualBodies), model \(expected.bodies)")
                 check(actualBodies.allSatisfy { $0.utf8.count <= bytes }, "a body over \(bytes) bytes: \(actualBodies)")
+                let actualDeadlines = actual.requests.map { $0.deadline?.timeIntervalSince1970 }
+                let expectedDeadlines: [TimeInterval?] = expected.requests.map { indices in
+                    let times = indices.map { seconds[$0] }
+                    return maximumAge.flatMap { age in times.contains(where: \.isNaN) ? .nan : times.min().map { $0 + TimeInterval(age) } }
+                }
+                func same(_ actual: TimeInterval?, _ expected: TimeInterval?) -> Bool {
+                    actual == expected || actual?.isNaN == true && expected?.isNaN == true
+                }
+                check(actualDeadlines.count == expectedDeadlines.count && zip(actualDeadlines, expectedDeadlines).allSatisfy(same), "deadlines \(actualDeadlines) of times \(seconds), age \(String(describing: maximumAge)), model \(expectedDeadlines)")
                 let actualSkipped = actual.skippedRecords.map { "\($0.recordID) \($0.reason.reason)" }
                 let expectedSkipped = expected.skipped.map { "\(batch[$0.index].id) \($0.reason)" }
                 check(actualSkipped == expectedSkipped, "skipped \(actualSkipped), model \(expectedSkipped)")

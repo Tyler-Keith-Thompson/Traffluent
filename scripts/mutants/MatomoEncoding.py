@@ -102,6 +102,29 @@ MUTANTS = [
     Mutant("decodedpath", F, "components.percentEncodedPath", "components.path", nth=0),
     Mutant("piwikendpoint", F, '"/matomo.php"', '"/piwik.php"'),
     Mutant("nowignored", F, "MatomoBatchEncoder(siteID: siteID, dimensions: dimensions, category: category, plan: plan, now: now)", "MatomoBatchEncoder(siteID: siteID, dimensions: dimensions, category: category, plan: plan)"),
+    # Deadlines (TRAF-134). The first `Self.window` is the request's deadline. The catch that sends
+    # requests without a deadline is reached only through a negative age, which deadlinenegative
+    # plants; a mutant inside it would be the same as that one. deadlinenegative comes first, as the
+    # first `Self.window` after deadline24h's is the one inside its mutated branch.
+    Mutant("deadlinenegative", B, "Self.window", "Duration.seconds(-1)", nth=0),
+    Mutant("deadline24h", B, "Self.window", "Self.window + .seconds(60 * 60)", nth=0),
+    Mutant("destinationnowignored", F, """return HTTPDestination(
+            endpoint: endpoint,
+            instrument: instrument,
+            transport: transport,
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            // One clock for both, so the 23 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)""", """return HTTPDestination(
+            endpoint: endpoint,
+            instrument: instrument,
+            transport: transport,
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            now: { Date.now })""", mode="stmt"),
 
     # The skipped records and their order.
     # The second occurrence, after a record is read; the first is in the reader's catch.
@@ -112,10 +135,10 @@ MUTANTS = [
     Mutant("anyeventname", B, "name.isMatomoAction", "true", nth=1),
     Mutant("timestamprounded", B, "record.timestamp.timeIntervalSince1970.rounded(.down)", "record.timestamp.timeIntervalSince1970.rounded()"),
     Mutant("timestamptruncated", B, "record.timestamp.timeIntervalSince1970.rounded(.down)", "record.timestamp.timeIntervalSince1970.rounded(.towardZero)"),
-    Mutant("nopast", B, "offset >= -Self.window", "true"),
-    Mutant("nofuture", B, "offset <= Self.window", "true"),
-    Mutant("pastexclusive", B, "offset >= -Self.window", "offset > -Self.window"),
-    Mutant("futureexclusive", B, "offset <= Self.window", "offset < Self.window"),
+    Mutant("nopast", B, "offset >= -Self.windowSeconds", "true"),
+    Mutant("nofuture", B, "offset <= Self.windowSeconds", "true"),
+    Mutant("pastexclusive", B, "offset >= -Self.windowSeconds", "offset > -Self.windowSeconds"),
+    Mutant("futureexclusive", B, "offset <= Self.windowSeconds", "offset < Self.windowSeconds"),
     Mutant("clockperrecord", B, "json(of: record, encodedAt: encodedAt)", "json(of: record, encodedAt: now())"),
     Mutant("sensitivesent", B, "properties = try reader.properties(of: record, includingSensitiveValues: false)", "properties = try reader.properties(of: record, includingSensitiveValues: record.revealsSensitiveValues)", mode="stmt"),
     Mutant("dimensionlengthunchecked", B, "length <= Self.dimensionValueLength", "true"),

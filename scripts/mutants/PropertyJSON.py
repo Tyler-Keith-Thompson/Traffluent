@@ -118,6 +118,21 @@ MUTANTS = [
     Mutant("splitoversizedatlimit", SPLIT, "byteCount <= recordCapacity", "byteCount < recordCapacity"),
     Mutant("splitlastrequestdropped", SPLIT, "        flush()\n        return requests", "        return requests", mode="stmt"),
     Mutant("splitfailurenotreported", SPLIT, "skippedRecords.append(SkippedRecord(record, reason: error))", "", mode="stmt"),
+    # Deadlines (TRAF-134).
+    Mutant("splitagenotpassed", SPLIT, "RequestBuilder(limit: self, envelope: envelope, maximumAge: maximumAge)", "RequestBuilder(limit: self, envelope: envelope, maximumAge: nil)"),
+    Mutant("splitdeadlinefirstrecord", SPLIT, "Swift.min($0, timestamp)", "$0"),
+    Mutant("splitdeadlinelatestrecord", SPLIT, "Swift.min($0, timestamp)", "Swift.max($0, timestamp)"),
+    Mutant("splitdeadlinecarried", SPLIT, "oldest = nil", "", mode="stmt"),
+    Mutant("splitdeadlinewithoutage", SPLIT, "$0.addingTimeInterval(maximumAge)", "$0"),
+    Mutant("splitzeroagethrows", SPLIT, "maximumAge >= .zero", "maximumAge > .zero"),
+    Mutant("splitnegativeageaccepted", SPLIT, "maximumAge >= .zero", "true"),
+    Mutant("splitagewholeseconds", SPLIT, "Double(components.seconds) + Double(components.attoseconds) * 1e-18", "Double(components.seconds)"),
+    Mutant("splitnodeadlinespellinghasone", SPLIT, "split(batch, in: envelope, maximumAge: nil, encoding: encoding, oversized: oversized)", "split(batch, in: envelope, maximumAge: 1, encoding: encoding, oversized: oversized)"),
+    Mutant("splitnonfinitetimestampignored", SPLIT, "!timestamp.timeIntervalSinceReferenceDate.isFinite", "false"),
+    # No mutant drops the check that keeps a NaN oldest time: the standard library's min(x, y) is
+    # `y < x ? y : x`, which keeps a NaN x, so the mutant would be equivalent today. The check
+    # stays so the deadline doesn't rest on that undocumented order.
+    Mutant("splitdeadlinedropped", SPLIT, "requests.append(EncodedRequest(body: envelope.body(of: elements), recordIDs: recordIDs, deadline: deadline))", "requests.append(EncodedRequest(body: envelope.body(of: elements), recordIDs: recordIDs))", mode="stmt"),
     # Flattening.
     Mutant("flattencollisionreplaces", FLAT, "            guard flattened.updateValue(self, forKey: key) == nil else {\n                throw FlattenedKeyCollision(key: key)\n            }", "flattened[key] = self", mode="stmt"),
     Mutant("flattenseparatorignored", FLAT, "name.map { $0 + separator + key } ?? key", "name.map { $0 + \".\" + key } ?? key"),

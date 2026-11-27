@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields, retrying a send that gets no response or a transient status with ExponentialBackoff on a clock until it is delivered, and reporting a batch it drops for good on dropReports; URLSessionTransport, the default transport.
+# HTTPDestination: sends each batch, encoded by a BatchEncoder, to an HTTP endpoint through an HTTPTransport, with its first record's trace context in the header fields, retrying a send that gets no response or a transient status with ExponentialBackoff on a clock until it is delivered or its request's deadline passes, and reporting a batch it drops for good on dropReports; URLSessionTransport, the default transport.
 swift_library(
     name = "HTTPDestinations",
     srcs = glob(["**/*.swift"]),

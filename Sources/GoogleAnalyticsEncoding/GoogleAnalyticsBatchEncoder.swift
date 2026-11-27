@@ -68,13 +68,20 @@ public import TrackingPlans
 /// sent: one whose event and version `plan` doesn't describe, one whose event or parameter name
 /// breaks Google Analytics' naming rules or is one it keeps for itself, one of more than 25
 /// parameters, one with a string over 100 bytes, one whose event isn't `Encodable`, one that holds
-/// a value JSON can't, one whose timestamp is more than 72 hours before or 15 minutes after the
+/// a value JSON can't, one whose timestamp is more than 71 hours before or 15 minutes after the
 /// batch is encoded, or has no microseconds form, and one too large for a request
 /// (``GoogleAnalyticsEncodingError``). ``requests(for:)`` returns them as `SkippedRecord`s, which
 /// `HTTPDestination` logs and reports on its `dropReports`. Google Analytics would answer 2xx to
 /// such an event and, under its default, relaxed validation, store it without the parameter that
 /// breaks a rule, or under a name it never checked. A Google Analytics 360 property takes values of
 /// up to 500 characters, but the encoder holds every property to the standard 100 bytes.
+///
+/// Google Analytics takes an event up to 72 hours old; the encoder holds records to 71, the hour to
+/// spare for the request to reach Google and for clocks that disagree. Each request's
+/// `EncodedRequest/deadline` is 71 hours after its oldest record was tracked, so `HTTPDestination`
+/// drops a request still being retried by then, every record of it, the younger ones included, and
+/// reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, rather than send records
+/// Google Analytics would store as 72 hours old.
 ///
 /// The Measurement Protocol has no field that identifies an event, so Google Analytics counts each
 /// one it receives: a record sent again, by a retry after Google stored it, by a delivery that
@@ -119,8 +126,13 @@ public struct GoogleAnalyticsBatchEncoder: BatchEncoder {
     /// Google Analytics takes no parameter whose string is longer, in bytes of UTF-8.
     private static let valueByteLimit = 100
 
-    /// How long before a batch is encoded a record may have been tracked: 72 hours.
-    private static let earliestOffset: TimeInterval = -72 * 60 * 60
+    /// How long before a batch is encoded, or before its request is sent, a record may have been
+    /// tracked, in seconds: 71 hours. Google Analytics takes an event up to 72 hours old; the hour to spare is
+    /// for the request to reach Google, and for a relay's clock and the device's that disagree.
+    private static let maximumAgeSeconds: TimeInterval = 71 * 60 * 60
+
+    /// ``maximumAgeSeconds`` as the maximum age of a request's oldest record.
+    private static let maximumAge: Duration = .seconds(maximumAgeSeconds)
 
     /// How long after a batch is encoded a record may say it was tracked: 15 minutes.
     private static let latestOffset: TimeInterval = 15 * 60
@@ -196,15 +208,30 @@ public struct GoogleAnalyticsBatchEncoder: BatchEncoder {
         var skippedRecords: [SkippedRecord<GoogleAnalyticsEncodingError>] = []
         for client in clients {
             let envelope = JSONEnvelope(["client_id": .string(client.id), "consent": Self.consent], arrayMember: "events")
-            let clientRequests = limit.requests(for: client.records, in: envelope) { record throws(GoogleAnalyticsEncodingError) in
-                try json(of: record, encodedAt: encodedAt)
-            } oversized: { byteCount in
-                .oversized(byteCount: byteCount)
-            }
+            // Each request's deadline is its oldest record's 71 hours, so HTTPDestination drops and
+            // reports one retried past them, which Google would store misdated.
+            let clientRequests = split(client.records, in: envelope, encodedAt: encodedAt)
             requests += clientRequests.requests
             skippedRecords += clientRequests.skippedRecords
         }
         return BatchRequests(requests: requests, skippedRecords: skippedRecords)
+    }
+
+    /// One client's records as requests within the limit, each with its deadline.
+    private func split(_ records: [EventRecord], in envelope: JSONEnvelope, encodedAt: Date) -> BatchRequests<GoogleAnalyticsEncodingError> {
+        let encoding = { (record: EventRecord) throws(GoogleAnalyticsEncodingError) -> JSON in
+            try json(of: record, encodedAt: encodedAt)
+        }
+        let oversized = { (byteCount: Int) -> GoogleAnalyticsEncodingError in
+            .oversized(byteCount: byteCount)
+        }
+        do {
+            return try limit.requests(for: records, in: envelope, maximumAge: Self.maximumAge, encoding: encoding, oversized: oversized)
+        } catch {
+            // Never reached: the age is a positive constant, and only a negative one throws.
+            // Requests without a deadline rather than a trap (D10).
+            return limit.requests(for: records, in: envelope, encoding: encoding, oversized: oversized)
+        }
     }
 
     private func json(of record: EventRecord, encodedAt: Date) throws(GoogleAnalyticsEncodingError) -> JSON {
@@ -256,11 +283,12 @@ public struct GoogleAnalyticsBatchEncoder: BatchEncoder {
         guard let microseconds = record.timestamp.microsecondsSince1970 else {
             throw .unrepresentableTimestamp
         }
-        // Measured from when the batch is encoded: a request retried for long can still arrive
-        // after its records' 72 hours. A NaN `now` compares false both ways, so a broken clock
-        // leaves the window to Google.
+        // Measured from when the batch is encoded; the request's deadline holds it to the same 71
+        // hours each time it is sent. A NaN `now` compares false both ways, so the encoder keeps
+        // the record, and HTTPDestination, reading the same clock, finds the deadline passed and
+        // reports the request.
         let offset = record.timestamp.timeIntervalSince(encodedAt)
-        if offset < Self.earliestOffset || offset > Self.latestOffset {
+        if offset < -Self.maximumAgeSeconds || offset > Self.latestOffset {
             throw .timestampOutsideWindow
         }
         return .object([

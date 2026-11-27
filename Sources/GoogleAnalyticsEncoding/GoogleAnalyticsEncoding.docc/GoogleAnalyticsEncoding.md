@@ -119,7 +119,7 @@ A record the encoder can't write is left out and the rest of the batch is sent:
 - one with a parameter Google Analytics keeps (a `firebase_`, `ga_` or `google_` prefix) or named
   `session_id`, which the encoder writes;
 - one of more than 25 parameters, counting `session_id`, or with a string longer than 100 bytes;
-- one tracked more than 72 hours before the batch is encoded, or more than 15 minutes after it,
+- one tracked more than 71 hours before the batch is encoded, or more than 15 minutes after it,
   and one whose timestamp has no microseconds form;
 - one too large for a request.
 
@@ -141,8 +141,12 @@ one whose events it doesn't store. A wrong measurement ID or API secret is answe
 stored, so check the property's Realtime event counts after setting the destination up. Google's
 validation server, `/debug/mp/collect`, checks a body's shape but not the measurement ID or the API
 secret, so a body it accepts can still be stored nowhere. A record older than 72 hours is stored as
-if it happened 72 hours ago, so the encoder leaves those out too; a request retried for long after
-its batch was encoded can still arrive past that window.
+if it happened 72 hours ago, so the encoder leaves out one older than 71 hours, the hour to spare
+for the request to reach Google and clocks that disagree. A request is encoded once and retried as
+it is, so the encoder gives each request a deadline 71 hours after its oldest record was tracked. A
+request still failing by then isn't sent again: the destination drops the whole request, its
+younger records too, and reports it on `dropReports` as
+`HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, with every one of its records' identifiers.
 
 To send to PostHog, Amplitude, Mixpanel or Segment, use `PostHogEncoding`, `AmplitudeEncoding`,
 `MixpanelEncoding` or `SegmentSpecEncoding` instead.

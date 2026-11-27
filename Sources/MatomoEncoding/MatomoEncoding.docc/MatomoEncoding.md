@@ -50,15 +50,17 @@ over your Matomo.
 Without a token, Matomo takes an event's time (`cdt`) only when it is less than a day old, and
 refuses one more than a day ahead. It answers 200 to such a request all the same, and stores
 nothing, so the encoder leaves out every record tracked more than 23 hours before or after it
-encodes the batch, and the destination reports it. The hour to spare is for the request to reach
-Matomo through retries, a queue on the server, and clocks that disagree. So a record that waits
+encodes the batch, and the destination reports it, the hour to spare for a queue on the server and clocks that disagree. So a record that waits
 more than 23 hours to be encoded, kept by a store through a long time offline or waiting in the
 buffer behind a failing delivery, is reported as ``MatomoEncodingError/timestampOutsideWindow``
 and never reaches Matomo.
 
-A request is encoded once, and each retry sends the same bytes. So a request that keeps failing
-and is retried until about a day has passed since its oldest record was tracked reaches Matomo
-too late: Matomo answers 200, stores nothing, and the destination reports nothing. The window is
+A request is encoded once, and each retry sends the same bytes, so the encoder gives each request
+a deadline 23 hours after its oldest record was tracked. A request still failing by then isn't
+sent again, as it would reach Matomo too late to be stored: the destination drops the whole
+request, its younger records too, and reports it on `dropReports` as
+`HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`, with every one of its records' identifiers. Only the past side of the window needs a deadline: a retry arrives later, never
+earlier, so it can't carry a record further ahead of Matomo's clock than it was. The window is
 measured with the device's clock, which Matomo can't see: a device whose clock is wrong by more
 than a day has every record refused, without an error. A clock that reads NaN or infinite has
 every record left out and reported.

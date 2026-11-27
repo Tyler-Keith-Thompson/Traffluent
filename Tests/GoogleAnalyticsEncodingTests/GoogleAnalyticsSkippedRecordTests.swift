@@ -468,10 +468,10 @@ struct GoogleAnalyticsSkippedRecordTests {
 
     // https://developers.google.com/analytics/devguides/collection/protocol/ga4/sending-events:
     // "Events ... can be backdated up to 72 hours"; the validation server supports "timestamps
-    // [15m] into the future" (2026-11-27).
-    @Test("A record tracked up to 72 hours before, or 15 minutes after, its batch is encoded is sent, and one further out is left out as timestampOutsideWindow", arguments: [
-        (0.0, false), (-259_200, false), (900, false), (-259_199.999, false), (899.999, false),
-        (-259_200.001, true), (900.001, true), (-1_000_000, true), (86_400, true),
+    // [15m] into the future" (2026-11-27). The encoder holds the past to 71 hours, an hour short.
+    @Test("A record tracked up to 71 hours before, or 15 minutes after, its batch is encoded is sent, and one further out is left out as timestampOutsideWindow", arguments: [
+        (0.0, false), (-255_600, false), (900, false), (-255_599.999, false), (899.999, false),
+        (-255_600.001, true), (900.001, true), (-259_200, true), (-1_000_000, true), (86_400, true),
     ])
     func timestampWindow(offset: Double, skipped: Bool) throws {
         let encodedAt = Date(timeIntervalSince1970: 1_795_442_607)
@@ -495,14 +495,14 @@ struct GoogleAnalyticsSkippedRecordTests {
         let expectedLater: [GoogleAnalyticsEncodingError] = [.timestampOutsideWindow]
 
         let actualNow = sut.requests(for: [record])
-        clock.now = Date(timeIntervalSince1970: 1_795_442_607 + 259_201)
+        clock.now = Date(timeIntervalSince1970: 1_795_442_607 + 255_601)
         let actualLater = sut.requests(for: [record])
 
         #expect(actualNow.skippedRecords.isEmpty)
         #expect(actualLater.skippedRecords.map(\.reason) == expectedLater)
     }
 
-    @Test("A batch encoded at a time with no value, as a broken clock gives, leaves the window to Google and sends the record")
+    @Test("A batch encoded at a time with no value, as a broken clock gives, keeps the record in its request, for the destination's deadline check to drop")
     func nanEncodingTime() throws {
         let sut = GoogleAnalyticsBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: .nan) })
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)

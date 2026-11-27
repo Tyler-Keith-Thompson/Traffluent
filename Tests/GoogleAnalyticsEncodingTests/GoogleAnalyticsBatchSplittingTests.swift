@@ -47,7 +47,7 @@ struct GoogleAnalyticsBatchSplittingTests {
         #expect(actual == expected)
     }
 
-    @Test("A session's records over the limit's count are split into requests in order, each the body an unsplit encoder writes for its records")
+    @Test("A session's records over the limit's count are split into requests in order, each the request an unsplit encoder makes of its records")
     func splitByCount() throws {
         let plan = try TrackingPlan(schemas: [Searched.schema])
         let limit = try BatchLimit(maximumRecordCount: 2, maximumByteCount: .max, maximumRecordByteCount: .max)
@@ -59,9 +59,9 @@ struct GoogleAnalyticsBatchSplittingTests {
             EventRecord(event: Searched(query: "q\(index)"), timestamp: Date(timeIntervalSince1970: 1_795_442_607 + Double(index)), sourceLocation: nil, context: context)
         }
         let expected = [
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[0 ..< 2])).requests.first).body, recordIDs: batch[0 ..< 2].map(\.id)),
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[2 ..< 4])).requests.first).body, recordIDs: batch[2 ..< 4].map(\.id)),
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[4 ..< 5])).requests.first).body, recordIDs: batch[4 ..< 5].map(\.id)),
+            try #require(unsplit.requests(for: Array(batch[0 ..< 2])).requests.first),
+            try #require(unsplit.requests(for: Array(batch[2 ..< 4])).requests.first),
+            try #require(unsplit.requests(for: Array(batch[4 ..< 5])).requests.first),
         ]
 
         let actual = sut.requests(for: batch)

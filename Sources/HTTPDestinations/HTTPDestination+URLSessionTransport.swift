@@ -18,13 +18,16 @@ extension HTTPDestination where Transport == URLSessionTransport {
     ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up
     ///     to 60 seconds, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - now: The wall-clock time, read before each attempt at a request with a deadline
+    ///     (``EncodedRequest/deadline``); the system's clock by default.
     public init(
         endpoint: URL,
         headerFields: HTTPFields = [:],
         instrument: any Instrument = InstrumentationSystem.instrument,
         encoder: Encoding,
         backoff: ExponentialBackoff = ExponentialBackoff(),
-        clock: some Clock<Duration> = ContinuousClock()
+        clock: some Clock<Duration> = ContinuousClock(),
+        now: @escaping @Sendable () -> Date = { Date.now }
     ) {
         self.init(
             endpoint: endpoint,
@@ -33,6 +36,7 @@ extension HTTPDestination where Transport == URLSessionTransport {
             transport: URLSessionTransport(),
             encoder: encoder,
             backoff: backoff,
-            clock: clock)
+            clock: clock,
+            now: now)
     }
 }
