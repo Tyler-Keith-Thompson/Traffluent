@@ -68,7 +68,8 @@ The rest ship no manifest: ``/Events``, ``/Trackers``, ``/Persistence``, ``/GRDB
 ``/Checksums``, ``/Destinations``, ``/LoggingDestinations``, ``/TracingDestinations``,
 ``/HTTPDestinations``, ``/CollectorEncoding``, ``/PostHogEncoding``, ``/AmplitudeEncoding``,
 ``/MixpanelEncoding``, ``/SegmentSpecEncoding``, ``/GoogleAnalyticsEncoding``, ``/SnowplowEncoding``,
-``/TelemetryDeckEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/EventMacros``, ``/TrackingPlans`` and ``/TrackingPlanTesting`` neither call a
+``/TelemetryDeckEncoding``, ``/MatomoEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/EventMacros``, ``/TrackingPlans`` and
+``/TrackingPlanTesting`` neither call a
 required-reason API nor make data of their own. They carry, store and send the events and context
 your app and the modules above make.
 

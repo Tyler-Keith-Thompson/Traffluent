@@ -199,6 +199,46 @@ bad row in a dashboard.
   adds. No `floatValue` is sent. The server answers 200 for any namespace and app
   ID and doesn't deduplicate, so the docs say a typo loses everything silently and a resent record
   counts twice.
+  Matomo (TRAF-108, decided 2026-11-27): `MatomoEncoding` posts bulk tracking requests,
+  `{"requests":["?…",…]}`, to `matomo.php` under the installation's `https` base URL, from every
+  platform, over HTTP alone (N3), with no `token_auth` anywhere: a token in an app is anyone's.
+  The factory takes the base URL and appends `matomo.php`, refusing any URL whose last component
+  ends in `.php`. Rejected: taking the endpoint (`piwik.php`, `index.php` and proxies make it
+  ambiguous) and `http`. Each record is an event: `e_c` is a required `category:` (such as the
+  app's name) and `e_a` the event's name; no `e_n` or `e_v`. Rejected for `e_c`: the consent
+  category (nearly always one value), the bundle ID (recovered records lack it), the event type's
+  module (changes on a refactor); rejected: the event name as `e_c` under a fixed action, and
+  `e_n` from a property or the version. `_id` is the session's last 64 bits in lowercase hex, or
+  the record ID's when there is no session; no `uid`, `cid` or device ID (D4). Rejected: the
+  first 64 bits (a v7 UUID's timestamp), a hash (no gain over random bits), `cid` (it would stop
+  Matomo's config_id fingerprint from merging a new session into another visit, but forces an
+  identifier D4 rules out), `new_visit` (a fingerprint match carries the old visitor over). The
+  docs name `trust_visitors_cookies = 1`, cookieless mode ignoring `_id`, and IP enrichment.
+  Properties reach Matomo only as numbered custom dimensions through `MatomoDimensions`
+  (property name to ID, mapped in every event that has it); setup throws for an ID below 1, a
+  property mapped twice, one no event has, one that is `Sensitive` in an event (read from its
+  type through `WrittenType`, as the JSON Schema export marks one; never sent, so a mapping of it
+  is a mistake), and two of one event on one dimension, in that order. A literal
+  keeps duplicates so the factory throws instead of trapping (D10). An unmapped property is left
+  out and reported once, as a setup log notice and `unmappedProperties(in:)` for tests. Rejected:
+  a SkippedRecord (it would drop the record and repeat each batch). A value is a string as it is,
+  anything else minified JSON, `nil` never sent. Without a token Matomo refuses a `cdt` a day old
+  or a day ahead yet answers 200, so a record more than 23 hours from encode time is skipped
+  (`timestampOutsideWindow`), the hour spare for retries and skew, and every record is when the
+  clock reads NaN or infinite (D10). Rejected: leaving a broken clock to Matomo, which drops them
+  unreported. A request retried until about a day after its oldest record is still lost
+  unreported, as HTTPDestination retries the bytes it first encoded (TRAF-134). `cdt` is whole
+  Unix seconds rounded down. Also skipped: an event name empty once trimmed or over the 4,096
+  characters `log_action.name` stores, and a dimension value over the 250 Matomo keeps, both
+  counted as Matomo stores them (line breaks and NULs removed, the five HTML entities, PHP's
+  trim), so nothing is silently cut. Batching is 20 requests (Matomo's iOS SDK's) and 1,000,000
+  bytes (under nginx's 1 MiB default; Matomo documents none). `lang` comes from `LocaleKey`; no
+  `rand`, `send_image`, `ua` or `res`. Matomo answers 200 to invalid requests and doesn't
+  deduplicate, so the docs say a wrong site ID loses everything silently and a resent record
+  counts twice; older records need a relay of the adopter's with a token, which the library
+  doesn't provide. With `bulk_requests_require_authentication` on, Matomo 6.0 answers 400
+  (dropped, reported) and 5.14 answers 500 (retried until cancelled), so the docs say to leave
+  it off.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

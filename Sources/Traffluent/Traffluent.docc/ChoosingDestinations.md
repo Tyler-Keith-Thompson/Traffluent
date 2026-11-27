@@ -110,6 +110,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time |
 | Snowplow | ``/SnowplowEncoding`` | `HTTPDestination.snowplow(collector:vendor:appID:plan:)` | Each record as a self-describing event whose schema, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, your plan's Iglu export writes: its session as `sid` and nothing else to identify it, its identifier as `eid`, its time in epoch milliseconds as `dtm` and `ttm`, its properties through your plan, and the standard context as Snowplow's `mobile_context` and `application` entities; no `duid`, `uid` or cookie, as every request carries `SP-Anonymous` |
 | TelemetryDeck | ``/TelemetryDeckEncoding`` | `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` | Each record as an Ingest API v3 signal: its session, hashed with SHA-256, as `clientUser` and the session itself as `sessionID`, so user counts are session counts; its time in ISO 8601 as `receivedAt`, its properties through your plan, flattened to dotted names, the standard context as TelemetryDeck's built-in `TelemetryDeck.` parameters, and `isTestMode` as you pass it; no other identifier |
+| Matomo | ``/MatomoEncoding`` | `HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` | Each record as a Matomo event in a bulk tracking request: your category as `e_c` and its name as `e_a`, the last 64 bits of its session as the visitor `_id`, so visitors are sessions, its time in Unix seconds as `cdt`, its locale as `lang`, and the properties you map as numbered custom dimensions; no `uid`, `cid` or `token_auth`, so a record over 23 hours old is skipped |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -583,6 +584,71 @@ escapes a re-encoder commonly adds. The destination reports each on `dropReports
 
 TelemetryDeck answers 200 to any namespace and app ID, so a typo in either loses every signal
 without an error: check that the first ones reach the dashboard. It doesn't remove duplicates, so
+a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
+
+### Matomo
+
+To send to a Matomo installation, make the destination with
+`HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` (module ``/MatomoEncoding``). It
+posts bulk tracking requests to `matomo.php` under the URL Matomo is installed at, sends no trace
+context in the header fields, and splits each batch into requests of at most 20 records, as
+Matomo's iOS SDK sends them, and 1,000,000 bytes, under nginx's default limit on a body, as Matomo
+documents none. Matomo needs no key to track, so the destination builds on every platform. The
+factory throws for a URL that isn't `https`, has no host, holds a user name, query or fragment, or
+already ends in a `.php` file such as `matomo.php`; for a site ID below 1; for a category that is
+empty or longer than Matomo stores; and for dimensions that break a rule.
+
+```swift
+let plan = try TrackingPlan()
+let matomo = try HTTPDestination.matomo(
+    url: url,  // where Matomo is installed: https://analytics.example.com
+    siteID: 3,  // the app's site in Matomo
+    dimensions: ["plan": 1],  // custom dimensions made in Matomo
+    category: "Shop",  // each event's category
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: matomo)
+```
+
+Each record is a Matomo event. Its category, `e_c`, is the one you pass, such as your app's name,
+and its action, `e_a`, is the event's name, so Matomo's Event Actions report lists your events; no
+event name or value is sent. Matomo numbers each site's custom dimensions as you make them, so
+`dimensions` maps your plan's property names to their IDs. A mapped property's value is sent as
+`dimension<ID>`, a string as it is and anything else as its JSON. A `Sensitive` property is never
+sent, so the factory throws for one that is mapped. A property with no dimension is
+left out of every request, and the destination logs a notice for each event that has one, once,
+when it is made. `MatomoDimensions.unmappedProperties(in:)` lists them for a test. Make the
+dimensions with the Action scope, so each event keeps its own value.
+
+The record's session (`Enricher.sessions()`) is its visitor: `_id` is the session's last 64 bits,
+in 16 hexadecimal digits, and nothing else identifies it, no `uid`, `cid` or device identifier. So
+Matomo's visitors are sessions. A record with no session, such as one a store recovered, is its own
+visitor, by its identifier's last 64 bits. A session is one visit while the sessions enricher's
+timeout is no longer than Matomo's visit length, 30 minutes by default. Matomo may still fold a session's first event into
+another visit from the same IP address and User-Agent within 30 minutes, an earlier session's or
+someone else's on the same network, unless `trust_visitors_cookies = 1` is set in its
+`config.ini.php`. Matomo records the IP address of each request; whether it masks it and what it
+uses it for are its privacy settings, which no app can override without a token.
+
+The destination never sends a `token_auth`: a token is a secret, and an app holds none. Without
+one, Matomo takes an event's time only when it is less than a day old, and answers 200 while
+storing nothing for an older one. So the encoder leaves out a record tracked more than 23 hours
+before or after the batch is encoded, an hour spare for retries and clocks, and reports it as
+`timestampOutsideWindow`: a record a store kept offline for longer, or that waited that long in
+the buffer. A request is encoded once and retried as it is, though, so one retried until about a
+day after its oldest record is answered 200 by Matomo and lost without a report. A clock that
+reads NaN or infinite has every record reported. To keep older records, send them to a server of
+yours that forwards to Matomo with a token.
+
+The encoder leaves out the same records as the collector's encoder, and also one whose event name
+is empty once trimmed or longer than the 4,096 characters Matomo stores; one whose time is outside
+the 23 hours; one with a dimension's value over the 250 characters Matomo keeps, counted as Matomo
+stores it, with `&` and the other characters HTML escapes as their entities; and one too large for
+a request (`oversized`). The destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`.
+
+Matomo answers 200 to any bulk request it can read, so a wrong site ID loses every event without
+an error: check that the first ones reach the site's Visits Log. It doesn't remove duplicates, so
 a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
 
 ### Memory

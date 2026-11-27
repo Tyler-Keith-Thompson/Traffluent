@@ -55,7 +55,7 @@ Tracker.current.track(ProductAddedToCart(productID: "canvas-tote", quantity: 1))
 - [Track from SwiftUI, UIKit and AppKit](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingfromviews)
 - [Keep events when the app goes offline or quits](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/persistingrecords)
 - [Ask for consent and gate events by it](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/consentgating)
-- [Send to PostHog, Amplitude, Mixpanel, Segment, RudderStack, Customer.io, Google Analytics from a server, Snowplow, TelemetryDeck, your own server, logs or traces](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations)
+- [Send to PostHog, Amplitude, Mixpanel, Segment, RudderStack, Customer.io, Google Analytics from a server, Snowplow, TelemetryDeck, Matomo, your own server, logs or traces](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations)
 - [Write a destination for another analytics vendor](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/writingavendordestination)
 - [Catch breaking event changes in CI](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow)
 

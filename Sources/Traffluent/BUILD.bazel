@@ -68,6 +68,7 @@ docc_archive(
         "//Sources/GoogleAnalyticsEncoding:GoogleAnalyticsEncodingDocumentation",
         "//Sources/SnowplowEncoding:SnowplowEncodingDocumentation",
         "//Sources/TelemetryDeckEncoding:TelemetryDeckEncodingDocumentation",
+        "//Sources/MatomoEncoding:MatomoEncodingDocumentation",
         "//Sources/PropertyJSON:PropertyJSONDocumentation",
         "//Sources/JSONValues:JSONValuesDocumentation",
         "//Sources/DestinationTesting:DestinationTestingDocumentation",
