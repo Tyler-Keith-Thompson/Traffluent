@@ -27,6 +27,7 @@ swift_library(
         "//Sources/PostHogEncoding",
         "//Sources/AmplitudeEncoding",
         "//Sources/MixpanelEncoding",
+        "//Sources/SegmentSpecEncoding",
         "//Sources/PropertyJSON",
         "//Sources/JSONValues",
         "//Sources/DestinationTesting",

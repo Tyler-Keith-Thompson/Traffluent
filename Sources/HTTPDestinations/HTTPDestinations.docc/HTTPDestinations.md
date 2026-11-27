@@ -25,8 +25,11 @@ Reach for this module to send to a server whose format you write yourself. For T
 format, give the destination a `CollectorBatchEncoder` (module `CollectorEncoding`); for PostHog,
 make it with `HTTPDestination.postHog(projectToken:host:plan:)` (module `PostHogEncoding`); for
 Amplitude, with `HTTPDestination.amplitude(apiKey:region:plan:)` (module `AmplitudeEncoding`); for
-Mixpanel, with `HTTPDestination.mixpanel(projectToken:region:plan:)` (module `MixpanelEncoding`). To
-read events inside the app or in a test, use `InMemoryDestination` (module `Destinations`) instead.
+Mixpanel, with `HTTPDestination.mixpanel(projectToken:region:plan:)` (module `MixpanelEncoding`);
+for Segment, RudderStack or Customer.io Data Pipelines, with
+`HTTPDestination.segment(writeKey:region:plan:)`, `rudderStack(writeKey:dataPlane:plan:)` or
+`customerIO(apiKey:region:plan:)` (module `SegmentSpecEncoding`). To read events inside the app
+or in a test, use `InMemoryDestination` (module `Destinations`) instead.
 
 ```swift
 import HTTPDestinations

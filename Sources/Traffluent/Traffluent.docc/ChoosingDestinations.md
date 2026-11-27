@@ -102,6 +102,9 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | PostHog | ``/PostHogEncoding`` | `HTTPDestination.postHog(projectToken:host:plan:)` | Each record as an anonymous event: its session as `distinct_id` and `$session_id`, its identifier as `uuid`, its properties through your plan, and the standard context as PostHog's `$`-prefixed properties |
 | Amplitude | ``/AmplitudeEncoding`` | `HTTPDestination.amplitude(apiKey:region:plan:)` | Each record as an event of an anonymous device: its session as `device_id`, the session's start as `session_id`, its identifier as `insert_id`, its time in epoch milliseconds, its properties through your plan as `event_properties`, and the standard context as Amplitude's own fields; no `user_id` |
 | Mixpanel | ``/MixpanelEncoding`` | `HTTPDestination.mixpanel(projectToken:region:plan:)` | Each record as an event of an anonymous user: its session as `distinct_id` and `$device_id`, its identifier as `$insert_id`, its time in epoch milliseconds, its properties through your plan, the standard context as Mixpanel's default properties, and `ip` as `0`; no `$user_id` |
+| Segment | ``/SegmentSpecEncoding`` | `HTTPDestination.segment(writeKey:region:plan:)` | Each record as a Segment-spec track call of an anonymous user: its session as `anonymousId`, its identifier as `messageId`, its time in ISO 8601, its properties through your plan, the standard context in the spec's `context` fields, and `context.ip` as `0.0.0.0`; no `userId`, `identify` or traits |
+| RudderStack | ``/SegmentSpecEncoding`` | `HTTPDestination.rudderStack(writeKey:dataPlane:plan:)` | The same track calls as Segment, at your data plane, with `request_ip` as `0.0.0.0` too |
+| Customer.io Data Pipelines | ``/SegmentSpecEncoding`` | `HTTPDestination.customerIO(apiKey:region:plan:)` | The same track calls as Segment, in strict mode |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -269,6 +272,118 @@ Mixpanel doesn't report every loss. It answers 200 even when it ingests none of 
 events, and its track API ingests only events from the last 5 days, so a record older than that
 when it is sent, such as one a store kept through a long time offline, counts as delivered and
 isn't stored.
+
+### Segment, RudderStack and Customer.io
+
+Segment, RudderStack and Customer.io Data Pipelines take the same batch call of the Segment spec,
+so one module, ``/SegmentSpecEncoding``, sends to all three, with a factory for each. Each posts to
+the endpoint's `/v1/batch`, sends no trace context, and splits each batch into requests of at most
+2,500 calls and 500 KB, each call under 32 KB, which all three accept.
+
+To send to a Segment source, make the destination with
+`HTTPDestination.segment(writeKey:region:plan:)`. The region is the workspace's, `.us` for
+Segment's default or `.eu`, and has no default, as Segment rejects events sent to the other
+region's endpoint, or answers without an error and stores nothing.
+
+```swift
+let plan = try TrackingPlan()
+let segment = try HTTPDestination.segment(
+    writeKey: writeKey,
+    region: .us,  // or .eu, where the workspace is
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: segment)
+```
+
+To send to a RudderStack source, make it with
+`HTTPDestination.rudderStack(writeKey:dataPlane:plan:)`, passing the data plane URL from the top of
+the workspace's Connections page, or a self-hosted data plane's. The factory appends `/v1/batch`
+itself, and throws `RudderStackSetupError` for a URL that isn't plain `https`, a local data plane's
+included, or that ends in `/v1` or `/v1/batch`.
+
+```swift
+let plan = try TrackingPlan()
+let rudderStack = try HTTPDestination.rudderStack(
+    writeKey: writeKey,
+    dataPlane: dataPlane,  // https://<workspace>dataplane.rudderstack.com
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: rudderStack)
+```
+
+To send to a Customer.io workspace through its Pipelines API, make it with
+`HTTPDestination.customerIO(apiKey:region:plan:)`, passing the source's public key (`pk_…`) and
+the workspace's region, `.us` or `.eu`.
+
+```swift
+let plan = try TrackingPlan()
+let customerIO = try HTTPDestination.customerIO(
+    apiKey: apiKey,  // the source's public key, pk_…
+    region: .us,  // or .eu, where the workspace is
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: customerIO)
+```
+
+The key goes in the `Authorization` header field, never in the body: as HTTP Basic
+authentication's user name, with an empty password, for Segment and RudderStack, and as a bearer
+token for Customer.io. Each is a public client key, the one the vendor's own app and web libraries
+ship, which lets a client send data to the source and read nothing. Customer.io's private keys
+(`sk_…`) reach every Customer.io API, deleting people included, and must never ship in an app, so
+the factory throws `CustomerIOSetupError` for one, as it does for a public key of the other
+region. Each factory throws for an empty key.
+
+Each record becomes a track call. Its `anonymousId` is the record's session
+(`Enricher.sessions()`), its `messageId` the record's identifier, which a record sent again keeps,
+and its `timestamp` the record's in ISO 8601. No `userId`, `identify` call or traits are sent, nor
+anything else that identifies anyone: not the vendor identifier, the trace context or your own
+context keys. The encoder fills in the spec's `context` fields for the app (its bundle identifier
+as `namespace`, version and build), the device (`model`, and `type` as Segment's Swift library
+names the platform), the locale, the network and the operating system, when the standard context
+enrichers set them, with no `device.id` or `advertisingId`. Event names are sent as they are.
+
+Every call's `context.ip` is `0.0.0.0`, which Segment takes as the user's address in place of the
+request's, so it records none. RudderStack reads `context.ip` first for geolocation, but fills in
+a `request_ip` from the request unless the call has one, and passes it on to its destinations, so
+RudderStack's calls also carry `request_ip` as `0.0.0.0`. Segment's and Customer.io's specs have no
+`request_ip`, and Customer.io's strict mode may refuse a member it doesn't know, so their calls
+don't carry one. Customer.io's references don't say whether `context.ip` takes the place of the
+address it reads from an HTTP request, so it may still record the request's.
+
+No `sentAt` is sent, so each endpoint takes the timestamp as it is, uncorrected for the device's
+clock: a request sent again carries the same body, whose `sentAt` would be the first attempt's.
+RudderStack fills in `sentAt`, `originalTimestamp` and `channel` from when it received the call.
+
+Each endpoint counts a user per `anonymousId`, so each session is one user in its reports, and so
+is each record sent without a session; on a plan billed by monthly tracked users, each counts as
+one. A record with no session, from a tracker without `.sessions()` or recovered by a store after a
+relaunch, is sent under its own record identifier: an anonymous user of one call, linked to
+nothing, as the spec rejects a call with neither a `userId` nor an `anonymousId`. Segment
+deduplicates calls by `messageId` and drops most duplicates within about 24 hours, not all, so a
+recovered record it stored before the app ended is most likely not stored again. RudderStack's and
+Customer.io's API references don't say whether they deduplicate, so such a record may be stored
+twice there.
+
+A `Sensitive` value is never sent, whatever the record reveals. The encoder leaves out the same
+records as the collector's encoder, and also one named as one of Customer.io's semantic events,
+which act on the person rather than record what they did: `User Deleted`, `User Suppressed`,
+`User Unsuppressed`, `Device Created or Updated`, `Device Deleted`, `Object Deleted`,
+`Relationship Deleted` and `Report Delivery Event`. It leaves those out for Segment and RudderStack
+too, as either can forward track calls to a Customer.io destination; rename such an event to send
+it. The encoder logs a notice for each such name in the plan when the destination is made.
+It also leaves out a record whose timestamp has no ISO 8601 form (before 1583, the first year
+wholly in the Gregorian calendar, or after 9999), and one too large for a call. The destination
+reports each on `dropReports` as `HTTPDropReport.skipped(_:)`.
+
+The endpoints don't report every loss. Segment answers 200 for every request but one too large or
+not JSON, so a wrong region, a write key of no source, or a batch of more calls than it takes may
+be answered 200 with nothing stored: check the source's debugger after setting the destination up.
+RudderStack answers a wrong write key with 401 and a disabled source with 404, and the destination
+drops and reports both. Customer.io answers 200 for a request it drops, a wrong key included,
+unless it is in strict mode, so the destination sends `X-Strict-Mode: 1`: it then answers a wrong
+key with 401 and a call it won't take with 400, which the destination reports. In strict mode it
+refuses a whole batch for one bad call, so the encoder leaves out each call Customer.io documents
+refusing; a 400 for anything else drops the whole request.
 
 ### Memory
 

@@ -120,6 +120,12 @@ bad row in a dashboard.
   (TRAF-109) and Aptabase (TRAF-110). This reverses the rejection of Segment above: as a plain
   sink, one more destination the pipeline delivers to, it duplicates nothing. The rejection of
   Firebase's and Amplitude's SDKs stands; Amplitude's destination uses its HTTP API.
+  Under the same request (TRAF-104), Segment-spec endpoints are allowed as plain-sink
+  destinations: Segment, RudderStack and Customer.io Data Pipelines each receive records after
+  Traffluent's own typing, consent gating and batching, from one module, `SegmentSpecEncoding`
+  (not `SegmentEncoding`, which reads as an encoding of `SegmentStore`'s segments), with a
+  factory per endpoint. It sends track calls only: no `identify`, traits or `userId` (D4). The
+  rejection of Segment above stands only for Segment as Traffluent's pipeline itself.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

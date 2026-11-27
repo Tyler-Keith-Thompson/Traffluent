@@ -38,6 +38,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/Persistence",
     "Sources/PostHogEncoding",
     "Sources/PropertyJSON",
+    "Sources/SegmentSpecEncoding",
     "Sources/Sessions",
     "Sources/StandardContext",
     "Sources/SwiftUITracking",
