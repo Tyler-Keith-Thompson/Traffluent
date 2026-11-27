@@ -47,7 +47,8 @@ struct AmplitudeContextTests {
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: nil, build: "418")
         context[DeviceKey.self] = DeviceKey.Value(model: "Model1,1", formFactor: formFactor)
         context[NetworkKey.self] = .wifi
-        let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
+        // A fixed identifier: a random UUID can contain "418" and fail the search below.
+        let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
         let expectedKeys = ["device_id", "device_model", "event_properties", "event_type", "insert_id", "time"]
 
         let body = try #require(sut.requests(for: [record]).requests.first).body.body
