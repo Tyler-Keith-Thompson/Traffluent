@@ -30,6 +30,11 @@ struct SegmentSpecBatchEncoderTests {
     @Event(name: "opened")
     struct Opened {}
 
+    @Event(name: "note_added")
+    struct NoteAdded {
+        var text: String
+    }
+
     enum TraceParentKey: ServiceContextKey {
         typealias Value = String
     }
@@ -87,6 +92,26 @@ struct SegmentSpecBatchEncoderTests {
 
         #expect(String(decoding: actual.body, as: UTF8.self) == expected)
         #expect(actual.contentType == expectedContentType)
+    }
+
+    // The input SegmentSpecBatchEncoderPropertyTests failed on (TRAF-138): one record without a
+    // session whose text is the one scalar U+FEFF, which JSONSerialization reads back as "".
+    @Test("A text of exactly U+FEFF is sent as its three UTF-8 bytes, EF BB BF, as it is")
+    func byteOrderMarkText() throws {
+        let sut = SegmentSpecBatchEncoder(plan: try TrackingPlan(schemas: [NoteAdded.schema]))
+        let record = EventRecord(
+            id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
+            event: NoteAdded(text: "\u{FEFF}"),
+            timestamp: Date(timeIntervalSince1970: 1_795_442_607),
+            sourceLocation: nil
+        )
+        let expected: [UInt8] = Array(#"{"batch":[{"anonymousId":"00000000-0000-4000-8000-000000000001","context":{"ip":"0.0.0.0"},"event":"note_added","messageId":"00000000-0000-4000-8000-000000000001","properties":{"text":""#.utf8)
+            + [0xEF, 0xBB, 0xBF]
+            + Array(#""},"timestamp":"2026-11-23T14:03:27.000Z","type":"track"}]}"#.utf8)
+
+        let actual = try #require(sut.requests(for: [record]).requests.first).body.body
+
+        #expect(Array(actual) == expected)
     }
 
     @Test("A redelivered record encodes with the messageId it was first sent with")

@@ -66,13 +66,26 @@ struct GoogleAnalyticsBatchEncoderPropertyTests {
                 let body = try #require(try JSONSerialization.jsonObject(with: request.body.body) as? [String: Any])
                 let events = try #require(body["events"] as? [[String: Any]])
                 let params = events.map { $0["params"] as? [String: Any] }
+                // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts
+                // a string value (a Foundation bug, recorded here rather than filed: on macOS
+                // whether the body holds it raw or as \uFEFF, in swift-corelibs-foundation when it
+                // is raw), so a text of exactly U+FEFF would read back as "" (TRAF-138).
+                struct Body: Decodable {
+                    struct Event: Decodable {
+                        struct Parameters: Decodable { var text: String }
+                        var params: Parameters
+                    }
+                    var events: [Event]
+                }
+                let actualTexts: [String?] = try JSONDecoder().decode(Body.self, from: request.body.body).events.map(\.params.text)
+                let expectedTexts: [String?] = expected.records.map { _ in text }
                 let expectedSessionIDs: [Int64?] = expected.records.map { record in
                     record.context[SessionKey.self].flatMap { Int64($0.uuidString.replacingOccurrences(of: "-", with: "").prefix(12), radix: 16) }
                 }
                 let expectedMicros: [Int64?] = expected.records.map { Int64($0.timestamp.timeIntervalSince1970) * 1_000_000 }
                 #expect(body["client_id"] as? String == expected.client)
                 #expect(events.allSatisfy { $0["name"] as? String == "generated" })
-                #expect(params.map { $0?["text"] as? String } == expected.records.map { _ in text })
+                #expect(actualTexts == expectedTexts)
                 #expect(params.map { $0?["count"] as? Int } == expected.records.map { ($0.event as? Generated)?.count })
                 #expect(params.map { ($0?["session_id"] as? NSNumber)?.int64Value } == expectedSessionIDs)
                 #expect(events.map { ($0["timestamp_micros"] as? NSNumber)?.int64Value } == expectedMicros)

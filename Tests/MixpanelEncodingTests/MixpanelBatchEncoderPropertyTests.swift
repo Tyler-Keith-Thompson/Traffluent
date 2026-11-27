@@ -62,7 +62,15 @@ struct MixpanelBatchEncoderPropertyTests {
             let actualInsertIDs = properties.map { $0?["$insert_id"] as? String }
             let actualTimes = properties.map { ($0?["time"] as? NSNumber)?.intValue }
             let actualCounts = properties.map { $0?["count"] as? Int }
-            let actualTexts = properties.map { $0?["text"] as? String }
+            // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF would read back as "" (TRAF-138).
+            struct Event: Decodable {
+                struct Properties: Decodable { var text: String }
+                var properties: Properties
+            }
+            let actualTexts: [String?] = try actual.requests.flatMap { try JSONDecoder().decode([Event].self, from: $0.body.body).map(\.properties.text) }
             #expect(actual.skippedRecords.isEmpty)
             #expect(actual.requests.map(\.recordIDs.count) == expectedRequestSizes)
             #expect(actualNames.allSatisfy { $0 == "generated" })

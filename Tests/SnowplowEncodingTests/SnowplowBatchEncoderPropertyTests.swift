@@ -58,6 +58,24 @@ struct SnowplowBatchEncoderPropertyTests {
                 return wrapper?["data"] as? [String: Any]
             }
             let data = selfDescribing.map { $0?["data"] as? [String: Any] }
+            // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF would read back as "" (TRAF-138).
+            struct Body: Decodable {
+                struct Event: Decodable { var ue_pr: String }
+                var data: [Event]
+            }
+            struct UnstructuredEvent: Decodable {
+                struct SelfDescribing: Decodable {
+                    struct Properties: Decodable { var text: String }
+                    var data: Properties
+                }
+                var data: SelfDescribing
+            }
+            let actualTexts: [String?] = try actual.requests.flatMap { request in
+                try JSONDecoder().decode(Body.self, from: request.body.body).data.map { try JSONDecoder().decode(UnstructuredEvent.self, from: Data($0.ue_pr.utf8)).data.data.text }
+            }
             #expect(actual.skippedRecords.isEmpty)
             #expect(actual.requests.map(\.recordIDs.count) == expectedRequestSizes)
             #expect(events.allSatisfy { $0["e"] as? String == "ue" && $0["aid"] as? String == "shop" && $0["ip"] as? String == "0.0.0.0" })
@@ -68,7 +86,7 @@ struct SnowplowBatchEncoderPropertyTests {
             #expect(events.map { $0["ttm"] as? String } == expectedTimes)
             #expect(selfDescribing.map { $0?["schema"] as? String } == expectedSchemas)
             #expect(data.map { $0?["count"] as? Int } == expectedCounts)
-            #expect(data.map { $0?["text"] as? String } == expectedTexts)
+            #expect(actualTexts == expectedTexts)
             #expect(events.allSatisfy { $0["duid"] == nil && $0["uid"] == nil && $0["stm"] == nil })
         }
     }

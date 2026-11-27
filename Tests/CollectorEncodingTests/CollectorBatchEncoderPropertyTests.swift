@@ -40,8 +40,20 @@ struct CollectorBatchEncoderPropertyTests {
             let object = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             let records = object?["records"] as? [[String: Any]]
             let actual = records?.first?["properties"] as? [String: Any]
+            // The text is read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF would read back as "" (TRAF-138).
+            struct Body: Decodable {
+                struct Record: Decodable {
+                    struct Properties: Decodable { var text: String }
+                    var properties: Properties
+                }
+                var records: [Record]
+            }
+            let actualText = body.flatMap { try? JSONDecoder().decode(Body.self, from: $0) }?.records.first?.properties.text
 
-            #expect(actual?["text"] as? String == event.text)
+            #expect(actualText == event.text)
             #expect((actual?["count"] as? NSNumber)?.int64Value == Int64(event.count))
             #expect((actual?["ratio"] as? NSNumber)?.doubleValue == event.ratio)
             #expect(actual?["tags"] as? [String] == event.tags)

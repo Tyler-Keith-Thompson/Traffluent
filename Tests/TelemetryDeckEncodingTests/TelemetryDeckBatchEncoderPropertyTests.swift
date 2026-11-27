@@ -83,13 +83,19 @@ struct TelemetryDeckBatchEncoderPropertyTests {
             let actual = sut.requests(for: batch)
 
             let events = try actual.requests.flatMap { try JSONSerialization.jsonObject(with: $0.body.body) as? [[String: Any]] ?? [] }
+            // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF would read back as "" (TRAF-138).
+            struct Signal: Decodable { var text: String }
+            let actualTexts: [String?] = try actual.requests.flatMap { try JSONDecoder().decode([Signal].self, from: $0.body.body).map(\.text) }
             #expect(actual.skippedRecords.isEmpty)
             #expect(actual.requests.map(\.recordIDs.count) == expectedRequestSizes)
             #expect(events.allSatisfy { $0["type"] as? String == "generated" && $0["appID"] as? String == "B97579B6-FFB8-4AC5-AAA7-DA5796CC5DCE" && $0["isTestMode"] as? String == "true" })
             #expect(events.map { $0["sessionID"] as? String } == expectedSessions)
             #expect(events.map { $0["clientUser"] as? String } == expectedClientUsers)
             #expect(events.map { $0["position"] as? Int } == expectedPositions)
-            #expect(events.map { $0["text"] as? String } == expectedTexts)
+            #expect(actualTexts == expectedTexts)
         }
     }
 

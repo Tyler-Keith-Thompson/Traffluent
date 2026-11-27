@@ -56,7 +56,18 @@ struct PostHogBatchEncoderPropertyTests {
             let actualDistinctIDs = events.map { $0["distinct_id"] as? String }
             let actualUUIDs = events.map { $0["uuid"] as? String }
             let actualCounts = properties.map { $0?["count"] as? Int }
-            let actualTexts = properties.map { $0?["text"] as? String }
+            // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF would read back as "" (TRAF-138).
+            struct Body: Decodable {
+                struct Event: Decodable {
+                    struct Properties: Decodable { var text: String }
+                    var properties: Properties
+                }
+                var batch: [Event]
+            }
+            let actualTexts: [String?] = try JSONDecoder().decode(Body.self, from: body).batch.map(\.properties.text)
             let actualSessionIDs = properties.map { $0?["$session_id"] as? String }
             #expect(actual.skippedRecords.isEmpty)
             #expect(actualToken == "phc_test")

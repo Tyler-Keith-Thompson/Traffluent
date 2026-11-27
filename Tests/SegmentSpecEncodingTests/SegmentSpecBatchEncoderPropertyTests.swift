@@ -52,6 +52,18 @@ struct SegmentSpecBatchEncoderPropertyTests {
 
             let calls = try actual.requests.flatMap { try (JSONSerialization.jsonObject(with: $0.body.body) as? [String: Any])?["batch"] as? [[String: Any]] ?? [] }
             let properties = calls.map { $0["properties"] as? [String: Any] }
+            // The texts are read with JSONDecoder: JSONSerialization drops a U+FEFF that starts a
+            // string value (a Foundation bug, recorded here rather than filed: on macOS whether the
+            // body holds it raw or as \uFEFF, in swift-corelibs-foundation when it is raw), so a
+            // text of exactly U+FEFF read back as "" though the body held EF BB BF (TRAF-138).
+            struct Body: Decodable {
+                struct Call: Decodable {
+                    struct Properties: Decodable { var text: String }
+                    var properties: Properties
+                }
+                var batch: [Call]
+            }
+            let actualTexts: [String?] = try actual.requests.flatMap { try JSONDecoder().decode(Body.self, from: $0.body.body).batch.map(\.properties.text) }
             #expect(actual.skippedRecords.isEmpty)
             #expect(actual.requests.map(\.recordIDs.count) == expectedRequestSizes)
             #expect(calls.allSatisfy { $0["type"] as? String == "track" && $0["event"] as? String == "generated" })
@@ -60,7 +72,7 @@ struct SegmentSpecBatchEncoderPropertyTests {
             #expect(calls.map { $0["messageId"] as? String } == expectedMessageIDs)
             #expect(calls.map { $0["timestamp"] as? String } == expectedTimestamps)
             #expect(properties.map { $0?["count"] as? Int } == expectedCounts)
-            #expect(properties.map { $0?["text"] as? String } == expectedTexts)
+            #expect(actualTexts == expectedTexts)
             #expect(calls.allSatisfy { $0["userId"] == nil && $0["traits"] == nil })
         }
     }
