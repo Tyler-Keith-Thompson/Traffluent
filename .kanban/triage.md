@@ -144,6 +144,29 @@ bad row in a dashboard.
   platform that takes the secret at run time (both put a credential that writes to the property
   into a binary anyone can read); and a SwiftPM trait or `-D` define to opt in to the factory,
   which adopters miss and Bazel would have to match.
+  Snowplow (TRAF-106, decided 2026-11-27): `SnowplowEncoding` sends the tracker protocol's
+  `payload_data` 1-0-4 to `<collector>/com.snowplowanalytics.snowplow/tp2`, one self-describing
+  event (`e=ue`, data in `ue_pr`) per record, from every platform, as a collector needs no secret.
+  Only `sid`, the session, identifies a record (D4): no `duid`, `uid`, `nuid`, `tnuid`,
+  `client_session` entity, IDFV or IDFA. Every request carries `SP-Anonymous: *`, so the collector
+  sets no `sp` cookie (which `URLSession` would keep across sessions) and records no IP. Each
+  event's schema is `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, and the plan exports an Iglu
+  registry (`TrackingPlan.writeIgluRegistry(to:vendor:registry:)`, the plugin's `--iglu-vendor`
+  and `--iglu-registry`). An event version is a SchemaVer MODEL. The export compares an event with
+  its newest published `N-0-k` through the plan's own compatibility check, on decoded documents: a
+  breaking difference throws `breakingChange`, and a compatible one is the next ADDITION,
+  superseding the earlier ones, for Iglu Server alone; for a static repository, which ignores
+  `$supersedes`, it throws `additionNeedsNewVersion`. The registry kind has no default. Published
+  files are never changed or deleted. Rejected: a warning instead of the static-repository throw
+  (events would fail silently), and naming the exact `N-0-k` in the encoder (an installed release
+  would then never pick up a later addition). Batching keeps the trackers' 25 events and 40,000
+  bytes, and an event up to 150,000 bytes goes in a request of its own, as the trackers send one,
+  under SQS's 192 kB (`BatchLimit.sendsLargeRecordsAlone`, off for every other encoder). Rejected: patching
+  `N-0-0` in place (Snowplow treats published schemas as immutable), `1-0-(N-1)` for version N (a
+  Traffluent version is a breaking change), base64 `ue_px`/`cx` (a third larger, and its URL
+  safety matters only to GET), and sending `stm` (a retry keeps the first attempt's, shifting
+  `derived_tstamp`). The collector answers 200 before validation, so the docs say that an event
+  failing validation is lost to the warehouse though delivered.
 - D2. Destinations are plain sinks: they receive events that have already been typed, enriched
   and consent-checked. A request to put enrichment or consent logic inside one destination is
   turned down in favour of a pipeline stage. The owner amended D2 on 2026-11-26 (TRAF-81):

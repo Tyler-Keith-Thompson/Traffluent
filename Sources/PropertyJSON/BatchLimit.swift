@@ -10,6 +10,14 @@
 /// ```
 ///
 /// Byte counts are of the UTF-8 the encoder writes, before any compression.
+///
+/// Some endpoints take one large record in a request of its own, beyond what a request of several
+/// holds, as Snowplow's collectors do. Such a limit sets ``sendsLargeRecordsAlone``:
+///
+/// ```swift
+/// // 25 events and 40 KB a request, and an event of up to 150 KB alone.
+/// let limit = try BatchLimit(maximumRecordCount: 25, maximumByteCount: 40_000, maximumRecordByteCount: 150_000, sendsLargeRecordsAlone: true)
+/// ```
 public struct BatchLimit: Sendable, Hashable {
     /// The most records one request holds.
     public let maximumRecordCount: Int
@@ -17,9 +25,12 @@ public struct BatchLimit: Sendable, Hashable {
     public let maximumByteCount: Int
     /// The most bytes one record's JSON holds; a record over it is left out of every request.
     public let maximumRecordByteCount: Int
+    /// Whether a record too large for a request of ``maximumByteCount`` is sent in a request of
+    /// its own, up to ``maximumRecordByteCount`` bytes of it, rather than left out.
+    public let sendsLargeRecordsAlone: Bool
 
     /// No limit: every record in one request, however large.
-    public static let unlimited = BatchLimit(unchecked: .max, .max, .max)
+    public static let unlimited = BatchLimit(unchecked: .max, .max, .max, sendsLargeRecordsAlone: false)
 
     /// A limit of `maximumRecordCount` records and `maximumByteCount` bytes per request, and
     /// `maximumRecordByteCount` bytes per record.
@@ -28,17 +39,21 @@ public struct BatchLimit: Sendable, Hashable {
     ///   - maximumRecordCount: The most records one request holds.
     ///   - maximumByteCount: The most bytes one request's body holds, the envelope included.
     ///   - maximumRecordByteCount: The most bytes one record's JSON holds.
-    /// - Throws: ``InvalidBatchLimit`` when any of the three is below 1.
-    public init(maximumRecordCount: Int, maximumByteCount: Int, maximumRecordByteCount: Int) throws(InvalidBatchLimit) {
+    ///   - sendsLargeRecordsAlone: Whether a record too large for a request of `maximumByteCount`
+    ///     bytes is sent in a request of its own, up to `maximumRecordByteCount` bytes of it; left
+    ///     out by default.
+    /// - Throws: ``InvalidBatchLimit`` when any of the three counts is below 1.
+    public init(maximumRecordCount: Int, maximumByteCount: Int, maximumRecordByteCount: Int, sendsLargeRecordsAlone: Bool = false) throws(InvalidBatchLimit) {
         guard maximumRecordCount >= 1, maximumByteCount >= 1, maximumRecordByteCount >= 1 else {
             throw InvalidBatchLimit()
         }
-        self.init(unchecked: maximumRecordCount, maximumByteCount, maximumRecordByteCount)
+        self.init(unchecked: maximumRecordCount, maximumByteCount, maximumRecordByteCount, sendsLargeRecordsAlone: sendsLargeRecordsAlone)
     }
 
-    private init(unchecked maximumRecordCount: Int, _ maximumByteCount: Int, _ maximumRecordByteCount: Int) {
+    private init(unchecked maximumRecordCount: Int, _ maximumByteCount: Int, _ maximumRecordByteCount: Int, sendsLargeRecordsAlone: Bool) {
         self.maximumRecordCount = maximumRecordCount
         self.maximumByteCount = maximumByteCount
         self.maximumRecordByteCount = maximumRecordByteCount
+        self.sendsLargeRecordsAlone = sendsLargeRecordsAlone
     }
 }

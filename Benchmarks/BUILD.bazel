@@ -41,6 +41,7 @@ LIBRARY_DIRECTORIES = [
     "Sources/PropertyJSON",
     "Sources/SegmentSpecEncoding",
     "Sources/Sessions",
+    "Sources/SnowplowEncoding",
     "Sources/StandardContext",
     "Sources/SwiftUITracking",
     "Sources/TracingDestinations",

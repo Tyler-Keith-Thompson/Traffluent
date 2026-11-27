@@ -189,6 +189,92 @@ are and lists them in the index, so a collector still accepts payloads from rele
 [`Examples/TrackingPlan`](https://github.com/Tyler-Keith-Thompson/Traffluent/tree/main/Examples/TrackingPlan)
 is the plan `StoreTrackingPlan` writes.
 
+### Exporting an Iglu registry
+
+Snowplow validates each event against a schema it looks up in an Iglu registry, by the URI the
+event names (<doc:ChoosingDestinations#Snowplow>). The plan writes those schemas too, in the
+layout of an Iglu static repository, which `igluctl` publishes to Iglu Server. Give the plugin the
+Iglu vendor your Snowplow destination uses, and the kind of registry you publish to: `server` for
+Iglu Server, `static` for a static repository:
+
+```sh
+swift package --allow-writing-to-package-directory export-tracking-plan --iglu-vendor com.example --iglu-registry server
+```
+
+It writes the plan into `TrackingPlan/`, as before, and the registry into `Iglu/`, or the directory
+`--iglu-output` names. The executable does the same with
+`iglu <vendor> server|static <registry-directory>`, and a program with
+`TrackingPlan.writeIgluRegistry(to:vendor:registry:)`:
+
+```swift
+let plan = try TrackingPlan(schemas: [SignedUp.schema])
+try plan.writeIgluRegistry(to: registry, vendor: "com.example", registry: .server)
+// registry/schemas/com.example/signed_up/jsonschema/1-0-0
+```
+
+Each file is the event's document as a self-describing schema: `self` names the vendor, the event,
+the format and the SchemaVer, `$schema` is Iglu's meta-schema, and there is no `$id`. For the
+`signed_up` event above:
+
+```json
+{
+  "$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+  "additionalProperties": false,
+  "properties": {
+    "email": {
+      "type": "string",
+      "x-traffluent-sensitive": true
+    },
+    "plan": {
+      "type": "string"
+    },
+    "referrer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "plan"
+  ],
+  "self": {
+    "format": "jsonschema",
+    "name": "signed_up",
+    "vendor": "com.example",
+    "version": "1-0-0"
+  },
+  "title": "signed_up",
+  "type": "object",
+  "x-traffluent-consent-category": "functional",
+  "x-traffluent-version": 1
+}
+```
+
+Version N of an event is SchemaVer `N-0-0`, the URI every event of that version names. Iglu treats
+a published schema as immutable, so writing again never changes or deletes a file. The export
+compares each event with the newest schema of its version in the registry by what they mean, as
+`check-tracking-plan` compares the plan, so a file reformatted since it was published still
+matches:
+
+- A version whose schema still matches is left as it is.
+- A breaking change at the same version, such as a property made required or retyped, throws
+  `IgluExportError.breakingChange(event:version:)`: raise the event's version instead.
+- A compatible change, such as an optional property added or a property removed, is an ADDITION.
+  For Iglu Server it is written as `N-0-1`, then `N-0-2`, each listing the earlier ones in
+  `$supersedes`, and Snowplow validates events naming `N-0-0` against the newest of them, so
+  releases already installed keep validating. A removed property stays in each new file,
+  deprecated and not required, as it does in the plan's documents. Superseding needs Iglu Server
+  0.11.0 or later and Enrich 3.8.0 or later. A static repository doesn't supersede, so for one the
+  export throws `IgluExportError.additionNeedsNewVersion(event:version:)`: raise the event's
+  version for every change.
+
+Publish the new files before the release that sends them: Snowplow's collector accepts every
+event, and one whose schema the registry lacks becomes a failed event, never loaded. The export
+also throws for an event whose name holds anything but ASCII letters, digits, `-` and `_`, whose
+version is below 1, or whose property has two patterns, which needs `allOf`, a keyword Snowplow's
+validation doesn't support. The executable exits with status 65 for each of these.
+
 ### Checking the plan
 
 One command fails when the Swift events no longer match the committed plan, with a line naming each

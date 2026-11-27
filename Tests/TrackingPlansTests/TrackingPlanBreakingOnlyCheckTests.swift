@@ -170,7 +170,7 @@ struct TrackingPlanBreakingOnlyCheckTests {
         let actual = CheckoutCommand.run(arguments: arguments)
 
         #expect(actual.status == expectedStatus)
-        #expect(actual.standardError.split(separator: "\n").last?.hasSuffix(expectedUsageLine) == true)
+        #expect(actual.standardError.split(separator: "\n").contains { $0.hasSuffix(expectedUsageLine) })
         #expect(actual.standardOutput.isEmpty)
     }
 

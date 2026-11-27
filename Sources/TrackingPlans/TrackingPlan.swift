@@ -259,7 +259,8 @@ extension EventSchema {
 }
 
 extension TrackingPlan.File {
-    fileprivate init(path: String, json: JSON) {
+    /// The file at `path` holding `json` as a plan writes it: rendered, then a newline.
+    init(path: String, json: JSON) {
         self.init(path: path, contents: Array((json.rendered + "\n").utf8))
     }
 }

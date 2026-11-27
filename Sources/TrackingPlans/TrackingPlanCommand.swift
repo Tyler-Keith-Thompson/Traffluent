@@ -26,6 +26,12 @@ import Foundation
 /// (`swift package check-tracking-plan --plan <directory> --breaking-only`) it fails only when a
 /// difference is breaking, so CI can check the events against the base branch's plan.
 ///
+/// Run it with `iglu`, the Iglu vendor of the app's schemas, the kind of registry and a directory
+/// (`swift run AppTrackingPlan iglu com.acme server Iglu`), or pass `--iglu-vendor` and
+/// `--iglu-registry` to the `export-tracking-plan` plugin, to write the plan's events as the
+/// schemas of an Iglu registry, for a Snowplow pipeline to validate them against, as
+/// ``TrackingPlan/writeIgluRegistry(to:vendor:registry:)`` writes them.
+///
 /// It is an executable of the app's own because only a program that links the app's event types
 /// holds their schemas: `TrackingPlan()` finds the events of the modules it links.
 public protocol TrackingPlanCommand {
@@ -52,11 +58,20 @@ extension TrackingPlanCommand {
     /// they match or the plan there is only out of date. It prints the differences of an
     /// out-of-date plan to standard output, as information.
     ///
+    /// Given `iglu`, a vendor, the kind of registry (`server` for Iglu Server, `static` for a
+    /// static repository) and a directory, it writes the plan's events there as the schemas of an
+    /// Iglu registry under that vendor, as ``TrackingPlan/writeIgluRegistry(to:vendor:registry:)``
+    /// does: it exits with status 0 once they are written, 64 (`EX_USAGE`) for a vendor Iglu
+    /// doesn't take, 65 (`EX_DATAERR`) for an event the registry can't hold (a name Iglu doesn't
+    /// take, a keyword Snowplow doesn't support, a breaking change at a published version, or, for
+    /// a static repository, any change at one), and 73 when a file can't be read or written.
+    ///
     /// Given anything else, it exits with status 64 (`EX_USAGE`): `check` alone (write to `./check`
     /// for a directory of that name), `check --breaking-only` alone, the flag in any other place,
-    /// or a directory whose name starts with `-`, as a mistyped option would (write `./-name` for
-    /// one). When ``trackingPlan`` throws, it exits with status 65 (`EX_DATAERR`). Every failure is
-    /// printed to standard error.
+    /// `iglu` without a vendor, a kind and a directory, a kind other than `server` or `static`, or a
+    /// directory or vendor whose name starts with `-`, as a mistyped option would (write `./-name`
+    /// for a directory). When ``trackingPlan`` throws, it exits with status 65 (`EX_DATAERR`). Every
+    /// failure is printed to standard error.
     public static func main() {
         let result = run(arguments: Array(CommandLine.arguments.dropFirst()))
         write(result.standardOutput, to: .standardOutput)
@@ -74,11 +89,19 @@ extension TrackingPlanCommand {
             return withPlan { check($0, against: arguments[1]) }
         case 3 where arguments[0] == "check" && arguments[1] == breakingOnlyFlag && !arguments[2].isOption:
             return withPlan { checkBreakingOnly($0, against: arguments[2]) }
+        case 4 where arguments[0] == "iglu" && !arguments[1].isOption && !arguments[3].isOption:
+            guard let registry = IgluRegistry(argument: arguments[2]) else { return usage }
+            return withPlan { writeIglu($0, vendor: arguments[1], registry: registry, to: arguments[3]) }
         default:
-            let name = CommandLine.arguments.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "tracking-plan"
-            let usage = "usage: \(name) <output-directory>\n       \(name) check [\(breakingOnlyFlag)] <plan-directory>"
-            return TrackingPlanCommandResult(status: 64, standardError: usage)
+            return usage
         }
+    }
+
+    /// Status 64 and how the command is called.
+    private static var usage: TrackingPlanCommandResult {
+        let name = CommandLine.arguments.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "tracking-plan"
+        let usage = "usage: \(name) <output-directory>\n       \(name) check [\(breakingOnlyFlag)] <plan-directory>\n       \(name) iglu <vendor> server|static <registry-directory>"
+        return TrackingPlanCommandResult(status: 64, standardError: usage)
     }
 
     // check-tracking-plan passes its own flag of this name through.
@@ -102,6 +125,28 @@ extension TrackingPlanCommand {
         } catch {
             let message = "error: couldn't write the tracking plan to \(directory): \(error.localizedDescription)"
             return TrackingPlanCommandResult(status: 73, standardError: message)
+        }
+    }
+
+    private static func writeIglu(_ trackingPlan: TrackingPlan, vendor: String, registry: IgluRegistry, to directory: String) -> TrackingPlanCommandResult {
+        do {
+            try trackingPlan.writeIgluRegistry(to: URL(fileURLWithPath: directory, isDirectory: true), vendor: vendor, registry: registry)
+            return TrackingPlanCommandResult(status: 0)
+        } catch {
+            switch error {
+            case .invalidVendor:
+                return TrackingPlanCommandResult(status: 64, standardError: "error: \(vendor) is not an Iglu vendor: use reverse domain notation, labels of ASCII letters, digits, - and _ joined by . (com.acme)")
+            case .invalidSchemaKey(let event, let version):
+                return TrackingPlanCommandResult(status: 65, standardError: "error: event \(event), version \(version), has no Iglu schema name: a name of ASCII letters, digits, - and _, and a version of 1 or more")
+            case .allOf(let event, let version):
+                return TrackingPlanCommandResult(status: 65, standardError: "error: event \(event), version \(version), needs allOf, which Snowplow's validation doesn't support: constrain each property with one pattern")
+            case .breakingChange(let event, let version):
+                return TrackingPlanCommandResult(status: 65, standardError: "error: event \(event), version \(version), changed in a way its published schema's payloads may fail: raise the event's version")
+            case .additionNeedsNewVersion(let event, let version):
+                return TrackingPlanCommandResult(status: 65, standardError: "error: event \(event), version \(version), changed, which a static repository can't publish at the same version: raise the event's version")
+            case .fileSystem(let cause):
+                return TrackingPlanCommandResult(status: 73, standardError: "error: couldn't read or write the Iglu registry in \(directory): \(cause.localizedDescription)")
+            }
         }
     }
 
@@ -143,5 +188,16 @@ extension String {
     /// Whether the argument is spelled as an option, which the command never takes for a directory.
     fileprivate var isOption: Bool {
         hasPrefix("-")
+    }
+}
+
+extension IgluRegistry {
+    /// The kind a command-line argument names: `server` or `static`.
+    fileprivate init?(argument: String) {
+        switch argument {
+        case "server": self = .server
+        case "static": self = .staticRepository
+        default: return nil
+        }
     }
 }

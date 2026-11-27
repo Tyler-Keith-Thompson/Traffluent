@@ -107,7 +107,9 @@ PACKAGES = [
     # dependency here (its row below is commented out), so it never narrows this resolution.
     ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "range:600.0.0..<605.0.0"),
     # Tests only: validates the tracking plans TrackingPlans writes against JSON Schema 2020-12's
-    # meta-schema, and events against them. Its JSONSchema product needs only swift-collections; it
+    # meta-schema, and events against them, and the events SnowplowEncoding sends against the Iglu
+    # schemas TrackingPlans exports (draft 4, which agrees with 2020-12 on every keyword a plan
+    # writes). Its JSONSchema product needs only swift-collections; it
     # is reported on Bowtie's conformance suite.
     ("swift-json-schema", "https://github.com/ajevans99/swift-json-schema", "minor:0.15.0"),
     # The record coder: CBOREncoder and CBORDecoder, Codable over CBOR (RFC 8949) with sorted,
@@ -182,6 +184,7 @@ MODULES = [
     ("AmplitudeEncoding", "Pipeline", "HTTPDestination.amplitude(apiKey:region:plan:): a destination for an Amplitude project in one throwing call, which checks the API key and fills in the HTTP V2 endpoint of the project's data residency (AmplitudeRegion), the encoder and Amplitude's limits; AmplitudeBatchEncoder, the BatchEncoder of Amplitude's HTTP V2 API (POST /2/httpapi): each record as an event whose device_id is its session's SessionKey, or the record's own id when it has no session, and no user_id or other identifier; its session_id the session's start in Unix milliseconds; its insert_id the record's id; its time in epoch milliseconds; its event_properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context as Amplitude's own top-level fields; batches split to 10 events and 1 MB a request; a record it can't encode, whose event name Amplitude reserves, or too large for Amplitude, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation"]),
     ("MixpanelEncoding", "Pipeline", "HTTPDestination.mixpanel(projectToken:region:plan:): a destination for a Mixpanel project in one throwing call, which checks the project token and fills in the /track endpoint of the project's data residency (MixpanelRegion), the encoder and Mixpanel's limits; MixpanelBatchEncoder, the BatchEncoder of Mixpanel's track API (POST /track, with the project token, never /import's secret): each record as an event whose distinct_id is its session's SessionKey, also sent as $device_id, or the record's own id when it has no session, and no $user_id or other identifier; its $insert_id the record's id; its time in epoch milliseconds; its properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context as Mixpanel's default properties; geolocation from the request's address turned off; batches split to 2,000 events and 2 MB a request; a record it can't encode, whose event name Mixpanel reserves, with a property named as one Mixpanel reserves, past Mixpanel's limits on properties, array elements or nesting, or too large for Mixpanel, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
     ("GoogleAnalyticsEncoding", "Pipeline", "HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:): a destination for a Google Analytics 4 web or data stream in one throwing call, compiled only for macOS and Linux, where a server holds the stream's Measurement Protocol API secret, which must never ship in an app, and refusing a Mac app at run time; it checks the measurement ID and secret and fills in the /mp/collect endpoint of the region (GoogleAnalyticsRegion), the encoder and the Measurement Protocol's limits; GoogleAnalyticsBatchEncoder, the BatchEncoder of the Measurement Protocol, also for macOS and Linux alone: each request one client's events, whose client_id is its session's SessionKey, or the record's own id when it has no session, as two numbers joined by a period, with no user_id, user properties, location or device, and ad consent sent as DENIED; each event's session_id the session's start, its timestamp_micros the record's; its params read through its schema in a TrackingPlan, never a Sensitive value, nested values flattened; batches split to 25 events and 100 KB a request; a record it can't encode, past GA4's naming rules, reserved names or limits on parameters and values, outside the 72 hours before and 15 minutes after it is encoded, or too large, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-log/Logging"]),
+    ("SnowplowEncoding", "Pipeline", "HTTPDestination.snowplow(collector:vendor:appID:plan:): a destination for a Snowplow collector in one throwing call, which checks the collector's https URL, the Iglu vendor of the app's schemas and the app ID, and fills in the collector's tracker protocol 2 endpoint, the SP-Anonymous header field that keeps the collector from setting its network_userid cookie or recording the request's address, the encoder and the trackers' request limits; SnowplowBatchEncoder, the BatchEncoder of the tracker protocol: each request a payload_data batch of self-describing events whose schema is iglu:<vendor>/<name>/jsonschema/<version>-0-0, from the event's name and version; its eid the record's id; its dtm and ttm the record's time in epoch milliseconds; its sid its session's SessionKey, and no duid, uid, nuid or other identifier; its data the properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context as Snowplow's mobile_context and application entities, without device identifiers; ip 0.0.0.0; batches split to 25 events and 40,000 bytes a request; a record it can't encode, whose event name Iglu doesn't take, whose time Snowplow can't store, or too large, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-log/Logging"]),
     ("SegmentSpecEncoding", "Pipeline", "HTTPDestination.segment(writeKey:region:plan:), .rudderStack(writeKey:dataPlane:plan:) and .customerIO(apiKey:region:plan:): a destination for an endpoint of the Segment spec in one throwing call, which checks the key and fills in the /v1/batch endpoint of the workspace's region (SegmentRegion, CustomerIORegion) or data plane, the key's header field (Basic auth with the write key for Segment and RudderStack, a bearer public key and strict mode for Customer.io), the encoder and the spec's limits; SegmentSpecBatchEncoder, the BatchEncoder of the spec's batch call: each record as a track call whose anonymousId is its session's SessionKey, or the record's own id when it has no session, with no userId, identify or traits; its messageId the record's id; its timestamp in ISO 8601 with milliseconds; its properties read through its schema in a TrackingPlan, never a Sensitive value; the standard context in the spec's context fields, with ip 0.0.0.0; batches split to 2,500 calls and 500 KB a request; a record it can't encode, named as a Customer.io semantic event, or too large for a call, is left out as a SkippedRecord, not the batch.", ["Events", "HTTPDestinations", "JSONValues", "PropertyJSON", "TrackingPlans", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes", "swift-log/Logging"]),
     ("Trackers", "Pipeline", "Tracker: records each tracked event, with its timestamp, source location and context as Enrichers extend it, for a delivery to read; bound to a task with withTracker and read with Tracker.current; Consent, which holds, delivers or drops each event by its ConsentCategory's status; and Samplers, which keep a seeded fraction of events, or of the groups a context key makes, stamping each kept record with its SampleRateKey.", ["AsyncQueues", "Events", "Persistence", "afluent/Afluent", "swift-collections/DequeModule", "swift-distributed-tracing/Instrumentation", "swift-log/Logging", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees"]),
     # Imports no testing framework, but is a product of its own that an app adds to its test target alone.
@@ -238,14 +241,14 @@ EXAMPLE_MODULES = ["DiscoveryFixtures"]
 # Testing. EventMacros builds swift-syntax but stays in: `@Event` is how events are declared, so
 # `import Traffluent` alone must give it. PostHogEncoding is a vendor's wire format, which
 # `import Traffluent` leaves out so the umbrella stays vendor-neutral (N3); an app sending to
-# PostHog adds it by name. AmplitudeEncoding, MixpanelEncoding, SegmentSpecEncoding and
-# GoogleAnalyticsEncoding are left out for the same reason.
+# PostHog adds it by name. AmplitudeEncoding, MixpanelEncoding, SegmentSpecEncoding,
+# GoogleAnalyticsEncoding and SnowplowEncoding are left out for the same reason.
 # PropertyJSON is the toolkit a vendor's encoder is written with, which an app never imports, and
 # it pulls in TrackingPlans and swift-cbor. DestinationTesting imports Swift Testing. Every vendor
 # module (<Vendor>Encoding) stays out too, so `import Traffluent` names no vendor (N3, N4).
 # JSONValues is the JSON those encoders and plans write; left out, `import Traffluent` declares no
 # top-level `JSON` to clash with an app's own or another package's (SwiftyJSON's, GenericJSON's).
-NON_UMBRELLA_MODULES = ["GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "SegmentSpecEncoding", "GoogleAnalyticsEncoding", "PropertyJSON", "JSONValues", "DestinationTesting"]
+NON_UMBRELLA_MODULES = ["GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "SegmentSpecEncoding", "GoogleAnalyticsEncoding", "SnowplowEncoding", "PropertyJSON", "JSONValues", "DestinationTesting"]
 
 # Library modules that import Swift Testing, by name from MODULES: test helpers adopters add to
 # their test targets (a custom Trait, an assertion that records an Issue). Bazel finds Testing only
@@ -297,6 +300,8 @@ RESOURCES = {
     "SegmentSpecEncodingTests": [("copy", "Fixtures")],
     # The requests DestinationConformance compares GoogleAnalyticsBatchEncoder's with, byte for byte.
     "GoogleAnalyticsEncodingTests": [("copy", "Fixtures")],
+    # The requests DestinationConformance compares SnowplowBatchEncoder's with, byte for byte.
+    "SnowplowEncodingTests": [("copy", "Fixtures")],
 }
 
 # Compiler plugins holding macros: (name, group, description, dependencies), whose dependencies
@@ -325,8 +330,8 @@ MACROS = [
 # prove it by running it.
 PLUGINS = [
     ("ExportTrackingPlan", "export-tracking-plan",
-     "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files.",
-     "Writes the tracking plan's JSON Schema files into the package"),
+     "Builds and runs the package's TrackingPlanCommand executable, which writes its tracking plan's JSON Schema files, and with --iglu-vendor and --iglu-registry its events as an Iglu registry's schemas.",
+     "Writes the tracking plan's JSON Schema files, and an Iglu registry's schemas, into the package"),
     ("CheckTrackingPlan", "check-tracking-plan",
      "Builds and runs the package's TrackingPlanCommand executable, which fails when the events no longer match the committed tracking plan, or with --breaking-only only when they break it.",
      None),
@@ -339,7 +344,7 @@ EXECUTABLES = [
 ]
 
 # What the docs' examples tests link: the umbrella and the products it leaves out.
-EXAMPLES_TEST_DEPENDENCIES = [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "SegmentSpecEncoding", "GoogleAnalyticsEncoding", "PropertyJSON", "JSONValues", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]
+EXAMPLES_TEST_DEPENDENCIES = [PROJECT, "swift-cbor/CBOR", "GRDBPersistence", "TrackingPlans", "TrackingPlanTesting", "TrackerTesting", "PostHogEncoding", "AmplitudeEncoding", "MixpanelEncoding", "SegmentSpecEncoding", "GoogleAnalyticsEncoding", "SnowplowEncoding", "PropertyJSON", "JSONValues", "DestinationTesting", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-system/SystemPackage"]
 
 # Examples tests whose article builds a store or plan from every discovered event
 # (`SegmentStore()`, `TrackingPlan()`). A test binary is the program those discover events in, and
@@ -360,6 +365,7 @@ LIST_FREE_EXAMPLES_TESTS = [
     "READMEExamplesExitTests",
     "READMEExamplesTests",
     "SegmentSpecEncodingModuleExamplesTests",
+    "SnowplowEncodingModuleExamplesTests",
     "TrackingPlansModuleExamplesTests",
     "TrackingPlanWorkflowExamplesTests",
     "TraffluentExamplesTests",
@@ -404,6 +410,7 @@ TEST_TARGETS = [
     ("SegmentSpecEncodingTests", ["SegmentSpecEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("MixpanelEncodingTests", ["MixpanelEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("GoogleAnalyticsEncodingTests", ["GoogleAnalyticsEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),
+    ("SnowplowEncodingTests", ["SnowplowEncoding", "PropertyJSON", "JSONValues", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     (f"{PROJECT}Tests", EXAMPLES_TEST_DEPENDENCIES),
 ] + [(name, EXAMPLES_TEST_DEPENDENCIES) for name in LIST_FREE_EXAMPLES_TESTS]
 

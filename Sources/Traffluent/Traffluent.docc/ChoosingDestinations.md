@@ -108,6 +108,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | RudderStack | ``/SegmentSpecEncoding`` | `HTTPDestination.rudderStack(writeKey:dataPlane:plan:)` | The same track calls as Segment, at your data plane, with `request_ip` as `0.0.0.0` too |
 | Customer.io Data Pipelines | ``/SegmentSpecEncoding`` | `HTTPDestination.customerIO(apiKey:region:plan:)` | The same track calls as Segment, in strict mode |
 | Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time |
+| Snowplow | ``/SnowplowEncoding`` | `HTTPDestination.snowplow(collector:vendor:appID:plan:)` | Each record as a self-describing event whose schema, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, your plan's Iglu export writes: its session as `sid` and nothing else to identify it, its identifier as `eid`, its time in epoch milliseconds as `dtm` and `ttm`, its properties through your plan, and the standard context as Snowplow's `mobile_context` and `application` entities; no `duid`, `uid` or cookie, as every request carries `SP-Anonymous` |
 
 To write a destination for a vendor not in the table, see <doc:WritingAVendorDestination>.
 
@@ -464,6 +465,67 @@ for them, so check the property's Realtime event counts after setting the destin
 validation server, `/debug/mp/collect`, checks a body's shape but not the measurement ID or the
 API secret. A record retried for long after its batch was encoded can arrive past the 72 hours,
 and Google Analytics then stores it as if it happened 72 hours ago.
+
+### Snowplow
+
+To send to a Snowplow pipeline, make the destination with
+`HTTPDestination.snowplow(collector:vendor:appID:plan:)` (module ``/SnowplowEncoding``). It posts
+to the collector's `/com.snowplowanalytics.snowplow/tp2` endpoint, after the URL's path, sends no
+trace context in the header fields, and splits each batch into requests of at most 25 events and
+40,000 bytes, the limits of Snowplow's own mobile trackers, sending a larger event, of up to
+150,000 bytes, in a request of its own, as they do. A collector takes events from anyone,
+so there is no secret and the destination builds on every platform. The factory throws for a
+collector URL that isn't `https`, has no host, a user name, a query or a fragment, or already ends
+in the endpoint; for a vendor Iglu doesn't take; and for an empty app ID or one longer than 255
+UTF-16 code units.
+
+```swift
+let plan = try TrackingPlan()
+let snowplow = try HTTPDestination.snowplow(
+    collector: collector,  // https://collector.example.com
+    vendor: "com.example",  // the Iglu vendor the plan is exported under
+    appID: "shop-ios",
+    plan: plan)
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: snowplow)
+```
+
+Each record is a self-describing event: Snowplow validates its data against the schema its URI
+names, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, before loading it. Those schemas are your
+plan's, exported as an Iglu registry (<doc:TrackingPlanWorkflow#Exporting-an-Iglu-registry>) and
+published before the release that sends them. Version N of an event is SchemaVer `N-0-0`. For
+Iglu Server, a compatible change at the same version is written as `N-0-1` and on, each
+superseding the ones before; a static repository doesn't supersede, so for one the export refuses
+the change, as it refuses a breaking change for either: raise the event's version. An event whose name holds anything but ASCII letters, digits, `-` and `_` has no Iglu
+schema, so its records are left out, and the encoder logs a notice for each such event in the plan
+when the destination is made.
+
+The record's session (`Enricher.sessions()`) is its `sid`, and nothing else identifies it. No
+`duid`, `uid`, `nuid` or `tnuid` is sent, no `client_session` entity, whose `userId` lasts across
+sessions, and no IDFV, IDFA, vendor identifier or trace context. Left alone, the collector would
+set an `sp` cookie, which `URLSession` keeps and sends back, and record the request's IP address,
+so every request carries `SP-Anonymous: *`: the collector then sets and reads no cookie, records
+`network_userid` as all zeros, and records no address. A record with no session is sent without a
+`sid`. Snowplow's unified data model reads a mobile session from the `client_session` entity, so
+set its `snowplow__session_identifiers` to `[{"schema": "atomic", "field": "domain_sessionid"}]`
+for these events. Each event's `dtm` and `ttm` are the record's timestamp, so Snowplow's `derived_tstamp` is
+when the event was tracked; no `stm` is sent, as a retried request would carry the first attempt's
+and shift the event by the time spent retrying. The standard context goes in Snowplow's
+`mobile_context` and `application` entities, and the platform `p` is `mob`, `tv`, `pc`, or `app`
+when the record has no device. A `Sensitive` value is never sent, whatever the record reveals.
+
+The encoder leaves out the same records as the collector's encoder, and also one whose event Iglu
+can't name, whose version is below 1, whose timestamp is outside the years 0 to 9999, which
+Snowplow's enrichment fails, or whose JSON is over 150,000 bytes (`oversized`), within the
+smallest of a pipeline's streams, SQS's 192 kB. The destination reports each on `dropReports` as
+`HTTPDropReport.skipped(_:)`.
+
+The collector doesn't report what Snowplow later rejects. It answers 200 to every request it can
+read, and an event that fails validation, names a schema the pipeline's Iglu resolver can't find,
+or is larger than the pipeline's stream takes becomes a failed event, kept out of the warehouse,
+though the destination counted it as delivered. Watch the pipeline's failed events after a change
+to the plan. Snowplow doesn't remove duplicates as they arrive: a record sent again keeps its
+`eid`, so Snowplow's data models, which deduplicate on `event_id`, count it once.
 
 ### Memory
 

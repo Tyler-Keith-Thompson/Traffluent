@@ -5,6 +5,7 @@
 // verbatim, which `just examples-test` builds and runs.
 
 import EventMacros
+import Foundation
 import Testing
 import TrackingPlans
 
@@ -72,5 +73,64 @@ struct TrackingPlanWorkflowExamplesTests {
 
         #expect(paths.first == expectedPaths.first)
         #expect(expectedPaths.allSatisfy(paths.contains))
+    }
+
+    @Test("SignedUp exports to an Iglu registry as the file the article shows")
+    func signedUpIgluFile() throws {
+        let expected = """
+            {
+              "$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+              "additionalProperties": false,
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "x-traffluent-sensitive": true
+                },
+                "plan": {
+                  "type": "string"
+                },
+                "referrer": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "self": {
+                "format": "jsonschema",
+                "name": "signed_up",
+                "vendor": "com.example",
+                "version": "1-0-0"
+              },
+              "title": "signed_up",
+              "type": "object",
+              "x-traffluent-consent-category": "functional",
+              "x-traffluent-version": 1
+            }
+
+            """
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+
+        let file = try #require(try plan.igluFiles(vendor: "com.example", registry: .server, carryingForward: []).first)
+        let actual = String(decoding: file.contents, as: UTF8.self)
+
+        #expect(actual == expected)
+    }
+
+    @Test("Exporting an Iglu registry")
+    func exportingAnIgluRegistry() throws {
+        let registry = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: registry) }
+
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+        try plan.writeIgluRegistry(to: registry, vendor: "com.example", registry: .server)
+        // registry/schemas/com.example/signed_up/jsonschema/1-0-0
+
+        let expected = try #require(try plan.igluFiles(vendor: "com.example", registry: .server, carryingForward: []).first).contents
+        let actual = FileManager.default.contents(atPath: registry.appendingPathComponent("schemas/com.example/signed_up/jsonschema/1-0-0").path)
+        #expect(actual == Data(expected))
     }
 }

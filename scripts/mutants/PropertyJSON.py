@@ -11,6 +11,10 @@
 # Known equivalent mutants (left out, as they would survive by design):
 # - The byte-string, other-tag and undefined arms of `anyValue()`: no standard type's `Encodable`
 #   conformance writes them through the CBOR package, so no test can reach them.
+# - BatchLimit's `sendsLargeRecordsAlone ? ... : Swift.min(...)` always taking the min: the same
+#   as largealonenever's, which plants a limit that never sends alone. Its init's default of `false`
+#   can't be planted (a default argument isn't a statement or a switchable expression);
+#   largeRecordLeftOutByDefault pins it, and `unlimited` (largealonealways) the private init.
 #
 # Left out because a mutant switch can't hold them: the guards that bind the map's entries and
 # each key's name (`case .map(let entries)`, `case .textString(let name)`), whose bindings the
@@ -89,6 +93,8 @@ MUTANTS = [
     Mutant("limitallowszerocount", LIMIT, "maximumRecordCount >= 1", "maximumRecordCount >= 0"),
     Mutant("limitallowszerobytes", LIMIT, "maximumByteCount >= 1", "maximumByteCount >= 0"),
     Mutant("limitallowszerorecordbytes", LIMIT, "maximumRecordByteCount >= 1", "maximumRecordByteCount >= 0"),
+    Mutant("largealonenever", LIMIT, "self.sendsLargeRecordsAlone = sendsLargeRecordsAlone", "self.sendsLargeRecordsAlone = false", mode="stmt"),
+    Mutant("largealonealways", LIMIT, "self.sendsLargeRecordsAlone = sendsLargeRecordsAlone", "self.sendsLargeRecordsAlone = true", mode="stmt"),
     # Envelope.
     Mutant("envelopeunsorted", ENVELOPE, "$0.key.utf8.lexicographicallyPrecedes(arrayMember.utf8)", "true"),
     Mutant("envelopebytesprefixonly", ENVELOPE, "prefix.utf8.count + suffix.utf8.count", "prefix.utf8.count"),
@@ -102,6 +108,9 @@ MUTANTS = [
     Mutant("splitcountoffbyone", SPLIT, "elements.count < limit.maximumRecordCount", "elements.count <= limit.maximumRecordCount"),
     Mutant("splitbytesoffbyone", SPLIT, "recordByteCount < limit.maximumByteCount - byteCount", "recordByteCount <= limit.maximumByteCount - byteCount"),
     Mutant("splitnocomma", SPLIT, "elements.isEmpty ? recordByteCount : recordByteCount + 1", "recordByteCount"),
+    # A large record sent alone whatever the limit says; before splitignoresrecordlimit, whose text
+    # this holds too.
+    Mutant("splitignoresrequestlimit", SPLIT, "Swift.min(maximumRecordByteCount, maximumByteCount - envelope.byteCount)", "maximumRecordByteCount"),
     # Before splitignoresenvelope, whose text this holds.
     Mutant("splitignoresrecordlimit", SPLIT, "Swift.min(maximumRecordByteCount, maximumByteCount - envelope.byteCount)", "maximumByteCount - envelope.byteCount"),
     # The second copy is the original's, after splitignoresrecordlimit's.

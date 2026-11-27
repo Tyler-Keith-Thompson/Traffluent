@@ -31,6 +31,8 @@ K = "TrackingPlan+Check.swift"
 R = "TrackingPlanCheck.swift"
 X = "TrackingPlanDifference.swift"
 V = "TrackingPlan+EarlierVersion.swift"
+I = "TrackingPlan+Iglu.swift"
+N = "String+IgluNames.swift"
 
 MUTANTS = [
     # TrackingPlan: the rules, the order and the index.
@@ -119,8 +121,8 @@ MUTANTS = [
     Mutant("anythreechecks", C, 'arguments[0] == "check"', "true", nth=1),
     Mutant("anyflag", C, "arguments[1] == breakingOnlyFlag", "true"),
     Mutant("writeoption", C, "!arguments[0].isOption", "true"),
-    Mutant("checkoption", C, "!arguments[1].isOption", "true"),
-    Mutant("breakingonlyoption", C, "!arguments[2].isOption", "true"),
+    Mutant("checkoption", C, "!arguments[1].isOption", "true", nth=0),
+    Mutant("breakingonlyoption", C, "!arguments[2].isOption", "true", nth=0),
     Mutant("optiondoubledash", C, 'hasPrefix("-")', 'hasPrefix("--")'),
     Mutant("optionanydash", C, 'hasPrefix("-")', 'contains("-")'),
     Mutant("checkchecksfirst", C, "check($0, against: arguments[1])", "check($0, against: arguments[0])"),
@@ -300,4 +302,70 @@ MUTANTS = [
     Mutant("indexnameunread", K, 'entry["name"]?.string', "String?.none"),
     Mutant("indexversionunread", K, 'entry["version"]?.integer.flatMap { Int(exactly: $0) }', "Int?.none"),
     Mutant("newestislast", K, "max(newest[name] ?? version, version)", "version"),
+
+    # The Iglu registry. Left out as equivalent: igluFiles' `{ first, _ in first }`, as a registry
+    # read from disk never lists a path twice; the writer's `catch { ... .fileWriteUnknown }`, as
+    # Foundation's file errors are all CocoaError; igluRegistryFiles' vendor guard, which
+    # igluFiles' own repeats before any file is read, and its `.filter(\.isIgluName)`, as igluFiles
+    # throws invalidSchemaKey for any other name before a file is written; `committed[latestPath] ?? []`,
+    # as the path is one of the keys; and `addition < .max`, as no registry holds N-0-Int.max.
+    # And the empty name of isIgluName: TrackingPlan(schemas:) refuses an empty event name
+    # (emptynameallowed), so no plan holds one. Unplantable: the static and server arms of the
+    # registry switch and IgluRegistry(argument:)'s patterns are case patterns, and the guard of
+    # JSON(parsing:) and differences(fromCommitted:) a list of conditions; their throws and returns
+    # are planted below, and "A newest version that isn't a schema the plan wrote" pins the guard.
+    Mutant("anyvendor", I, "guard vendor.isIgluVendor else { throw .invalidVendor }", "", mode="stmt"),
+    Mutant("writeasserver", I, "igluFiles(vendor: vendor, registry: registry, carryingForward: igluRegistryFiles(in: directory, vendor: vendor))", "igluFiles(vendor: vendor, registry: .server, carryingForward: igluRegistryFiles(in: directory, vendor: vendor))"),
+    # After writeasserver's, the text holds two copies; the second is the original's.
+    Mutant("noregistryread", I, "igluRegistryFiles(in: directory, vendor: vendor)", "[TrackingPlan.File]()", nth=1),
+    Mutant("folderunchecked", I, "guard fileManager.fileExists(atPath: folderURL.path) else { continue }", "", mode="stmt"),
+    Mutant("unlistableskipped", I, "throw .fileSystem(CocoaError(error, path: folderURL.path, otherwise: .fileReadUnknown))", "return []", mode="stmt"),
+    Mutant("unreadableskipped", I, "throw .fileSystem(CocoaError(error, path: url.path, otherwise: .fileReadUnknown))", "continue", mode="stmt"),
+    Mutant("anyentry", I, "entry.isSchemaVer", "true"),
+    Mutant("schemaverparts", I, "parts.count == 3", "parts.count >= 2"),
+    Mutant("schemavernoncanonical", I, "String($0) == part", "true"),
+    Mutant("anyschemakey", I, "name.hasIgluSchemaKey(version: version)", "true"),
+    Mutant("folderlayout", I, '"schemas/\\(vendor)/\\(name)/jsonschema/"', '"schemas/\\(vendor)/\\(name)/"'),
+    Mutant("noncanonicaladdition", I, "String(addition) == digits", "true"),
+    Mutant("oldestaddition", I, "additions.max()", "additions.min()"),
+    Mutant("corruptwritten", I, "throw .fileSystem(CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: latestPath]))", "return try igluFile(vendor: vendor, addition: 0, keepingRemovedFrom: nil)", mode="stmt"),
+    Mutant("corruptcode", I, "CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: latestPath])", "CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: latestPath])"),
+    # After corruptcode's, the text holds two copies; the second is the original's.
+    Mutant("corruptpath", I, "[NSFilePathErrorKey: latestPath]", "[NSFilePathErrorKey: folder]", nth=1),
+    Mutant("unchangedrewritten", I, "differences.isEmpty", "false"),
+    Mutant("breakingwritten", I, "differences.contains(where: \\.isBreaking)", "false"),
+    Mutant("compatiblebreaking", I, "differences.contains(where: \\.isBreaking)", "!differences.isEmpty"),
+    # serverrefuses and staticsupersedes come before the mutants inside the server arm's call;
+    # staticsupersedes' replacement then holds a second copy of it, after the original.
+    Mutant("serverrefuses", I, "return try igluFile(vendor: vendor, addition: latest + 1, keepingRemovedFrom: latestDocument)", "throw IgluExportError.additionNeedsNewVersion(event: name, version: version)", mode="stmt"),
+    Mutant("staticsupersedes", I, "throw .additionNeedsNewVersion(event: name, version: version)", "return try igluFile(vendor: vendor, addition: latest + 1, keepingRemovedFrom: latestDocument)", mode="stmt"),
+    Mutant("nextkeepsnothing", I, "latestDocument", "JSON?.none", nth=2),
+    Mutant("nextsameaddition", I, "latest + 1", "latest", nth=0),
+    Mutant("staticasserver", I, "schema.igluFile(vendor: vendor, registry: registry, committed: committedFiles)", "schema.igluFile(vendor: vendor, registry: .server, committed: committedFiles)"),
+    Mutant("allofallowed", I, "throw .allOf(event: name, version: version)", "", mode="stmt"),
+    Mutant("allofanyname", I, 'members["properties"]?.object?.values.contains(where: { $0.object?["allOf"] != nil }) == true', 'members["properties"]?.object?.keys.contains("allOf") == true || members["properties"]?.object?.values.contains(where: { $0.object?["allOf"] != nil }) == true'),
+    Mutant("idkept", I, 'members["$id"] = nil', "", mode="stmt"),
+    Mutant("metaschema", I, '"http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#"', '"http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0"'),
+    Mutant("selfformat", I, '.string("jsonschema")', '.string("json")'),
+    Mutant("selfvendor", I, ".string(vendor)", ".string(name)"),
+    Mutant("nosupersedes", I, "addition > 0", "false"),
+    Mutant("supersedesfirst", I, "addition > 0", "addition >= 0"),
+    Mutant("supersedeslast", I, "0..<addition", "addition - 1..<addition"),
+    Mutant("writeeverything", I, "guard fileManager.contents(atPath: url.path) != contents else { continue }", "", mode="stmt"),
+    Mutant("nodirectories", I, "try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)", "", mode="stmt"),
+    Mutant("igludifferencesnone", K, "EventContract.differences(from: [committed], to: [EventContract(schema: self)])", "[TrackingPlanDifference]()"),
+    Mutant("vendoroption", C, "!arguments[1].isOption", "true", nth=1),
+    Mutant("directoryoption", C, "!arguments[3].isOption", "true"),
+    Mutant("staticasserverargument", C, "self = .staticRepository", "self = .server", mode="stmt"),
+    # After staticasserverargument's, the text holds a second copy, after the original.
+    Mutant("serverasstaticargument", C, "self = .server", "self = .staticRepository", nth=0, mode="stmt"),
+    Mutant("anykindargument", C, "return nil", "self = .server", mode="stmt"),
+    Mutant("anyiglu", C, 'arguments[0] == "iglu"', "true"),
+    Mutant("igluvendorargument", C, "writeIglu($0, vendor: arguments[1], registry: registry, to: arguments[3])", "writeIglu($0, vendor: arguments[2], registry: registry, to: arguments[3])"),
+    Mutant('igluvendorstatus', C, 'return TrackingPlanCommandResult(status: 64, standardError: "error: \\(vendor) is not an Iglu vendor: use reverse domain notation, labels of ASCII letters, digits, - and _ joined by . (com.acme)")', 'return TrackingPlanCommandResult(status: 65, standardError: "error: \\(vendor) is not an Iglu vendor: use reverse domain notation, labels of ASCII letters, digits, - and _ joined by . (com.acme)")', mode="stmt"),
+    Mutant('iglukeystatus', C, 'return TrackingPlanCommandResult(status: 65, standardError: "error: event \\(event), version \\(version), has no Iglu schema name: a name of ASCII letters, digits, - and _, and a version of 1 or more")', 'return TrackingPlanCommandResult(status: 73, standardError: "error: event \\(event), version \\(version), has no Iglu schema name: a name of ASCII letters, digits, - and _, and a version of 1 or more")', mode="stmt"),
+    Mutant('igluallofstatus', C, 'return TrackingPlanCommandResult(status: 65, standardError: "error: event \\(event), version \\(version), needs allOf, which Snowplow\'s validation doesn\'t support: constrain each property with one pattern")', 'return TrackingPlanCommandResult(status: 0, standardError: "error: event \\(event), version \\(version), needs allOf, which Snowplow\'s validation doesn\'t support: constrain each property with one pattern")', mode="stmt"),
+    Mutant('iglubreakingstatus', C, 'return TrackingPlanCommandResult(status: 65, standardError: "error: event \\(event), version \\(version), changed in a way its published schema\'s payloads may fail: raise the event\'s version")', 'return TrackingPlanCommandResult(status: 0, standardError: "error: event \\(event), version \\(version), changed in a way its published schema\'s payloads may fail: raise the event\'s version")', mode="stmt"),
+    Mutant('iglustaticstatus', C, 'return TrackingPlanCommandResult(status: 65, standardError: "error: event \\(event), version \\(version), changed, which a static repository can\'t publish at the same version: raise the event\'s version")', 'return TrackingPlanCommandResult(status: 0, standardError: "error: event \\(event), version \\(version), changed, which a static repository can\'t publish at the same version: raise the event\'s version")', mode="stmt"),
+    Mutant('iglufilestatus', C, 'return TrackingPlanCommandResult(status: 73, standardError: "error: couldn\'t read or write the Iglu registry in \\(directory): \\(cause.localizedDescription)")', 'return TrackingPlanCommandResult(status: 65, standardError: "error: couldn\'t read or write the Iglu registry in \\(directory): \\(cause.localizedDescription)")', mode="stmt"),
 ]

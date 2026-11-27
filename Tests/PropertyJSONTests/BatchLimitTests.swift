@@ -33,6 +33,7 @@ struct BatchLimitTests {
         #expect(actual.maximumRecordCount == expected)
         #expect(actual.maximumByteCount == expected)
         #expect(actual.maximumRecordByteCount == expected)
+        #expect(!actual.sendsLargeRecordsAlone)
     }
 
     @Test("An envelope's body is what JSON.minified writes for the object with the elements as its array, members sorted around it")

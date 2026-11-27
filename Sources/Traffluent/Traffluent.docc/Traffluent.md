@@ -119,7 +119,8 @@ struct CartView: View {
 
 `import Traffluent` imports every module except ``/TrackingPlans``, ``/PostHogEncoding``,
 ``/AmplitudeEncoding``, ``/MixpanelEncoding``, ``/SegmentSpecEncoding``,
-``/GoogleAnalyticsEncoding``, ``/PropertyJSON``, ``/JSONValues``, ``/GRDBPersistence`` and the
+``/GoogleAnalyticsEncoding``, ``/SnowplowEncoding``, ``/PropertyJSON``, ``/JSONValues``,
+``/GRDBPersistence`` and the
 testing modules, which are products of their own.
 
 ### Where to go next
@@ -196,6 +197,7 @@ testing modules, which are products of their own.
 - ``/MixpanelEncoding``
 - ``/SegmentSpecEncoding``
 - ``/GoogleAnalyticsEncoding``
+- ``/SnowplowEncoding``
 - ``/PropertyJSON``
 - ``/JSONValues``
 - ``/Persistence``

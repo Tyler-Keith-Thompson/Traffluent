@@ -145,6 +145,41 @@ struct BatchSplittingTests {
         #expect(actual.skippedRecords == expectedSkipped)
     }
 
+    @Test("A limit that sends large records alone sends one too large for a request in a request of its own, between the others, up to the limit for one record")
+    func largeRecordAlone() throws {
+        // In the array envelope a request is 2 bytes, plus its records' JSON, plus a comma between
+        // each two: 12 bytes hold two 1-letter records (9), and leave 10 for a record alone, under
+        // a 9-letter one's 11 bytes, which is sent alone; a 12-letter one, 14 bytes, is over 13.
+        let limit = try BatchLimit(maximumRecordCount: .max, maximumByteCount: 12, maximumRecordByteCount: 13, sendsLargeRecordsAlone: true)
+        let batch = [1, 1, 9, 1, 12].map { EventRecord(event: Sized(size: $0), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil) }
+        let expectedRequests = [[batch[0].id, batch[1].id], [batch[2].id], [batch[3].id]]
+        let expectedBodies = [#"["x","x"]"#, #"["xxxxxxxxx"]"#, #"["x"]"#]
+        let expectedSkipped = [SkippedRecord(recordID: batch[4].id, eventName: "sized", schemaVersion: 1, reason: Failure(reason: "14"))]
+
+        let actual = limit.requests(for: batch, in: .array) { record throws(Failure) in
+            .string(String(repeating: "x", count: (record.event as? Sized)?.size ?? 0))
+        } oversized: { Failure(reason: "\($0)") }
+
+        #expect(actual.requests.map(\.recordIDs) == expectedRequests)
+        #expect(actual.requests.map { String(decoding: $0.body.body, as: UTF8.self) } == expectedBodies)
+        #expect(actual.skippedRecords == expectedSkipped)
+    }
+
+    @Test("A limit that doesn't send large records alone, the default, leaves out a record too large for a request though under the limit for one record")
+    func largeRecordLeftOutByDefault() throws {
+        let limit = try BatchLimit(maximumRecordCount: .max, maximumByteCount: 12, maximumRecordByteCount: 13)
+        let record = EventRecord(event: Sized(size: 9), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
+        let expectedSkipped = [SkippedRecord(recordID: record.id, eventName: "sized", schemaVersion: 1, reason: Failure(reason: "11"))]
+
+        let actual = limit.requests(for: [record], in: .array) { record throws(Failure) in
+            .string(String(repeating: "x", count: (record.event as? Sized)?.size ?? 0))
+        } oversized: { Failure(reason: "\($0)") }
+
+        #expect(!limit.sendsLargeRecordsAlone)
+        #expect(actual.requests.isEmpty)
+        #expect(actual.skippedRecords == expectedSkipped)
+    }
+
     @Test("Every record is left out when the envelope alone is over the request's limit")
     func envelopeOverLimit() throws {
         let limit = try BatchLimit(maximumRecordCount: .max, maximumByteCount: 1, maximumRecordByteCount: .max)
@@ -171,12 +206,12 @@ struct BatchSplittingTests {
     func greedyModel() async {
         // Each value is a record: -1 throws, and any other is a string of value / 5 repeats of the
         // letter value % 5, so multi-byte and escaped letters meet every boundary.
-        await propertyCheck(count: 500, input: Gen.int(in: -1 ... 64).array(of: 0 ... 24), Gen.int(in: 1 ... 5), Gen.int(in: 1 ... 60), Gen.int(in: 1 ... 24)) { values, count, bytes, recordBytes in
-            try check(values: values, count: count, bytes: bytes, recordBytes: recordBytes)
+        await propertyCheck(count: 500, input: Gen.int(in: -1 ... 64).array(of: 0 ... 24), Gen.int(in: 1 ... 5), Gen.int(in: 1 ... 60), Gen.int(in: 1 ... 24), Gen.bool) { values, count, bytes, recordBytes, alone in
+            try check(values: values, count: count, bytes: bytes, recordBytes: recordBytes, alone: alone)
         }
 
-        func check(values: [Int], count: Int, bytes: Int, recordBytes: Int) throws {
-            let limit = try BatchLimit(maximumRecordCount: count, maximumByteCount: bytes, maximumRecordByteCount: recordBytes)
+        func check(values: [Int], count: Int, bytes: Int, recordBytes: Int, alone: Bool) throws {
+            let limit = try BatchLimit(maximumRecordCount: count, maximumByteCount: bytes, maximumRecordByteCount: recordBytes, sendsLargeRecordsAlone: alone)
             let envelope = JSONEnvelope(["k": .integer(1)], arrayMember: "a")
             let batch = values.map { value in
                 EventRecord(event: Sized(size: value < 0 ? -1 : value / 5, letter: max(value, 0) % 5), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
@@ -197,7 +232,9 @@ struct BatchSplittingTests {
                     expectedSkipped.append(index)
                     continue
                 }
-                if element(index).utf8.count > recordBytes || body([index]).utf8.count > bytes {
+                // A record too large for a request is left out, unless the limit sends it alone: then
+                // it can't share a request either way, as any request holding it is over the bytes.
+                if element(index).utf8.count > recordBytes || (!alone && body([index]).utf8.count > bytes) {
                     expectedSkipped.append(index)
                     continue
                 }

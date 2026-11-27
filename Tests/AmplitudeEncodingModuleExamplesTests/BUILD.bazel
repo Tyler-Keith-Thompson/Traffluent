@@ -29,6 +29,7 @@ swift_library(
         "//Sources/MixpanelEncoding",
         "//Sources/SegmentSpecEncoding",
         "//Sources/GoogleAnalyticsEncoding",
+        "//Sources/SnowplowEncoding",
         "//Sources/PropertyJSON",
         "//Sources/JSONValues",
         "//Sources/DestinationTesting",

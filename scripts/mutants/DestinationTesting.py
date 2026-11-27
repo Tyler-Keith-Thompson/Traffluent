@@ -11,6 +11,9 @@
 #
 # Known equivalent mutants (left out, as they would survive by design):
 # - The issue texts: tests pin that an issue is recorded, not its words.
+# - The oversized check's label always the record limit, whether or not a large record goes alone:
+#   every encoder whose limit doesn't send one alone has a record limit no larger than its
+#   request's, so the smaller of the two is the record limit.
 # - The trace check's record tracked in a span (`context: span.context`): the in-memory tracer
 #   records an injection whatever the context, so a record outside any span still fails a
 #   destination that asks the tracer to inject; the span makes its header fields hold a trace ID
@@ -29,7 +32,8 @@
 # request, and an empty script answering with no response. Either makes a check's destination
 # retry until the suite's time limit. ScriptedTransportTests pin both.
 
-TESTS = ["DestinationTestingTests", "PostHogEncodingTests"]
+# SnowplowEncodingTests holds the one limit that sends a large record alone.
+TESTS = ["DestinationTestingTests", "PostHogEncodingTests", "SnowplowEncodingTests"]
 
 T = "ScriptedTransport.swift"
 C = "DestinationConformance.swift"
@@ -50,6 +54,7 @@ MUTANTS = [
     Mutant("grantednotrequired", C, "!text.contains(ConformanceAnalyticsEvent.name)", "false"),
     # Oversized records.
     Mutant("oversizedunreportedpasses", C, "skippedIDs != [oversized.id]", "false"),
+    Mutant("oversizedignoresalone", C, "limit.sendsLargeRecordsAlone ? limit.maximumRecordByteCount : min(limit.maximumRecordByteCount, limit.maximumByteCount)", "min(limit.maximumRecordByteCount, limit.maximumByteCount)"),
     Mutant("oversizedsentpasses", C, "sent.requests.contains(where: { $0.body.count > labelByteCount })", "false"),
     Mutant("oversizedundersized", C, 'String(repeating: "x", count: labelByteCount)', 'String(repeating: "x", count: 1)'),
     Mutant("oversizedalwaysunchecked", C, "labelByteCount <= 64 << 20", "labelByteCount <= 0"),

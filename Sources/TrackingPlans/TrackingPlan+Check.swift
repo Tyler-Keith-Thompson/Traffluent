@@ -77,6 +77,18 @@ extension TrackingPlan {
     }
 }
 
+extension EventSchema {
+    /// How the event differs from `document`, a document of the same event a plan wrote before
+    /// (an Iglu schema of it included, which holds the same keywords), by what the two mean rather
+    /// than their bytes, as ``TrackingPlan/check(against:)`` compares an event; `nil` when
+    /// `document` isn't of the shape a plan writes.
+    func differences(fromCommitted document: JSON) -> [TrackingPlanDifference]? {
+        EventContract(document: document).map { committed in
+            EventContract.differences(from: [committed], to: [EventContract(schema: self)])
+        }
+    }
+}
+
 extension JSON {
     /// The documents an index lists, in its order, or `nil` when the value isn't an index.
     fileprivate var indexedDocuments: [IndexedDocument]? {

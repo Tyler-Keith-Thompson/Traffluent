@@ -9,6 +9,7 @@ import Instrumentation
 import MixpanelEncoding
 import PostHogEncoding
 import SegmentSpecEncoding
+import SnowplowEncoding
 import Testing
 import TrackingPlans
 import Traffluent
@@ -276,3 +277,30 @@ struct ChoosingDestinationsGoogleAnalyticsExamplesTests {
     }
 }
 #endif
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw.
+@Suite("Choosing destinations examples: Snowplow", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsSnowplowExamplesTests {
+    @Test("Snowplow")
+    func snowplow() async throws {
+        let collector = try #require(URL(string: "https://collector.example.com"))
+
+        let plan = try TrackingPlan()
+        let snowplow = try HTTPDestination.snowplow(
+            collector: collector,  // https://collector.example.com
+            vendor: "com.example",  // the Iglu vendor the plan is exported under
+            appID: "shop-ios",
+            plan: plan)
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: snowplow)
+
+        // Nothing is tracked, so nothing is sent and the example runs without a network.
+        await tracker.finish()
+        try await delivery.execute()
+        let expected = ["signed_up", SessionStarted.name, SessionEnded.name]
+        let actual = plan.schemas.map(\.name)
+
+        #expect(expected.allSatisfy(actual.contains))
+    }
+}

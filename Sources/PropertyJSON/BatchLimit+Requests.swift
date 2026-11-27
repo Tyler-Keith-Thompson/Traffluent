@@ -11,8 +11,9 @@ extension BatchLimit {
     /// Records keep the batch's order, across requests and within each. A request takes the next
     /// record while it holds fewer than ``maximumRecordCount`` records and the record's JSON fits
     /// in its ``maximumByteCount``; otherwise the record starts the next request. A record whose
-    /// JSON is over ``maximumRecordByteCount``, or too large for a request of it alone, is left
-    /// out with `oversized`'s reason.
+    /// JSON is over ``maximumRecordByteCount`` is left out with `oversized`'s reason, and so is one
+    /// too large for a request of it alone, unless ``sendsLargeRecordsAlone`` is set: such a record
+    /// is then a request of its own, the only one whose body is over ``maximumByteCount``.
     ///
     /// ```swift
     /// let requests = limit.requests(for: batch, in: envelope) { record throws(VendorError) in
@@ -39,10 +40,11 @@ extension BatchLimit {
     ) -> BatchRequests<Failure> {
         var skippedRecords: [SkippedRecord<Failure>] = []
         var builder = RequestBuilder(limit: self, envelope: envelope)
-        // What one record may hold: its own limit, and what a request of it alone leaves beside
-        // the envelope. Negative when the envelope alone is over the request's limit, so every
-        // record is too large.
-        let recordCapacity = Swift.min(maximumRecordByteCount, maximumByteCount - envelope.byteCount)
+        // What one record may hold: its own limit, and, unless a large record goes alone, what a
+        // request of it alone leaves beside the envelope. Negative when the envelope alone is over
+        // the request's limit, so every record is too large. A record sent alone needs nothing of
+        // the builder: it never fits beside another, so it is flushed before and after.
+        let recordCapacity = sendsLargeRecordsAlone ? maximumRecordByteCount : Swift.min(maximumRecordByteCount, maximumByteCount - envelope.byteCount)
         for record in batch {
             let text: String
             do {
@@ -81,8 +83,8 @@ private struct RequestBuilder {
         byteCount = envelope.byteCount
     }
 
-    /// Adds a record's JSON, `byteCount` bytes that fit in a request of it alone, to the request
-    /// being filled, or to a new one when that one is full.
+    /// Adds a record's JSON, `byteCount` bytes that fit in a request of it alone (or that the limit
+    /// sends alone), to the request being filled, or to a new one when that one is full.
     mutating func append(_ text: String, byteCount recordByteCount: Int, id: UUID) {
         // Written as a comparison with what is left, which can't overflow, where the sum could.
         let fits = elements.isEmpty || (elements.count < limit.maximumRecordCount && recordByteCount < limit.maximumByteCount - byteCount)

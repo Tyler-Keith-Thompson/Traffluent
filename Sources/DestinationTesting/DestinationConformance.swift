@@ -199,8 +199,9 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
 
     private func expectOversizedRecordSkipped(sourceLocation: Testing.SourceLocation) async throws {
         // The label alone fills the limit, so the record's JSON, with its name and quotes, is over
-        // it. Bounded, as the kit allocates the label.
-        let labelByteCount = min(limit.maximumRecordByteCount, limit.maximumByteCount)
+        // it: the record limit when a large record goes alone, and otherwise the smaller of it and
+        // the request's. Bounded, as the kit allocates the label.
+        let labelByteCount = limit.sendsLargeRecordsAlone ? limit.maximumRecordByteCount : min(limit.maximumRecordByteCount, limit.maximumByteCount)
         // No cap the kit can exceed: nothing to check, which ConformanceCheck documents.
         guard labelByteCount <= 64 << 20 else { return }
         let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])

@@ -47,6 +47,13 @@ let paths = plan.files.map(\.path)
 // ["tracking-plan.json", ..., "signed_up.v1.schema.json", "signed_up.v1.example.json"]
 ```
 
+The plan also writes the schemas of an Iglu registry, which a Snowplow pipeline validates events
+against (``TrackingPlan/igluFiles(vendor:registry:carryingForward:)``,
+``TrackingPlan/writeIgluRegistry(to:vendor:registry:)``). Version N of an event is SchemaVer
+`N-0-0`. For Iglu Server, a compatible change at the same version is the next addition, `N-0-1`
+and on, superseding the earlier ones; a static repository doesn't supersede, so there the export
+refuses it, and so it does a breaking change for either kind: raise the event's version.
+
 The guide [Exporting and Checking a Tracking Plan](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/trackingplanworkflow)
 covers the executable, the command plugins and the test.
 
@@ -64,6 +71,13 @@ covers the executable, the command plugins and the test.
 - ``TrackingPlan/files(carryingForward:)``
 - ``TrackingPlan/write(to:)``
 - ``TrackingPlanCommand``
+
+### Exporting an Iglu registry
+
+- ``TrackingPlan/igluFiles(vendor:registry:carryingForward:)``
+- ``TrackingPlan/writeIgluRegistry(to:vendor:registry:)``
+- ``IgluRegistry``
+- ``IgluExportError``
 
 ### Checking a plan
 
