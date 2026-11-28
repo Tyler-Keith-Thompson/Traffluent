@@ -68,8 +68,15 @@ is in an earlier format, so updating from one of those releases drops the record
 undelivered, each segment reported on `dropReports` as `.corruption`.
 
 The store makes the log durable against power loss too (`fsync`), once per batch. Call
-`store.synchronize()`, after `tracker.flush()`, as the app moves to the background or terminates. A
-recovered record's `ServiceContext` is not kept: the record comes back in the top-level context.
+`store.synchronize()`, after `tracker.flush()`, as the app moves to the background or terminates.
+
+A recovered record keeps one value of its `ServiceContext`: its session's `SessionKey`, written in
+the record's own bytes and deleted when the store deletes them (a `SegmentStore`: once the record's
+whole segment is delivered). So a vendor destination sends it under the identity it was first sent
+with, and, where the vendor deduplicates, the vendor can drop a second copy. A record
+tracked without a session comes back without one. The rest of the context isn't kept: the
+record otherwise comes back in the top-level context, with no screen, standard context, sample
+rate or trace.
 
 ### Changing an event's type
 

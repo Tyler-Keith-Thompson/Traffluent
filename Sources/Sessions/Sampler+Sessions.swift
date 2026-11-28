@@ -5,7 +5,7 @@ extension Sampler {
     /// A sampler that keeps or drops whole sessions, keeping each with probability `rate`: every
     /// record of a session gets the same decision.
     ///
-    /// It samples by each record's ``SessionKey``, so it needs the sessions enricher among the
+    /// It samples by each record's ``/Events/SessionKey``, so it needs the sessions enricher among the
     /// tracker's enrichers, which run before its samplers:
     ///
     /// ```swift
@@ -14,8 +14,9 @@ extension Sampler {
     ///
     /// A session's decision is made from the tracker's sampling seed and the session's identifier,
     /// and from nothing else, so its ``SessionStarted`` and ``SessionEnded`` go with it. Nothing
-    /// is kept to remember the decision but the current session's, in memory, and the identifier
-    /// is never written anywhere. A record with no session, such as one tracked without the
+    /// is kept to remember the decision but the current session's, in memory, and the sampler
+    /// never writes the identifier anywhere (a store keeps it beside each record, as
+    /// ``/Events/SessionKey`` says). A record with no session, such as one tracked without the
     /// sessions enricher, isn't sampled by it.
     ///
     /// - Parameters:

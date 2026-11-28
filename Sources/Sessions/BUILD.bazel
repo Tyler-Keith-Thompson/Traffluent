@@ -4,7 +4,7 @@ load("//tools:docc.bzl", "docc_archive")
 load("//tools:resources.bzl", "module_resources", "module_resources_data")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a version 7 UUID (its start time, then random bits) kept in memory only, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays; and Sampler.sessions(where:rate:), which keeps or drops whole sessions.
+# Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a version 7 UUID (its start time, then random bits) the enricher keeps in memory only and a store keeps only beside each of its records, deleted with the record's bytes, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays; and Sampler.sessions(where:rate:), which keeps or drops whole sessions.
 swift_library(
     name = "Sessions",
     # `Bundle.module`, as SwiftPM generates it, for the resources below.

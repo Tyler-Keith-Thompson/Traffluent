@@ -37,10 +37,10 @@ struct SegmentSpecIdentityTests {
         #expect(call["anonymousId"] as? String == expected)
     }
 
-    @Test("A recovered record, with no context, is sent with its own id as anonymousId and messageId")
-    func recoveredRecord() throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent with its own id as anonymousId and messageId")
+    func sessionlessRecord() throws {
         let sut = SegmentSpecBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
-        // As a store remakes a record after a relaunch: no context, marked redelivered.
+        // No session in its context, and marked redelivered, as a store can hand one over.
         let record = EventRecord(
             id: UUID(uuidString: "2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E")!,
             event: CheckoutStarted(cartSize: 1),

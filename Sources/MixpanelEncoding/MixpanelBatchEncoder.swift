@@ -34,12 +34,12 @@ public import TrackingPlans
 ///
 /// The session is the only identifier sent: there is no `$user_id`, and no other device
 /// identifier. Mixpanel counts a user per `distinct_id`, so its unique users are sessions. A
-/// record with no session (one tracked by a tracker without `Enricher.sessions()`, or one a store
-/// recovered after a relaunch, which keeps no context) is its own anonymous user, linked to
-/// nothing, rather than an event with no `distinct_id`, which Mixpanel would attribute to no user,
-/// or to a hash of the request's address. Mixpanel treats two events of the same `event`, `time`,
-/// `distinct_id` and `$insert_id` as one, so a recovered record that Mixpanel had already stored
-/// under its session, before the app ended, is stored again. The record's vendor identifier and
+/// record with no session (one tracked by a tracker without `Enricher.sessions()`) is its own
+/// anonymous user, linked to nothing, rather than an event with no `distinct_id`, which Mixpanel
+/// would attribute to no user, or to a hash of the request's address. Mixpanel treats two events
+/// of the same `event`, `time`, `distinct_id` and `$insert_id` as one. A record a store recovers
+/// after a relaunch keeps its session, so it goes out with the `distinct_id` and `$device_id` of
+/// its first send, and Mixpanel treats it as the copy it had already stored, if it had. The record's vendor identifier and
 /// trace context, and any other context value, aren't sent.
 ///
 /// Properties are read through the event's schema in `plan`, as `PropertyReader` reads them. A
@@ -209,8 +209,8 @@ public struct MixpanelBatchEncoder: BatchEncoder {
         for (key, value) in record.mixpanelContext {
             properties[key] = value
         }
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own anonymous user rather than being skipped, which would
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own anonymous user rather than being skipped, which would
         // let the delivery acknowledge it and the store delete it, or sent without a
         // `distinct_id`, which Mixpanel would attribute to no user, or to a hash of the request's
         // address.

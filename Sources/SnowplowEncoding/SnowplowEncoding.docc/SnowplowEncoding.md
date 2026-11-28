@@ -97,8 +97,9 @@ Properties are read through the event's schema in the `TrackingPlan` the encoder
 The record's session, from the sessions enricher, is its `sid`, Snowplow's `domain_sessionid`, and
 nothing else identifies it. No `duid`, `uid`, `nuid` or `tnuid` is sent, no `client_session`
 entity (its `userId` lasts across sessions), and no IDFV, IDFA or other device identifier. The
-record's vendor identifier and trace context aren't sent either. A record with no session, such as
-one a store recovered after a relaunch, is sent without a `sid`. Snowplow's mobile data models
+record's vendor identifier and trace context aren't sent either. A record with no session, from a
+tracker without the sessions enricher, is sent without a `sid`; a record a store recovered after a
+relaunch keeps its session and its `sid`. Snowplow's mobile data models
 read a session from the `client_session` entity, so set the unified package's
 `snowplow__session_identifiers` to `[{"schema": "atomic", "field": "domain_sessionid"}]` for these
 events.

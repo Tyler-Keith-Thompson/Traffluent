@@ -85,7 +85,9 @@ public import TrackingPlans
 ///
 /// The Measurement Protocol has no field that identifies an event, so Google Analytics counts each
 /// one it receives: a record sent again, by a retry after Google stored it, by a delivery that
-/// sends a cancelled batch again, or by a store's redelivery after a relaunch, is counted twice.
+/// sends a cancelled batch again, or by a store's redelivery after a relaunch, is counted twice. A
+/// record a store recovers keeps its session, so it is counted under the `client_id` and
+/// `session_id` of its first send.
 ///
 /// ``requests(for:)`` splits each client's records into requests within the encoder's limit,
 /// ``batchLimit`` by default, and makes none for a batch with no record it can write, so

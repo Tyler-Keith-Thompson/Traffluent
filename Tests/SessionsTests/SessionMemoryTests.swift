@@ -7,7 +7,7 @@ import SystemPackage
 import Testing
 import Trackers
 
-@Suite("Sessions: random and in memory only", .timeLimit(.minutes(1)))
+@Suite("Sessions: random, and on disk only beside their records", .timeLimit(.minutes(1)))
 struct SessionMemoryTests {
     struct Tapped: Event, Codable, Equatable {
         var number: Int
@@ -38,8 +38,8 @@ struct SessionMemoryTests {
         #expect(secondID.uuid.6 >> 4 == expectedVersion)
     }
 
-    @Test("Nothing about a session reaches the disk: a store's directory holds the same files as without sessions, none holding an identifier, and the user defaults hold none")
-    func nothingWritten() async throws {
+    @Test("A session reaches the disk only inside its records, once in each, and is gone once they are delivered: the store's files are the same as without sessions, and the user defaults hold none")
+    func writtenOnlyWithItsRecords() async throws {
         let clock = TestClock()
         let origin = Date(timeIntervalSinceReferenceDate: 1_000)
         let root = FileManager.default.temporaryDirectory.appending(path: "Sessions-\(UUID().uuidString)")
@@ -69,47 +69,63 @@ struct SessionMemoryTests {
         sessionStore.synchronize()
         controlStore.synchronize()
 
-        var ids: Set<UUID> = []
+        var records: [EventRecord] = []
         for await record in sut.records {
-            ids.insert(try #require(record.context[SessionKey.self]))
+            records.append(record)
         }
+        let sessions = try records.map { try #require($0.context[SessionKey.self]) }
         func names(in directory: URL) throws -> [String] {
             try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)).sorted()
         }
-        func contains(_ bytes: [UInt8], _ needle: [UInt8]) -> Bool {
-            guard bytes.count >= needle.count else { return false }
-            return (0 ... bytes.count - needle.count).contains { bytes[$0 ..< $0 + needle.count].elementsEqual(needle) }
+        func occurrences(of needle: [UInt8], in bytes: [UInt8]) -> Int {
+            guard bytes.count >= needle.count else { return 0 }
+            return (0 ... bytes.count - needle.count).count { bytes[$0 ..< $0 + needle.count].elementsEqual(needle) }
+        }
+        func stored() throws -> [[UInt8]] {
+            try names(in: withSessions).map { try Array(Data(contentsOf: withSessions.appending(path: $0))) }
         }
         let expectedNames = try names(in: without)
         let actualNames = try names(in: withSessions)
-        let defaults = UserDefaults.standard.dictionaryRepresentation().values.map { String(describing: $0) }
-        #expect(ids.count == 2)
-        #expect(actualNames == expectedNames)
-        for name in actualNames {
-            let bytes = try Array(Data(contentsOf: withSessions.appending(path: name)))
-            for id in ids {
-                #expect(!contains(bytes, Array(id.uuidString.utf8)))
-                #expect(!contains(bytes, Array(id.uuidString.lowercased().utf8)))
-                #expect(!contains(bytes, withUnsafeBytes(of: id.uuid) { Array($0) }))
+        let before = try stored()
+        for record in records {
+            if let tag = record.deliveryTag {
+                tag.acknowledger.acknowledge([tag.position])
             }
         }
-        for id in ids {
+        let after = try stored()
+        let defaults = UserDefaults.standard.dictionaryRepresentation().values.map { String(describing: $0) }
+        #expect(Set(sessions).count == 2)
+        #expect(actualNames == expectedNames)
+        for id in Set(sessions) {
+            let expectedCount = sessions.count { $0 == id }
+            let actualCount = before.reduce(0) { $0 + occurrences(of: Array(id.uuidString.utf8), in: $1) }
+            let lowercaseCount = before.reduce(0) { $0 + occurrences(of: Array(id.uuidString.lowercased().utf8), in: $1) }
+            let rawCount = before.reduce(0) { $0 + occurrences(of: withUnsafeBytes(of: id.uuid) { Array($0) }, in: $1) }
+            let afterCount = after.reduce(0) { $0 + occurrences(of: Array(id.uuidString.utf8), in: $1) }
+            #expect(actualCount == expectedCount)
+            #expect(lowercaseCount == 0)
+            #expect(rawCount == 0)
+            #expect(afterCount == 0)
             #expect(!defaults.contains { $0.localizedCaseInsensitiveContains(id.uuidString) })
         }
+        #expect(after.isEmpty)
     }
 
-    @Test("Records a store kept from an earlier run carry no session: they aren't enriched again")
-    func recoveredRecordsHaveNoSession() async throws {
+    @Test("Records a store kept from an earlier run carry the session they were tracked in, not the new tracker's: they aren't enriched again")
+    func recoveredRecordsKeepTheirSession() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "Sessions-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let path = FilePath(directory.path(percentEncoded: false))
         let events: [any (Event & Codable).Type] = [Tapped.self, SessionStarted.self, SessionEnded.self]
+        let earlierSession: UUID?
         do {
             let store = try SegmentStore(events: events, directory: path)
             let earlier = Tracker(store: store, enrichers: [.sessions()])
             earlier.track(Tapped(number: 1))
             await earlier.finish()
             store.synchronize()
+            var earlierRecords = earlier.records.makeAsyncIterator()
+            earlierSession = await earlierRecords.next()?.context[SessionKey.self]
         }
         let expected = ["SessionStarted()", "Tapped(number: 1)", "SessionStarted()", "Tapped(number: 2)"]
         let store = try SegmentStore(events: events, directory: path)
@@ -123,9 +139,12 @@ struct SessionMemoryTests {
             records.append(record)
         }
         let actual = records.map { String(describing: $0.event) }
+        let expectedEarlier = try #require(earlierSession)
         #expect(actual == expected)
-        #expect(records[0].context[SessionKey.self] == nil)
-        #expect(records[1].context[SessionKey.self] == nil)
+        #expect(records[0].context[SessionKey.self] == expectedEarlier)
+        #expect(records[1].context[SessionKey.self] == expectedEarlier)
         #expect(records[2].context[SessionKey.self] != nil)
+        #expect(records[2].context[SessionKey.self] != expectedEarlier)
+        #expect(records[3].context[SessionKey.self] == records[2].context[SessionKey.self])
     }
 }

@@ -1,7 +1,7 @@
 public import Events
 
 extension Enricher {
-    /// An enricher that puts every event in a session: it sets each record's ``SessionKey`` to its
+    /// An enricher that puts every event in a session: it sets each record's ``/Events/SessionKey`` to its
     /// session's identifier, and starts a new session when an event comes `timeout` or more after
     /// the one before it, tracking ``SessionEnded`` and ``SessionStarted`` before that event.
     ///

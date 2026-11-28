@@ -78,7 +78,14 @@ MUTANTS = [
     Mutant("eventreadfromname", N, "try registration.decode(.event, container)", "try registration.decode(.name, container)"),
     # The record's identifier, written and given back on recovery.
     Mutant("idnotwritten", N, "try container.encode(record.id, forKey: .id)", "", mode="stmt"),
-    Mutant("idnotrestored", N, "return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))", "return .record(EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location))", mode="stmt"),
+    Mutant("idnotrestored", N, "return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location, context: context))", "return .record(EventRecord(event: event, timestamp: timestamp, sourceLocation: location?.location, context: context))", mode="stmt"),
+    # The record's session, written beside it and given back on recovery (TRAF-122).
+    Mutant("sessionnotwritten", N, "try container.encodeIfPresent(record.context[SessionKey.self], forKey: .session)", "", mode="stmt"),
+    Mutant("sessionnotrestored", N, "return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location, context: context))", "_ = context\n            return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))", mode="stmt"),
+    Mutant("sessionfromid", N, "context[SessionKey.self] = try container.decode(UUID.self, forKey: .session)", "context[SessionKey.self] = try container.decode(UUID.self, forKey: .id)", mode="stmt"),
+    Mutant("malformedsessionignored", N, "context[SessionKey.self] = try container.decode(UUID.self, forKey: .session)", "context[SessionKey.self] = try? container.decode(UUID.self, forKey: .session)", mode="stmt"),
+    Mutant("nullsessionaccepted", N, "context[SessionKey.self] = try container.decode(UUID.self, forKey: .session)", "context[SessionKey.self] = try container.decodeIfPresent(UUID.self, forKey: .session)", mode="stmt"),
+    Mutant("sessionwrittenalways", N, "try container.encodeIfPresent(record.context[SessionKey.self], forKey: .session)", "try container.encode(record.context[SessionKey.self], forKey: .session)", mode="stmt"),
     Mutant("lengthnotwritten", F, "frame.storeBytes(of: length.littleEndian, toByteOffset: 0, as: UInt32.self)", "", mode="stmt"),
     Mutant("checksumnotwritten", F, "frame.storeBytes(of: checksum.littleEndian, toByteOffset: 4, as: UInt32.self)", "", mode="stmt"),
     Mutant("markoffbyone", F, "withUnsafeBytes(of: index.littleEndian) { frame.append(contentsOf: $0) }", "withUnsafeBytes(of: (index + 1).littleEndian) { frame.append(contentsOf: $0) }", mode="stmt"),

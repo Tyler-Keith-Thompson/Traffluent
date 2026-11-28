@@ -156,9 +156,9 @@ operating system, locale and network when the standard context enrichers set the
 sent as they are.
 
 PostHog rejects a whole batch with 400 when one of its events has no `distinct_id`, so every event
-gets one. A record with no session, from a tracker without `.sessions()` or recovered by a store
-after a relaunch (recovered records keep no context), is sent under its own record identifier: an
-anonymous person of one event, linked to nothing.
+gets one. A record with no session, from a tracker without `.sessions()`, is sent under its own
+record identifier: an anonymous person of one event, linked to nothing. A record a store recovers
+after a relaunch keeps its session, so it goes out under the `distinct_id` of its first send.
 
 PostHog records the address each request comes from as `$ip`, unless the project discards client IP
 data, and its GeoIP transformation adds a location even when it does. The encoder sends
@@ -188,9 +188,9 @@ The factory throws `AmplitudeSetupError` for an empty key and for an Amplitude E
 deployment key (`client-…` or `server-…`), which isn't the project's API key. The destination
 retries 429 and 5xx responses and drops a request Amplitude rejects, such as one answered with
 400 or 413. A record sent again in the same run keeps its `insert_id` and `device_id`, and
-Amplitude drops a repeat of both. A record a store recovers after a relaunch has no session, so it
-goes out under its own identifier as `device_id`; if Amplitude stored it before the app ended, it
-is stored twice.
+Amplitude drops a repeat of both. A record a store recovers after a relaunch keeps its session,
+so it goes out with the same `device_id` and `insert_id`, and Amplitude drops it if it stored it
+before the app ended.
 
 ```swift
 let plan = try TrackingPlan()
@@ -242,8 +242,8 @@ answered with 400, 401 or 413. A wrong region, or a token of no project, may be 
 and nothing stored, so check the project's Live View after setting the destination up. A record
 sent again in the same run keeps its `$insert_id` and `distinct_id`, and Mixpanel counts a repeat
 of an event's name, `time`, `distinct_id` and `$insert_id` once. A record a store recovers after a
-relaunch has no session, so it goes out under its own identifier as `distinct_id`; if Mixpanel
-stored it before the app ended, it is stored twice.
+relaunch keeps its session, so it goes out with the same `distinct_id` and `$insert_id`, and
+Mixpanel counts it once if it stored it before the app ended.
 
 ```swift
 let plan = try TrackingPlan()
@@ -267,9 +267,8 @@ from the request's address. The encoder fills in Mixpanel's default properties f
 version and build, device model, Wi-Fi and operating system when the standard context enrichers
 set them. Event names are sent as they are.
 
-A record with no session, from a tracker without `.sessions()` or recovered by a store, is sent
-under its own record identifier, with no `$device_id`: an anonymous user of one event, linked to
-nothing. Without a `distinct_id`, Mixpanel would attribute it to no user, or to a hash of the
+A record with no session, from a tracker without `.sessions()`, is sent under its own record
+identifier, with no `$device_id`: an anonymous user of one event, linked to nothing. Without a `distinct_id`, Mixpanel would attribute it to no user, or to a hash of the
 request's address.
 
 A `Sensitive` value is never sent, whatever the record reveals. The encoder leaves out the same
@@ -374,9 +373,10 @@ RudderStack fills in `sentAt`, `originalTimestamp` and `channel` from when it re
 
 Each endpoint counts a user per `anonymousId`, so each session is one user in its reports, and so
 is each record sent without a session; on a plan billed by monthly tracked users, each counts as
-one. A record with no session, from a tracker without `.sessions()` or recovered by a store after a
-relaunch, is sent under its own record identifier: an anonymous user of one call, linked to
-nothing, as the spec rejects a call with neither a `userId` nor an `anonymousId`. Segment
+one. A record with no session, from a tracker without `.sessions()`, is sent under its own record
+identifier: an anonymous user of one call, linked to nothing, as the spec rejects a call with
+neither a `userId` nor an `anonymousId`. A record a store recovers after a relaunch keeps its
+session, so it goes out with the `anonymousId` and `messageId` of its first send. Segment
 deduplicates calls by `messageId` and drops most duplicates within about 24 hours, not all, so a
 recovered record it stored before the app ended is most likely not stored again. RudderStack's and
 Customer.io's API references don't say whether they deduplicate, so such a record may be stored
@@ -573,8 +573,9 @@ the `sessionID` holds the same session in the clear, so the destination takes no
 account or trace context. TelemetryDeck counts users by `clientUser`, so its user counts are
 session counts, and its retention shows how long a session lasts. To count devices, put
 `VendorIdentifierKey` in the records' context and send them through a destination that reads it,
-or write your own enricher and encoder. A record with no session, such as one a store recovered,
-is its own user: its `clientUser` is the hash of its identifier, and it has no `sessionID`.
+or write your own enricher and encoder. A record with no session, from a tracker without
+`.sessions()`, is its own user: its `clientUser` is the hash of its identifier, and it has no
+`sessionID`. A record a store recovered keeps its session.
 
 Each signal's `type` is the event's name and its `receivedAt` the record's timestamp. Its
 properties sit beside them, each keeping its JSON type. An object or array is flattened into
@@ -635,8 +636,8 @@ dimensions with the Action scope, so each event keeps its own value.
 
 The record's session (`Enricher.sessions()`) is its visitor: `_id` is the session's last 64 bits,
 in 16 hexadecimal digits, and nothing else identifies it, no `uid`, `cid` or device identifier. So
-Matomo's visitors are sessions. A record with no session, such as one a store recovered, is its own
-visitor, by its identifier's last 64 bits. A session is one visit while the sessions enricher's
+Matomo's visitors are sessions. A record with no session, from a tracker without `.sessions()`, is
+its own visitor, by its identifier's last 64 bits; a record a store recovered keeps its session. A session is one visit while the sessions enricher's
 timeout is no longer than Matomo's visit length, 30 minutes by default. Matomo may still fold a session's first event into
 another visit from the same IP address and User-Agent within 30 minutes, an earlier session's or
 someone else's on the same network, unless `trust_visitors_cookies = 1` is set in its
@@ -699,12 +700,12 @@ The record's session (`Enricher.sessions()`) is its `identity`, as a lowercase U
 else identifies it: no `user_id`, `session_id`, vendor identifier, device identifier, account or
 trace context. Heap makes a user of each identity it hasn't seen and keeps it, so its users are
 sessions, and its user counts and retention describe sessions, not people. A record with no
-session, such as one a store recovered, is its own user, by its identifier.
+session, from a tracker without `.sessions()`, is its own user, by its identifier; a record a
+store recovered keeps its session.
 
 Each event's `event` is the event's name, its `timestamp` the record's, and its
 `idempotency_key` the record's identifier, so Heap stores a record sent twice under the same
-identity once. A record a store recovered keeps no context and goes under its own identifier, so
-Heap may store it twice. Its properties
+identity once, a record a store recovered after a relaunch included. Its properties
 are flattened into dotted names (`cart.size`, `tags.0`), as Heap takes only numbers and strings: a
 boolean is the string `true` or `false`, and `nil` is left out. The standard context isn't sent,
 as Heap keeps no built-in property of a server-side event, and app and device fields among the
@@ -760,8 +761,8 @@ salt it changes every day, so a user is one address and client on one day, and n
 app sends changes that. It also looks up each request's IP address and stores its country and
 region with every event in the request. The record's session (`Enricher.sessions()`) is its `sessionId`, as a
 lowercase UUID, and nothing else identifies it: no vendor identifier, device identifier, account
-or trace context. A record with no session, such as one a store recovered, is a session of its
-own, by its identifier.
+or trace context. A record with no session, from a tracker without `.sessions()`, is a session of
+its own, by its identifier; a record a store recovered keeps its session.
 
 Each event's `eventName` is the event's name and its `timestamp` the record's. Its `props` are its
 properties, flattened into dotted names (`cart.size`, `tags.0`), as Aptabase keeps only a

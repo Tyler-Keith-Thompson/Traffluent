@@ -43,8 +43,8 @@ public import TrackingPlans
 ///
 /// The session is the only identifier sent. Matomo counts a visitor per `_id`, so its visitors are
 /// sessions, each a new visitor of one visit. A record with no session (one tracked by a tracker
-/// without `Enricher.sessions()`, or one a store recovered after a relaunch, which keeps no
-/// context) is its own visitor, linked to nothing. No `uid`, `cid`, `token_auth`, `cip` or device
+/// without `Enricher.sessions()`) is its own visitor, linked to nothing. A record a store recovers
+/// after a relaunch keeps its session, so it goes out under the `_id` of its first send. No `uid`, `cid`, `token_auth`, `cip` or device
 /// identifier is sent, and nothing of the record's context but its locale, nor its trace context.
 ///
 /// A property reaches Matomo only as the custom dimension `dimensions` maps it to, read through
@@ -251,8 +251,8 @@ public struct MatomoBatchEncoder: BatchEncoder {
         guard offset >= -Self.windowSeconds, offset <= Self.windowSeconds else {
             throw .timestampOutsideWindow
         }
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own visitor rather than being skipped, which would let the
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own visitor rather than being skipped, which would let the
         // delivery acknowledge it and the store delete it.
         var parameters: [(name: String, value: String)] = [
             ("idsite", siteID),

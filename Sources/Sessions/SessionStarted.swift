@@ -2,7 +2,7 @@ public import Events
 internal import LinkerSets
 
 /// A session started: what `Enricher.sessions(timeout:kinds:)` tracks before the first event of
-/// each session, stamped with that event's time and carrying the new session's ``SessionKey``.
+/// each session, stamped with that event's time and carrying the new session's ``/Events/SessionKey``.
 ///
 /// It is `Codable`, so a store keeps it once its `events` list `SessionStarted.self`, and
 /// its schema goes in a tracking plan beside the app's own events. It has no properties.

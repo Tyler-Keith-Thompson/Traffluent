@@ -63,8 +63,8 @@ privacy. To count
 devices or accounts instead, write your own enricher and encoder that send the identifier you
 choose; this encoder sends the session alone.
 
-A record with no session, such as one a store recovered after a relaunch, is its own user: its
-identity is the record's identifier. Making up a session would join unrelated records, skipping
+A record with no session, from a tracker without the sessions enricher, is its own user: its
+identity is the record's identifier. A record a store recovered after a relaunch keeps its session. Making up a session would join unrelated records, skipping
 the record would lose it, and Heap takes no event without an identity.
 
 ### What Heap receives
@@ -75,8 +75,8 @@ one track event per record. Every event has:
 - `event`, the event's name;
 - `identity`, the session;
 - `idempotency_key`, the record's identifier, so Heap stores a record sent twice under the same
-  identity once. A record a store recovers after a relaunch keeps no context, so it goes under
-  its own identifier rather than its session, and Heap may store it twice;
+  identity once. A record a store recovers after a relaunch keeps its session, so it goes under
+  the identity of its first send, and Heap stores it once;
 - `timestamp`, the record's timestamp in ISO 8601 with milliseconds, so an event sent late still
   counts at the time it was tracked;
 - `properties`, when the event has any to send.

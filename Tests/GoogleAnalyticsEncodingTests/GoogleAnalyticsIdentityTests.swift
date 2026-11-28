@@ -59,10 +59,10 @@ struct GoogleAnalyticsIdentityTests {
         #expect(request["client_id"] as? String == expected)
     }
 
-    @Test("A recovered record, with no context, is sent with its own id as client_id, no session_id, and in a request of its own")
-    func recoveredRecord() throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent with its own id as client_id, no session_id, and in a request of its own")
+    func sessionlessRecord() throws {
         let sut = GoogleAnalyticsBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_700) })
-        // As a store remakes records after a relaunch: no context, marked redelivered.
+        // No session in their context, and marked redelivered, as a store can hand them over.
         let batch = [
             EventRecord(id: UUID(uuidString: "2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E")!, event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil, isRedelivered: true),
             EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: CheckoutStarted(cartSize: 2), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil, isRedelivered: true),

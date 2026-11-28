@@ -3,7 +3,7 @@
 load("//tools:docc.bzl", "docc_archive")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; each record a CBOR map, its event written through its Codable conformance.
+# RecordStore: where a tracker keeps each record until it is delivered; SegmentStore, the default, a size-bounded log of append-only segment files that reports every drop; each record a CBOR map, its event written through its Codable conformance, with its session's SessionKey, the only part of its context kept.
 swift_library(
     name = "Persistence",
     srcs = glob(["**/*.swift"]),
@@ -13,6 +13,7 @@ swift_library(
         "//Sources/Events",
         "//Sources/Checksums",
         "@swiftpkg_swift_cbor//:CBOR",
+        "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_system//:SystemPackage",
         "@swiftpkg_swift_log//:Logging",
     ],

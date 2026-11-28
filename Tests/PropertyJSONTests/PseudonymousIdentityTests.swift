@@ -1,6 +1,7 @@
 import EventMacros
 import Foundation
 import Instrumentation
+import Persistence
 import PropertyBased
 import PropertyJSON
 import Sessions
@@ -26,7 +27,7 @@ struct PseudonymousIdentityTests {
         #expect(actual.uuid == session)
     }
 
-    @Test("A record with no session, as a store recovers one, is identified by its own identifier")
+    @Test("A record with no session, from a tracker without the sessions enricher, is identified by its own identifier")
     func noSession() throws {
         let id = UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!
         let sut = EventRecord(id: id, event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, isRedelivered: true)
@@ -36,6 +37,23 @@ struct PseudonymousIdentityTests {
 
         #expect(actual == expected)
         #expect(actual.uuid == id)
+    }
+
+    @Test("A record a store recovers after a relaunch has the identity, and the deduplication ID, it had when it was stored")
+    func recoveredIdentity() throws {
+        let directory = NSTemporaryDirectory() + "PseudonymousIdentityTests-\(UUID().uuidString)"
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let session = UUID(uuidString: "019A2B3C-4D5E-7F60-8172-839405A6B7C8")!
+        var context = ServiceContext.topLevel
+        context[SessionKey.self] = session
+        let stored = EventRecord(event: Opened(), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)
+        _ = try SegmentStore(events: [Opened.self], directory: .init(directory)).append(stored)
+        let expected = PseudonymousIdentity.session(session)
+
+        let sut = try #require(try SegmentStore(events: [Opened.self], directory: .init(directory)).takeRecoveredRecords().first)
+
+        #expect(sut.pseudonymousIdentity == expected)
+        #expect(sut.deduplicationID == stored.deduplicationID)
     }
 
     @Test("The deduplication ID is the record's identifier in lowercase, which a redelivered record keeps")

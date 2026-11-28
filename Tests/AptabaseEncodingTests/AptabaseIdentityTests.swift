@@ -98,11 +98,11 @@ struct AptabaseIdentityTests {
         #expect(!text.contains("com.example.shop"))
     }
 
-    @Test("A recovered record, with no context, is sent as a session of its own, its id as sessionId, with only isDebug and sdkVersion as systemProps")
-    func recoveredRecord() throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent as a session of its own, its id as sessionId, with only isDebug and sdkVersion as systemProps")
+    func sessionlessRecord() throws {
         let tracked = Date(timeIntervalSince1970: 1_795_442_607)
         let sut = AptabaseBatchEncoder(isDebug: false, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { tracked })
-        // As a store remakes a record after a relaunch: no context, marked redelivered.
+        // No session in its context, and marked redelivered, as a store can hand one over.
         let record = EventRecord(
             id: UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!,
             event: CheckoutStarted(cartSize: 1),

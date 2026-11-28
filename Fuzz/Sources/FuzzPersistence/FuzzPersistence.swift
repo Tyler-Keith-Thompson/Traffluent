@@ -14,7 +14,9 @@
 // decode, and so must one without a version, read by name like one at its type's version; one
 // missing a required key,
 // holding a value of another type, an unknown event type, bytes past its map or a version other
-// than its type's must not.
+// than its type's must not. A record's session, a UUID string under `session`, comes back as its
+// context's SessionKey, and one without it comes back sessionless (TRAF-122); a session that
+// isn't a UUID string, null included, makes the record undecodable.
 
 import AsyncQueues
 import Checksums
@@ -81,6 +83,12 @@ enum FuzzPersistence {
     /// timestamp, event name, version (left out when `nil`, a record with no version to compare),
     /// call site and event, with `extra` entries after them.
     static func recordPayload(id: UUID, name: String, version: Int? = 1, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
+        recordPayload(id: id, name: name, version: version, session: nil, event: event, extra: extra)
+    }
+
+    /// The payload of a record whose session, when there is one, is `session`'s bytes under
+    /// `session`, before its event.
+    static func recordPayload(id: UUID, name: String, version: Int?, session: [UInt8]?, event: [UInt8], extra: [(key: String, value: [UInt8])]) -> [UInt8] {
         let location = map([("fileID", text("App/File.swift")), ("function", text("f()")), ("line", integer(1)), ("column", integer(1))])
         var entries: [(key: String, value: [UInt8])] = [
             ("id", text(id.uuidString)),
@@ -91,7 +99,11 @@ enum FuzzPersistence {
         if let version {
             entries.append(("version", integer(version)))
         }
-        entries += [("sourceLocation", location), ("event", event)]
+        entries.append(("sourceLocation", location))
+        if let session {
+            entries.append(("session", session))
+        }
+        entries.append(("event", event))
         return [0] + map(entries + extra)
     }
 
@@ -104,10 +116,11 @@ enum FuzzPersistence {
         return map(entries)
     }
 
-    /// A record frame the fuzzer built: the record's identifier and event.
+    /// A record frame the fuzzer built: the record's identifier, event and session.
     struct Built: Hashable {
         var id: UUID
         var event: Tapped
+        var session: UUID?
     }
 
     /// What the model reads from a segment's bytes.
@@ -178,17 +191,26 @@ enum FuzzPersistence {
                     let extra: [(key: String, value: [UInt8])] = input.int(below: 2) == 0 ? [("context", map([("k", text("v"))]))] : []
                     // Version 1, written or left out.
                     let version: Int? = input.int(below: 3) == 0 ? nil : 1
-                    let payload = recordPayload(id: id, name: "Tapped", version: version, event: eventBytes, extra: extra)
-                    built[Array(payload.dropFirst())] = Built(id: id, event: event)
+                    // A session from a few values, in uppercase as Foundation writes it or in
+                    // lowercase, which reads back as the same UUID; or none, as a record tracked
+                    // without one, or written before stores kept sessions, has.
+                    let session: UUID? = input.int(below: 3) == 0 ? nil : UUID(uuid: (0x01, 0x9A, 0, 0, 0, 0, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, UInt8(input.int(below: 3))))
+                    let sessionText = session.map { input.int(below: 4) == 0 ? $0.uuidString.lowercased() : $0.uuidString }
+                    let payload = recordPayload(id: id, name: "Tapped", version: version, session: sessionText.map(text), event: eventBytes, extra: extra)
+                    built[Array(payload.dropFirst())] = Built(id: id, event: event, session: session)
                     bytes += frame(payload)
                     records += 1
                 case 3:
                     // A record the store can't decode: an unlisted type, bytes past its map, an
-                    // event missing a required property, one whose property has another type, or
-                    // a readable event stored at another version than Tapped's, 1.
+                    // event missing a required property, one whose property has another type, a
+                    // readable event stored at another version than Tapped's, 1, or one whose
+                    // session isn't a UUID string.
                     let id = UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
                     let payload: [UInt8]
-                    switch input.int(below: 5) {
+                    switch input.int(below: 6) {
+                    case 5:
+                        let session = [integer(7), text("not-a-uuid"), map([]), [0xF6]][input.int(below: 4)]
+                        payload = recordPayload(id: id, name: "Tapped", version: 1, session: session, event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false), extra: [])
                     case 0: payload = recordPayload(id: id, name: "Other", event: map([]))
                     case 1: payload = recordPayload(id: id, name: "Tapped", event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false)) + [0x00]
                     case 2: payload = recordPayload(id: id, name: "Tapped", event: map([("number", integer(1))]))
@@ -247,6 +269,9 @@ enum FuzzPersistence {
             check(record.event as? Tapped == expectation.record.event, "recovered \(record.event), model \(expectation.record.event)")
             check(record.id == expectation.record.id, "recovered identifier \(record.id), model \(expectation.record.id)")
             check(record.isRedelivered == expectation.isRedelivered, "redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
+            check(record.context[SessionKey.self] == expectation.record.session, "recovered session \(String(describing: record.context[SessionKey.self])), model \(String(describing: expectation.record.session))")
+            // The session is the only part of the context a store keeps.
+            check(record.context.count == (expectation.record.session == nil ? 0 : 1), "recovered a context of \(record.context.count) values")
         }
         // Dropped records beside ones to deliver: the segment is rewritten without them.
         let isRewritten = !expected.isEmpty && expected.count < model.records.count
@@ -266,6 +291,7 @@ enum FuzzPersistence {
                 let match = readBack.first { $0.deliveryTag?.position == record.deliveryTag?.position }
                 check(match?.event as? Tapped == record.event as? Tapped, "read back \(String(describing: match?.event)), recovered \(record.event)")
                 check(match?.id == record.id, "read back identifier \(String(describing: match?.id)), recovered \(record.id)")
+                check(match?.context[SessionKey.self] == record.context[SessionKey.self], "read back session \(String(describing: match?.context[SessionKey.self])), recovered \(String(describing: record.context[SessionKey.self]))")
             }
         }
 
@@ -289,7 +315,7 @@ enum FuzzPersistence {
         // The next launch finds what this one left: the same records, numbered in order, and no
         // drop to report.
         let reports: AsyncQueue<DropReport>
-        var again: [(event: Tapped?, id: UUID, isRedelivered: Bool, index: UInt32)] = []
+        var again: [(event: Tapped?, id: UUID, isRedelivered: Bool, index: UInt32, session: UUID?)] = []
         do {
             let next: SegmentStore
             do {
@@ -300,7 +326,7 @@ enum FuzzPersistence {
             }
             reports = next.dropReports
             again = next.takeRecoveredRecords().map { record in
-                (record.event as? Tapped, record.id, record.isRedelivered, UInt32(truncatingIfNeeded: record.deliveryTag?.position ?? .max))
+                (record.event as? Tapped, record.id, record.isRedelivered, UInt32(truncatingIfNeeded: record.deliveryTag?.position ?? .max), record.context[SessionKey.self])
             }
         }
         check(again.count == expected.count, "the second recovery found \(again.count) records, model \(expected.count)")
@@ -309,6 +335,7 @@ enum FuzzPersistence {
             check(record.id == expectation.record.id, "the second recovery's identifier \(record.id), model \(expectation.record.id)")
             check(record.isRedelivered == expectation.isRedelivered, "the second recovery's redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
             check(record.index == UInt32(offset), "the second recovery's position \(record.index), model \(offset)")
+            check(record.session == expectation.record.session, "the second recovery's session \(String(describing: record.session)), model \(String(describing: expectation.record.session))")
         }
         check(FileManager.default.contents(atPath: path) == contents, "the second recovery changed the segment")
         let actualReports = allReports(reports)

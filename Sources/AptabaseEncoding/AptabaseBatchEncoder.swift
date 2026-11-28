@@ -41,9 +41,9 @@ public import TrackingPlans
 /// holding one. The encoder logs a notice the first time it leaves out each member.
 ///
 /// The session is the only identifier sent: Aptabase has no member for a user or a device. A
-/// record with no session (one tracked by a tracker without `Enricher.sessions()`, or one a store
-/// recovered after a relaunch, which keeps no context) is a session of its own: Aptabase takes no
-/// event without a session. The record's vendor identifier, trace context and other context
+/// record with no session (one tracked by a tracker without `Enricher.sessions()`) is a session of
+/// its own: Aptabase takes no event without a session. A record a store recovers after a relaunch
+/// keeps its session, so it goes out in the session of its first send. The record's vendor identifier, trace context and other context
 /// values aren't sent. Aptabase counts users itself, from a hash of each request's IP address and
 /// `User-Agent` header field with a salt it changes every day.
 ///
@@ -299,8 +299,8 @@ public struct AptabaseBatchEncoder: BatchEncoder {
         var systemProperties = system.mapValues(JSON.string)
         systemProperties["isDebug"] = .boolean(isDebug)
         systemProperties["sdkVersion"] = .string(Self.sdkVersion)
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own session rather than being skipped, which would let
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own session rather than being skipped, which would let
         // the delivery acknowledge it and the store delete it, or sent without a sessionId, which
         // Aptabase refuses with the whole request. Its lowercase UUID, 36 characters, the most
         // Aptabase takes of a session ID that isn't a number. Rejected: the SDKs' numeric form

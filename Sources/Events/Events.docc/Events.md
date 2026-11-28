@@ -79,6 +79,7 @@ The umbrella guide on this area is
 - ``EventRecord``
 - ``SourceLocation``
 - ``Enricher``
+- ``SessionKey``
 
 ### Stores
 

@@ -107,10 +107,10 @@ struct TelemetryDeckIdentityTests {
         #expect(!text.contains("0af7651916cd43dd8448eb211c80319c"))
     }
 
-    @Test("A recovered record, with no context, is sent as its own user, its id hashed as clientUser, with no sessionID")
-    func recoveredRecord() throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent as its own user, its id hashed as clientUser, with no sessionID")
+    func sessionlessRecord() throws {
         let sut = try TelemetryDeckBatchEncoder(appID: "B97579B6-FFB8-4AC5-AAA7-DA5796CC5DCE", testMode: false, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
-        // As a store remakes a record after a relaunch: no context, marked redelivered.
+        // No session in its context, and marked redelivered, as a store can hand one over.
         let record = EventRecord(
             id: UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!,
             event: CheckoutStarted(cartSize: 1),

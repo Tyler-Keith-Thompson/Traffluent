@@ -27,11 +27,12 @@ What Aptabase does with these events depends on more than the events themselves:
   seeing the address a request comes from.
 - Aptabase looks up each request's IP address and stores its country and region with every event
   in the request, so its dashboard breaks counts down by where the requests came from.
-- Its sessions are the sessions enricher's. A record with no session, such as one a store
-  recovered after a relaunch, counts as a session of one event.
+- Its sessions are the sessions enricher's. A record with no session, from a tracker without the
+  enricher, counts as a session of one event. A record a store recovered after a relaunch keeps
+  its session.
 - Its breakdowns by operating system, app version, build, device model and locale come from the
   standard context. Give the tracker the standard context enrichers, or those breakdowns are
-  empty. A recovered record keeps no context, so it shows none of them.
+  empty. A recovered record keeps only the session of its context, so it shows none of them.
 - `isDebug` decides where events go. Aptabase shows events marked as debug events only in its
   Debug mode, apart from your users' events, and keeps them for months rather than years.
 - Aptabase requires an `sdkVersion` with every event, and keeps it, but its events dashboard

@@ -52,11 +52,11 @@ of the address it reads from an HTTP request, so it may still record the request
 
 Each endpoint counts a user per `anonymousId`, so each session is one user in its reports, and so
 is each record sent without a session. On a plan billed by monthly tracked users, each counts as
-one. A record a store recovers after a relaunch has no session, so it goes out under its own
-identifier. Segment deduplicates calls by `messageId`, which the record keeps, and drops most
-duplicates within about 24 hours, not all, so one it stored before the app ended is most likely
-not stored again. RudderStack's and Customer.io's API references don't say whether they
-deduplicate, so such a record may be stored twice there.
+one. A record a store recovers after a relaunch keeps its session, so it goes out under the
+`anonymousId` and `messageId` of its first send. Segment deduplicates calls by `messageId` and
+drops most duplicates within about 24 hours, not all, so one it stored before the app ended is
+most likely not stored again. RudderStack's and Customer.io's API references don't say whether
+they deduplicate, so such a record may be stored twice there.
 
 Properties are read through the event's schema in the `TrackingPlan` the encoder is made with. A
 `Sensitive` value is never sent, whatever the record reveals. A record the encoder can't write is

@@ -40,12 +40,13 @@ public import TrackingPlans
 /// The session is the only identifier sent: there is no `userId`, no `identify` call, no traits,
 /// and no `context.device.id` or `advertisingId`. An endpoint counts a user per `anonymousId`, so
 /// its anonymous users are sessions. A record with no session (one tracked by a tracker without
-/// `Enricher.sessions()`, or one a store recovered after a relaunch, which keeps no context) is its
-/// own anonymous user, linked to nothing: the spec rejects a call with neither a `userId` nor an
-/// `anonymousId`. Segment deduplicates calls by `messageId` over about the last 24 hours, and
-/// drops most duplicates rather than all, so a recovered record Segment had already stored before
-/// the app ended is most likely not stored again, whatever its `anonymousId`. RudderStack's and
-/// Customer.io's references don't say whether they deduplicate. The record's vendor identifier
+/// `Enricher.sessions()`) is its own anonymous user, linked to nothing: the spec rejects a call
+/// with neither a `userId` nor an `anonymousId`. A record a store recovers after a relaunch keeps
+/// its session, so it goes out with the `anonymousId` and `messageId` of its first send. Segment
+/// deduplicates calls by `messageId` over about the last 24 hours, and drops most duplicates
+/// rather than all, so a recovered record Segment had already stored before the app ended is most
+/// likely not stored again. RudderStack's and Customer.io's references don't say whether they
+/// deduplicate. The record's vendor identifier
 /// and trace context, and any other context value, aren't sent.
 ///
 /// `context.ip` is `"0.0.0.0"` in every call, which the spec reads as the user's address, so
@@ -230,8 +231,8 @@ public struct SegmentSpecBatchEncoder: BatchEncoder {
         // request's, is never sent. RudderStack reads `context.ip` first for geolocation, but still
         // fills in `request_ip` from the request unless the call has one, hence sendsRequestIP.
         context["ip"] = .string("0.0.0.0")
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own anonymous user rather than being skipped, which would
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own anonymous user rather than being skipped, which would
         // let the delivery acknowledge it and the store delete it, or sent without an
         // `anonymousId`, which the spec rejects.
         var call: [String: JSON] = [

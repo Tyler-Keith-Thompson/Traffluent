@@ -181,6 +181,15 @@ let benchmarks: @Sendable () -> Void = {
     let location = SourceLocation(file: "App/CheckoutView.swift", fileID: "App/CheckoutView.swift", function: "body", line: 42, column: 13)
     // Built before each window, so only the coding and the store's own work are measured.
     let records = (0 ..< tracks).map { EventRecord(event: Tapped(number: $0, screen: "Checkout"), timestamp: Date(timeIntervalSinceReferenceDate: Double($0)), sourceLocation: location) }
+    // The same records in one session, as the sessions enricher stamps them: the store writes the
+    // session in each record's bytes and decodes it on recovery.
+    let sessionRecords: [EventRecord] = {
+        // A record's top-level context rather than ServiceContext.topLevel: the benchmarks don't
+        // depend on Instrumentation, which names it.
+        var context = records[0].context
+        context[SessionKey.self] = UUID(uuidString: "019A2B3C-4D5E-7F60-8172-839405A6B7C8")
+        return records.map { EventRecord(id: $0.id, event: $0.event, timestamp: $0.timestamp, sourceLocation: location, context: context) }
+    }()
     let positional = records.map {
         PositionalRecord(id: $0.id, timestamp: $0.timestamp, fileID: location.fileID, function: location.function, line: location.line, column: location.column, name: Tapped.name, number: ($0.event as! Tapped).number, screen: "Checkout")
     }
@@ -246,6 +255,35 @@ let benchmarks: @Sendable () -> Void = {
             // Closed before the store under measurement opens: one store per directory at a time.
             let earlier = try SegmentStore(events: [Tapped.self], directory: .init(directory))
             for record in records {
+                _ = earlier.append(record)
+            }
+        }
+        benchmark.startMeasurement()
+        let store = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+        blackHole(store.takeRecoveredRecords())
+        benchmark.stopMeasurement()
+    }
+
+    // The append above, of records that carry a session.
+    Benchmark("record: SegmentStore append, with a session", configuration: .init(scalingFactor: .kilo)) { benchmark in
+        let directory = scratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let store = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+        benchmark.startMeasurement()
+        for record in sessionRecords {
+            blackHole(store.append(record))
+        }
+        benchmark.stopMeasurement()
+    }
+
+    // The recovery above, of records that carry a session.
+    Benchmark("record: SegmentStore recovery, with a session", configuration: .init(scalingFactor: .kilo)) { benchmark in
+        let directory = scratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        do {
+            // Closed before the store under measurement opens: one store per directory at a time.
+            let earlier = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+            for record in sessionRecords {
                 _ = earlier.append(record)
             }
         }

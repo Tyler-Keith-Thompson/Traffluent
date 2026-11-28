@@ -167,8 +167,8 @@ struct PostHogDeliveryTests {
         #expect(actual == [expectedBody, expectedBody])
     }
 
-    @Test("A recovered record, with no context, is sent under its own id rather than dropped")
-    func recoveredRecordSent() async throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent under its own id rather than dropped")
+    func sessionlessRecordSent() async throws {
         let endpoint = try #require(URL(string: "https://posthog.example.com/batch/"))
         let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let stub = PostHogStub([.ok])

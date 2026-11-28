@@ -35,11 +35,18 @@ public import Persistence
 ///   `events`, in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
 ///   they are delivered in this run like any other, are never written, and are lost if the app
 ///   ends first. The first record of each such type is reported as
-///   `DropReport.notPersisted(event:)`, so a type left out by mistake shows up. A
-///   record's context is not kept: a recovered record is in the top-level `ServiceContext`, as
-///   its span ended with the earlier run.
-/// - **Deleting.** A record's row is deleted once every destination has received it, so a
-///   table whose records are all delivered is empty.
+///   `DropReport.notPersisted(event:)`, so a type left out by mistake shows up.
+/// - **A recovered record's session.** A record keeps the `SessionKey` of its context, written in
+///   its row's bytes, so a record recovered after a relaunch carries the session it was tracked
+///   in, and a vendor destination sends it under the same identity as the first time. A row
+///   written without a session comes back with none. The rest of its context is not kept: a
+///   recovered record is otherwise in the top-level `ServiceContext`, as its span ended with the
+///   earlier run.
+/// - **Deleting.** A record's row, its session included, is deleted once every destination has
+///   received it, so a table whose records are all delivered is empty, and the store keeps no
+///   session apart from the records tracked in it. How long a deleted row's bytes remain in the
+///   file is up to the database's journal mode and `secure_delete` setting: in WAL mode, the
+///   log can hold them until SQLite writes over them or a checkpoint truncates it.
 /// - **Reading back.** When a destination's full buffer drops a batch on its way through a
 ///   delivery, the delivery reads that batch's rows back, in one read, once the destination has
 ///   caught up, and hands their records to it in this run, each in the context it was tracked in,
@@ -65,6 +72,8 @@ public import Persistence
 /// from inside an access to the same database: GRDB's migrations aren't reentrant. Copies of a
 /// store share its table.
 public struct DatabaseStore: RecordStore {
+    // A deleted row's bytes can outlive it in the -wal file and in freed pages, as the doc above
+    // says; TRAF-146 tracks wiping them.
     /// The bound a store has unless it is given another: 5 MiB (5,242,880 bytes) of encoded records.
     public static let defaultByteBound = 5 * 1024 * 1024
 

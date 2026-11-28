@@ -33,10 +33,11 @@ public import TrackingPlans
 /// The session is the only identifier sent, and every event is anonymous: `properties` holds
 /// `$process_person_profile: false`, so PostHog makes no person profile, and `$geoip_disable: true`,
 /// so PostHog doesn't add a location from the request's IP address. A record with no session (one
-/// tracked by a tracker without `Enricher.sessions()`, or one a store recovered after a relaunch,
-/// which keeps no context) is its own anonymous person, linked to nothing: PostHog rejects a whole
-/// batch when one of its events has no `distinct_id`. PostHog counts a person per `distinct_id`,
-/// so its unique users are sessions. The session is also sent as `$session_id`, which PostHog's
+/// tracked by a tracker without `Enricher.sessions()`) is its own anonymous person, linked to
+/// nothing: PostHog rejects a whole batch when one of its events has no `distinct_id`. A record a
+/// store recovers after a relaunch keeps its session, so it goes out under the `distinct_id` and
+/// `$session_id` of its first send. PostHog counts a person per `distinct_id`, so its unique users
+/// are sessions. The session is also sent as `$session_id`, which PostHog's
 /// sessions and web analytics group events by (`SessionKey` is the UUIDv7 they require); a record
 /// with no session has none. The record's vendor identifier and trace context, and any other
 /// context value, aren't sent.
@@ -158,8 +159,8 @@ public struct PostHogBatchEncoder: BatchEncoder {
         for (key, value) in record.postHogContext {
             properties[key] = value
         }
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own anonymous person rather than being skipped, which
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own anonymous person rather than being skipped, which
         // would let the delivery acknowledge it and the store delete it, or sent without a
         // `distinct_id`, which makes PostHog reject the whole batch.
         let identity = record.pseudonymousIdentity

@@ -44,10 +44,11 @@ carries its session's key.
 
 The identifier is a version 7 UUID: its first 48 bits are the session's start in Unix milliseconds,
 which every record's timestamp sends anyway, and the rest is random, derived from nothing. It lives
-in the enricher's memory only.
-Neither the tracker nor its store writes it to disk (a store keeps no record's context), and the
-next launch's tracker starts a new session with a new identifier. Traffluent keeps no identifier
-that links one session to another.
+in the enricher's memory only, and the next launch's tracker starts a new session with a new
+identifier. A store keeps it beside each record of the session, so a record recovered after a
+relaunch still carries its session, and it is deleted when the store deletes the record's bytes
+(a `SegmentStore`: once its whole segment is delivered).
+Traffluent keeps no identifier that links one session to another.
 
 ### Standard context
 

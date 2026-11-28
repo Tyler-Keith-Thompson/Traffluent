@@ -6,7 +6,8 @@ import Synchronization
 /// The state behind `Enricher.sessions`: the timeline of one tracker's sessions, which stamps each
 /// record with its session and makes the records of the sessions that start and end before it.
 ///
-/// Held in memory only, never written anywhere, so a session's identifier ends with the process.
+/// Held in memory only, so the next process starts a session of its own. A store keeps a
+/// session's identifier only beside each of its records, until it deletes the record's bytes.
 final class SessionRotation: Sendable {
     let kinds: Set<SessionEventKind>
     let callSite: SourceLocation

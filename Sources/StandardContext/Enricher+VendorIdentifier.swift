@@ -12,8 +12,8 @@ extension Enricher {
     /// Nothing carries the identifier until the app adds this enricher, and the app owns that
     /// decision, the user's consent to it included. The identifier is read once, from `UIDevice`
     /// or `WKInterfaceDevice` on the main actor, when this is called, and held in the enricher's
-    /// memory only: neither the tracker nor its store writes it to disk (a store keeps no
-    /// record's context). Where the system has none (macOS, Linux, a device not yet unlocked
+    /// memory only: neither the tracker nor its store writes it to disk (a store keeps only a
+    /// record's session of its context). Where the system has none (macOS, Linux, a device not yet unlocked
     /// since it restarted) the enricher sets nothing; it never makes one up.
     ///
     /// - Returns: The enricher, which runs on the tracker's worker like any other.

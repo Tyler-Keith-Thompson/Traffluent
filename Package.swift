@@ -110,7 +110,7 @@ let targets: [Target] = [
     .target(name: "StandardContext", dependencies: ["Events", "Trackers", .product(name: "Instrumentation", package: "swift-distributed-tracing")], exclude: bazelFiles, resources: [.copy("PrivacyInfo.xcprivacy")]),
     // Persistence
     .target(name: "Checksums", exclude: bazelFiles),
-    .target(name: "Persistence", dependencies: ["AsyncQueues", "Events", "Checksums", .product(name: "CBOR", package: "swift-cbor"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
+    .target(name: "Persistence", dependencies: ["AsyncQueues", "Events", "Checksums", .product(name: "CBOR", package: "swift-cbor"), .product(name: "Instrumentation", package: "swift-distributed-tracing"), .product(name: "SystemPackage", package: "swift-system"), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     .target(name: "GRDBPersistence", dependencies: ["AsyncQueues", "Events", "Persistence", .product(name: "GRDB", package: "grdb.swift", condition: .when(platforms: applePlatforms)), .product(name: "Logging", package: "swift-log")], exclude: bazelFiles),
     // Schema
     .target(name: "EventMacros", dependencies: ["Events", "EventMacrosPlugin", .product(name: "LinkerSetsRuntime", package: "linkersets")], exclude: bazelFiles),

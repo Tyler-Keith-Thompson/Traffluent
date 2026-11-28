@@ -99,10 +99,10 @@ struct HeapIdentityTests {
         #expect(!text.contains("com.example.shop"))
     }
 
-    @Test("A recovered record, with no context, is sent as its own user, its id as both identity and idempotency_key")
-    func recoveredRecord() throws {
+    @Test("A record with no session, from a tracker without the sessions enricher, is sent as its own user, its id as both identity and idempotency_key")
+    func sessionlessRecord() throws {
         let sut = try HeapBatchEncoder(appID: "12343283", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
-        // As a store remakes a record after a relaunch: no context, marked redelivered.
+        // No session in its context, and marked redelivered, as a store can hand one over.
         let record = EventRecord(
             id: UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!,
             event: CheckoutStarted(cartSize: 1),

@@ -40,9 +40,10 @@ public import TrackingPlans
 /// identifier with their default, empty salt; TelemetryDeck salts and hashes it again before
 /// storing it. No salt of the app's own is taken: `sessionID` sends the same session in the
 /// clear, so a salt would hide nothing. TelemetryDeck counts a user per `clientUser`, so its users
-/// are sessions. A record with no session (one tracked by a tracker without `Enricher.sessions()`,
-/// or one a store recovered after a relaunch, which keeps no context) is its own user of one event, with no `sessionID`, linked to nothing: TelemetryDeck
-/// refuses an event without a `clientUser`. The record's vendor identifier and trace context, and
+/// are sessions. A record with no session (one tracked by a tracker without `Enricher.sessions()`)
+/// is its own user of one event, with no `sessionID`, linked to nothing: TelemetryDeck refuses an
+/// event without a `clientUser`. A record a store recovers after a relaunch keeps its session, so
+/// it goes out with the `clientUser` and `sessionID` of its first send. The record's vendor identifier and trace context, and
 /// any other context value, aren't sent. Nor is a `floatValue`: a number among the properties
 /// keeps its JSON type in Ingest API v3.
 ///
@@ -241,8 +242,8 @@ public struct TelemetryDeckBatchEncoder: BatchEncoder {
         for (name, value) in record.telemetryDeckContext {
             event[name] = value
         }
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own user rather than being skipped, which would let the
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own user rather than being skipped, which would let the
         // delivery acknowledge it and the store delete it, or sent without a clientUser, which
         // TelemetryDeck refuses with the whole request. It gets no sessionID: Ingest API v3
         // stores none it isn't sent, where a made-up one would count a session that never was.

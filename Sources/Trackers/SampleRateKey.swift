@@ -11,7 +11,7 @@ public import Instrumentation
 ///
 /// A record that several samplers kept carries the product of their rates, the probability that
 /// it was kept. One no sampler applies to carries no key: it was kept for certain. Nor does one a
-/// store recovered from an earlier run, which comes back in the top-level context.
+/// store recovered from an earlier run, as a store keeps only the session of a record's context.
 public enum SampleRateKey: ServiceContextKey {
     /// The rate the record was kept at.
     public typealias Value = SampleRate

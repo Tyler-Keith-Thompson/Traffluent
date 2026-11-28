@@ -32,11 +32,12 @@ public import TrackingPlans
 ///
 /// The session is the only identifier sent: there is no `user_id`, and no `ip`, `idfv` or other
 /// device identifier. Amplitude counts a user per `device_id`, so its unique users are sessions. A
-/// record with no session (one tracked by a tracker without `Enricher.sessions()`, or one a store
-/// recovered after a relaunch, which keeps no context) is its own anonymous user, linked to
-/// nothing: Amplitude rejects an event with neither a `device_id` nor a `user_id`. Amplitude drops
-/// a second copy of an event with the same `insert_id` and `device_id`, so a recovered record that
-/// Amplitude had already stored under its session, before the app ended, is stored again. The
+/// record with no session (one tracked by a tracker without `Enricher.sessions()`) is its own
+/// anonymous user, linked to nothing: Amplitude rejects an event with neither a `device_id` nor a
+/// `user_id`. Amplitude drops a second copy of an event with the same `insert_id` and `device_id`.
+/// A record a store recovers after a relaunch keeps its session, so it goes out with the
+/// `device_id` and `session_id` of its first send, and Amplitude drops it if it had already stored
+/// it before the app ended. The
 /// record's vendor identifier and trace context, and any other context value, aren't sent. Nor is
 /// an `ip`: neither an address nor `$remote`, which asks Amplitude to look the user's location up
 /// from the request's address.
@@ -151,8 +152,8 @@ public struct AmplitudeBatchEncoder: BatchEncoder {
             throw .unrepresentableTimestamp
         }
         var event = record.amplitudeContext
-        // D4: the session is the only identifier sent. A record without one (a recovered record
-        // keeps no context) becomes its own anonymous user rather than being skipped, which would
+        // D4: the session is the only identifier sent. A record without one (its tracker has no
+        // sessions enricher) becomes its own anonymous user rather than being skipped, which would
         // let the delivery acknowledge it and the store delete it, or sent without a `device_id`,
         // which Amplitude rejects.
         let identity = record.pseudonymousIdentity

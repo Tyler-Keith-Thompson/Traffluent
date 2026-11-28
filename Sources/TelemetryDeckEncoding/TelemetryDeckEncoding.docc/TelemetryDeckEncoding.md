@@ -58,8 +58,10 @@ is the library's default, for privacy. To count devices instead, put
 destination that reads it, or write your own enricher and encoder that send the identifier you
 choose. This encoder sends the session alone.
 
-A record with no session, such as one a store recovered after a relaunch, is its own user: its
-`clientUser` is the hash of the record's identifier, and it has no `sessionID`. Making up a session
+A record with no session, from a tracker without the sessions enricher, is its own user: its
+`clientUser` is the hash of the record's identifier, and it has no `sessionID`. A record a store
+recovered after a relaunch keeps its session, and with it the `clientUser` and `sessionID` of its
+first send. Making up a session
 would join unrelated records, and skipping the record would lose it.
 
 ### What TelemetryDeck receives

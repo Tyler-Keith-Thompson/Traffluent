@@ -6,8 +6,19 @@ Traffluent knows people only by a pseudonymous session. An identifier that outli
 
 The identifier Traffluent makes is the session's: `Enricher.sessions(timeout:kinds:)` (module
 ``/Sessions``) stamps every record's context with its `SessionKey`, a version 7 UUID (the session's
-start time, then random bits) derived from nothing else and held in the enricher's memory only. It is never written to disk, and the next launch
-starts a new session with a new identifier.
+start time, then random bits) derived from nothing else and held in the enricher's memory only. The
+next launch starts a new session with a new identifier.
+
+A store writes the session to disk in one place only: beside each record tracked in it, in that
+record's own bytes. It is deleted when the store deletes the record's bytes (a `SegmentStore`: once
+its whole segment is delivered). So a record recovered after a relaunch carries the session it was
+tracked in, and a vendor destination sends it under the same identity as the first time. A vendor
+that deduplicates then drops the second copy instead of counting a new user.
+
+The store keeps no session apart from its records. Until they are deleted, though, it holds
+records of several sessions side by side, each with its own session's identifier, and a resend
+after a relaunch can carry an earlier session's record in the same request as the current
+session's.
 
 Nothing else identifies the person unless the app asks. Traffluent keeps no persisted anonymous or
 device identifier, and has no call that identifies a user or aliases one identifier to another.
@@ -96,8 +107,8 @@ account.signOut()
 tracker.track(CheckoutStarted(itemCount: 1))  // carries SessionKey only
 ```
 
-A store keeps no record's context, so a record recovered from an earlier run arrives without
-either identifier.
+A store keeps only the session of a record's context, so a record recovered from an earlier run
+arrives with its `SessionKey` but without your identifier.
 
 ### Keep it from destinations
 

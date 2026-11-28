@@ -81,8 +81,9 @@ as the sessions enricher's timeout is no longer than Matomo's visit length, 30 m
 (`visit_standard_length`). With a longer timeout, a session that pauses for longer than Matomo's
 visit length becomes two visits of one visitor.
 
-A record with no session, such as one a store recovered after a relaunch, is its own visitor: its
-`_id` is the last 64 bits of the record's identifier. Making up a session would join unrelated
+A record with no session, from a tracker without the sessions enricher, is its own visitor: its
+`_id` is the last 64 bits of the record's identifier. A record a store recovered after a relaunch
+keeps its session, and with it the `_id` of its first send. Making up a session would join unrelated
 records, and skipping the record would lose it.
 
 Matomo recognizes a visitor by `_id` and, failing that, by a fingerprint of the request's IP

@@ -44,8 +44,9 @@ public import TrackingPlans
 /// The session is the only identifier sent: there is no `duid`, `uid`, `nuid` or `tnuid`, no
 /// `client_session` entity, whose `userId` lasts across sessions, and no `appleIdfv`, `appleIdfa`
 /// or other device identifier. Snowplow's `domain_sessionid` is the session; a record with no
-/// session (one tracked by a tracker without `Enricher.sessions()`, or one a store recovered after
-/// a relaunch, which keeps no context) is sent without one, linked to nothing. The record's vendor
+/// session (one tracked by a tracker without `Enricher.sessions()`) is sent without one, linked to
+/// nothing. A record a store recovers after a relaunch keeps its session, so it goes out with the
+/// `sid` of its first send. The record's vendor
 /// identifier and trace context, and any other context value, aren't sent.
 ///
 /// Each event's `ttm`, its true timestamp, is the record's timestamp, as is `dtm`, so Snowplow's

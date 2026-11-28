@@ -33,9 +33,8 @@ public import TrackingPlans
 ///
 /// The session is the only identifier sent: there is no `user_id`, which is Heap's own ID of a
 /// user, and no `session_id`. Heap makes a user for each identity it hasn't seen, so its users are
-/// sessions. A record with no session (one tracked by a tracker without `Enricher.sessions()`, or
-/// one a store recovered after a relaunch, which keeps no context) is its own user of one event,
-/// linked to nothing: Heap takes no event without an identity. The record's vendor identifier,
+/// sessions. A record with no session (one tracked by a tracker without `Enricher.sessions()`) is
+/// its own user of one event, linked to nothing: Heap takes no event without an identity. The record's vendor identifier,
 /// trace context and standard context, and any other context value, aren't sent: Heap keeps no
 /// built-in property of a server-side event, so they would sit among the event's own properties,
 /// under names of the encoder's choosing.
@@ -60,9 +59,9 @@ public import TrackingPlans
 /// nothing for it. Heap answers a request it takes with 200 and one it can't with 400, which
 /// `HTTPDestination` drops and reports with every record of the request. Heap stores an event
 /// once per `idempotency_key` within one identity, so a record sent again under the same session
-/// is stored once. A record a store recovers after a relaunch keeps no context, so it is sent
-/// under its own identifier, not its session's, and Heap may store it twice. The bytes are the same for
-/// the same records on every run and platform: no whitespace, object members in the order of their
+/// is stored once. A record a store recovers after a relaunch keeps its session, so it is sent
+/// under the identity of its first send, and Heap stores it once. The bytes are the same for the
+/// same records on every run and platform: no whitespace, object members in the order of their
 /// names' UTF-8 bytes.
 public struct HeapBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
@@ -232,7 +231,7 @@ public struct HeapBatchEncoder: BatchEncoder {
             throw .unrepresentableTimestamp
         }
         // D4: the session is the only identifier sent, as `identity`, which Heap makes a user of.
-        // A record without one (a recovered record keeps no context) becomes its own user rather
+        // A record without one (its tracker has no sessions enricher) becomes its own user rather
         // than being skipped, which would let the delivery acknowledge it and the store delete it,
         // or sent without an identity, which Heap requires. Rejected: `user_id`, which must be a
         // Heap SDK's numeric user ID, and `session_id`, a session ID of Heap's SDKs, which Heap's

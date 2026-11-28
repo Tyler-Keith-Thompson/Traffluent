@@ -26,11 +26,17 @@ public import SystemPackage
 ///   other, are never written, and are lost if the app ends first. The first record of each such
 ///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out by mistake,
 ///   such as one that conforms to `Event` by hand, shows up.
-///   A record's context is not kept: a recovered record is in the top-level `ServiceContext`,
-///   as its span ended with the earlier run.
+/// - **A recovered record's session.** A record keeps the `SessionKey` of its context, written in
+///   the record's own bytes, so a record recovered after a relaunch carries the session it was
+///   tracked in, and a vendor destination sends it under the same identity as the first time. A
+///   record written without a session comes back with none. The rest of its context is not kept:
+///   a recovered record is otherwise in the top-level `ServiceContext`, as its span ended with
+///   the earlier run.
 /// - **Deleting.** A segment is deleted as a whole once every record in it is delivered, so a
-///   log whose records are all delivered holds no files. A segment kept for one undelivered
-///   record keeps its delivered ones too. Only recovery rewrites a segment: one still holding
+///   log whose records are all delivered holds no files. A record's session goes with its
+///   segment: the store keeps no session apart from the records tracked in it. A segment kept
+///   for one undelivered record keeps its delivered ones too, sessions and all. Only recovery
+///   rewrites a segment: one still holding
 ///   records after it drops some (``DropReport/undecodable(recordCount:)``,
 ///   ``DropReport/versionMismatch(event:storedVersion:currentVersion:recordCount:)``) is
 ///   rewritten without them, so each drop is reported once. Should the rewrite fail, the

@@ -62,7 +62,7 @@ off the device.
 | ``/AutomaticScreenTracking`` | Product Interaction | `trackScreensAutomatically`: a `ScreenViewed` per screen, named after its view controller or SwiftUI view type. |
 | ``/AutomaticControlTracking`` | Product Interaction | `trackControlsAutomatically`: a `ControlActivated` per touch that activates a control, named by its accessibility identifier, never its text. |
 | ``/LifecycleTracking`` | Product Interaction | `trackLifecycle`: the app's installs, updates (with the versions), opens, moves to the background and terminations. |
-| ``/Sessions`` | Product Interaction | `Enricher.sessions(timeout:kinds:)`: a random session identifier held in memory only, and `SessionStarted` and `SessionEnded` with the session's duration. |
+| ``/Sessions`` | Product Interaction | `Enricher.sessions(timeout:kinds:)`: a random session identifier held in memory, and kept by a store only beside each of the session's records, deleted with the record's bytes, and `SessionStarted` and `SessionEnded` with the session's duration. |
 
 The rest ship no manifest: ``/Events``, ``/Trackers``, ``/Persistence``, ``/GRDBPersistence``,
 ``/Checksums``, ``/Destinations``, ``/LoggingDestinations``, ``/TracingDestinations``,

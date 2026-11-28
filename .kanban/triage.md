@@ -364,6 +364,11 @@ bad row in a dashboard.
   all removed. Traffluent may offer it as an opt-in enricher where the platform has it, never
   stored by Traffluent and never a fallback to a generated ID.
   Adopters who want one write their own Enricher and own that decision, including its consent.
+  Amended 2026-11-27 (TRAF-122, the agent's default while the owner's answer is pending): a store
+  may write a record's session ID into that record's own stored bytes, and only there, so a record
+  recovered after a relaunch reaches vendors under the ID it was first sent with; it is deleted
+  when the store deletes the record's bytes (a SegmentStore: once its whole segment is
+  delivered), and no session ID is stored apart from its records.
   An item asking Traffluent to persist or link identifiers across sessions is turned down,
   pointing at the Enricher route.
 - D5. Tracking accepts and nothing more (the owner, 2026-11-23): "collection can happen on any

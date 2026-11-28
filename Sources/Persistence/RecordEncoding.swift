@@ -1,20 +1,25 @@
 internal import CBOR
 public import Events
 import Foundation
+import Instrumentation
 
 /// A record's bytes on disk, the same for every store: a CBOR map, written by the CBOR package's
 /// `CBOREncoder` with its keys sorted, of its identifier (`id`, its UUID string), its timestamp
 /// (`timestamp`, a double of its seconds since 2001-01-01 UTC, which `Date` stores, so it reads
 /// back exactly), its event type's name (`name`) and `Event.schemaVersion` (`version`), its call
-/// site (`sourceLocation`, left out when the record has none) and its event (`event`, written by
-/// its `Codable` conformance). The call site is a map of `fileID`, `file` (left out when it equals
-/// `fileID`), `function`, `line` and `column`.
+/// site (`sourceLocation`, left out when the record has none), its session (`session`, the
+/// `SessionKey` of its context as a UUID string, left out when it has none) and its event
+/// (`event`, written by its `Codable` conformance). The call site is a map of `fileID`, `file`
+/// (left out when it equals `fileID`), `function`, `line` and `column`.
 ///
 /// A record without `version` has no version to compare: it is read by its event's name, whatever
-/// version the registered type is at, and dropped as undecodable if its bytes don't read.
+/// version the registered type is at, and dropped as undecodable if its bytes don't read. A record
+/// without `session` is read back with none, and one whose `session` isn't a UUID string, null
+/// included, is undecodable.
 ///
-/// A record's context and delivery state are not part of it: a store keeps those, if at all, in a
-/// form of its own.
+/// The session is the only part of a record's context kept, and only here, beside the record, so
+/// it is deleted with the record's bytes. The rest of the context and the delivery state are not
+/// part of it: a store keeps the delivery state in a form of its own.
 package enum RecordEncoding {
     /// A record map's keys.
     package enum Key: String, CodingKey {
@@ -23,6 +28,7 @@ package enum RecordEncoding {
         case name
         case version
         case sourceLocation
+        case session
         case event
     }
 
@@ -43,7 +49,8 @@ package enum RecordEncoding {
     /// What reading a record's bytes found: the record, or a record of a registered event type
     /// stored at another version than the type's, which is left undecoded.
     package enum Reading {
-        /// The record, with its identifier, no tag, tracked in the top-level context.
+        /// The record, with its identifier and no tag, tracked in the top-level context with its
+        /// session's `SessionKey` set, when it had one.
         case record(EventRecord)
         /// A record of the event named `event`, stored at `storedVersion` while its registered type
         /// is at `currentVersion`.
@@ -79,8 +86,14 @@ package enum RecordEncoding {
             let id = try container.decode(UUID.self, forKey: .id)
             let timestamp = Date(timeIntervalSinceReferenceDate: try container.decode(Double.self, forKey: .timestamp))
             let location = try container.decodeIfPresent(StoredSourceLocation.self, forKey: .sourceLocation)
+            var context = ServiceContext.topLevel
+            // decode, not decodeIfPresent, which would read a null session as none: a session that is
+            // there but isn't a UUID string, null included, makes the record undecodable.
+            if container.contains(.session) {
+                context[SessionKey.self] = try container.decode(UUID.self, forKey: .session)
+            }
             let event = try registration.decode(.event, container)
-            return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location))
+            return .record(EventRecord(id: id, event: event, timestamp: timestamp, sourceLocation: location?.location, context: context))
         }
     }
 }
@@ -99,6 +112,12 @@ private struct StoredRecord: Encodable {
         try container.encode(registration.name, forKey: .name)
         try container.encode(registration.version, forKey: .version)
         try container.encodeIfPresent(record.sourceLocation.map(StoredSourceLocation.init(location:)), forKey: .sourceLocation)
+        // The session alone of the context: a vendor destination sends it as the record's device or
+        // user identifier, so a record recovered after a relaunch must go out under the one it was
+        // first sent with, or the vendor can't drop the second copy (TRAF-122, D4 amended). Any
+        // other context value would need a decision of its own on what a record may carry to disk.
+        // A record without the key, as releases before TRAF-122 wrote, reads back sessionless.
+        try container.encodeIfPresent(record.context[SessionKey.self], forKey: .session)
         try registration.encode(record.event, .event, &container)
     }
 }

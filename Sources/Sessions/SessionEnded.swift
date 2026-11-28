@@ -6,7 +6,7 @@ internal import LinkerSets
 /// ``SessionStarted``.
 ///
 /// Its record is stamped with the time of the ended session's last event and carries that
-/// session's ``SessionKey``.
+/// session's ``/Events/SessionKey``.
 ///
 /// It is `Codable`, so a store keeps it once its `events` list `SessionEnded.self`, and its
 /// ``schema`` goes in a tracking plan beside the app's own events.

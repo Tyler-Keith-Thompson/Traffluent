@@ -5,7 +5,9 @@ import Events
 import Foundation
 import GRDB
 import GRDBPersistence
+import Instrumentation
 import Persistence
+import SwiftCBOR
 import SystemPackage
 import Testing
 import Trackers
@@ -79,6 +81,41 @@ struct DatabaseStoreTests {
         #expect(sut.takeRecoveredRecords().compactMap { $0.event as? Tapped } == [Tapped(number: 1)])
         let migrationCount = try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM grdb_migrations") }
         #expect(migrationCount == 1)
+    }
+
+    @Test("Rows written by another encoder come back with the session their bytes hold, and a row without one, as a store wrote before it kept sessions, with none")
+    func rowsWithAndWithoutSession() throws {
+        let database = try DatabaseQueue()
+        _ = try DatabaseStore(events: [Tapped.self], database: database)
+        let session = UUID(uuidString: "019A2B3C-4D5E-7F60-8172-839405A6B7C8")!
+        let withSession: [UInt8] = SwiftCBOR.CBOR.map([
+            .utf8String("id"): .utf8String("00000000-0000-4000-8000-000000000001"),
+            .utf8String("timestamp"): .double(0),
+            .utf8String("name"): .utf8String("Tapped"),
+            .utf8String("version"): .unsignedInt(1),
+            .utf8String("session"): .utf8String(session.uuidString),
+            .utf8String("event"): .map([.utf8String("number"): .unsignedInt(1)]),
+        ]).encode()
+        let withoutSession: [UInt8] = SwiftCBOR.CBOR.map([
+            .utf8String("id"): .utf8String("00000000-0000-4000-8000-000000000002"),
+            .utf8String("timestamp"): .double(0),
+            .utf8String("name"): .utf8String("Tapped"),
+            .utf8String("version"): .unsignedInt(1),
+            .utf8String("event"): .map([.utf8String("number"): .unsignedInt(2)]),
+        ]).encode()
+        try database.write { db in
+            for payload in [withSession, withoutSession] {
+                try db.execute(sql: "INSERT INTO traffluentRecord (timestamp, payload) VALUES (?, ?)", arguments: [0.0, Data(payload)])
+            }
+        }
+        let expected: [UUID?] = [session, nil]
+
+        let sut = try DatabaseStore(events: [Tapped.self], database: database)
+
+        let recovered = sut.takeRecoveredRecords()
+        let actual = recovered.map { $0.context[SessionKey.self] }
+        #expect(recovered.compactMap { $0.event as? Tapped } == [Tapped(number: 1), Tapped(number: 2)])
+        #expect(actual == expected)
     }
 
     @Test("Two stores on two tables of one database keep their records apart")
