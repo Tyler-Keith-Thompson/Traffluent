@@ -13,11 +13,16 @@
 # - The unknownEvent arm of `CollectorEncodingError.init(_ error: PropertyReadingError)` mapped to
 #   another case: the encoder looks the event up in the plan itself and reads it through
 #   `properties(types:writingSensitiveValues:)`, which never throws unknownEvent.
+# - The decoder's `records.reserveCapacity(items.count)` removed: capacity only.
+# - The CBOR writer and ISO 8601 parser the decoder reads through live in PropertyJSON, whose spec
+#   plants them with these tests among its own.
 
 TESTS = ["CollectorEncodingTests"]
 
 B = "CollectorBatchEncoder.swift"
 C = "EventRecord+CollectorContext.swift"
+DEC = "CollectorBatchDecoder.swift"
+CTX = "ServiceContext+CollectorContext.swift"
 
 MUTANTS = [
     # The record's envelope.
@@ -61,4 +66,49 @@ MUTANTS = [
     Mutant("minifiedcolonspaced", "JSON.swift", '":"', '": "', module="JSONValues"),
     # The second sort in JSON.swift is minified's.
     Mutant("minifiedunsorted", "JSON.swift", "$0.key.utf8.lexicographicallyPrecedes($1.key.utf8)", "$1.key.utf8.lexicographicallyPrecedes($0.key.utf8)", nth=1, module="JSONValues"),
+    # CollectorBatchDecoder: the body.
+    Mutant("decodenotjsonasobject", DEC, "throw .notJSON", "throw NotACollectorBatch.notAnObject", mode="stmt"),
+    Mutant("decodemissingasnotarray", DEC, "throw .missingRecords", "throw NotACollectorBatch.recordsNotAnArray", mode="stmt"),
+    # Expressions rather than statements where a guard binds a name the code after it reads.
+    Mutant("decoderecordsanyvalue", DEC, "member.array", "Optional(member.array ?? [])"),
+    Mutant("decodereportoffsetzero", DEC, "undecodedRecords.append(UndecodedRecord(offset: offset, recordID: item.recordID, eventName: item.eventName, reason: error))", "undecodedRecords.append(UndecodedRecord(offset: 0, recordID: item.recordID, eventName: item.eventName, reason: error))", mode="stmt"),
+    Mutant("decodeundecodedunreported", DEC, "undecodedRecords.append(UndecodedRecord(offset: offset, recordID: item.recordID, eventName: item.eventName, reason: error))", "", mode="stmt"),
+    # The first copies are decodereportoffsetzero's, the second batch(from:)'s report's, the third
+    # record(from:)'s guard.
+    Mutant("decodereportnoid", DEC, "item.recordID", "UUID?.none", nth=1),
+    Mutant("decodereportnoname", DEC, "item.eventName", "String?.none", nth=1),
+    # The record's members.
+    Mutant("decodefreshid", DEC, "item.recordID", "Optional(UUID())", nth=2),
+    Mutant("decodetimestampignored", DEC, 'members["timestamp"]?.string.flatMap(Date.init(iso8601Timestamp:))', "Optional(Date(timeIntervalSince1970: 0))"),
+    Mutant("decodeneverredelivered", DEC, 'members["isRedelivered"]', "Optional(JSON.boolean(false))"),
+    Mutant("decodecontextdropped", DEC, "ServiceContext(collectorContext: context, instrument: instrument)", "ServiceContext.topLevel"),
+    Mutant("decodeconcealed", DEC, "record.revealsSensitiveValues = true", "", mode="stmt"),
+    Mutant("decodeunknowneventunnamed", DEC, "throw .unknownEvent(name: name)", 'throw CollectorDecodingError.unknownEvent(name: "")', mode="stmt"),
+    Mutant("decodepropertyunnamed", DEC, "error.property", '""'),
+    # The plan and the types: the first schemaVersion is the init's plan lookup, inside the second
+    # (record(from:)'s report of an unknown version).
+    Mutant("decodeversionunchecked", DEC, "event.propertyTypes", "Optional(event.propertyTypes ?? [:])"),
+    Mutant("decodeplanversionignored", DEC, "type.schemaVersion", "1", nth=0),
+    Mutant("decodereportedversionone", DEC, "event.type.schemaVersion", "1"),
+    Mutant("decodeduplicatesallowed", DEC, "decodable[type.name]", "DecodableEvent?.none", nth=0),
+    Mutant("decodeduplicatetypesswapped", DEC, "String(reflecting: first.type)", "String(reflecting: type)"),
+    Mutant("decodenothingdiscovered", DEC, "DiscoveredEvent.all.map { $0.type }", "DiscoveredEvent.all.prefix(0).map { $0.type }"),
+    # The context.
+    Mutant("decodeapplicationdropped", CTX, "context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: bundleIdentifier, version: version, build: build)", "", mode="stmt"),
+    Mutant("decodebuildasversion", CTX, "ApplicationKey.Value(bundleIdentifier: bundleIdentifier, version: version, build: build)", "ApplicationKey.Value(bundleIdentifier: bundleIdentifier, version: version, build: version)"),
+    Mutant("decodeapplicationnonstrings", CTX, "value.string.map(Optional.some)", "Optional.some(value.string)"),
+    Mutant("decodedevicedropped", CTX, "context[DeviceKey.self] = DeviceKey.Value(model: model, formFactor: formFactor)", "", mode="stmt"),
+    Mutant("decodelocaledropped", CTX, "context[LocaleKey.self] = Locale(identifier: identifier)", "", mode="stmt"),
+    Mutant("decodenetworkdropped", CTX, "context[NetworkKey.self] = value", "", mode="stmt"),
+    Mutant("decodeosdropped", CTX, "context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: name, version: version)", "", mode="stmt"),
+    Mutant("decodesampleratedropped", CTX, "context[SampleRateKey.self] = rate", "", mode="stmt"),
+    Mutant("decodesessiondropped", CTX, "context[SessionKey.self] = key", "", mode="stmt"),
+    Mutant("decodevendordropped", CTX, "context[VendorIdentifierKey.self] = Sensitive(identifier)", "", mode="stmt"),
+    Mutant("decodetracenotextracted", CTX, "instrument.extract(fields, into: &context, using: DictionaryExtractor())", "", mode="stmt"),
+    Mutant("decodetraceanyvalue", CTX, "trace.object", "Optional(trace.object ?? [:])"),
+    # The first copy is the trace loop's, before optionalString's.
+    Mutant("decodetracenonstrings", CTX, "value.string", 'Optional(value.string ?? "")', nth=0),
+    # The first is the form factor's, the second the network's.
+    Mutant("decodeanyformfactor", CTX, "Self.allCases.first(where: { $0.collectorName == name })", "Self.allCases.first", nth=0),
+    Mutant("decodeanynetwork", CTX, "Self.allCases.first(where: { $0.collectorName == name })", "Self.allCases.first", nth=1),
 ]

@@ -1,6 +1,7 @@
 # ``CollectorEncoding``
 
-Write batches of records in TraffluentCollector's ingest format, for an `HTTPDestination` to send.
+Write batches of records in TraffluentCollector's ingest format, for an `HTTPDestination` to send,
+and read them back into records on a server.
 
 ## Overview
 
@@ -46,6 +47,42 @@ let delivery = tracker.records.batch().deliver(to: collector)
 The guide [Choosing Destinations](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/choosingdestinations)
 covers sending to the collector beside the other destinations.
 
+### Reading batches back
+
+``CollectorBatchDecoder`` reads a body the encoder wrote back into `EventRecord`s, for a server
+that receives an app's batches and hands them to another destination, such as a relay in front
+of Google Analytics. Make it with the plan the app's encoder was made with. It finds each record's
+event type by name among the `@Event`s the server links, or among the types you list
+(``CollectorBatchDecoder/init(plan:events:instrument:)``).
+
+```swift
+import CollectorEncoding
+import TrackingPlans
+
+let plan = try TrackingPlan()
+let decoder = try CollectorBatchDecoder(plan: plan)
+let batch = try decoder.batch(from: body)  // a body CollectorBatchEncoder wrote
+await destination.receive(batch.records)
+```
+
+Each record keeps its identifier, timestamp (to the millisecond), event, redelivery flag and the
+context the body holds: its session's `SessionKey`, its sample rate, the standard context and its
+trace context, which the decoder's instrument extracts. Encoding the records again with an encoder
+of the same plan writes the same bytes. A record the decoder can't read is left out and the rest
+are read: one of an event it has no type of, or whose type's version the plan doesn't describe, one
+missing a member or holding what the encoder never writes, and one with a property the event's
+type can't read: a required `Sensitive` property a delivery redacted, an array of non-optional
+`Sensitive` elements it redacted, or an integer outside its property's type.
+
+The body names each record's event but not its version, so a record is read at the version of the
+decoder's type of that name. Deploy the server with the event types the apps send. Once an event's
+version is raised, a record from an app still at the earlier version is read as the newer one:
+reported as `undecodableProperty` when its properties don't fit the newer type, and read as the
+newer version when they do.
+``DecodedCollectorBatch/undecodedRecords`` holds a report of each, an ``UndecodedRecord`` whose
+reason is a ``CollectorDecodingError``. A body that isn't a collector batch at all throws
+``NotACollectorBatch``.
+
 ## Topics
 
 ### Encoding batches
@@ -56,3 +93,15 @@ covers sending to the collector beside the other destinations.
 ### Records left out
 
 - ``CollectorEncodingError``
+
+### Decoding batches
+
+- ``CollectorBatchDecoder``
+- ``DecodedCollectorBatch``
+- ``CollectorBatchDecoderError``
+- ``NotACollectorBatch``
+
+### Records that can't be read
+
+- ``UndecodedRecord``
+- ``CollectorDecodingError``

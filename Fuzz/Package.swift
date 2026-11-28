@@ -26,6 +26,7 @@ let package = Package(
         target("FuzzAsyncQueues", ["AsyncQueues", "Destinations", "Events"]),
         target("FuzzPersistence", ["Persistence", "AsyncQueues", "Checksums", "Events"]),
         target("FuzzTrackers", ["Trackers", "AsyncQueues", "Events"]),
+        target("FuzzCollectorEncoding", ["CollectorEncoding", "PropertyJSON", "JSONValues", "TrackingPlans", "Events"]),
         target("FuzzPropertyJSON", ["PropertyJSON", "HTTPDestinations", "JSONValues", "Events"]),
     ]
 )

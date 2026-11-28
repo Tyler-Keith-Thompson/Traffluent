@@ -51,7 +51,7 @@ extension EventRecord {
 
 // Spelled out rather than `String(describing:)`, so renaming a case can't change what is sent.
 extension DeviceKey.Value.FormFactor {
-    fileprivate var collectorName: String {
+    var collectorName: String {
         switch self {
         case .phone: "phone"
         case .pad: "pad"
@@ -64,7 +64,7 @@ extension DeviceKey.Value.FormFactor {
 }
 
 extension NetworkKey.Value {
-    fileprivate var collectorName: String {
+    var collectorName: String {
         switch self {
         case .wifi: "wifi"
         case .cellular: "cellular"

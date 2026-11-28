@@ -480,11 +480,12 @@ also throws for an empty measurement ID, for one that isn't `G-` followed by upp
 digits, and for an empty API secret. The secret is in every request's URL, so don't log the
 destination, its requests or a transport's URLs.
 
-Traffluent has no decoder that turns a collector batch back into records, so a relay decodes each
-event the app sent into the same `@Event` type, remakes its `EventRecord` with the app's
-identifier, timestamp and a context whose `SessionKey` is the app's session, and hands the records
-to the destination's `receive(_:)`. It doesn't track them again through a tracker with `.sessions()`, which would send
-every user of the app as one `client_id`. A server that tracks its own events does use a tracker:
+A relay reads each body the app sent back into records with a `CollectorBatchDecoder` (module
+``/CollectorEncoding``), which keeps each record's identifier, timestamp and event and the app's
+`SessionKey`, and hands the records to the destination's `receive(_:)`. The GoogleAnalyticsEncoding
+module's article shows one. It doesn't track them again through a tracker with `.sessions()`, which
+would send every user of the app as one `client_id`. A server that tracks its own events does use a
+tracker:
 
 ```swift
 let plan = try TrackingPlan()

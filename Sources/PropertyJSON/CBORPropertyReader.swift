@@ -83,7 +83,7 @@ struct CBORPropertyReader {
             return .array(elements)
         case .date:
             return try .string(Self.timestamp(value))
-        case .other, nil:
+        case .floatingPoint, .other, nil:
             return try anyValue(value)
         }
     }
@@ -172,36 +172,6 @@ struct CBORPropertyReader {
 
 /// A value JSON has no form for, or bytes that don't hold the value their type says.
 private struct Unrepresentable: Error {}
-
-/// How a written type's value is read from its CBOR.
-private enum Shape {
-    /// `T?`, `T!` or `Optional<T>`: `null`, or `T`'s value.
-    case optional(WrittenType)
-    /// `Sensitive<T>`: `T`'s value, or `null` where it is redacted.
-    case sensitive(WrittenType)
-    /// `Refined<T, Rule>`, whose value is `T`'s.
-    case refined(WrittenType)
-    /// `[T]` or `Array<T>`.
-    case array(WrittenType)
-    /// `Date`: a double of its seconds since 2001, or tag 1's since 1970.
-    case date
-    /// Any other type, read for what its value holds.
-    case other
-}
-
-extension WrittenType {
-    /// How the type's value is read, with the module names the plan's documents accept.
-    fileprivate var shape: Shape {
-        if case .optional(let wrapped) = self { return .optional(wrapped) }
-        if case .array(let element) = self { return .array(element) }
-        if let arguments = names("Optional", in: ["Swift"]), arguments.count == 1 { return .optional(arguments[0]) }
-        if let arguments = names("Array", in: ["Swift"]), arguments.count == 1 { return .array(arguments[0]) }
-        if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .refined(arguments[0]) }
-        if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .sensitive(arguments[0]) }
-        if names("Date", in: ["Foundation", "FoundationEssentials"])?.isEmpty == true { return .date }
-        return .other
-    }
-}
 
 extension JSON {
     /// A finite number as JSON.

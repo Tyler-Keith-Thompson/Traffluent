@@ -135,9 +135,9 @@ bad row in a dashboard.
   refuses it at run time: it throws `GoogleAnalyticsSetupError.appBundle` when the main bundle is
   an `.app` or `.appex`. The docs say what shipping the secret exposes, and that the secret sits in
   every request's URL. An app's events reach GA4 through the adopter's server, which remakes each
-  `EventRecord` with the app's `SessionKey` and calls the destination's `receive`; Traffluent
-  doesn't provide that server yet (TraffluentCollector doesn't forward to GA4, and there is no
-  collector-batch decoder). The encoder writes a web or data stream's request (`measurement_id`,
+  `EventRecord` with the app's `SessionKey` and calls the destination's `receive`: TraffluentCollector
+  forwards to GA4 (TC-21), and `CollectorBatchDecoder` reads a collector batch back into records
+  for a server of the adopter's own (TRAF-133). The encoder writes a web or data stream's request (`measurement_id`,
   `client_id` from the session, else the record ID) and nothing beyond the session (D4): no
   Firebase `app_instance_id`, `user_id`, user properties, IP, device or advertising ID, with ad
   consent sent as denied. Rejected: shipping the secret in apps with a warning; a factory on every

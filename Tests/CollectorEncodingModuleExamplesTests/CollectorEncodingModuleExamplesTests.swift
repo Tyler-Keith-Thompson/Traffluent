@@ -56,4 +56,30 @@ struct CollectorEncodingModuleExamplesTests {
         #expect(records.first?["name"] as? String == expectedName)
         #expect(properties["plan"] as? String == expectedPlan)
     }
+
+    @Test("Reading batches back")
+    func readingBatchesBack() async throws {
+        let memory = InMemoryDestination()
+        let recording = Tracker(enrichers: [.sessions()])
+        let recordingDelivery = recording.records.batch().deliver(to: memory)
+        recording.track(SignedUp(plan: "pro"))
+        await recording.finish()
+        try await recordingDelivery.execute()
+        let body = try #require(CollectorBatchEncoder(plan: try TrackingPlan()).batch(of: memory.records).body).body
+        let destination = InMemoryDestination()
+
+        let plan = try TrackingPlan()
+        let decoder = try CollectorBatchDecoder(plan: plan)
+        let batch = try decoder.batch(from: body)  // a body CollectorBatchEncoder wrote
+        await destination.receive(batch.records)
+
+        let expectedIDs = memory.records.map(\.id)
+        let expectedSessions = memory.records.map { $0.context[SessionKey.self] }
+        let expectedPlan = "pro"
+
+        #expect(batch.undecodedRecords.isEmpty)
+        #expect(destination.records.map(\.id) == expectedIDs)
+        #expect(destination.records.map { $0.context[SessionKey.self] } == expectedSessions)
+        #expect(destination.records.compactMap { ($0.event as? SignedUp)?.plan } == [expectedPlan])
+    }
 }

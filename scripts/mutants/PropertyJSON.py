@@ -15,17 +15,27 @@
 #   as largealonenever's, which plants a limit that never sends alone. Its init's default of `false`
 #   can't be planted (a default argument isn't a statement or a switchable expression);
 #   largeRecordLeftOutByDefault pins it, and `unlimited` (largealonealways) the private init.
+# - The writer's `elements.reserveCapacity(items.count)` removed: capacity only.
+# - DecodingError's keyNotFound arm reading `key.stringValue` alone: the coding path is empty for a
+#   property of the event itself, and the CBOR writer makes every nested value of a type the plan
+#   maps, so only a type of the app's own could tell them apart.
+# - The ISO 8601 parser's 12-digit cap on a year raised: a 13-digit year's day count overflows no
+#   Int128, and its millisecond count, past Int64, is refused all the same.
 #
 # Left out because a mutant switch can't hold them: the guards that bind the map's entries and
 # each key's name (`case .map(let entries)`, `case .textString(let name)`), whose bindings the
 # code after them needs. NotAMap's tests in CollectorEncodingTests and PostHogEncodingTests pin the
-# first.
+# first. And the month lengths' `case` patterns in CivilDate.daysInMonth; the thirty-day months are
+# pinned by the 04-31, 06-31, 09-31 and 11-31 cases of CollectorTimestampDecodingTests.
 
 TESTS = ["PropertyJSONTests", "CollectorEncodingTests", "PostHogEncodingTests", "DestinationTestingTests"]
 
 S = "EventSchema+PropertyTypes.swift"
 R = "EventRecord+Properties.swift"
 P = "CBORPropertyReader.swift"
+SHAPE = "WrittenType+Shape.swift"
+WRITER = "CBORPropertyWriter.swift"
+EVENT = "Event+Properties.swift"
 D = "Date+Timestamps.swift"
 READER = "PropertyReader.swift"
 LIMIT = "BatchLimit.swift"
@@ -55,10 +65,10 @@ MUTANTS = [
     Mutant("tagdatesince2001", P, "date = Date(timeIntervalSince1970: seconds)", "date = Date(timeIntervalSinceReferenceDate: seconds)", mode="stmt", nth=1),
     # The second copy is anyValue()'s, for a Date in a type the plan can't map.
     Mutant("nesteddateunread", P, "return try .string(Self.timestamp(value))", "throw Unrepresentable()", mode="stmt", nth=1),
-    Mutant("dateasnumber", P, 'if names("Date", in: ["Foundation", "FoundationEssentials"])?.isEmpty == true { return .date }', "", mode="stmt"),
-    Mutant("unqualifieddateonly", P, '["Foundation", "FoundationEssentials"]', '["FoundationEssentials"]'),
-    Mutant("refinedopaque", P, 'if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .refined(arguments[0]) }', "", mode="stmt"),
-    Mutant("sensitiveopaque", P, 'if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .sensitive(arguments[0]) }', "", mode="stmt"),
+    Mutant("dateasnumber", SHAPE, 'if names("Date", in: ["Foundation", "FoundationEssentials"])?.isEmpty == true { return .date }', "", mode="stmt"),
+    Mutant("unqualifieddateonly", SHAPE, '["Foundation", "FoundationEssentials"]', '["FoundationEssentials"]'),
+    Mutant("refinedopaque", SHAPE, 'if let arguments = names("Refined", in: ["Events", "Traffluent"]), arguments.count == 2 { return .refined(arguments[0]) }', "", mode="stmt"),
+    Mutant("sensitiveopaque", SHAPE, 'if let arguments = names("Sensitive", in: ["Events", "Traffluent"]), arguments.count == 1 { return .sensitive(arguments[0]) }', "", mode="stmt"),
     Mutant("floatwidened", P, "Double(number.description)", "Optional(Double(number))"),
     Mutant("negativeoffbyone", P, "~$0", "-$0"),
     Mutant("largeunsignedclamped", P, ".number(Double(magnitude))", ".number(Double(UInt64(Int64.max)))"),
@@ -143,4 +153,53 @@ MUTANTS = [
     Mutant("contextnilapplicationnull", CONTEXT, "application.bundleIdentifier.map(JSON.string)", "Optional(application.bundleIdentifier.map(JSON.string) ?? .null)"),
     Mutant("contextpadasphone", CONTEXT, '"pad"', '"phone"'),
     Mutant("contextofflineasother", CONTEXT, '"offline"', '"other"'),
+    # CollectorBatchDecoder's reading of properties and timestamps.
+    # PropertyJSON's CBOR writer, which only the decoder reaches.
+    Mutant("writerpropertydropped", WRITER, "entries[.textString(name)] = try cbor(value, as: types[name] ?? nil)", "", mode="stmt"),
+    Mutant("writerpropertyunnamed", WRITER, "UndecodableProperty(property: name)", 'UndecodableProperty(property: "")'),
+    Mutant("writeroptionalunwrapped", WRITER, "guard value != .null else { return .null }", "", mode="stmt"),
+    Mutant("writerelementuntyped", WRITER, "elements.append(try cbor(item, as: element))", "elements.append(anyValue(item))", mode="stmt"),
+    Mutant("writerdateastext", WRITER, "return .double(date.timeIntervalSinceReferenceDate)", "return .textString(text)", mode="stmt"),
+    Mutant("writerfloatuntyped", WRITER, "return .double(number)", "return anyValue(value)", mode="stmt"),
+    Mutant("writerzeronegative", WRITER, "integer >= 0", "integer > 0"),
+    Mutant("writernegativeoffbyone", WRITER, "UInt64(~integer)", "UInt64(-integer)"),
+    Mutant("writerlargeasdouble", WRITER, "UInt64(exactly: number).map(CBOR.unsignedInt) ?? .double(number)", "CBOR.double(number)"),
+    Mutant("writerobjectempty", WRITER, "entries[.textString(name)] = anyValue(item)", "", mode="stmt"),
+    Mutant("floatuntyped", SHAPE, '["Double", "Float", "Float64", "Float32"]', '["Double"]'),
+    Mutant("decodingconcealed", EVENT, "true", "false"),
+    Mutant("decodingmissingunnamed", EVENT, "(context.codingPath.first ?? key).stringValue", '""'),
+    Mutant("decodingmismatchunnamed", EVENT, 'context.codingPath.first?.stringValue ?? ""', '""'),
+    # PropertyJSON's ISO 8601 parser.
+    Mutant("parsenegativeignored", D, "isNegative ? -magnitude : magnitude", "magnitude"),
+    Mutant("parsenegativezero", D, "!isNegative || magnitude > 0", "true"),
+    Mutant("parseleadingzero", D, 'yearDigits == 4 || text[yearStart] != UInt8(ascii: "0")', "true"),
+    Mutant("parseshortyear", D, "yearDigits >= 4", "yearDigits >= 3"),
+    Mutant("parselengthloose", D, "rest.count == 20", "rest.count >= 20"),
+    Mutant("parseseparatorsunchecked", D, "rest[rest.startIndex + offset] != UInt8(ascii: byte)", "false"),
+    Mutant("parsedigitsignored", D, 'value * 10 + Int64(digit - UInt8(ascii: "0"))', "value * 10"),
+    Mutant("parsemonthunchecked", D, "(1 ... 12).contains(month)", "true"),
+    Mutant("parsedaythirtyone", D, "(1 ... date.daysInMonth).contains(day)", "(1 ... 31).contains(day)"),
+    Mutant("parsedayzero", D, "(1 ... date.daysInMonth).contains(day)", "(0 ... date.daysInMonth).contains(day)"),
+    Mutant("parsehour24", D, "hour < 24", "hour <= 24"),
+    Mutant("parseminute60", D, "minute < 60", "minute <= 60"),
+    Mutant("parsesecond60", D, "second < 60", "second <= 60"),
+    Mutant("parsemillisecondsignored", D, "((hour * 60 + minute) * 60 + second) * 1000 + millisecond", "((hour * 60 + minute) * 60 + second) * 1000"),
+    Mutant("leapeveryyear", D, "year % 4 == 0", "true"),
+    Mutant("leapcenturies", D, "year % 100 != 0 || year % 400 == 0", "true"),
+    Mutant("leapnofourhundred", D, "year % 400 == 0", "false"),
+    Mutant("civilmarchyear", D, "month <= 2 ? year - 1 : year", "year"),
+    Mutant("civileratruncated", D, "marchYear >= 0 ? marchYear : marchYear - 399", "marchYear"),
+    Mutant("civilmonthfrommarch", D, "month > 2 ? month - 3 : month + 9", "month - 3"),
+    # The second copy is days_from_civil's; the first civil_from_days'.
+    Mutant("civilnocenturyrule", D, "yearOfEra / 100", "0", nth=1),
+    # The parse's search for a Date in the millisecond.
+    Mutant("parsenearestonly", D, "lowest < milliseconds", "false"),
+    Mutant("parsenearestdropped", D, "actual != milliseconds", "false"),
+    Mutant("parselowabove", D, "actual < milliseconds ? nearest : nearest - width", "nearest"),
+    Mutant("parsehighbelow", D, "actual < milliseconds ? nearest + width : nearest", "nearest"),
+    Mutant("parsewidthonems", D, "Swift.max(0.002, 2 * nearest.ulp)", "0.001"),
+    Mutant("parsebisectreversed", D, "reached < milliseconds", "reached >= milliseconds"),
+    Mutant("parsebisectnone", D, "low.nextUp < high", "false"),
+    Mutant("parsereferencefrom1970", D, "Int128(Self.millisecondsBetween1970AndReferenceDate)", "Int128(0)"),
+    Mutant("parselastunchecked", D, "guard Self.milliseconds(atReferenceSeconds: high) == milliseconds else { return nil }", "", mode="stmt"),
 ]

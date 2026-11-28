@@ -34,6 +34,8 @@ swift_library(
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_json_schema//:JSONSchema",
         "@swiftpkg_swift_property_based//:PropertyBased",
+        "@swiftpkg_swiftprng//:Generators",
+        "@swiftpkg_swiftprng//:Sampling",
         "//Tests/TraffluentTestSupport",
     ],
 )

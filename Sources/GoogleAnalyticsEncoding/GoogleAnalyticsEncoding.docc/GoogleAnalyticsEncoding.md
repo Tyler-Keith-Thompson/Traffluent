@@ -103,15 +103,42 @@ it: check the property's Realtime report after setting the variables.
 ### Sending from a server of your own
 
 To send from a server of yours instead, such as a relay in front of Google Analytics, make this
-destination there and hand it the records. Traffluent has no decoder that turns a collector batch
-back into records, so a relay's job is:
+destination there and hand it the records. The app sends to the relay as it would to the
+collector, with an `HTTPDestination` and a `CollectorBatchEncoder`. The relay reads each body back
+into records with a `CollectorBatchDecoder` (module `CollectorEncoding`), made with the same
+`TrackingPlan` and the same `@Event` types, from a module the app and the server share, and hands
+the records to the destination:
 
-1. Read each event the app sent (its name, version, identifier, timestamp, properties and session)
-   and decode it into the same `@Event` type the app tracked, from a module the app and the server
-   share.
-2. Remake its `EventRecord` with `EventRecord(id:event:timestamp:sourceLocation:context:)`: the
-   app's identifier and timestamp, and a context whose `SessionKey` is the app's session.
-3. Hand each batch of records to the destination's `receive(_:)`.
+```swift
+import CollectorEncoding
+import GoogleAnalyticsEncoding
+import HTTPDestinations
+import TrackingPlans
+
+let plan = try TrackingPlan()
+let decoder = try CollectorBatchDecoder(plan: plan)
+let googleAnalytics = try HTTPDestination.googleAnalytics(
+    measurementID: measurementID,  // the web or data stream's, G-…
+    apiSecret: apiSecret,  // from the server's configuration, never an app's
+    region: .global,  // or .eu, to have Google collect the data in the EU
+    plan: plan)
+
+// For each request the relay receives: its body, as the app's CollectorBatchEncoder wrote it.
+let batch = try decoder.batch(from: body)
+await googleAnalytics.receive(batch.records)
+```
+
+Each record keeps the identifier, timestamp and event the app sent, and the app's `SessionKey` in
+its context, so Google Analytics gets each session as its own `client_id`. A record the decoder
+can't read, such as one of an event the server has no type of, is left out and reported in
+`batch.undecodedRecords`; the batch's other records are still sent. A body that isn't a collector
+batch at all throws `NotACollectorBatch`, which the relay can answer with a 400.
+
+The body doesn't say which version of an event a record holds, so the decoder reads each record at
+the version of its own type of that name. Deploy the relay with the event types the apps send. Once
+an event's version is raised, a record from an app still at the earlier version is read as the
+newer one: reported as `undecodableProperty` when its properties don't fit the newer type, and sent
+as the newer version when they do.
 
 Don't track the events again through a `Tracker` with `.sessions()` on the server. That tracker
 would give every event the server's own session, so every user of the app would arrive in Google

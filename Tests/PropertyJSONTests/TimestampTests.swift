@@ -236,4 +236,101 @@ struct TimestampTests {
             #expect(actual == expected)
         }
     }
+
+    @Test("Any millisecond's timestamp parses back as a date in that millisecond", .tags(.randomized))
+    func parsesBack() async {
+        await propertyCheck(count: 500, input: Gen.uint64(in: .min ... .max)) { seed in
+            try check(seed: seed)
+        }
+
+        func check(seed: UInt64) throws {
+            var random = Xoshiro256StarStar(seed: seed)
+            // Half a millisecond past a whole one, so rounding down is unambiguous: within 2^49
+            // milliseconds of 1970, a Double's step is under 0.1 ms.
+            let expected = Int64(random.integer(in: -562_949_953_421_312 ... 562_949_953_421_312))
+            let timestamp = try Date(timeIntervalSince1970: (Double(expected) + 0.5) / 1000).iso8601Timestamp
+
+            let actual = try Date(iso8601Timestamp: timestamp)?.millisecondsSince1970()
+
+            #expect(actual == expected)
+        }
+    }
+
+    @Test("For any millisecond within 2^53 of 1970, the timestamp parses back as a date of exactly that millisecond, which some Date always reaches", .tags(.randomized))
+    func parsesEveryMillisecond() async {
+        await propertyCheck(count: 1000, input: Gen.int64(in: -9_007_199_254_740_992 ... 9_007_199_254_740_992)) { milliseconds in
+            try check(milliseconds)
+        }
+
+        // Howard Hinnant's civil_from_days
+        // (https://howardhinnant.github.io/date_algorithms.html#civil_from_days), written apart
+        // from the library's, to spell the millisecond's timestamp without a Date.
+        func timestamp(of milliseconds: Int64) -> String {
+            let days = milliseconds >= 0 ? milliseconds / 86_400_000 : (milliseconds - 86_399_999) / 86_400_000
+            let millisecond = milliseconds - days * 86_400_000
+            let shifted = days + 719_468
+            let era = (shifted >= 0 ? shifted : shifted - 146_096) / 146_097
+            let dayOfEra = shifted - era * 146_097
+            let yearOfEra = (dayOfEra - dayOfEra / 1_460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365
+            let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)
+            let monthFromMarch = (5 * dayOfYear + 2) / 153
+            let day = dayOfYear - (153 * monthFromMarch + 2) / 5 + 1
+            let month = monthFromMarch < 10 ? monthFromMarch + 3 : monthFromMarch - 9
+            let year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0)
+            let yearText = (year < 0 ? "-" : "") + String(format: "%04lld", abs(year))
+            return yearText + String(format: "-%02lld-%02lldT%02lld:%02lld:%02lld.%03lldZ", month, day, millisecond / 3_600_000, millisecond / 60_000 % 60, millisecond / 1_000 % 60, millisecond % 1_000)
+        }
+
+        func check(_ expected: Int64) throws {
+            // Whether a Date reaches the millisecond: a few Doubles of seconds since 1970 nearest its
+            // start, and of seconds since 2001, rounded down as the timestamp rounds. Past 2^53 ms
+            // from 1970 a step of a Double is over a millisecond apart, so some milliseconds are
+            // reached by none.
+            func around(_ start: Double) -> [Double] {
+                [start.nextDown.nextDown, start.nextDown, start, start.nextUp, start.nextUp.nextUp]
+            }
+            let since1970 = around(Double(expected) / 1000).map { Date(timeIntervalSince1970: $0) }
+            let sinceReference = around(Double(expected) / 1000 - Date.timeIntervalBetween1970AndReferenceDate).map { Date(timeIntervalSinceReferenceDate: $0) }
+            let reached = (since1970 + sinceReference).contains { (try? $0.millisecondsSince1970()) == expected }
+
+            let actual = Date(iso8601Timestamp: timestamp(of: expected))
+
+            if let actual {
+                #expect(try actual.millisecondsSince1970() == expected)
+            }
+            #expect(actual != nil || !reached)
+        }
+    }
+
+    @Test("A millisecond whose nearest Date rounds into a later one parses back as the Date below it that rounds into it")
+    func nearestAbove() throws {
+        // -9007175353700285 ms from 1970: the Double nearest its start, -9008153660900.283 s from
+        // 2001, rounds down to -9007175353700283 ms; the Double below it to this millisecond.
+        let expected = Date(timeIntervalSinceReferenceDate: -9_008_153_660_900.285)
+        let expectedMilliseconds: Int64 = -9_007_175_353_700_285
+        let timestamp = try expected.iso8601Timestamp
+
+        let actual = try #require(Date(iso8601Timestamp: timestamp))
+
+        #expect(try expected.millisecondsSince1970() == expectedMilliseconds)
+        #expect(try actual.millisecondsSince1970() == expectedMilliseconds)
+    }
+
+    @Test(
+        "A timestamp parses back only in the form iso8601Timestamp writes",
+        arguments: [
+            ("1970-01-01T00:00:00.000Z", 0 as Int64?),
+            ("0000-03-01T00:00:00.000Z", -62_162_035_200_000),
+            ("10000-01-01T00:00:00.000Z", 253_402_300_800_000),
+            ("1970-01-01T00:00:00Z", nil),
+            ("00000-01-01T00:00:00.000Z", nil),
+            ("-0000-01-01T00:00:00.000Z", nil),
+            ("2023-02-29T00:00:00.000Z", nil),
+        ]
+    )
+    func parsing(timestamp: String, expected: Int64?) throws {
+        let actual = try Date(iso8601Timestamp: timestamp)?.millisecondsSince1970()
+
+        #expect(actual == expected)
+    }
 }
