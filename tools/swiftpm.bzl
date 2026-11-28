@@ -27,6 +27,7 @@ _ModuleDependencies = provider(
         "name": "The module name, or for an external package's product, `identity/Product`.",
         "lines": "depset of `Module: Dependency Dependency` lines, one per first-party module.",
         "resources": "depset of `Module: .rule(\"path\")` lines, one per resource entry of a first-party module.",
+        "features": "depset of `Module: .enableExperimentalFeature(\"Name\")` lines, one per language feature of a first-party module.",
     },
 )
 
@@ -38,7 +39,12 @@ def _external_name(label):
 
 def _module_dependencies_aspect_impl(target, ctx):
     if target.label.repo_name:
-        return [_ModuleDependencies(name = _external_name(target.label), lines = depset(), resources = depset())]
+        return [_ModuleDependencies(
+            name = _external_name(target.label),
+            lines = depset(),
+            resources = depset(),
+            features = depset(),
+        )]
     # A compiler plugin (MACROS in scripts/modules.py) is a `plugins` entry in Bazel and a
     # dependency in Package.swift.
     deps = [dep for dep in getattr(ctx.rule.attr, "deps", []) + getattr(ctx.rule.attr, "plugins", []) if _ModuleDependencies in dep]
@@ -53,10 +59,22 @@ def _module_dependencies_aspect_impl(target, ctx):
         if ModuleResourcesInfo in data
         for rule, path in data[ModuleResourcesInfo].entries
     ]
+    # Language features, spelled as Package.swift's swiftSettings spell them.
+    copts = getattr(ctx.rule.attr, "copts", [])
+    spellings = {
+        "-enable-experimental-feature": "enableExperimentalFeature",
+        "-enable-upcoming-feature": "enableUpcomingFeature",
+    }
+    features = [
+        "{}: .{}(\"{}\")".format(name, spellings[copts[index]], copts[index + 1])
+        for index in range(len(copts) - 1)
+        if copts[index] in spellings
+    ]
     return [_ModuleDependencies(
         name = name,
         lines = depset([line], transitive = [dep[_ModuleDependencies].lines for dep in deps]),
         resources = depset(resources, transitive = [dep[_ModuleDependencies].resources for dep in deps]),
+        features = depset(features, transitive = [dep[_ModuleDependencies].features for dep in deps]),
     )]
 
 _module_dependencies_aspect = aspect(
@@ -123,6 +141,22 @@ grep -E '^ *\\.(target|executableTarget|testTarget|macro)\\(name: "' "$manifest"
     fi
     printf '%s\\n' "$list" | grep -oE "$entry" | awk -v name="$name" '{ print name ": " $0 }'
 done | LC_ALL=C sort > "$bundled"
+# One `Target: .enableExperimentalFeature("Name")` line per language feature among a target's
+# swiftSettings.
+features="$5"
+enabled="${TEST_TMPDIR:-/tmp}/enabled.txt"
+settings="${TEST_TMPDIR:-/tmp}/settings.txt"
+LC_ALL=C sort "$features" > "$enabled"
+grep -E '^ *\\.(target|executableTarget|testTarget|macro)\\(name: "' "$manifest" | while IFS= read -r line; do
+    case "$line" in
+        *"swiftSettings: ["*) ;;
+        *) continue ;;
+    esac
+    name="${line#*name: \\"}"
+    name="${name%%\\"*}"
+    printf '%s\\n' "${line#*swiftSettings: [}" | grep -oE '\\.enable(Experimental|Upcoming)Feature\\("[^"]*"\\)' \\
+        | awk -v name="$name" '{ print name ": " $0 }' || true
+done | LC_ALL=C sort > "$settings"
 status=0
 if ! diff -u "$bazel" "$actual"; then
     echo
@@ -137,6 +171,11 @@ fi
 if ! diff -u "$resources" "$bundled"; then
     echo
     echo "Package.swift's resources differ from the module_resources targets (- Bazel, + Package.swift)."
+    status=1
+fi
+if ! diff -u "$enabled" "$settings"; then
+    echo
+    echo "Package.swift's language features differ from the swift_library copts (- Bazel, + Package.swift)."
     status=1
 fi
 if [ "$status" -ne 0 ]; then
@@ -155,22 +194,25 @@ def _swiftpm_manifest_test_impl(ctx):
     resources = ctx.actions.declare_file(ctx.label.name + ".resources.txt")
     entries = depset(transitive = [module[_ModuleDependencies].resources for module in ctx.attr.modules])
     ctx.actions.write(resources, "".join([entry + "\n" for entry in entries.to_list()]))
+    features = ctx.actions.declare_file(ctx.label.name + ".features.txt")
+    enabled = depset(transitive = [module[_ModuleDependencies].features for module in ctx.attr.modules])
+    ctx.actions.write(features, "".join([feature + "\n" for feature in enabled.to_list()]))
     checker = ctx.actions.declare_file(ctx.label.name + ".check.sh")
     ctx.actions.write(checker, _SCRIPT, is_executable = True)
     runner = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(
         runner,
-        '#!/bin/sh\nexec "{}" "{}" "{}" "{}" "{}"\n'.format(checker.short_path, ctx.file.manifest.short_path, expected.short_path, products.short_path, resources.short_path),
+        '#!/bin/sh\nexec "{}" "{}" "{}" "{}" "{}" "{}"\n'.format(checker.short_path, ctx.file.manifest.short_path, expected.short_path, products.short_path, resources.short_path, features.short_path),
         is_executable = True,
     )
     return [DefaultInfo(
         executable = runner,
-        runfiles = ctx.runfiles(files = [checker, expected, products, resources, ctx.file.manifest]),
+        runfiles = ctx.runfiles(files = [checker, expected, products, resources, features, ctx.file.manifest]),
     )]
 
 swiftpm_manifest_test = rule(
     implementation = _swiftpm_manifest_test_impl,
-    doc = "Fails when Package.swift's targets, dependencies, resources or library products differ from the Bazel graph's.",
+    doc = "Fails when Package.swift's targets, dependencies, resources, language features or library products differ from the Bazel graph's.",
     attrs = {
         "manifest": attr.label(allow_single_file = True, mandatory = True),
         "modules": attr.label_list(aspects = [_module_dependencies_aspect], mandatory = True),

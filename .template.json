@@ -1,5 +1,5 @@
 {
-  "commit": "16da3d6d7c7274bbad5e0e11f48852854bb2fcda",
+  "commit": "e9e96f6175eda1c60af9686eae959739753d55ac",
   "name": "Traffluent",
   "type": "library",
   "benchmarks": true,
@@ -14,5 +14,6 @@
   "ci": true,
   "trunk": false,
   "simulator": true,
-  "examples": true
+  "examples": true,
+  "performance": false
 }

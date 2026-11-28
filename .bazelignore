@@ -23,6 +23,3 @@ Fuzz/.build
 # sources, for the Apple apps.
 Examples/.build
 Examples/.swiftpm
-
-# Overlays the bootstrap script copies over the template (server and embedded types); not built in place.
-templates

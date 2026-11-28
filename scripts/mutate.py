@@ -11,7 +11,9 @@ rather than once per mutant:
 
 A stmt mutant's `old` never starts with `defer`: in the else block, the defer would run when that
 block ends rather than with its scope, changing the unmutated build, so the run refuses one. Mutate
-the statements inside the defer instead.
+the statements inside the defer instead. Nor does it start with a declaration (`let`, `var`): the
+binding would exist only inside the else block, so code after it wouldn't build. Mutate the
+initializer with an expr mutant instead.
 
 `old` must occur once in the file, or `nth` picks the occurrence. `module` puts a mutant in another
 module's file (Sources/<module>/<file>), for code the spec's module wires into; the spec's TESTS
@@ -322,8 +324,11 @@ def sync_coverage_workspace(module, bundles):
         subprocess.run(["rsync", "-a", "-c", "--delete", os.path.join(WORK, item), COVERAGE_WORK], check=True)
     with open(os.path.join(WORK, "Package.swift")) as f:
         manifest = f.read()
-    manifest, found = re.subn(rf'(\.(?:target|macro)\(name: "{module}",.*?)\),\n',
-                              rf'\1, swiftSettings: [{INSTRUMENT}]),\n', manifest, count=1)
+    # A target with settings of its own (MOCKING, EXPERIMENTAL_FEATURES in scripts/modules.py) takes
+    # the instrumentation into its list: a second `swiftSettings:` argument wouldn't parse.
+    manifest, found = re.subn(rf'(\.(?:target|macro)\(name: "{module}"(?:,.*?)?)(?:, swiftSettings: \[(.*)\])?\),\n',
+                              lambda m: f'{m[1]}, swiftSettings: [{INSTRUMENT}{", " + m[2] if m[2] else ""}]),\n',
+                              manifest, count=1)
     if not found:
         sys.exit(f"No target {module} in Package.swift")
     for b in bundles:
@@ -816,6 +821,11 @@ def main():
             sys.exit(f"{m.name}: a stmt mutant can't replace a `defer`: in the mutation build it would run "
                      "when the mutant's else block ends, changing the unmutated code. Mutate the statements "
                      "inside the defer instead.")
+        # A declaration in the else block binds its name there alone, so later code wouldn't build.
+        if m.mode == "stmt" and re.match(r"\s*(let|var)\b", m.old):
+            sys.exit(f"{m.name}: a stmt mutant can't replace a declaration (`let`, `var`): in the mutation "
+                     "build its binding would exist only inside the mutant's else block, so the code after "
+                     "it wouldn't build. Mutate the initializer with an expr mutant instead.")
     unknown = set(args.names) - names
     if unknown:
         sys.exit(f"No such mutants: {', '.join(sorted(unknown))}")
