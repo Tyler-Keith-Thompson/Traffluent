@@ -337,9 +337,13 @@ let benchmarks: @Sendable () -> Void = {
 
     // MARK: track: the cost of one tracked event, written through to disk.
     //
-    // `track` only queues the event, and the tracker's worker writes it, so these measure what the
-    // caller pays. The worker runs on a dispatch queue, which the simulated counts don't see; judge
-    // its cost by wall clock (`just bench`).
+    // `track` only queues the event, and the tracker's worker, on a dispatch queue of its own,
+    // writes it. Each window ends with `flush()`, so it holds the worker's handling of every event
+    // too: left to run on after the window, the worker allocated inside it as far as it had got,
+    // and mallocCountTotal differed on every run. The mallocs and wall clock count the caller and
+    // the worker. The instructions count only the caller, as the simulated counts don't see
+    // dispatch queues: the two Tracker benchmarks count the same instructions, and the store's
+    // own are in "record: SegmentStore append".
 
     // The hand-written form the library must keep pace with: one write() of a record-sized frame
     // to a file opened for appending, per event.
@@ -363,17 +367,19 @@ let benchmarks: @Sendable () -> Void = {
         for number in 0 ..< tracks {
             tracker.track(Tapped(number: number, screen: "Checkout"))
         }
+        await tracker.flush()
         benchmark.stopMeasurement()
         await tracker.finish()
     }
 
-    // The same tracking with no store: what a store adds to the caller's cost.
+    // The same tracking with no store: what a store adds.
     Benchmark("track: Tracker() in memory only", configuration: .init(scalingFactor: .kilo)) { benchmark in
         let tracker = Tracker()
         benchmark.startMeasurement()
         for number in 0 ..< tracks {
             tracker.track(Tapped(number: number, screen: "Checkout"))
         }
+        await tracker.flush()
         benchmark.stopMeasurement()
         await tracker.finish()
     }
