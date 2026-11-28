@@ -61,7 +61,7 @@ PACKAGES = [
     # EventMacrosPlugin, as any module that uses @Event does
     # (TRAF-126). from: on purpose (the owner, TRAF-126): a LinkerSets release that breaks the
     # macro-support API is fixed here when it happens, rather than capped.
-    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.31"),
+    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.33"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
