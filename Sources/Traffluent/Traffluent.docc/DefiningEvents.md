@@ -90,12 +90,12 @@ An `@Event` struct in an extension that shows the type is generic, by naming its
 generic types`), as the macro can't tell from the extension that the type is generic; declare it
 outside the generic type instead.
 
-Event names must be unique across the program, whatever their versions, as a store couldn't tell
-two events' records apart. Within one executable or library, the build checks this. Beside each
-event's record, `@Event` declares a function whose symbol is named for the event's name, so a
-second event of that name defines the symbol again. In one module the compiler refuses it
-(`multiple definitions of symbol`). Across the modules linked into one executable or library, the
-linker refuses it, naming the symbol and both object files:
+Event names must be unique across the program, whatever their versions: the build checks the name
+alone, and a store built from a list takes one type per name. Within one executable or library,
+the build checks this. Beside each event's record, `@Event` declares a function whose symbol is
+named for the event's name, so a second event of that name defines the symbol again. In one
+module the compiler refuses it (`multiple definitions of symbol`). Across the modules linked into
+one executable or library, the linker refuses it, naming the symbol and both object files:
 
 ```
 duplicate symbol '_$linkerset_kind_65766E74_key_OrderPlaced' in:
@@ -119,9 +119,9 @@ links their modules: `SessionStarted` and `SessionEnded` (`Sessions`), `ScreenVi
 of these names, fails to link beside that module; give it another name.
 
 The build can't compare names across separate images, so the stores and the plan check again when
-they read the events. Two discovered events of one name make `SegmentStore()` and
-`DatabaseStore(database:)` throw `duplicateEventName`, and two of one name and version make
-`TrackingPlan()` throw `duplicateEvent`. Each error carries the name and both types' fully
+they read the events. Two discovered events of one name and version make `SegmentStore()` and
+`DatabaseStore(database:)` throw `duplicateEventName`, and `TrackingPlan()` throw
+`duplicateEvent`. Each error carries the name and both types' fully
 qualified names, such as `duplicateEventName("signed_up", firstType: "Checkout.SignedUp",
 secondType: "Signup.SignedUp")`. "Limits" below lists the cases only these errors catch.
 
@@ -129,18 +129,21 @@ A test target is a program of its own, whose events are the ones it declares and
 target whose fixtures reuse a name, two tests that each declare a `signed_up` event, fails to
 build. Rename one of the fixtures, or declare them inside a `private` or `fileprivate` type, such
 as a private test suite: the build doesn't check names there (see "Limits"). The target then holds
-two events of one name, so `SegmentStore()` and `TrackingPlan()` throw in it; build the store or
-plan in such a test from an explicit list, `SegmentStore(events: [SignedUp.self])`. A unit test
-bundle that Xcode hosts in the app is an image of its own, apart from the app's, so a fixture there
-that shares an app event's name isn't refused by the build, only by a store or plan that reads
-both. A tracking plan executable holds the events of the modules it links, so it links every module
-that declares one (<doc:TrackingPlanWorkflow>).
+two events of one name, so `SegmentStore()` and `TrackingPlan()` throw in it when the two share a
+version; build the store or plan in such a test from an explicit list,
+`SegmentStore(events: [SignedUp.self])`. A unit test bundle that Xcode hosts in the app is an
+image of its own, apart from the app's, so a fixture there that shares an app event's name isn't
+refused by the build, only by a store or plan that reads both, when the two share a version. A
+tracking plan executable holds the events of the modules it links, so it links every module that
+declares one (<doc:TrackingPlanWorkflow>).
 
 A program that needs several versions of one event as types at once, such as a relay that reads
-records sent or stored at an older version, declares the older ones inside a `private` type, where the
-build doesn't check their names, and builds its stores from explicit lists, as a store holds one
-type per name. `TrackingPlan()` and a `CollectorBatchDecoder` take one type per name and version,
-so they hold every version. Declare that private type at file scope, or `fileprivate` inside
+records sent at an older version, declares the older ones inside a `private` type, where the
+build doesn't check their names. `TrackingPlan()` and a `CollectorBatchDecoder` take one type per
+name and version, so they hold every version. `SegmentStore()` and `DatabaseStore(database:)`
+keep only the highest version of each name, the one the program tracks
+(<doc:PersistingRecords>). An explicit list, `SegmentStore(events:)`, still takes one type per
+name, whatever its version. Declare that private type at file scope, or `fileprivate` inside
 another type: `@Event`'s expansion can't reach a type that is a `private` member of another.
 
 #### Limits
@@ -183,8 +186,9 @@ another type: `@Event`'s expansion can't reach a type that is a `private` member
   SwiftPM and Bazel link every module whole, and there a duplicate is an error.
 - An event declared inside a `private` or `fileprivate` type, or in an extension marked either
   way, isn't checked by the build: the symbol would be local to its file, and the linker never
-  compares local symbols. Stores and plans still refuse its name at run time. An event that is
-  itself `private`, at file scope or in a wider type, is checked.
+  compares local symbols. Stores and plans still refuse its name at run time when it shares a
+  version with another event's. An event that is itself `private`, at file scope or in a wider
+  type, is checked.
 
 ### Enum properties
 

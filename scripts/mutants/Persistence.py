@@ -24,13 +24,15 @@
 # - The frame buffer an append takes and gives back (spareFrameBuffer), and the limit on the one
 #   kept: without them each frame allocates a buffer of its own, which only counting allocations
 #   could observe.
+# - The newest-version filter's `?? false` made `?? true`: every type it filters took its name in
+#   the loop before, so its name always has a newest type and the fallback is never reached.
 # - The registry's encodeNil for an event that isn't its registration's type: the registry finds a
 #   registration by the event's own type, so the cast always holds.
 # - The rewrite's failure path deleting its temporary file, and its synchronizations (the file's
 #   fsync, the directory's): a test can only make the temporary file's creation fail, which leaves
 #   nothing to delete, and only a power cut could observe either fsync.
 
-TESTS = ["PersistenceTests"]
+TESTS = ["PersistenceTests", "EventDiscoveryVersionsTests", "EventDiscoveryDuplicateTests"]
 
 F = "SegmentFormat.swift"
 L = "SegmentLog.swift"
@@ -201,17 +203,32 @@ MUTANTS = [
     Mutant("exhaustedunreported", L, "dropReports.enqueue(.writeFailed(recordCount: 1, timestamps: record.timestamp...record.timestamp))", "", mode="stmt", nth=4),
     Mutant("anyfilename", L, 'guard name.hasSuffix(".segment") else { return nil }', "", mode="stmt"),
     # The store.
+    # The registry, called after the argument checks, so a bad bound is reported before a duplicate name.
+    Mutant("registrybeforebound", S, "guard byteBound > SegmentFormat.header.count else { throw .byteBoundTooSmall }", "do throws(DuplicateEventName) { _ = try registry() } catch let clash { throw .duplicateEventName(clash.name, firstType: clash.firstType, secondType: clash.secondType) }\n        guard byteBound > (SegmentFormat.header.count) else { throw .byteBoundTooSmall }", mode="stmt"),
     Mutant("defaultbound", S, "5 * 1024 * 1024", "5 * 1000 * 1000"),
     Mutant("defaultsegment", S, "max(byteBound / 8, 1)", "max(byteBound / 4, 1)"),
     Mutant("boundatheaderallowed", S, "byteBound > SegmentFormat.header.count", "byteBound >= SegmentFormat.header.count"),
     Mutant("zerosegmentallowed", S, "$0 > 0", "$0 >= 0"),
-    Mutant("duplicatenamesallowed", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "false"),
+    Mutant("duplicatenamesallowed", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "false", nth=0),
     Mutant("duplicatenamesforgotten", R, "typeByName[registration.name] = type", "", mode="stmt"),
-    Mutant("duplicatefirsttypewrong", R, "String(reflecting: registered)", "String(reflecting: type)"),
+    Mutant("duplicatefirsttypewrong", R, "String(reflecting: registered)", "String(reflecting: type)", nth=0),
     Mutant("duplicatenamesmisnamed", S, "throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)", "throw .byteBoundTooSmall", mode="stmt"),
     Mutant("duplicatetypesswapped", S, "error.firstType", "error.secondType"),
-    Mutant("repeatedtyperefused", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "true"),
+    Mutant("repeatedtyperefused", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "true", nth=0),
     Mutant("notfoundbyname", R, "byName[registration.name] = registration", "", mode="stmt"),
+    # The list-free spelling's newest version of each name (TRAF-159).
+    Mutant("versionclashallowed", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "false", nth=1),
+    Mutant("versionrepeatrefused", R, "ObjectIdentifier(registered) != ObjectIdentifier(type)", "true", nth=1),
+    Mutant("versionclashforgotten", R, "typeByVersion[key] = type", "", mode="stmt"),
+    Mutant("versionclashfirsttypewrong", R, "String(reflecting: registered)", "String(reflecting: type)", nth=1),
+    Mutant("versionignoredinclash", R, "NameAndVersion(name: type.name, version: type.schemaVersion)", "NameAndVersion(name: type.name, version: 0)"),
+    Mutant("lastlistedkept", R, "newest[key.name].map({ $0.schemaVersion < key.version }) ?? true", "true"),
+    Mutant("firstlistedkept", R, "newest[key.name].map({ $0.schemaVersion < key.version }) ?? true", "newest[key.name] == nil"),
+    Mutant("lowestversionkept", R, "$0.schemaVersion < key.version", "$0.schemaVersion > key.version"),
+    Mutant("newestforgotten", R, "newest[key.name] = type", "", mode="stmt"),
+    Mutant("everyversionkept", R, "newest[type.name].map { ObjectIdentifier($0) == ObjectIdentifier(type) } ?? false", "true"),
+    Mutant("listfreerefusesversions", S, "EventRegistry(newestVersionsOf: DiscoveredEvent.all.map(\\.type))", "EventRegistry(DiscoveredEvent.all.map(\\.type))"),
+    Mutant("listkeepsnewest", S, "EventRegistry(events)", "EventRegistry(newestVersionsOf: events)"),
     # Delivery's acknowledgement, in Destinations.
     Mutant("neveracknowledged", "DestinationBuffer.swift", "delivery.acknowledgement?.received()", "", mode="stmt", module="Destinations"),
     # The first is the delivery loop's; the second, after the loop, is noted as equivalent.

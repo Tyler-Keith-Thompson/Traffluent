@@ -30,9 +30,10 @@ extension EventLinkerSetMacro {
     /// default, which `@Event` declares as the name.
     ///
     /// - Throws: A diagnostic at a `name:` argument that isn't a string literal.
-    // The name alone, not its version: stores refuse two types of one name whatever their
-    // versions. LinkerSets refuses a key it can't read at compile time, so a name the macro can't
-    // read is refused too, rather than checked under the type's name, which isn't the event's.
+    // The name alone, not its version: a store built from a list takes one type per name,
+    // whatever its version. LinkerSets refuses a key it can't read at compile time, so a name the
+    // macro can't read is refused too, rather than checked under the type's name, which isn't the
+    // event's.
     // @Event declares the name it gives here, so a name declared anywhere else is a redeclaration;
     // its peer reports a name member before LinkerSets asks for the key.
     public static func uniqueKey(of declaration: some DeclSyntaxProtocol, attribute: AttributeSyntax) throws -> String? {

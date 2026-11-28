@@ -11,8 +11,10 @@ public enum SegmentStoreError: Error, Sendable, Hashable {
     /// The segment size is zero or less.
     case nonPositiveSegmentByteCount
     /// Two of the event types share an `Event.name`, so recovery couldn't tell their records
-    /// apart: the name, and the fully qualified names (`String(reflecting:)`) of the type listed
-    /// first and the one listed second. Rename one of them, or leave one out of `events`.
+    /// apart: two of the listed `events`, whatever their versions, or two of the discovered events
+    /// that share a version too. It holds the name, and the fully qualified names
+    /// (`String(reflecting:)`) of the type that came first and the one that came second. Rename
+    /// one of them, or leave one out of the list.
     case duplicateEventName(String, firstType: String, secondType: String)
     /// The directory can't be created or read, or a segment in it can't be opened, read or
     /// truncated.

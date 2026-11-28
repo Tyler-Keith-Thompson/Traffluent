@@ -32,7 +32,9 @@ public import Persistence
 ///   doesn't join the app's transaction, and the worker inserts it once that write is done, even
 ///   if it rolls back.
 /// - **What is kept.** Every event `DiscoveredEvent.all` lists, or only the `Codable` types in
-///   `events`, in the same encoding as `SegmentStore`'s. Events of any other type are kept in memory only:
+///   `events`, in the same encoding as `SegmentStore`'s. Of the discovered types that share a
+///   name, only the one at the highest version is kept: the version the program tracks. Events
+///   of any other type are kept in memory only:
 ///   they are delivered in this run like any other, are never written, and are lost if the app
 ///   ends first. The first record of each such type is reported as
 ///   `DropReport.notPersisted(event:)`, so a type left out by mistake shows up.
@@ -121,7 +123,8 @@ public struct DatabaseStore: RecordStore {
     /// table if it is missing, and recovers the records already there.
     ///
     /// - Parameters:
-    ///   - events: The event types to keep. No two may share an `Event.name`.
+    ///   - events: The event types to keep. No two may share an `Event.name`, whatever their
+    ///     versions.
     ///   - database: The app's database: a `DatabaseQueue` or a `DatabasePool`.
     ///   - table: The table the records go in; ``defaultTable`` unless given. It may not hold a
     ///     double quote.
@@ -137,18 +140,12 @@ public struct DatabaseStore: RecordStore {
         table: String = DatabaseStore.defaultTable,
         byteBound: Int = DatabaseStore.defaultByteBound
     ) throws(DatabaseStoreError) {
-        guard byteBound > 0 else { throw .nonPositiveByteBound }
-        let registry: EventRegistry
-        do throws(DuplicateEventName) {
-            registry = try EventRegistry(events)
-        } catch {
-            throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)
-        }
-        do throws(DatabaseError) {
-            log = try DatabaseLog(writer: database, table: table, registry: registry, byteBound: byteBound)
-        } catch {
-            throw .database(error)
-        }
+        try self.init(
+            registry: { () throws(DuplicateEventName) in try EventRegistry(events) },
+            database: database,
+            table: table,
+            byteBound: byteBound
+        )
     }
 
     /// A store keeping events of every type the program declares with `@Event`, and the
@@ -159,6 +156,14 @@ public struct DatabaseStore: RecordStore {
     /// that conforms to `Event` by hand isn't among them; to keep one too, list the types with
     /// ``init(events:database:table:byteBound:)``: `DiscoveredEvent.all.map(\.type) + [Legacy.self]`.
     ///
+    /// Of the types that share an `Event.name` at different versions, as in a program that
+    /// declares an event's earlier versions to read older apps' batches, the store keeps the one
+    /// at the highest `Event.schemaVersion`, the version the program tracks. An event of an
+    /// earlier version's type is kept in memory only and reported as
+    /// `DropReport.notPersisted(event:)`, and a record stored at an earlier version, before the
+    /// app was upgraded, is dropped and reported as
+    /// `DropReport.versionMismatch(event:storedVersion:currentVersion:recordCount:)`.
+    ///
     /// - Parameters:
     ///   - database: The app's database: a `DatabaseQueue` or a `DatabasePool`.
     ///   - table: The table the records go in; ``defaultTable`` unless given. It may not hold a
@@ -166,15 +171,44 @@ public struct DatabaseStore: RecordStore {
     ///   - byteBound: The most bytes of encoded records the table may hold.
     /// - Throws: ``DatabaseStoreError/nonPositiveByteBound`` when `byteBound` isn't positive,
     ///   ``DatabaseStoreError/duplicateEventName(_:firstType:secondType:)`` when two of the program's event types share an
-    ///   `Event.name`, and ``DatabaseStoreError/database(_:)`` when the table can't be created (the
-    ///   database is read-only, or `table` holds a double quote) or read, or the rows recovery
-    ///   drops can't be deleted.
+    ///   `Event.name` and an `Event.schemaVersion`, and ``DatabaseStoreError/database(_:)`` when
+    ///   the table can't be created (the database is read-only, or `table` holds a double quote)
+    ///   or read, or the rows recovery drops can't be deleted.
     public init(
         database: some DatabaseWriter,
         table: String = DatabaseStore.defaultTable,
         byteBound: Int = DatabaseStore.defaultByteBound
     ) throws(DatabaseStoreError) {
-        try self.init(events: DiscoveredEvent.all.map(\.type), database: database, table: table, byteBound: byteBound)
+        try self.init(
+            registry: { () throws(DuplicateEventName) in try EventRegistry(newestVersionsOf: DiscoveredEvent.all.map(\.type)) },
+            database: database,
+            table: table,
+            byteBound: byteBound
+        )
+    }
+
+    // Both spellings hand their registry here as a closure, called once the bound is checked: a
+    // bad bound is reported before a duplicate name, whichever spelling, and the list-free one
+    // doesn't scan discovery for a store that can't open. A Result was turned down, as it would
+    // build the registry, and scan, before the check.
+    private init(
+        registry: () throws(DuplicateEventName) -> EventRegistry,
+        database: some DatabaseWriter,
+        table: String,
+        byteBound: Int
+    ) throws(DatabaseStoreError) {
+        guard byteBound > 0 else { throw .nonPositiveByteBound }
+        let events: EventRegistry
+        do throws(DuplicateEventName) {
+            events = try registry()
+        } catch {
+            throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)
+        }
+        do throws(DatabaseError) {
+            log = try DatabaseLog(writer: database, table: table, registry: events, byteBound: byteBound)
+        } catch {
+            throw .database(error)
+        }
     }
 
     /// The table the store keeps its records in.

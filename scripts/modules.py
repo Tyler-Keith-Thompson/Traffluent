@@ -444,6 +444,9 @@ TEST_TARGETS = [
     # Holds two events of one name and version on purpose: a store or plan of every discovered
     # event refuses them, which no other target's binary can show.
     ("EventDiscoveryDuplicateTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
+    # Holds two versions of one event name, as a relay reading older apps' batches does: the
+    # stores of every discovered event keep the highest, which a binary without them can't show.
+    ("EventDiscoveryVersionsTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
     # Links the four modules that declare the library's own events and imports none of them, so
     # nothing in its binary references an event's object file: discovery must find each event
     # anyway, as in an app that links a module and never names its event.

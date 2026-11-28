@@ -16,7 +16,7 @@
 #   reaches the last catch, which logs it at error level rather than notice, and tests don't pin
 #   logs.
 
-TESTS = ["PersistenceTests"]
+TESTS = ["PersistenceTests", "EventDiscoveryVersionsTests", "EventDiscoveryDuplicateTests"]
 
 L = "DatabaseLog.swift"
 S = "DatabaseStore.swift"
@@ -96,11 +96,16 @@ MUTANTS = [
     Mutant("recoveryunbounded", L, "recovery.byteCount > byteBound", "false"),
     Mutant("recoveryevictionnotdeleted", L, 'try db.execute(sql: "DELETE FROM \\(table.quotedDatabaseIdentifier) WHERE position <= ?", arguments: [last])', "", mode="stmt", nth=1),
     # The store.
+    # The registry, called after the argument checks, so a bad bound is reported before a duplicate name.
+    Mutant("registrybeforebound", S, "guard byteBound > 0 else { throw .nonPositiveByteBound }", "do throws(DuplicateEventName) { _ = try registry() } catch let clash { throw .duplicateEventName(clash.name, firstType: clash.firstType, secondType: clash.secondType) }\n        guard byteBound > (0) else { throw .nonPositiveByteBound }", mode="stmt"),
     Mutant("defaultbound", S, "5 * 1024 * 1024", "5 * 1000 * 1000"),
     Mutant("defaulttable", S, '"traffluentRecord"', '"traffluentRecords"'),
     Mutant("zeroboundallowed", S, "byteBound > 0", "byteBound >= 0"),
     Mutant("duplicatenamesmisnamed", S, "throw .duplicateEventName(error.name, firstType: error.firstType, secondType: error.secondType)", "throw .nonPositiveByteBound", mode="stmt"),
     Mutant("duplicatetypesswapped", S, "error.firstType", "error.secondType"),
+    # The list-free spelling keeps the newest version of each name (TRAF-159).
+    Mutant("listfreerefusesversions", S, "EventRegistry(newestVersionsOf: DiscoveredEvent.all.map(\\.type))", "EventRegistry(DiscoveredEvent.all.map(\\.type))"),
+    Mutant("listkeepsnewest", S, "EventRegistry(events)", "EventRegistry(newestVersionsOf: events)"),
     # Rows stored at another schema version (TRAF-18): deleted and reported.
     Mutant("mismatchedkept", L, "undecodable + mismatched", "undecodable"),
     Mutant("mismatchonlynotdeleted", L, "!undecodable.isEmpty || !mismatched.isEmpty", "!undecodable.isEmpty"),

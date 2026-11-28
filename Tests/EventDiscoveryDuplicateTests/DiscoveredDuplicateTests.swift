@@ -12,8 +12,10 @@ import TrackingPlans
 #endif
 
 // This target's binary holds three events named "duplicated", two of them at one version, so a
-// store or a plan of every discovered event refuses them. They are declared out of order, so
-// DiscoveredEvent.all's order comes from its sort, not from the order of their records.
+// store or a plan of every discovered event refuses them: a store keeps the highest version of a
+// name (EventDiscoveryVersionsTests), but two types at any one version still clash. They are
+// declared out of order, so DiscoveredEvent.all's order comes from its sort, not from the order of
+// their records.
 //
 // They sit in a private enum: @Event leaves a private type's events out of the link check of
 // names, which would otherwise refuse the binary, so the run-time checks are what these tests
@@ -53,7 +55,7 @@ struct DiscoveredDuplicateTests {
         #expect(actual == expected)
     }
 
-    @Test("SegmentStore() throws duplicateEventName naming the first two discovered types of one name")
+    @Test("SegmentStore() throws duplicateEventName naming the two discovered types of one name and version, though a higher version is there to keep")
     func segmentStore() {
         let directory = FilePath(NSTemporaryDirectory()).appending("DiscoveredDuplicateTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
@@ -63,6 +65,17 @@ struct DiscoveredDuplicateTests {
 
         #expect(throws: expected) {
             try SegmentStore(directory: directory)
+        }
+    }
+
+    @Test("SegmentStore() reports a bound no larger than a segment's header before the duplicate names")
+    func segmentStoreBoundFirst() {
+        let directory = FilePath(NSTemporaryDirectory()).appending("DiscoveredDuplicateTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: directory.string) }
+        let largestRefused = 8
+
+        #expect(throws: SegmentStoreError.byteBoundTooSmall) {
+            try SegmentStore(directory: directory, byteBound: largestRefused)
         }
     }
 
@@ -97,7 +110,7 @@ struct DiscoveredDuplicateTests {
     }
 
     #if canImport(GRDB)
-        @Test("DatabaseStore(database:) throws duplicateEventName naming the first two discovered types of one name")
+        @Test("DatabaseStore(database:) throws duplicateEventName naming the two discovered types of one name and version, though a higher version is there to keep")
         func databaseStore() throws {
             let database = try DatabaseQueue()
             let expected = ["duplicated", String(reflecting: Duplicates.DuplicatedAlpha.self), String(reflecting: Duplicates.DuplicatedBeta.self)]
@@ -111,6 +124,19 @@ struct DiscoveredDuplicateTests {
                 return
             }
             #expect([name, firstType, secondType] == expected)
+        }
+
+        @Test("DatabaseStore(database:) reports a bound that isn't positive before the duplicate names")
+        func databaseStoreBoundFirst() throws {
+            let database = try DatabaseQueue()
+            let largestRefused = 0
+
+            #expect {
+                try DatabaseStore(database: database, byteBound: largestRefused)
+            } throws: { error in
+                guard case DatabaseStoreError.nonPositiveByteBound = error else { return false }
+                return true
+            }
         }
     #endif
 }

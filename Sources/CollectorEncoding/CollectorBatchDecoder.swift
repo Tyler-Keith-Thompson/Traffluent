@@ -39,8 +39,6 @@ public import TrackingPlans
 /// build, and a plan made from the same types holds a schema of each. That scope is a file-scope
 /// `private` type or a `fileprivate` one, not a `private` member of another type
 /// ([Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents)).
-/// The program builds any store from an explicit list (`SegmentStore(events:)`): a store holds one
-/// type per name, so `SegmentStore()` throws `duplicateEventName` there.
 ///
 /// ```swift
 /// @Event(name: "checkout_started", version: 2)

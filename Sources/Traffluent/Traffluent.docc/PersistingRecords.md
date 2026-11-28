@@ -108,6 +108,17 @@ a new version, is dropped and reported as undecodable. Neither is ever delivered
 value, and records are never migrated from one version to another. <doc:ChangingEvents> lists each
 kind of change.
 
+A program can declare an event's earlier versions as types beside its current one, as a relay that
+reads older apps' batches does (<doc:DefiningEvents>). `SegmentStore()` and
+`DatabaseStore(database:)` then keep the highest version of each name, as they assume that is the
+one the program tracks. A program that tracks a lower version than one it declares lists its
+types instead, `SegmentStore(events:)`. An event of an earlier version's type is kept in memory
+only, and reported as `notPersisted`, which names the event but not its version. A record stored at
+an earlier version is dropped and reported with both versions, as after any version raise. Two
+discovered types of one name and one version make them throw `duplicateEventName`, as nothing says
+which to keep. A list given to `SegmentStore(events:)` holds one type per name, whatever its
+version: list only the one the program tracks.
+
 ### A GRDB database
 
 An app on Apple platforms that already keeps a GRDB database can keep its records there instead.

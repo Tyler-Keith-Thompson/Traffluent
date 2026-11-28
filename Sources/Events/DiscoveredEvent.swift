@@ -54,8 +54,9 @@ internal import LinkerSetsRuntime
 ///   or library, fail to build: `@Event` gives each record a symbol named for the event's name,
 ///   which the compiler or the linker refuses to define twice. Separate images are never compared,
 ///   so a name shared with a dynamic library, a library opened with `dlopen`, or a module linked
-///   into two images is found only here, and a store or plan built from ``all`` refuses it. So is
-///   one declared inside a `private` or `fileprivate` type, whose symbol is local to its file.
+///   into two images is found only here: a store or plan built from ``all`` refuses two of one
+///   name and version, and a store keeps the highest of one name's versions. So is one declared
+///   inside a `private` or `fileprivate` type, whose symbol is local to its file.
 public struct DiscoveredEvent: Sendable {
     /// The event's type.
     public let type: any (Event & Codable).Type
@@ -72,16 +73,18 @@ public struct DiscoveredEvent: Sendable {
     /// version, then by the types' fully qualified names.
     ///
     /// Two types may share a name when they sit in separate images, or one is in a private type,
-    /// which the build doesn't compare: a store or a plan built from the list refuses them, as it
-    /// would the same types listed by hand. The fully qualified name of a type in a private scope
-    /// holds an address that changes between launches, so the order of such types of one name and
-    /// version, and the names a store's or plan's error gives for them, can change too.
+    /// which the build doesn't compare. A store or a plan built from the list refuses two of one
+    /// name and version, as it would the same types listed by hand; a store keeps the one at the
+    /// highest version of types that share a name and differ in version. The fully qualified name
+    /// of a type in a private scope holds an address that changes between launches, so the order
+    /// of such types of one name and version, and the names a store's or plan's error gives for
+    /// them, can change too.
     ///
     /// - Complexity: O(*n* log *n*) in the events, after a walk of the program's loaded images.
     public static var all: [DiscoveredEvent] {
         // One type can have two records: one written by hand beside the macro's, or a record's
         // object file linked into one image twice. A store or plan built from the list would refuse
-        // the second as a duplicate name, so each type is listed once.
+        // the second as a duplicate name and version, so each type is listed once.
         var seen = Set<ObjectIdentifier>()
         return LinkerSet<any __DiscoverableEvent.Type>(kind: .events).values
             .filter { seen.insert(ObjectIdentifier($0)).inserted }

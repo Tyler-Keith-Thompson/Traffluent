@@ -160,8 +160,6 @@ private enum EarlierVersions {
 Declare the earlier version's type at file scope, as above, or `fileprivate` inside another type:
 `@Event` can't expand inside a type that is a `private` member of another
 ([Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents)).
-Build any store on the relay from an explicit list (`SegmentStore(events:)`): a store holds one
-type per name, so `SegmentStore()` throws `duplicateEventName` there.
 
 A record at a version the relay has no type for is left out and reported as `unknownVersion`; the
 rest of its batch is still sent. Apps built with an earlier Traffluent send no version, and the
