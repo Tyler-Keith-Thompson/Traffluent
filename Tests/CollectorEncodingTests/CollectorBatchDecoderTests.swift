@@ -240,11 +240,12 @@ private struct CollectorBatchDecoderTests {
         var plan: String
     }
 
-    @Test("Two event types of one name throw duplicateEventName, naming both types in order")
-    func duplicateEventName() throws {
+    @Test("Two event types of one name and version throw duplicateEvent, naming the version and both types in order")
+    func duplicateEvent() throws {
         let plan = try TrackingPlan(schemas: [SignedUp.schema])
-        let expected = CollectorBatchDecoderError.duplicateEventName(
+        let expected = CollectorBatchDecoderError.duplicateEvent(
             "signed_up",
+            version: 1,
             firstType: String(reflecting: SignedUp.self),
             secondType: String(reflecting: SignedUpAgain.self)
         )

@@ -36,6 +36,7 @@ public import TrackingPlans
 /// | `properties` | The event's stored properties, by name |
 /// | `context` | The context values listed below that the record's context holds |
 /// | `isRedelivered` | The record's `EventRecord/isRedelivered` |
+/// | `version` | The event's `Event/schemaVersion`, an integer, at every version, 1 included |
 ///
 /// Properties are read from the event's `Encodable` form, which `@Event` derives, through
 /// the types its schema in `plan` lists, so the values are the ones the plan's documents describe:
@@ -181,6 +182,12 @@ public struct CollectorBatchEncoder: BatchEncoder {
             "properties": .object(properties),
             "context": .object(record.collectorContext(instrument: instrument)),
             "isRedelivered": .boolean(record.isRedelivered),
+            // Written at every version, 1 included. Leaving it out at 1 would save a few bytes a
+            // record, but a reader can't tell that from a record of a release before the member,
+            // which leaves it out at every version: CollectorBatchDecoder reads such a record at
+            // its lowest readable version, so one without version 1 would misread a 1 as that
+            // instead of reporting unknownVersion. Readers before the member ignore it either way.
+            "version": .integer(Int64(version.version)),
         ])
     }
 }

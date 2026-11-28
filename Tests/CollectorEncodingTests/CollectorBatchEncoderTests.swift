@@ -110,7 +110,7 @@ private struct CollectorBatchEncoderTests {
             sourceLocation: nil,
             isRedelivered: true
         )
-        let expected = #"{"records":[{"context":{"application":{"build":"418","bundleIdentifier":"com.example.shop","version":"2.4.1"},"device":{"formFactor":"phone","model":"iPhone17,1"},"locale":"en-US","network":"wifi","operatingSystem":{"name":"iOS","version":"26.1.0"},"sampleRate":0.5,"session":"00000000-0000-4000-8000-00000000000A","trace":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},"vendorIdentifier":"00000000-0000-4000-8000-00000000000B"},"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","isRedelivered":false,"name":"signed_up","properties":{"discount":0.25,"email":"ada@example.com","plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z"}]}"#
+        let expected = #"{"records":[{"context":{"application":{"build":"418","bundleIdentifier":"com.example.shop","version":"2.4.1"},"device":{"formFactor":"phone","model":"iPhone17,1"},"locale":"en-US","network":"wifi","operatingSystem":{"name":"iOS","version":"26.1.0"},"sampleRate":0.5,"session":"00000000-0000-4000-8000-00000000000A","trace":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},"vendorIdentifier":"00000000-0000-4000-8000-00000000000B"},"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","isRedelivered":false,"name":"signed_up","properties":{"discount":0.25,"email":"ada@example.com","plan":"pro","referrer":null,"seats":3,"tags":["beta","ios"],"trialEndsAt":"2026-12-07T14:03:27.000Z"},"timestamp":"2026-11-23T14:03:27.500Z","version":1},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":2,"coupon":null},"timestamp":"2026-11-23T14:03:28.250Z","version":2}]}"#
         let expectedContentType = "application/json"
 
         let actual = try #require(sut.batch(of: [first, second]).body)
@@ -138,7 +138,7 @@ private struct CollectorBatchEncoderTests {
             sourceLocation: nil,
             isRedelivered: true
         )
-        let expected = #"{"records":[{"context":{},"id":"2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":1,"coupon":"SPRING"},"timestamp":"2026-11-23T14:03:27.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E","isRedelivered":true,"name":"checkout_started","properties":{"cartSize":1,"coupon":"SPRING"},"timestamp":"2026-11-23T14:03:27.000Z","version":2}]}"#
 
         let actual = try #require(sut.batch(of: [redelivery]).body)
 
@@ -182,7 +182,7 @@ private struct CollectorBatchEncoderTests {
             timestamp: Date(timeIntervalSince1970: 0.125),
             sourceLocation: nil
         )
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"1970-01-01T00:00:00.125Z","version":2}]}"#
 
         let actual = try #require(sut.batch(of: [record]).body)
 
@@ -199,7 +199,7 @@ private struct CollectorBatchEncoderTests {
             timestamp: Date(timeIntervalSince1970: -62_135_596_800),
             sourceLocation: nil
         )
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"0001-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"checkout_started","properties":{"cartSize":1,"coupon":null},"timestamp":"0001-01-01T00:00:00.000Z","version":2}]}"#
 
         let actual = try #require(sut.batch(of: [record]).body)
 

@@ -6,8 +6,10 @@
 //   to the same records with none left out, and encodes again to the same bytes.
 // - A body built from choices: up to four records, each member valid or broken in one of a few
 //   ways (an id that isn't a UUID, an unknown event, a timestamp of another form, a property of
-//   the wrong type or out of its type's range, a malformed session). A record decodes exactly when
-//   every one of its members is valid, keeping its id, timestamp, properties and session.
+//   the wrong type or out of its type's range, a malformed session, a version no type has or that
+//   isn't an integer). A record decodes exactly when every one of its members is valid, keeping
+//   its id, timestamp, properties and session, into the type of its version (1 when it states
+//   none).
 // - Timestamps: a millisecond count's timestamp parses back to a date with the same timestamp, and
 //   any text parses to nil or to a date whose timestamp is that text, both read through the
 //   decoder.
@@ -64,6 +66,24 @@ struct Probe: Event, Codable, Equatable {
     }
 }
 
+/// Probe's version 2, of the same properties, so a record of either fits both, and only the type it
+/// decodes into tells which version it was read at.
+struct ProbeAtTwo: Event, Codable, Equatable {
+    static let name = "probe"
+    static let schemaVersion = 2
+    static let schema = EventSchema(name: "probe", version: 2, consentCategory: .analytics, properties: Probe.schema.properties)
+
+    var probe: Probe
+
+    init(from decoder: any Decoder) throws {
+        probe = try Probe(from: decoder)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        try probe.encode(to: encoder)
+    }
+}
+
 /// A millisecond count from up to six choices, within about ±4,400 years of 1970.
 func milliseconds(_ input: inout FuzzInput) -> Int64 {
     var value: Int64 = 0
@@ -117,7 +137,7 @@ func checkAnyBody(_ body: Data, decoder: CollectorBatchDecoder, encoder: Collect
 func checkBuiltBody(_ input: inout FuzzInput, decoder: CollectorBatchDecoder) {
     let count = input.int(in: 0 ... 4)
     var texts: [String] = []
-    var expected: [(id: UUID, milliseconds: Int64, small: Int, ratio: Double, at: Int64, note: String?, session: UUID?)?] = []
+    var expected: [(id: UUID, milliseconds: Int64, small: Int, ratio: Double, at: Int64, note: String?, session: UUID?, version: Int)?] = []
     for index in 0 ..< count {
         var valid = true
         let id = UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", index)) ?? UUID()
@@ -156,9 +176,20 @@ func checkBuiltBody(_ input: inout FuzzInput, decoder: CollectorBatchDecoder) {
             contextText = #"{"session":"nope"}"#
             valid = false
         }
+        // The decoder reads Probe at 1 and ProbeAtTwo at 2, and a record without a version at 1.
+        let versionText: String
+        var version = 1
+        switch input.int(below: 10) {
+        case 0: versionText = ""
+        case 1: versionText = #","version":1"#
+        case 2, 3: versionText = #","version":2"#; version = 2
+        case 4: versionText = #","version":"# + String([0, -1, 3, 2_147_483_648][input.int(below: 4)]); valid = false
+        case 5: versionText = #","version":"# + ["null", #""2""#, "1.5", "true", "9223372036854775808"][input.int(below: 5)]; valid = false
+        default: versionText = #","version":1"#
+        }
         let properties = #"{"at":"# + atText + #","note":"# + (note.map(quoted) ?? "null") + #","ratio":"# + ratioText + #","small":"# + String(small) + "}"
-        texts.append(#"{"context":"# + contextText + #","id":"# + idText + #","isRedelivered":false,"name":"# + nameText + #","properties":"# + properties + #","timestamp":"# + timestampText + "}")
-        expected.append(valid ? (id, millisecond, small, ratio, atMillisecond, note, session) : nil)
+        texts.append(#"{"context":"# + contextText + #","id":"# + idText + #","isRedelivered":false,"name":"# + nameText + #","properties":"# + properties + #","timestamp":"# + timestampText + versionText + "}")
+        expected.append(valid ? (id, millisecond, small, ratio, atMillisecond, note, session, version) : nil)
     }
     let body = Data((#"{"records":["# + texts.joined(separator: ",") + "]}").utf8)
     guard let decoded = try? decoder.batch(from: body) else {
@@ -169,7 +200,8 @@ func checkBuiltBody(_ input: inout FuzzInput, decoder: CollectorBatchDecoder) {
     check(decoded.records.count == kept.count, "decoded \(decoded.records.count) of the \(kept.count) valid records")
     check(decoded.undecodedRecords.map(\.offset) == expected.indices.filter { expected[$0] == nil }, "reported \(decoded.undecodedRecords.map(\.offset))")
     for (record, model) in zip(decoded.records, kept) {
-        let event = record.event as? Probe
+        let event = record.event as? Probe ?? (record.event as? ProbeAtTwo)?.probe
+        check(type(of: record.event).schemaVersion == model.version, "read at version \(type(of: record.event).schemaVersion), not \(model.version)")
         check(record.id == model.id, "id \(record.id)")
         check((try? record.timestamp.millisecondsSince1970()) == model.milliseconds, "timestamp \(record.timestamp)")
         check(event.map { Int($0.small) } == model.small, "small \(String(describing: event?.small))")
@@ -209,9 +241,10 @@ func checkTimestamps(_ input: inout FuzzInput, decoder: CollectorBatchDecoder) {
 @main
 enum FuzzCollectorEncoding {
     static func main() {
-        // Made once: a decoder of Probe through its own schema, and an encoder of the same plan.
-        guard let plan = try? TrackingPlan(schemas: [Probe.schema]),
-              let decoder = try? CollectorBatchDecoder(plan: plan, events: [Probe.self])
+        // Made once: a decoder of Probe and ProbeAtTwo through their own schemas, and an encoder of
+        // the same plan.
+        guard let plan = try? TrackingPlan(schemas: [Probe.schema, ProbeAtTwo.schema]),
+              let decoder = try? CollectorBatchDecoder(plan: plan, events: [Probe.self, ProbeAtTwo.self])
         else {
             check(false, "the plan or decoder didn't build")
             return

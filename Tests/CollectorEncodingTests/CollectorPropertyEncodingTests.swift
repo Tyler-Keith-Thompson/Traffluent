@@ -106,7 +106,7 @@ private struct CollectorPropertyEncodingTests {
             refined: try Refined("abc")
         )
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"scalars","properties":{"byte":255,"count":-3,"flag":true,"identifier":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","largest":1.8446744073709552e+19,"ratio":1e-05,"refined":"abc","single":0.1,"smallest":-9223372036854775808,"text":"pro"},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"scalars","properties":{"byte":255,"count":-3,"flag":true,"identifier":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","largest":1.8446744073709552e+19,"ratio":1e-05,"refined":"abc","single":0.1,"smallest":-9223372036854775808,"text":"pro"},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
@@ -118,7 +118,7 @@ private struct CollectorPropertyEncodingTests {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Scalars.schema]), instrument: NoOpInstrument())
         let event = Scalars(text: "", flag: false, count: 0, smallest: 0, largest: 0, byte: 0, ratio: 3, single: -2, identifier: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!, refined: try Refined("a"))
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"scalars","properties":{"byte":0,"count":0,"flag":false,"identifier":"00000000-0000-0000-0000-000000000000","largest":0,"ratio":3,"refined":"a","single":-2,"smallest":0,"text":""},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"scalars","properties":{"byte":0,"count":0,"flag":false,"identifier":"00000000-0000-0000-0000-000000000000","largest":0,"ratio":3,"refined":"a","single":-2,"smallest":0,"text":""},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
@@ -130,7 +130,7 @@ private struct CollectorPropertyEncodingTests {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Optionals.schema]), instrument: NoOpInstrument())
         let event = Optionals(missing: nil, present: 4, oneElement: ["a"], empty: [], nested: .some(.some(5)), nestedNil: .some(nil), date: nil)
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"optionals","properties":{"date":null,"empty":[],"missing":null,"nested":5,"nestedNil":null,"oneElement":["a"],"present":4},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"optionals","properties":{"date":null,"empty":[],"missing":null,"nested":5,"nestedNil":null,"oneElement":["a"],"present":4},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
@@ -147,7 +147,7 @@ private struct CollectorPropertyEncodingTests {
             refined: try Refined(Date(timeIntervalSince1970: 60))
         )
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"all":["1970-01-01T00:00:00.000Z","1970-01-02T00:00:00.500Z"],"at":"2026-11-23T14:03:27.250Z","qualified":"2001-01-01T00:00:00.000Z","refined":"1970-01-01T00:01:00.000Z"},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"all":["1970-01-01T00:00:00.000Z","1970-01-02T00:00:00.500Z"],"at":"2026-11-23T14:03:27.250Z","qualified":"2001-01-01T00:00:00.000Z","refined":"1970-01-01T00:01:00.000Z"},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
@@ -159,7 +159,7 @@ private struct CollectorPropertyEncodingTests {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Purchased.schema]), instrument: NoOpInstrument())
         let event = Purchased(price: Money(amount: 1999, currency: "USD"), prices: [Money(amount: 5, currency: "EUR")])
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"purchased","properties":{"price":{"amount":1999,"currency":"USD"},"prices":[{"amount":5,"currency":"EUR"}]},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"purchased","properties":{"price":{"amount":1999,"currency":"USD"},"prices":[{"amount":5,"currency":"EUR"}]},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 
@@ -173,7 +173,7 @@ private struct CollectorPropertyEncodingTests {
         let redacted = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         var revealed = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, event: event, timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
         revealed.revealsSensitiveValues = true
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":null}},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":"4242424242424242"}},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":null}},"timestamp":"1970-01-01T00:00:00.000Z","version":1},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"card":{"last4":"4242","number":"4242424242424242"}},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [redacted, revealed]).body).body, as: UTF8.self)
 
@@ -184,7 +184,7 @@ private struct CollectorPropertyEncodingTests {
     func escaping() throws {
         let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [Quoted.schema]), instrument: NoOpInstrument())
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Quoted(text: "\"a\\b\"\n\t\u{01}é🎉"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)
-        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"quoted","properties":{"text":"\"a\\b\"\n\t\u0001é🎉"},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#
+        let expected = #"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"quoted","properties":{"text":"\"a\\b\"\n\t\u0001é🎉"},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#
 
         let actual = String(decoding: try #require(sut.batch(of: [record]).body).body, as: UTF8.self)
 

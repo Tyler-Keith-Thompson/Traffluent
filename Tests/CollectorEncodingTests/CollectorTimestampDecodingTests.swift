@@ -45,7 +45,7 @@ private struct CollectorTimestampDecodingTests {
         let plan = try TrackingPlan(schemas: [Dated.schema])
         let sut = try CollectorBatchDecoder(plan: plan, events: [Dated.self], instrument: NoOpInstrument())
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
-        let expected = Data((#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":""# + timestamp + #""},"timestamp":""# + timestamp + #""}]}"#).utf8)
+        let expected = Data((#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":""# + timestamp + #""},"timestamp":""# + timestamp + #"","version":1}]}"#).utf8)
 
         let decoded = try sut.batch(from: expected)
         let actual = encoder.batch(of: decoded.records).body?.body
@@ -57,7 +57,7 @@ private struct CollectorTimestampDecodingTests {
     @Test("A timestamp reads back as the start of its millisecond")
     func startOfMillisecond() throws {
         let sut = try CollectorBatchDecoder(plan: try TrackingPlan(schemas: [Dated.schema]), events: [Dated.self], instrument: NoOpInstrument())
-        let body = Data(#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":"2001-01-01T00:00:00.250Z"},"timestamp":"1970-01-01T00:00:01.500Z"}]}"#.utf8)
+        let body = Data(#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":"2001-01-01T00:00:00.250Z"},"timestamp":"1970-01-01T00:00:01.500Z","version":1}]}"#.utf8)
         let expectedTimestamp = Date(timeIntervalSince1970: 1.5)
         let expectedAt = Date(timeIntervalSinceReferenceDate: 0.25)
 
@@ -111,7 +111,7 @@ private struct CollectorTimestampDecodingTests {
     )
     func malformed(timestamp: String) throws {
         let sut = try CollectorBatchDecoder(plan: try TrackingPlan(schemas: [Dated.schema]), events: [Dated.self], instrument: NoOpInstrument())
-        let body = Data((#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":"1970-01-01T00:00:00.000Z"},"timestamp":""# + timestamp + #""},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"dates","properties":{"at":""# + timestamp + #""},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#).utf8)
+        let body = Data((#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"dates","properties":{"at":"1970-01-01T00:00:00.000Z"},"timestamp":""# + timestamp + #""},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"dates","properties":{"at":""# + timestamp + #""},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#).utf8)
         let expected = [
             UndecodedRecord(offset: 0, recordID: UUID(uuidString: "00000000-0000-4000-8000-000000000001"), eventName: "dates", reason: .malformedMember("timestamp")),
             UndecodedRecord(offset: 1, recordID: UUID(uuidString: "00000000-0000-4000-8000-000000000002"), eventName: "dates", reason: .undecodableProperty(event: "dates", property: "at")),

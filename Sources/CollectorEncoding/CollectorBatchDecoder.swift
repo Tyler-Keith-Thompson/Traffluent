@@ -21,8 +21,8 @@ public import TrackingPlans
 ///
 /// - its `EventRecord/id` and `EventRecord/isRedelivered`;
 /// - its `EventRecord/timestamp`, to the millisecond the body holds;
-/// - its event, a value of the decoder's type of that `Event/name`, read through the type's
-///   schema in `plan`, its `Sensitive` values included;
+/// - its event, a value of the decoder's type of that `Event/name` and version, read through the
+///   type's schema in `plan`, its `Sensitive` values included;
 /// - the context the body's `context` holds: the session's `SessionKey`, the sample rate, the
 ///   standard context keys, and the trace context, which the decoder's instrument extracts.
 ///
@@ -32,16 +32,45 @@ public import TrackingPlans
 /// ``CollectorBatchEncoder`` of the same plan, and an instrument that injects what it extracts,
 /// writes the same bytes.
 ///
-/// The body names each record's event but not its version, so a record is read at the version of
-/// the decoder's type of that name, and the plan must hold a schema of that version. Deploy the
-/// decoder with the event types the apps send. Once a type's version is raised, a record an older
-/// app sends at the earlier version is read as the newer one: it is reported as
+/// Each record is read at the version its `version` member states, into the decoder's type of
+/// that name and version, through the plan's schema of both. A server that reads the batches of
+/// several releases of an app is given a type of each version they send. It declares the earlier
+/// versions in a `private` or `fileprivate` scope, where `@Event` lets a second type of one name
+/// build, and a plan made from the same types holds a schema of each. That scope is a file-scope
+/// `private` type or a `fileprivate` one, not a `private` member of another type
+/// ([Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents)).
+/// The program builds any store from an explicit list (`SegmentStore(events:)`): a store holds one
+/// type per name, so `SegmentStore()` throws `duplicateEventName` there.
+///
+/// ```swift
+/// @Event(name: "checkout_started", version: 2)
+/// struct CheckoutStarted {
+///     var items: Int
+///     var currency: String
+/// }
+///
+/// // Version 1, which releases still installed send.
+/// private enum EarlierVersions {
+///     @Event(name: "checkout_started")
+///     struct CheckoutStarted {
+///         var items: Int
+///     }
+/// }
+///
+/// let decoder = try CollectorBatchDecoder(plan: try TrackingPlan())
+/// ```
+///
+/// A record without a `version` member, as releases before the member was written send, is read
+/// at version 1 when the decoder has a type and the plan a schema of its event at 1, and otherwise
+/// at the lowest version it has both of. Those releases sent version 1 unless an event declared
+/// another. A record one of them sent at a raised version is read at version 1 too when the
+/// decoder has version 1: it is reported as
 /// ``CollectorDecodingError/undecodableProperty(event:property:)`` when its properties don't fit
-/// the newer type, and read as the newer version when they do.
+/// that type, and read as version 1 when they do.
 ///
 /// A record the decoder can't read is left out and the batch's other records are read: one whose
-/// event it has no type of, one whose type's version the plan has no schema of, a member that is
-/// missing or holds what the encoder never writes, and a property the event's type can't read
+/// event it has no type of, one at a version it has no type of or the plan no schema of, a member
+/// that is missing or holds what the encoder never writes, and a property the event's type can't read
 /// (``CollectorDecodingError``). ``batch(from:)`` returns each as an ``UndecodedRecord``. A
 /// `Sensitive` property a delivery redacted is missing, so its record reads back only when the
 /// property is optional or has a default value; a redacted `Sensitive` element of an array is
@@ -56,15 +85,23 @@ public import TrackingPlans
 // The event types come from a TrackingPlan and a list of types, rather than from either alone. The
 // plan is what the encoder reads properties through, so the decoder reads them back through the
 // same schemas, and it says which versions the collector accepts. A type is what a record's event
-// is decoded into, and the plan holds none, only schemas. The body has no version member, so the
-// type of a name decides the version, and the plan only confirms it. Rejected: types alone (each
-// @Event's own schema), which would read a version the plan has dropped and could disagree with
-// the encoder's schema; a plan alone, which can't make a value; and a version member in the body,
-// which would change the collector's format for every reader of it.
+// is decoded into, and the plan holds none, only schemas. Rejected: types alone (each @Event's own
+// schema), which would read a version the plan has dropped and could disagree with the encoder's
+// schema; and a plan alone, which can't make a value.
+//
+// The body states each record's version, so a type is found by name and version (TRAF-151).
+// Rejected: reading every record at the version of the decoder's one type of its name, as before
+// the member, which misreads an older app's records once a version is raised; and trying each
+// version held until one decodes, as TraffluentCollector's validator does, which reads a record
+// that fits two versions at whichever is tried first.
+//
+// A record without the member is read at 1, else at the lowest version held, rather than the
+// newest: only releases from before the member leave it out, and they sent 1 unless an event
+// declared another. The newest would misread every version 1 record of an event raised since.
 public struct CollectorBatchDecoder: Sendable {
-    // Each event type by name, with its property types from the plan, looked up once here rather
-    // than per record; nil property types mean the plan has no schema of the type's version.
-    private let events: [String: DecodableEvent]
+    // Each event name's types by version, with their property types from the plan, looked up once
+    // here rather than per record.
+    private let events: [String: EventVersions]
     private let instrument: any Instrument
 
     /// A decoder of records of `events`, whose properties `plan` describes, extracting each
@@ -72,12 +109,13 @@ public struct CollectorBatchDecoder: Sendable {
     ///
     /// - Parameters:
     ///   - plan: The tracking plan the encoder that wrote the batches was made with: each record's
-    ///     event is read through the schema of its type's name and `Event/schemaVersion` here.
-    ///   - events: The event types records are read back into, one per `Event/name`.
+    ///     event is read through the schema of its name and version here.
+    ///   - events: The event types records are read back into, one per `Event/name` and
+    ///     `Event/schemaVersion`. A type in a `private` or `fileprivate` scope is read as any other.
     ///   - instrument: What extracts each record's trace context from its `trace` member; the
     ///     bootstrapped `InstrumentationSystem.instrument`, read once here, by default.
-    /// - Throws: ``CollectorBatchDecoderError/duplicateEventName(_:firstType:secondType:)`` when
-    ///   two of `events` share a name.
+    /// - Throws: ``CollectorBatchDecoderError/duplicateEvent(_:version:firstType:secondType:)``
+    ///   when two of `events` share a name and a version.
     public init(
         plan: TrackingPlan,
         events: [any (Event & Decodable).Type],
@@ -87,15 +125,22 @@ public struct CollectorBatchDecoder: Sendable {
         for schema in plan.schemas {
             schemas[PlannedVersion(name: schema.name, version: schema.version)] = schema
         }
-        var decodable: [String: DecodableEvent] = [:]
+        // Every type by name and version, for a duplicate's error to name the first.
+        var listed: [PlannedVersion: any (Event & Decodable).Type] = [:]
+        // The types the plan has a schema of, by name and version; a name whose types have none
+        // still has an entry, so its records are unknownVersion rather than unknownEvent.
+        var readable: [String: [Int: DecodableEvent]] = [:]
         for type in events {
-            if let first = decodable[type.name] {
-                throw .duplicateEventName(type.name, firstType: String(reflecting: first.type), secondType: String(reflecting: type))
+            let version = PlannedVersion(name: type.name, version: type.schemaVersion)
+            if let first = listed[version] {
+                throw .duplicateEvent(version.name, version: version.version, firstType: String(reflecting: first), secondType: String(reflecting: type))
             }
-            let schema = schemas[PlannedVersion(name: type.name, version: type.schemaVersion)]
-            decodable[type.name] = DecodableEvent(type: type, propertyTypes: schema?.propertyTypes)
+            listed[version] = type
+            var versions = readable[version.name] ?? [:]
+            versions[version.version] = schemas[version].map { DecodableEvent(type: type, propertyTypes: $0.propertyTypes) }
+            readable[version.name] = versions
         }
-        self.events = decodable
+        self.events = readable.mapValues(EventVersions.init(readable:))
         self.instrument = instrument
     }
 
@@ -106,8 +151,8 @@ public struct CollectorBatchDecoder: Sendable {
     ///   - plan: The tracking plan the encoder that wrote the batches was made with.
     ///   - instrument: What extracts each record's trace context; the bootstrapped
     ///     `InstrumentationSystem.instrument` by default.
-    /// - Throws: ``CollectorBatchDecoderError/duplicateEventName(_:firstType:secondType:)`` when
-    ///   two of the discovered events share a name.
+    /// - Throws: ``CollectorBatchDecoderError/duplicateEvent(_:version:firstType:secondType:)``
+    ///   when two of the discovered events share a name and a version.
     public init(plan: TrackingPlan, instrument: any Instrument = InstrumentationSystem.instrument) throws(CollectorBatchDecoderError) {
         try self.init(plan: plan, events: DiscoveredEvent.all.map { $0.type }, instrument: instrument)
     }
@@ -147,11 +192,23 @@ public struct CollectorBatchDecoder: Sendable {
         guard let properties = members["properties"]?.object else { throw .malformedMember("properties") }
         guard let context = members["context"]?.object else { throw .malformedMember("context") }
         guard case .boolean(let isRedelivered)? = members["isRedelivered"] else { throw .malformedMember("isRedelivered") }
-        guard let event = events[name] else { throw .unknownEvent(name: name) }
-        guard let types = event.propertyTypes else { throw .unknownVersion(name: name, version: event.type.schemaVersion) }
+        let statedVersion: Int?
+        switch members["version"] {
+        case nil:
+            statedVersion = nil
+        case .integer(let version)?:
+            // Past a 32-bit Int's range, where no event type can have the version, it is malformed.
+            guard let version = Int(exactly: version) else { throw .malformedMember("version") }
+            statedVersion = version
+        case _?:
+            throw .malformedMember("version")
+        }
+        guard let versions = events[name] else { throw .unknownEvent(name: name) }
+        let version = statedVersion ?? versions.unstatedVersion
+        guard let event = versions.readable[version] else { throw .unknownVersion(name: name, version: version) }
         var record = EventRecord(
             id: id,
-            event: try event.decode(properties, types: types),
+            event: try event.decode(properties),
             timestamp: timestamp,
             sourceLocation: nil,
             context: try ServiceContext(collectorContext: context, instrument: instrument),
@@ -170,16 +227,30 @@ private struct PlannedVersion: Hashable {
     let version: Int
 }
 
-/// An event type records are read into, and its property types in the plan, `nil` when the plan
-/// has no schema of its version.
+/// The event types of one name records can be read into, by version.
+private struct EventVersions: Sendable {
+    /// The types the plan has a schema of, by version: the versions a record can be read at.
+    let readable: [Int: DecodableEvent]
+    /// The version a record without a `version` member is read at: 1 when it is readable, else
+    /// the lowest that is, and 1 when none is.
+    let unstatedVersion: Int
+
+    /// The versions of `readable`, with the version a record without one is read at.
+    init(readable: [Int: DecodableEvent]) {
+        self.readable = readable
+        unstatedVersion = readable[1] != nil ? 1 : readable.keys.min() ?? 1
+    }
+}
+
+/// An event type records are read into, and its property types in the plan.
 private struct DecodableEvent: Sendable {
     let type: any (Event & Decodable).Type
-    let propertyTypes: [String: WrittenType?]?
+    let propertyTypes: [String: WrittenType?]
 
-    /// The event `properties` hold, read through `types`.
-    func decode(_ properties: [String: JSON], types: [String: WrittenType?]) throws(CollectorDecodingError) -> any Event {
+    /// The event `properties` hold, read through the plan's property types.
+    func decode(_ properties: [String: JSON]) throws(CollectorDecodingError) -> any Event {
         do throws(UndecodableProperty) {
-            return try type.init(properties: properties, types: types)
+            return try type.init(properties: properties, types: propertyTypes)
         } catch {
             throw .undecodableProperty(event: type.name, property: error.property)
         }

@@ -36,7 +36,9 @@ private struct CollectorUndecodedRecordTests {
         "A record the decoder can't read is reported with its offset, id, name and reason, and the records around it decode",
         arguments: [
             (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"refunded","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "refunded", CollectorDecodingError.unknownEvent(name: "refunded")),
-            (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "opened", .unknownVersion(name: "opened", version: 2)),
+            (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":2}"#, "opened", .unknownVersion(name: "opened", version: 2)),
+            (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "opened", .unknownVersion(name: "opened", version: 1)),
+            (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"amount":5,"card":"4242","code":"A"},"timestamp":"1970-01-01T00:00:00.000Z","version":null}"#, "paid", .malformedMember("version")),
             (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"amount":"5","card":"4242","code":"A"},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "paid", .undecodableProperty(event: "paid", property: "amount")),
             (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"amount":5,"code":"A"},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "paid", .undecodableProperty(event: "paid", property: "card")),
             (#"{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"paid","properties":{"amount":5,"card":"4242","code":""},"timestamp":"1970-01-01T00:00:00.000Z"}"#, "paid", .undecodableProperty(event: "paid", property: "code")),

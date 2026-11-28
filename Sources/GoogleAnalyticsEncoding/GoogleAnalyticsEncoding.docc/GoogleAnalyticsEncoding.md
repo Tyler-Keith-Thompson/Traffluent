@@ -106,8 +106,9 @@ To send from a server of yours instead, such as a relay in front of Google Analy
 destination there and hand it the records. The app sends to the relay as it would to the
 collector, with an `HTTPDestination` and a `CollectorBatchEncoder`. The relay reads each body back
 into records with a `CollectorBatchDecoder` (module `CollectorEncoding`), made with the same
-`TrackingPlan` and the same `@Event` types, from a module the app and the server share, and hands
-the records to the destination:
+`TrackingPlan` and the same `@Event` types: the app's events, from a module the app and the server
+share, plus the earlier versions the relay declares (below). It hands the records to the
+destination:
 
 ```swift
 import CollectorEncoding
@@ -134,11 +135,40 @@ can't read, such as one of an event the server has no type of, is left out and r
 `batch.undecodedRecords`; the batch's other records are still sent. A body that isn't a collector
 batch at all throws `NotACollectorBatch`, which the relay can answer with a 400.
 
-The body doesn't say which version of an event a record holds, so the decoder reads each record at
-the version of its own type of that name. Deploy the relay with the event types the apps send. Once
-an event's version is raised, a record from an app still at the earlier version is read as the
-newer one: reported as `undecodableProperty` when its properties don't fit the newer type, and sent
-as the newer version when they do.
+Each record states its event's version, and the decoder reads it into the relay's type of that
+name and version. Once an app raises an event's version, the releases still installed keep sending
+the earlier one, so the relay keeps a type for each version the apps send. Two `@Event` types of
+one name fail to build unless the earlier one sits in a `private` or `fileprivate` scope.
+`TrackingPlan()` and the decoder still find it there:
+
+```swift
+@Event(name: "order_placed", version: 2)
+struct OrderPlaced {
+    var items: Int
+    var currency: String
+}
+
+// Version 1, which releases still installed send.
+private enum EarlierVersions {
+    @Event(name: "order_placed")
+    struct OrderPlaced {
+        var items: Int
+    }
+}
+```
+
+Declare the earlier version's type at file scope, as above, or `fileprivate` inside another type:
+`@Event` can't expand inside a type that is a `private` member of another
+([Defining Events](https://tyler-keith-thompson.github.io/Traffluent/documentation/traffluent/definingevents)).
+Build any store on the relay from an explicit list (`SegmentStore(events:)`): a store holds one
+type per name, so `SegmentStore()` throws `duplicateEventName` there.
+
+A record at a version the relay has no type for is left out and reported as `unknownVersion`; the
+rest of its batch is still sent. Apps built with an earlier Traffluent send no version, and the
+decoder reads such a record at version 1, or at the relay's lowest version when it has no
+version 1. Those apps sent version 1 unless the event declared another. A record one of them sent
+at a raised version is read at version 1 too: it is reported as `undecodableProperty` when its
+properties don't fit that type, and is read as version 1 when they fit.
 
 Don't track the events again through a `Tracker` with `.sessions()` on the server. That tracker
 would give every event the server's own session, so every user of the app would arrive in Google

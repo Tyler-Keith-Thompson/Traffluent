@@ -10,6 +10,22 @@ import Testing
 import TrackingPlans
 import Traffluent
 
+// "Sending from a server of your own": a relay's types of two versions of one event, at file scope
+// as the article declares them.
+@Event(name: "order_placed", version: 2)
+struct OrderPlaced {
+    var items: Int
+    var currency: String
+}
+
+// Version 1, which releases still installed send.
+private enum EarlierVersions {
+    @Event(name: "order_placed")
+    struct OrderPlaced {
+        var items: Int
+    }
+}
+
 @Suite("GoogleAnalyticsEncoding module examples: through the collector", .timeLimit(.minutes(1)))
 struct GoogleAnalyticsEncodingCollectorExamplesTests {
     // Not `signed_up`, which the other suite declares: the list-free TrackingPlan() discovers both.
@@ -165,6 +181,47 @@ struct GoogleAnalyticsEncodingModuleExamplesTests {
         #expect(transport.requests.count == 1)
         #expect(sent["client_id"] as? String == expectedClientID)
         #expect(params["plan"] as? String == expectedPlan)
+    }
+
+    @Test("Sending from a server of your own: a record of each version reaches Google Analytics through its own type, and one of a version the relay lacks is unknownVersion")
+    func earlierVersions() async throws {
+        let measurementID = "G-TEST000000"
+        let apiSecret = "testapisecret"
+        let memory = InMemoryDestination()
+        let app = Tracker()  // No sessions, whose SessionStarted would come first.
+        let appDelivery = app.records.batch().deliver(to: memory)
+        app.track(EarlierVersions.OrderPlaced(items: 1))
+        app.track(OrderPlaced(items: 2, currency: "EUR"))
+        await app.finish()
+        try await appDelivery.execute()
+        let plan = try TrackingPlan()
+        let appBody = try #require(CollectorBatchEncoder(plan: plan).batch(of: memory.records).body).body
+        let versionThree = Data(#"{"records":[{"context":{},"id":"00000000-0000-4000-8000-000000000003","isRedelivered":false,"name":"order_placed","properties":{"items":3},"timestamp":"1970-01-01T00:00:00.000Z","version":3}]}"#.utf8)
+        let decoder = try CollectorBatchDecoder(plan: plan)
+        // Two answers: each record without a session is a client of its own, sent in a request of its own.
+        let transport = ScriptedTransport([.status(.noContent), .status(.noContent)])
+        let googleAnalytics = try HTTPDestination.googleAnalytics(measurementID: measurementID, apiSecret: apiSecret, region: .global, plan: plan, transport: transport)
+        let expectedVersions = [1, 2]
+        let expectedItems: [Int?] = [1, 2]
+        let expectedCurrencies: [String?] = [nil, "EUR"]
+        let expectedUndecoded = [UndecodedRecord(offset: 0, recordID: UUID(uuidString: "00000000-0000-4000-8000-000000000003"), eventName: "order_placed", reason: .unknownVersion(name: "order_placed", version: 3))]
+
+        let batch = try decoder.batch(from: appBody)
+        let unknown = try decoder.batch(from: versionThree)
+        await googleAnalytics.receive(batch.records)
+
+        let sent = transport.requests.compactMap { try? JSONSerialization.jsonObject(with: $0.body) as? [String: Any] }
+        let events = sent.flatMap { $0["events"] as? [[String: Any]] ?? [] }
+        let params = events.compactMap { $0["params"] as? [String: Any] }
+        let actualVersions = batch.records.map { type(of: $0.event).schemaVersion }
+        let actualItems = params.map { $0["items"] as? Int }
+        let actualCurrencies = params.map { $0["currency"] as? String }
+
+        #expect(batch.undecodedRecords.isEmpty)
+        #expect(actualVersions == expectedVersions)
+        #expect(actualItems == expectedItems)
+        #expect(actualCurrencies == expectedCurrencies)
+        #expect(unknown.undecodedRecords == expectedUndecoded)
     }
 }
 #endif

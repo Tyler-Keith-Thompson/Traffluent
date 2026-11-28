@@ -16,6 +16,9 @@
 # - The decoder's `records.reserveCapacity(items.count)` removed: capacity only.
 # - The CBOR writer and ISO 8601 parser the decoder reads through live in PropertyJSON, whose spec
 #   plants them with these tests among its own.
+# - The decoder's `Int(exactly: version)` made `Int(truncatingIfNeeded: version)`: a JSON integer
+#   is an Int64, which a 64-bit Int always holds, so only a 32-bit Int (arm64_32, where no test
+#   runs) tells them apart. pastInt32 in CollectorEventVersionTests pins both outcomes.
 
 TESTS = ["CollectorEncodingTests"]
 
@@ -85,13 +88,29 @@ MUTANTS = [
     Mutant("decodeconcealed", DEC, "record.revealsSensitiveValues = true", "", mode="stmt"),
     Mutant("decodeunknowneventunnamed", DEC, "throw .unknownEvent(name: name)", 'throw CollectorDecodingError.unknownEvent(name: "")', mode="stmt"),
     Mutant("decodepropertyunnamed", DEC, "error.property", '""'),
-    # The plan and the types: the first schemaVersion is the init's plan lookup, inside the second
-    # (record(from:)'s report of an unknown version).
-    Mutant("decodeversionunchecked", DEC, "event.propertyTypes", "Optional(event.propertyTypes ?? [:])"),
-    Mutant("decodeplanversionignored", DEC, "type.schemaVersion", "1", nth=0),
-    Mutant("decodereportedversionone", DEC, "event.type.schemaVersion", "1"),
-    Mutant("decodeduplicatesallowed", DEC, "decodable[type.name]", "DecodableEvent?.none", nth=0),
-    Mutant("decodeduplicatetypesswapped", DEC, "String(reflecting: first.type)", "String(reflecting: type)"),
+    # The plan and the types, by name and version (TRAF-151).
+    # In this order: the first's replacement doesn't hold the text the second matches, which the
+    # other way round would occur twice.
+    Mutant("decodeversionunchecked", DEC, "schemas[version].map { DecodableEvent(type: type, propertyTypes: $0.propertyTypes) }", "Optional(DecodableEvent(type: type, propertyTypes: schemas[version]?.propertyTypes ?? [:]))"),
+    Mutant("decodeplanversionignored", DEC, "schemas[version].map", "schemas[PlannedVersion(name: version.name, version: 1)].map"),
+    Mutant("decodereportedversionone", DEC, "throw .unknownVersion(name: name, version: version)", "throw CollectorDecodingError.unknownVersion(name: name, version: 1)", mode="stmt"),
+    # The first copy is the duplicate check's; the second, an assignment, isn't an expression.
+    Mutant("decodeduplicatebyname", DEC, "listed[version]", "listed.first(where: { $0.key.name == version.name })?.value", nth=0),
+    Mutant("decodeduplicatesallowed", DEC, "listed[version] = type", "", mode="stmt"),
+    # The first copy is the error's, before the readable versions' subscript.
+    Mutant("decodeduplicateversionone", DEC, "version.version", "1", nth=0),
+    Mutant("decodeduplicatetypesswapped", DEC, "String(reflecting: first)", "String(reflecting: type)"),
+    # The record's version member.
+    Mutant("decodestatedignored", DEC, "statedVersion ?? versions.unstatedVersion", "versions.unstatedVersion"),
+    Mutant("decodeunstatedalwaysone", DEC, "statedVersion ?? versions.unstatedVersion", "statedVersion ?? 1"),
+    Mutant("decodeunstatedastwo", DEC, "statedVersion = nil", "statedVersion = 2", mode="stmt"),
+    Mutant("decodeunstatednewest", DEC, "readable[1] != nil ? 1 : readable.keys.min() ?? 1", "readable.keys.max() ?? 1"),
+    Mutant("decodeunstatedlowest", DEC, "readable[1] != nil ? 1 : readable.keys.min() ?? 1", "readable.keys.min() ?? 1"),
+    Mutant("decodeunstatednonezero", DEC, "readable[1] != nil ? 1 : readable.keys.min() ?? 1", "readable[1] != nil ? 1 : readable.keys.min() ?? 0"),
+    # The second copy is the catch-all case's, after the guard's past a 32-bit Int.
+    Mutant("decodemalformedversionasabsent", DEC, 'throw .malformedMember("version")', "statedVersion = nil", nth=1, mode="stmt"),
+    Mutant("versionwrittenasone", B, ".integer(Int64(version.version))", ".integer(1)"),
+    Mutant("versionrenamed", B, '"version"', '"schemaVersion"'),
     Mutant("decodenothingdiscovered", DEC, "DiscoveredEvent.all.map { $0.type }", "DiscoveredEvent.all.prefix(0).map { $0.type }"),
     # The context.
     Mutant("decodeapplicationdropped", CTX, "context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: bundleIdentifier, version: version, build: build)", "", mode="stmt"),

@@ -4,7 +4,8 @@ import JSONValues
 extension TrackingPlan {
     /// A committed document of an earlier version of one of the plan's events, with its example
     /// when there is one, which the plan's files keep byte for byte: releases still installed send
-    /// that version, and a record carries no version for a validator to pick a document by.
+    /// that version, and a validator needs its document whether it picks one by the version a
+    /// record states or, for a record from a release that states none, tries each.
     struct EarlierVersion {
         let name: String
         let version: Int

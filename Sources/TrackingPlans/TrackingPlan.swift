@@ -91,8 +91,8 @@ import JSONValues
 ///
 /// An event's earlier versions stay in the plan once exported. ``write(to:)`` keeps the documents
 /// and examples a directory holds of an event at a version below the plan's, as they are, and the
-/// index lists them, since releases still installed send that version and a record doesn't say
-/// which version it is.
+/// index lists them, since releases still installed send that version, and a validator reads a
+/// record against that version's document.
 ///
 /// ``check(againstDirectory:)`` compares a plan with the one committed in a directory, reporting
 /// each ``TrackingPlanDifference``.

@@ -47,7 +47,7 @@ private struct CollectorContextDecodingTests {
     )
     func malformedContext(context: String, member: String) throws {
         let sut = try CollectorBatchDecoder(plan: try TrackingPlan(schemas: [Opened.schema]), events: [Opened.self], instrument: NoOpInstrument())
-        let body = Data((#"{"records":[{"context":"# + context + #","id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#).utf8)
+        let body = Data((#"{"records":[{"context":"# + context + #","id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#).utf8)
         let expected = [UndecodedRecord(offset: 0, recordID: UUID(uuidString: "00000000-0000-4000-8000-000000000001"), eventName: "opened", reason: .malformedMember(member))]
 
         let actual = try sut.batch(from: body)
@@ -85,7 +85,7 @@ private struct CollectorContextDecodingTests {
         let plan = try TrackingPlan(schemas: [Opened.schema])
         let sut = try CollectorBatchDecoder(plan: plan, events: [Opened.self], instrument: NoOpInstrument())
         let encoder = CollectorBatchEncoder(plan: plan, instrument: NoOpInstrument())
-        let expected = Data((#"{"records":[{"context":"# + context + #","id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#).utf8)
+        let expected = Data((#"{"records":[{"context":"# + context + #","id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#).utf8)
 
         let decoded = try sut.batch(from: expected)
         let actual = encoder.batch(of: decoded.records).body?.body
@@ -97,7 +97,7 @@ private struct CollectorContextDecodingTests {
     @Test("A context member the encoder doesn't write is left out, and the record decodes")
     func unknownContextMember() throws {
         let sut = try CollectorBatchDecoder(plan: try TrackingPlan(schemas: [Opened.schema]), events: [Opened.self], instrument: NoOpInstrument())
-        let body = Data(#"{"records":[{"context":{"experiment":"b","session":"00000000-0000-4000-8000-00000000000A"},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#.utf8)
+        let body = Data(#"{"records":[{"context":{"experiment":"b","session":"00000000-0000-4000-8000-00000000000A"},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#.utf8)
         let expected = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")
 
         let actual = try sut.batch(from: body)
@@ -132,7 +132,7 @@ private struct CollectorContextDecodingTests {
     func traceExtracted() throws {
         let instrument = RecordingInstrument()
         let sut = try CollectorBatchDecoder(plan: try TrackingPlan(schemas: [Opened.schema]), events: [Opened.self], instrument: instrument)
-        let body = Data(#"{"records":[{"context":{"trace":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01","tracestate":"a=1"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z"}]}"#.utf8)
+        let body = Data(#"{"records":[{"context":{"trace":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01","tracestate":"a=1"}},"id":"00000000-0000-4000-8000-000000000001","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":1},{"context":{},"id":"00000000-0000-4000-8000-000000000002","isRedelivered":false,"name":"opened","properties":{},"timestamp":"1970-01-01T00:00:00.000Z","version":1}]}"#.utf8)
         let expected = [["traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "tracestate": "a=1"]]
 
         _ = try sut.batch(from: body)

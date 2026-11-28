@@ -137,8 +137,11 @@ both. A tracking plan executable holds the events of the modules it links, so it
 that declares one (<doc:TrackingPlanWorkflow>).
 
 A program that needs several versions of one event as types at once, such as a relay that reads
-records stored at an older version, declares the older ones inside a `private` type, where the
-build doesn't check their names, and builds its stores and plans from explicit lists.
+records sent or stored at an older version, declares the older ones inside a `private` type, where the
+build doesn't check their names, and builds its stores from explicit lists, as a store holds one
+type per name. `TrackingPlan()` and a `CollectorBatchDecoder` take one type per name and version,
+so they hold every version. Declare that private type at file scope, or `fileprivate` inside
+another type: `@Event`'s expansion can't reach a type that is a `private` member of another.
 
 #### Limits
 

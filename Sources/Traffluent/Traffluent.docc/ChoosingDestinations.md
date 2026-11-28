@@ -92,9 +92,10 @@ write each record's context into the body if the server needs it.
 To send to a self-hosted TraffluentCollector, give `HTTPDestination` a
 `CollectorBatchEncoder(plan:)` (module ``/CollectorEncoding``) as its encoder, and the collector's
 API key as an `Authorization: Bearer` header field. It writes the collector's ingest format: each
-record's identifier (which a redelivered record keeps), its name, timestamp and redelivery marker,
-its properties read through the event's schema in your `TrackingPlan`, and its standard context and
-trace context. A `Sensitive` value is sent only while the record reveals it.
+record's identifier (which a redelivered record keeps), its event's name and version, its
+timestamp and redelivery marker, its properties read through the event's schema in your
+`TrackingPlan`, and its standard context and trace context. A `Sensitive` value is sent only while
+the record reveals it.
 
 A record the encoder can't write is left out of the request, and the rest of its batch is sent.
 That happens when the plan has no schema for the record's event at its version (an event that
