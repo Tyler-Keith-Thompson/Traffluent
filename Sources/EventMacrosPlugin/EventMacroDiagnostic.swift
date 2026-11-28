@@ -27,6 +27,7 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case enumNotCodable(name: String)
     case genericNotDiscovered
     case nestedInGenericNotDiscovered
+    case privateMemberType(macro: String, names: [String])
 
     var message: String {
         switch self {
@@ -76,6 +77,10 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
             "@Event can't give a generic struct the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)"
         case .nestedInGenericNotDiscovered:
             "@Event can't give a struct nested in a generic type the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)"
+        case .privateMemberType(let macro, let names):
+            names.count == 1
+                ? "\(macro) conforms the type in an extension at file scope, where the private member type \(names.prose) is hidden; make it fileprivate"
+                : "\(macro) conforms the type in an extension at file scope, where the private member types \(names.prose) are hidden; make them fileprivate"
         }
     }
 
@@ -104,6 +109,7 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .enumNotCodable: "enumNotCodable"
         case .genericNotDiscovered: "genericNotDiscovered"
         case .nestedInGenericNotDiscovered: "nestedInGenericNotDiscovered"
+        case .privateMemberType: "privateMemberType"
         }
         return MessageID(domain: "EventMacros", id: id)
     }
@@ -125,14 +131,28 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
 /// The change the compiler offers beside a diagnostic.
 enum EventMacroFixIt: FixItMessage {
     case moveNameToArgument
+    case makeFileprivate(name: String)
 
     var message: String {
         switch self {
         case .moveNameToArgument: "Move the name into @Event(name:)"
+        case .makeFileprivate(let name): "Make \(name) fileprivate"
         }
     }
 
     var fixItID: MessageID {
-        MessageID(domain: "EventMacros", id: "moveNameToArgument")
+        let id = switch self {
+        case .moveNameToArgument: "moveNameToArgument"
+        case .makeFileprivate: "makeFileprivate"
+        }
+        return MessageID(domain: "EventMacros", id: id)
+    }
+}
+
+extension [String] {
+    /// The names as a list in prose: `A`, `A and B`, `A, B and C`.
+    fileprivate var prose: String {
+        guard let last, count > 1 else { return last ?? "" }
+        return dropLast().joined(separator: ", ") + " and " + last
     }
 }

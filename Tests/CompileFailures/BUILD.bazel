@@ -135,6 +135,23 @@ swift_compile_failure_test(
     deps = ["//Sources/EventMacros"],
 )
 
+# @Event on a struct in a private member type: the extension @Event adds sits at file scope, where
+# the type is hidden, so the macro reports it at the attribute instead, and that is the one error:
+# no record or extension follows it to fail in the expansion.
+swift_compile_failure_test(
+    name = "EventInPrivateMemberType",
+    size = "small",
+    src = "EventInPrivateMemberType.swift",
+    error_count = 1,
+    expected_errors = [
+        "EventInPrivateMemberType.swift:11:9: error: @Event conforms the type in an extension at file scope, where the private member type EarlierVersions is hidden; make it fileprivate",
+    ],
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
 # @Event structs in a module whose default isolation is the main actor, the default for a new app
 # target in Xcode 26 and later, used from nonisolated code, among them structs marked @MainActor and
 # one nested in a @MainActor class. Swift 6.4 doesn't apply the module's default isolation to a

@@ -18,6 +18,11 @@ import SwiftSyntaxMacros
 /// In a private or fileprivate type the record has no key. The extension always declares
 /// `name`, so no other declaration of it can differ from the key.
 ///
+/// A struct that is, or is nested in, a type declared `private` inside another type or an
+/// extension gets an error instead, naming each such type to make `fileprivate`, with a Fix-It
+/// when the struct is the only one: the extension sits at file scope, where such a type is hidden
+/// (`PrivateMemberType`).
+///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
 public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
@@ -36,7 +41,8 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
         let enums = RawValueEnum.enums(in: structure.memberBlock.members)
         let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
-        let diagnostics = argumentDiagnostics + nameMemberDiagnostics(of: structure, attribute: node) + propertyDiagnostics + enumDiagnostics(of: held, in: enums)
+        let scopeDiagnostics = PrivateMemberType.diagnostic(of: structure, attribute: node, in: context).map { [$0] } ?? []
+        let diagnostics = scopeDiagnostics + argumentDiagnostics + nameMemberDiagnostics(of: structure, attribute: node) + propertyDiagnostics + enumDiagnostics(of: held, in: enums)
         guard diagnostics.isEmpty else {
             diagnostics.forEach(context.diagnose)
             return []
@@ -95,7 +101,8 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         let enums = RawValueEnum.enums(in: structure.memberBlock.members)
         let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
         let argumentDiagnostics = EventArguments.arguments(of: node).diagnostics + nameMemberDiagnostics(of: structure, attribute: node)
-        let expands = argumentDiagnostics.isEmpty && propertyDiagnostics.isEmpty && enumDiagnostics(of: held, in: enums).isEmpty
+        let isVisible = PrivateMemberType.types(around: structure, in: context.lexicalContext).isEmpty
+        let expands = isVisible && argumentDiagnostics.isEmpty && propertyDiagnostics.isEmpty && enumDiagnostics(of: held, in: enums).isEmpty
         guard isRecorded && expands else { return [] }
         return try recordPeers(of: node, providingPeersOf: declaration, in: context)
     }

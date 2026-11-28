@@ -14,6 +14,8 @@
 /// in an extension of its own: so an app's `@Event` of the same name fails to link beside the
 /// library's event, as two `@Event`s of one name do. A static `name` the struct declares itself is
 /// an error. In a `private` or `fileprivate` type the record has no key, as `@Event`'s doesn't.
+/// A struct that is, or is nested in, a type declared `private` inside another type or an
+/// extension is an error, as it is for `@Event`.
 @attached(extension, conformances: __DiscoverableEvent, names: named(name))
 @attached(peer)
 public macro _DiscoverableEvent() = #externalMacro(module: "EventMacrosPlugin", type: "DiscoverableEventMacro")

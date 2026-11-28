@@ -144,7 +144,9 @@ name and version, so they hold every version. `SegmentStore()` and `DatabaseStor
 keep only the highest version of each name, the one the program tracks
 (<doc:PersistingRecords>). An explicit list, `SegmentStore(events:)`, still takes one type per
 name, whatever its version. Declare that private type at file scope, or `fileprivate` inside
-another type: `@Event`'s expansion can't reach a type that is a `private` member of another.
+another type. `@Event` conforms the type in an extension at file scope, which can't see a type
+that is a `private` member of another, so the macro reports an event in one as an error and says
+which type to make `fileprivate`.
 
 #### Limits
 
@@ -186,11 +188,12 @@ another type: `@Event`'s expansion can't reach a type that is a `private` member
   such an archive whole (`-force_load`), or pass `-Xlinker -fatal_warnings`, to keep it an error.
   SwiftPM, and Bazel for a `swift_library` left at `alwayslink = True`, link every object file,
   and there a duplicate is an error.
-- An event declared inside a `private` or `fileprivate` type, or in an extension marked either
-  way, isn't checked by the build: the symbol would be local to its file, and the linker never
-  compares local symbols. Stores and plans still refuse its name at run time when it shares a
-  version with another event's. An event that is itself `private`, at file scope or in a wider
-  type, is checked.
+- An event declared inside a `private` type at file scope, a `fileprivate` type, or an extension
+  marked either way, isn't checked by the build: the symbol would be local to its file, and the
+  linker never compares local symbols. Stores and plans still refuse its name at run time when it
+  shares a version with another event's. An event that is itself `private` at file scope is
+  checked. One that is a `private` member of another type, or nested in such a member, doesn't
+  compile; make that type `fileprivate`.
 
 ### Enum properties
 

@@ -63,6 +63,12 @@
 /// stored properties not supported in generic types`), as the extension doesn't say the type is
 /// generic; declare it outside the generic type.
 ///
+/// The conformance is an extension, which Swift places at file scope, where a type declared
+/// `private` inside another type or an extension can't be seen. So a struct that is such a type,
+/// or is nested in one, is a compile error naming each one to make `fileprivate`, with a Fix-It
+/// when the struct is the only one. A `private` type at file scope is `fileprivate` already, and
+/// so are the members of a `private` extension.
+///
 /// Beside the record the macro adds a function whose symbol is named for the event's name,
 /// `$linkerset_kind_65766E74_key_` and the name, its ASCII letters and digits as they are and every
 /// other byte as `_` and two hex digits. Two events of one name in one linked image, whatever their

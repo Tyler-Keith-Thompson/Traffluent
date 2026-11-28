@@ -25,6 +25,10 @@
 # the parser flags (a prefix without digits, a digit outside its radix) is text `Int(_:radix:)`
 # rejects too; the guard stays to read literals as 601's own property does.
 #
+# Known equivalent (left out): in PrivateMemberType's privateKeyword, dropping `&& $0.detail == nil`.
+# Only a modifier like private(set) has a detail, which Swift refuses on a type, so no compiling
+# declaration tells the two apart; the check stays to read `private` as LinkerSets' isPrivate does.
+#
 # Left out because a schema can't switch it: the schema's `consentCategory: Self.consentCategory`,
 # text inside a multi-line string literal. //Tests/EventMacrosTests pins each event's schema
 # category, and Events.py's schemaconsentfixed the stored field.
@@ -41,6 +45,7 @@ R = "RawValueEnum.swift"
 L = "EventLinkerSetMacro.swift"
 V = "DiscoverableEventMacro.swift"
 E = "EventRecordMacro.swift"
+T = "PrivateMemberType.swift"
 # A schema property's entry, as EventMacro.swift writes it.
 PROPERTY = r'"        Events.EventSchema.Property(name: \"\(property.name)\", typeName: \"\(property.typeName)\", isOptional: \(property.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\(property.identifier)), keywords: \(property.keywords)\(enumeration)),"'
 
@@ -264,4 +269,27 @@ MUTANTS = [
     Mutant("discoverablekeynil", V, "declaration.as(StructDeclSyntax.self)", "Optional<StructDeclSyntax>.none", nth=1),
     Mutant("discoverablenamememberignored", V, "throw DiagnosticsError(diagnostics: [Diagnostic(node: member, message: EventMacroDiagnostic.discoverableNameMember)])", "", mode="stmt"),
     Mutant("discoverablemessageevents", V, "EventMacroDiagnostic.discoverableNameMember", "EventMacroDiagnostic.nameMember"),
+    # TRAF-157: a struct that is, or is nested in, a private member type, which the extension at
+    # file scope can't name, is an error at the attribute, with no record or extension.
+    Mutant("privatememberignored", M, "PrivateMemberType.diagnostic(of: structure, attribute: node, in: context).map { [$0] } ?? []", "[Diagnostic]()"),
+    Mutant("privatememberpeerrecorded", M, "PrivateMemberType.types(around: structure, in: context.lexicalContext).isEmpty", "true"),
+    Mutant("discoverableprivatemembersilent", V, "context.diagnose(diagnostic)", "", mode="stmt"),
+    Mutant("discoverableprivatememberexpands", V, "return []", "", mode="stmt", nth=0),
+    Mutant("discoverableprivatemembernamemember", V, "_ = try uniqueKey(of: declaration, attribute: node)", "", mode="stmt"),
+    Mutant("discoverableprivatememberrecorded", V, "PrivateMemberType.types(around: declaration, in: context.lexicalContext).isEmpty", "true"),
+    Mutant("privatememberfilescope", T, "([Syntax(declaration)] + lexicalContext).dropLast()", "([Syntax(declaration)] + lexicalContext)[...]"),
+    Mutant("privatememberlexicalignored", T, "[Syntax(declaration)] + lexicalContext", "[Syntax(declaration)]", nth=1),
+    Mutant("privatememberselfignored", T, "[Syntax(declaration)] + lexicalContext", "lexicalContext", nth=1),
+    Mutant("privatememberlocalscope", T, "guard lexicalContext.allSatisfy({ $0.isProtocol(DeclGroupSyntax.self) }) else { return [] }", "", mode="stmt"),
+    Mutant("privatememberfileprivate", T, "$0.name.tokenKind == .keyword(.private)", "$0.name.tokenKind == .keyword(.fileprivate)"),
+    Mutant("privatememberfixitalways", T, "types.count == 1 && innermost.isAttachedDeclaration", "true"),
+    Mutant("privatememberfixitenclosed", T, "types.count == 1 && innermost.isAttachedDeclaration", "innermost.isAttachedDeclaration"),
+    Mutant("privatememberfixitenclosing", T, "types.count == 1 && innermost.isAttachedDeclaration", "types.count == 1"),
+    Mutant("privatememberattachedalways", T, "index == 0", "true"),
+    Mutant("privatememberfixitunchanged", T, r"innermost.keyword.with(\.tokenKind, .keyword(.fileprivate))", "innermost.keyword"),
+    Mutant("privatemembermacronamed", T, '"@" + attribute.attributeName.trimmedDescription', '"@Event"'),
+    Mutant("privatememberoutermostfirst", T, r"types.map(\.name)", r"types.reversed().map(\.name)"),
+    Mutant("privatememberplural", D, "names.count == 1", "true"),
+    Mutant("prosenocommas", D, 'dropLast().joined(separator: ", ") + " and " + last', 'joined(separator: " and ")'),
+    Mutant("proseandalone", D, "count > 1", "count > 0"),
 ]

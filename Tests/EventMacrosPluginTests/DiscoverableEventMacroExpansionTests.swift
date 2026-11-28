@@ -231,6 +231,145 @@ struct DiscoverableEventMacroExpansionTests {
         )
     }
 
+    @Test("A struct in a private member type is an error at the attribute naming the type, with no record, conformance or name, as @Event's is")
+    func inPrivateMemberType() {
+        assertMacroExpansion(
+            """
+            private struct Suite {
+                private enum Lifecycle {
+                    @_DiscoverableEvent
+                    struct Opened {
+                    }
+                }
+            }
+            """,
+            expandedSource: """
+                private struct Suite {
+                    private enum Lifecycle {
+                        struct Opened {
+                        }
+                    }
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@_DiscoverableEvent conforms the type in an extension at file scope, where the private member type Lifecycle is hidden; make it fileprivate",
+                    line: 3, column: 9),
+            ],
+            macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A struct in a private member type that declares a static name gets both errors, as @Event reports every rule a struct breaks")
+    func nameMemberInPrivateMemberType() {
+        assertMacroExpansion(
+            """
+            struct Suite {
+                private enum Lifecycle {
+                    @_DiscoverableEvent
+                    struct Opened {
+                        static let name = "opened"
+                    }
+                }
+            }
+            """,
+            expandedSource: """
+                struct Suite {
+                    private enum Lifecycle {
+                        struct Opened {
+                            static let name = "opened"
+                        }
+                    }
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@_DiscoverableEvent names the event after its type, which no other event may share; remove this member, or rename the type",
+                    line: 5, column: 13),
+                DiagnosticSpec(
+                    message: "@_DiscoverableEvent conforms the type in an extension at file scope, where the private member type Lifecycle is hidden; make it fileprivate",
+                    line: 3, column: 9),
+            ],
+            macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A struct that is itself a private member type is an error with a Fix-It making it fileprivate, as @Event's is")
+    func privateMemberStruct() {
+        assertMacroExpansion(
+            """
+            enum Lifecycle {
+                @_DiscoverableEvent
+                private struct Opened {
+                }
+            }
+            """,
+            expandedSource: """
+                enum Lifecycle {
+                    private struct Opened {
+                    }
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@_DiscoverableEvent conforms the type in an extension at file scope, where the private member type Opened is hidden; make it fileprivate",
+                    line: 2, column: 5,
+                    fixIts: [FixItSpec(message: "Make Opened fileprivate")]),
+            ],
+            macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
+            fixedSource: """
+                enum Lifecycle {
+                    @_DiscoverableEvent
+                    fileprivate struct Opened {
+                    }
+                }
+                """,
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A struct in a fileprivate member type nested two levels deep gets its record, with no key, its conformance and its name")
+    func inFileprivateMemberTypeTwoLevelsDeep() {
+        assertMacroExpansion(
+            """
+            private struct Suite {
+                fileprivate enum Fixtures {
+                    fileprivate enum Lifecycle {
+                        @_DiscoverableEvent
+                        struct Opened {
+                        }
+                    }
+                }
+            }
+            """,
+            expandedSource: """
+                private struct Suite {
+                    fileprivate enum Fixtures {
+                        fileprivate enum Lifecycle {
+                            struct Opened {
+                            }
+
+                            #__eventRecord(kind: 0x65766E74, storing: Suite.Fixtures.Lifecycle.Opened.self as any (Events.__DiscoverableEvent).Type)
+                        }
+                    }
+                }
+
+                extension Suite.Fixtures.Lifecycle.Opened: Events.__DiscoverableEvent {
+                }
+
+                nonisolated extension Suite.Fixtures.Lifecycle.Opened {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+                }
+                """,
+            macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
     @Test("#__eventRecord expands to what LinkerSets' #linkerSetRecord does for the same arguments")
     func recordMacro() throws {
         let node = try #require(DeclSyntax("#__eventRecord(kind: 0x65766E74, storing: Opened.self)").as(MacroExpansionDeclSyntax.self))
