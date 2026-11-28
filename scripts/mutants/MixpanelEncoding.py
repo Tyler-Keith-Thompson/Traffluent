@@ -15,6 +15,15 @@
 # - The factory's `backoff:` and `clock:` arguments: a mutant switch can't hold an argument, and
 #   without them the destination would use the default backoff, which only slows the retry check.
 #   Its instrument is a constant of its own, so `bootstrappedinstrument` reaches it.
+# - The URLSessionTransport factory's `now:` argument, passed on to the other factory: a mutant
+#   switch can't hold an argument, and no test sends through URLSession.
+# - The past side of the window written as `offset.magnitude <= Self.windowSeconds`: the
+#   future side's hour already refuses every offset past 119 hours ahead.
+# - An `offset.isFinite` term in the window's guard, or one dropped: the two bounds already refuse
+#   NaN, which compares false, and each infinity, which falls outside one of them. The non-finite
+#   clock tests pin the outcome.
+# - The catch in requests(for:), which falls back to no deadline: BatchLimit only throws for a
+#   maximum age below zero, and the window is 119 hours.
 # - The endpoints' `?? URL(fileURLWithPath: "/")` fallbacks: the literals always parse.
 # - A timestamp with no epoch-milliseconds form taken as 0 rather than thrown at: 0 is before
 #   1971, so the guard after it throws the same error.
@@ -35,8 +44,16 @@ MUTANTS = [
     Mutant("nopropertiesobject", B, ".object(properties)", ".object([:])"),
     Mutant("freshinsertid", B, ".string(record.deduplicationID)", ".string(UUID().uuidString.lowercased())"),
     Mutant("timeinseconds", B, ".integer(time)", ".integer(time / 1_000)"),
-    Mutant("before1971accepted", B, "time >= Self.earliestTime", "true"),
-    Mutant("earliestexclusive", B, "time >= Self.earliestTime", "time > Self.earliestTime"),
+    # The window checked before the 1971 guard (TRAF-135), so a record of 1960 under a clock of
+    # 2026 would be reported as outside the window rather than unrepresentable. Before the 1971
+    # and window mutants, as its statement holds their text; they take the original's copy, the
+    # second (nth=1), after the one its new branch writes.
+    Mutant("windowbeforeearliest", B,
+           "guard time >= Self.earliestTime else {\n            throw .unrepresentableTimestamp\n        }",
+           "guard offset >= -Self.windowSeconds, offset <= Self.latestOffset else {\n            throw .timestampOutsideWindow\n        }\n        guard time >= Self.earliestTime else {\n            throw .unrepresentableTimestamp\n        }",
+           mode="stmt"),
+    Mutant("before1971accepted", B, "time >= Self.earliestTime", "true", nth=1),
+    Mutant("earliestexclusive", B, "time >= Self.earliestTime", "time > Self.earliestTime", nth=1),
     Mutant("earliestinseconds", B, "31_536_000_000", "31_536_000"),
     Mutant("notoken", B, 'properties["token"] = .string(projectToken)', "", mode="stmt"),
     Mutant("tokenempty", B, ".string(projectToken)", '.string("")'),
@@ -164,4 +181,30 @@ MUTANTS = [
     Mutant("bareunknownrejected", B, "break", "return .rejected(reason: noValidEvent)", mode="stmt", nth=1),
     Mutant("unreadablerejected", B, """logger.notice("Mixpanel answered \\(response.head.status) with a body its track API doesn't document; the request counts as delivered")
         return .delivered""", "return .rejected(reason: noValidEvent)", mode="stmt"),
+    # The 5-day window and request deadlines (TRAF-135).
+    Mutant("nowindow", B, "offset >= -Self.windowSeconds", "true", nth=1),
+    Mutant("windowexclusive", B, "offset >= -Self.windowSeconds", "offset > -Self.windowSeconds", nth=1),
+    Mutant("futureaccepted", B, "offset <= Self.latestOffset", "true", nth=1),
+    Mutant("futureexclusive", B, "offset <= Self.latestOffset", "offset < Self.latestOffset", nth=1),
+    Mutant("windowfivedays", B, "(5 * 24 - 1) * 60 * 60", "5 * 24 * 60 * 60"),
+    Mutant("clockperrecord", B, "json(of: record, encodedAt: encodedAt)", "json(of: record, encodedAt: now())"),
+    Mutant("nodeadline", B, "return try limit.requests(for: batch, in: .array, maximumAge: Self.window, encoding: encoding, oversized: oversized)", "return limit.requests(for: batch, in: .array, encoding: encoding, oversized: oversized)", mode="stmt"),
+    Mutant("factorynowignored", F, "MixpanelBatchEncoder(projectToken: projectToken, plan: plan, now: now)", "MixpanelBatchEncoder(projectToken: projectToken, plan: plan)"),
+    Mutant("destinationnowignored", F, """return HTTPDestination(
+            endpoint: region.endpoint,
+            instrument: instrument,
+            transport: transport,
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            // One clock for both, so the 119 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)""", """return HTTPDestination(
+            endpoint: region.endpoint,
+            instrument: instrument,
+            transport: transport,
+            encoder: encoder,
+            backoff: backoff,
+            clock: clock,
+            now: { Date.now })""", mode="stmt"),
 ]

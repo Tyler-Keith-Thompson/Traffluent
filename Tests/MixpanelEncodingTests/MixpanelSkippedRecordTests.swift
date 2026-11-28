@@ -95,7 +95,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("A record whose event the plan doesn't describe is left out as unknownEvent, and the records around it are sent")
     func unknownEvent() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let skipped = EventRecord(event: Measured(value: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil, context: context)
@@ -116,7 +116,7 @@ struct MixpanelSkippedRecordTests {
     @Test("A record whose version the plan doesn't describe is left out as unknownEvent with its version, though the plan has its name")
     func unknownVersion() throws {
         let earlier = EventSchema(name: "checkout_started", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [earlier]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [earlier]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "checkout_started", schemaVersion: 2, reason: .unknownEvent(name: "checkout_started", version: 2))]
 
@@ -128,7 +128,7 @@ struct MixpanelSkippedRecordTests {
     @Test("A record whose event isn't Encodable is left out as notEncodable")
     func notEncodable() throws {
         let handWritten = EventSchema(name: "HandWritten", version: 1, consentCategory: .analytics, properties: [EventSchema.Property(name: "plan", typeName: "String", isOptional: false)])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [handWritten]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [handWritten]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: HandWritten(plan: "pro"), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "HandWritten", schemaVersion: 1, reason: .notEncodable(name: "HandWritten"))]
 
@@ -139,7 +139,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("A record holding a NaN is left out as unrepresentableValue, naming the property")
     func unrepresentableValue() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Measured.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Measured.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Measured(value: .nan), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "measured", schemaVersion: 1, reason: .unrepresentableValue(event: "measured", property: "value"))]
 
@@ -151,7 +151,7 @@ struct MixpanelSkippedRecordTests {
     @Test("A record whose encoding isn't a map is left out as unrepresentableValue with no property")
     func notAMap() throws {
         let schema = EventSchema(name: "not_a_map", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: NotAMap(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = MixpanelEncodingError.unrepresentableValue(event: "not_a_map", property: "")
 
@@ -176,7 +176,7 @@ struct MixpanelSkippedRecordTests {
         // inside another closure.
         func check() throws {
             let schema = EventSchema(name: name, version: 1, consentCategory: .analytics, properties: [])
-            let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+            let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
             let record = EventRecord(event: Named(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
             let expected: [MixpanelEncodingError] = reserved ? [.reservedEventName(name: name)] : []
             let expectedRequestCount = reserved ? 0 : 1
@@ -191,7 +191,7 @@ struct MixpanelSkippedRecordTests {
     @Test("A record whose event name Mixpanel reserves is left out, and the records around it are sent")
     func reservedAmongOthers() throws {
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, identify]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, identify]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let skipped = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil)
         let batch = [
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil),
@@ -213,7 +213,7 @@ struct MixpanelSkippedRecordTests {
             static let name = "$create_alias"
         }
         let schema = EventSchema(name: "$create_alias", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: CreateAlias(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "$create_alias", schemaVersion: 1, reason: .reservedEventName(name: "$create_alias"))]
 
@@ -224,7 +224,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("A record the plan doesn't describe is left out as unknownEvent even when Mixpanel reserves its name")
     func unknownBeforeReserved() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: []))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: []), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "$identify", schemaVersion: 1, reason: .unknownEvent(name: "$identify", version: 1))]
 
@@ -244,7 +244,7 @@ struct MixpanelSkippedRecordTests {
     ])
     func reservedPropertyName(property: String, reserved: Bool) throws {
         let schema = EventSchema(name: "property_named", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: PropertyNamed(property: property), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected: [MixpanelEncodingError] = reserved ? [.reservedPropertyName(event: "property_named", property: property)] : []
         let expectedRequestCount = reserved ? 0 : 1
@@ -257,7 +257,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("An @Event with properties named time, token and ip is left out, naming the first of them by its bytes, so none is lost or replaced")
     func reservedEventProperties() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [VideoWatched.schema, CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [VideoWatched.schema, CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let skipped = EventRecord(event: VideoWatched(time: 12.5, token: "abc", ip: "x"), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil)
         let sent = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: skipped.id, eventName: "video_watched", schemaVersion: 1, reason: .reservedPropertyName(event: "video_watched", property: "ip"))]
@@ -270,7 +270,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("A Sensitive property named as a reserved one is never sent, so the record is sent without it")
     func reservedSensitiveProperty() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [RedactedTime.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [RedactedTime.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: RedactedTime(time: Sensitive(12.5), count: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expectedTime: Int64 = 1_795_442_607_000
 
@@ -291,7 +291,7 @@ struct MixpanelSkippedRecordTests {
             var token: String
         }
         let schema = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: IdentifyWithToken(token: "x"), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected: [MixpanelEncodingError] = [.reservedEventName(name: "$identify")]
 
@@ -302,7 +302,7 @@ struct MixpanelSkippedRecordTests {
 
     @Test("A record with a reserved property is left out as reservedPropertyName, before a timestamp Mixpanel can't take")
     func reservedPropertyBeforeTimestamp() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [VideoWatched.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [VideoWatched.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: VideoWatched(time: 1, token: "abc", ip: "x"), timestamp: Date(timeIntervalSince1970: .nan), sourceLocation: nil)
         let expected: [MixpanelEncodingError] = [.reservedPropertyName(event: "video_watched", property: "ip")]
 
@@ -318,7 +318,10 @@ struct MixpanelSkippedRecordTests {
         (31_535_999.999, true), (31_536_000, false), (9.2e15, false), (1_795_442_607, false),
     ])
     func unrepresentableTimestamp(seconds: Double, skipped: Bool) throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        // The encoder's clock reads the record's own time where it is finite, so the 119 hours
+        // don't decide.
+        let now = Date(timeIntervalSince1970: seconds.isFinite ? seconds : 0)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { now })
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: seconds), sourceLocation: nil)
         let expected: [SkippedRecord<MixpanelEncodingError>] = skipped
             ? [SkippedRecord(recordID: record.id, eventName: "checkout_started", schemaVersion: 2, reason: .unrepresentableTimestamp)]
@@ -333,7 +336,7 @@ struct MixpanelSkippedRecordTests {
     @Test("A batch whose every record is skipped has no request, and each record's reason is reported in order")
     func everyRecordSkipped() throws {
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, VideoWatched.schema, identify]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema, VideoWatched.schema, identify]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [
             EventRecord(event: Measured(value: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil),
             EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil),

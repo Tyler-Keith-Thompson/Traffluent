@@ -4,7 +4,7 @@ Send records to a Mixpanel project through its track API.
 
 ## Overview
 
-``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:)`` makes an
+``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:now:)`` makes an
 `HTTPDestination` (module ``/HTTPDestinations``) for your Mixpanel project in one call. It checks
 the project token, posts to the `/track` endpoint of the project's data residency
 (``MixpanelRegion``), with `verbose=1`, through a ``MixpanelBatchEncoder``, and splits each batch to Mixpanel's limits
@@ -47,7 +47,8 @@ starts with `$`, as Mixpanel's own events' names do, one with a property Mixpane
 more counting the encoder's own, one holding an array of 255 elements or more, one whose property
 nests objects more than 3 deep, one whose event isn't
 `Encodable`, one holding a value JSON can't, one whose timestamp is before 1971 or has no
-epoch-milliseconds form, and one too large for Mixpanel. The destination reports each as
+epoch-milliseconds form, one tracked more than 119 hours before its batch is encoded or more than
+an hour after, and one too large for Mixpanel. The destination reports each as
 `HTTPDropReport.skipped(_:)`, a `SkippedRecord` whose reason is a ``MixpanelEncodingError``.
 
 Mixpanel answers 200 even when it finds no valid event in a request. The endpoint asks for
@@ -56,8 +57,16 @@ drops the request and reports it as `HTTPDropReport.rejectedInBody(status:reason
 with Mixpanel's error as the reason. A `status` of 1 means only that one event or more was well
 formed: it doesn't confirm that the token names a project, so a wrong region, or a token of no
 project, may be answered 200 with nothing stored. Check the project's Live View after setting the
-destination up. Its track API ingests only events from the last 5 days, so a record older than
-that when it is sent isn't stored, and is reported only when no event of its request was valid.
+destination up.
+
+Mixpanel's track API ingests only events from the last 5 days, and answers 200 to an older one
+while storing nothing. So the destination drops and reports such a record rather than send it.
+The encoder leaves out a record tracked more than 119 hours (5 days less an hour, for clocks that
+disagree) before its batch is encoded, as
+``MixpanelEncodingError/timestampOutsideWindow``. Each request has a deadline 119 hours after its
+oldest record was tracked, and a request still being retried when it passes isn't sent again: it
+is reported as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. Pass the factory's `now:` a
+clock of your own to test this.
 
 To send to PostHog or Amplitude, use `PostHogEncoding` or `AmplitudeEncoding` instead.
 
@@ -82,8 +91,8 @@ covers what Mixpanel receives, and why, in more detail.
 
 ### Sending to Mixpanel
 
-- ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:)``
-- ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:)``
+- ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:now:)``
+- ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:now:)``
 - ``MixpanelRegion``
 - ``HTTPDestinations/ExponentialBackoff/mixpanel``
 - ``MixpanelSetupError``

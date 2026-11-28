@@ -33,7 +33,7 @@ struct MixpanelBatchEncoderPropertyTests {
             let text = String(String.UnicodeScalarView(scalars.compactMap { Unicode.Scalar($0 % 0x11_0000) }))
             // A small count, so the batches here split as a batch of 2,000 would.
             let limit = try BatchLimit(maximumRecordCount: 7, maximumByteCount: MixpanelBatchEncoder.batchLimit.maximumByteCount, maximumRecordByteCount: MixpanelBatchEncoder.batchLimit.maximumRecordByteCount)
-            let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Generated.schema]), limit: limit)
+            let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Generated.schema]), limit: limit, now: { Date(timeIntervalSince1970: 1_795_442_607) })
             let batch = sessions.enumerated().map { index, session in
                 var context = ServiceContext.topLevel
                 // A few sessions, so records share one as a tracker's do.

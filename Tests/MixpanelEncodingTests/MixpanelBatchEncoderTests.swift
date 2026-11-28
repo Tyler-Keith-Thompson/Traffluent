@@ -41,7 +41,7 @@ struct MixpanelBatchEncoderTests {
     @Test("A hand-worked batch encodes to Mixpanel's track request, byte for byte, without its Sensitive email")
     func handWorkedBatch() throws {
         let plan = try TrackingPlan(schemas: [SignedUp.schema, CheckoutStarted.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
         context[DeviceKey.self] = DeviceKey.Value(model: "iPhone17,1", formFactor: .phone)
@@ -91,7 +91,7 @@ struct MixpanelBatchEncoderTests {
     @Test("A redelivered record encodes with the $insert_id it was first sent with")
     func redelivered() throws {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "01A208B7-E840-7A3E-8B4D-5C6E7F801234")!
         let firstDelivery = EventRecord(
@@ -120,7 +120,7 @@ struct MixpanelBatchEncoderTests {
     @Test("Events are encoded in the batch's order, oldest first")
     func order() throws {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let batch = [3, 1, 2].map { size in
@@ -137,7 +137,7 @@ struct MixpanelBatchEncoderTests {
 
     @Test("The project token is written into each event as given, escaped as a JSON string")
     func projectTokenEscaped() throws {
-        let sut = MixpanelBatchEncoder(projectToken: #"token"quoted"\"#, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: #"token"quoted"\"#, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = (0 ..< 2).map { index in
             EventRecord(event: CheckoutStarted(cartSize: index, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         }
@@ -158,7 +158,8 @@ struct MixpanelBatchEncoderTests {
     ])
     func time(seconds: Double, expected: Int64) throws {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        // The encoder's clock reads the record's own time, so the 119 hours don't decide.
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: seconds) })
         let record = EventRecord(event: CheckoutStarted(cartSize: 1, coupon: nil), timestamp: Date(timeIntervalSince1970: seconds), sourceLocation: nil)
 
         let body = try #require(sut.requests(for: [record]).requests.first).body.body
@@ -171,7 +172,7 @@ struct MixpanelBatchEncoderTests {
     @Test("A Sensitive property is left out, whether or not the record reveals it", arguments: [true, false])
     func sensitiveNeverSent(reveals: Bool) throws {
         let plan = try TrackingPlan(schemas: [SignedUp.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         var record = EventRecord(
@@ -194,7 +195,7 @@ struct MixpanelBatchEncoderTests {
 
     @Test("An event without properties is sent with only the members the encoder writes")
     func emptyProperties() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, event: Opened(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = #"[{"event":"opened","properties":{"$insert_id":"00000000-0000-4000-8000-000000000001","distinct_id":"00000000-0000-4000-8000-000000000001","ip":"0","time":1795442607000,"token":"testprojecttoken"}}]"#
 

@@ -24,7 +24,7 @@ struct MixpanelDeliveryTests {
     func trackerToEndpoint() async throws {
         let start = Date(timeIntervalSince1970: 1_795_442_607.5)
         let transport = ScriptedTransport([.status(.ok)])
-        let mixpanel = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport)
+        let mixpanel = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let memory = InMemoryDestination()
         let tracker = Tracker(enrichers: [.sessions(kinds: [])], now: { start })
         let delivery = tracker.records.batch().deliver(to: mixpanel, memory)
@@ -58,7 +58,7 @@ struct MixpanelDeliveryTests {
     ])
     func rejectionDropped(status: HTTPResponse.Status) async throws {
         let transport = ScriptedTransport([.status(status), .status(.ok)])
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .eu, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .eu, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expected = HTTPDropReport<MixpanelEncodingError>.rejected(status: status, recordIDs: [batch[0].id])
         let expectedRequestCount = 1
@@ -77,7 +77,7 @@ struct MixpanelDeliveryTests {
     func transientRetried(status: HTTPResponse.Status) async throws {
         let transport = ScriptedTransport([.status(status), .status(.ok)])
         let clock = TestClock()
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .india, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: try ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(60), jitter: .none), clock: clock)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .india, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: try ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(60), jitter: .none), clock: clock, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expectedRequestCount = 2
         let receiving = Task { await sut.receive(batch) }
@@ -108,7 +108,7 @@ struct MixpanelDeliveryTests {
         }
         let identify = EventSchema(name: "$identify", version: 1, consentCategory: .analytics, properties: [])
         let transport = ScriptedTransport([.status(.ok)])
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [identify]), transport: transport)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [identify]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [EventRecord(event: Identify(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expected = HTTPDropReport<MixpanelEncodingError>.skipped(SkippedRecord(recordID: batch[0].id, eventName: "$identify", schemaVersion: 1, reason: .reservedEventName(name: "$identify")))
 

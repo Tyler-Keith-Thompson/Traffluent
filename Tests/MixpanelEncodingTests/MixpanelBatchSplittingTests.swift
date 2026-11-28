@@ -28,7 +28,7 @@ struct MixpanelBatchSplittingTests {
 
     @Test("By default, 2,000 events go in one request, and a 2,001st starts another", arguments: [(1, [1]), (2_000, [2_000]), (2_001, [2_000, 1])])
     func defaultCount(recordCount: Int, expected: [Int]) throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = (0 ..< recordCount).map { index in
             EventRecord(event: Searched(query: "q\(index)"), timestamp: Date(timeIntervalSince1970: 1_795_442_607 + Double(index)), sourceLocation: nil)
         }
@@ -42,15 +42,15 @@ struct MixpanelBatchSplittingTests {
     func splitByCount() throws {
         let plan = try TrackingPlan(schemas: [Searched.schema])
         let limit = try BatchLimit(maximumRecordCount: 2, maximumByteCount: .max, maximumRecordByteCount: .max)
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: limit)
-        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: limit, now: { Date(timeIntervalSince1970: 1_795_442_607) })
+        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = (0 ..< 5).map { index in
             EventRecord(event: Searched(query: "q\(index)"), timestamp: Date(timeIntervalSince1970: 1_795_442_607 + Double(index)), sourceLocation: nil)
         }
         let expected = [
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[0 ..< 2])).requests.first).body, recordIDs: batch[0 ..< 2].map(\.id)),
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[2 ..< 4])).requests.first).body, recordIDs: batch[2 ..< 4].map(\.id)),
-            EncodedRequest(body: try #require(unsplit.requests(for: Array(batch[4 ..< 5])).requests.first).body, recordIDs: batch[4 ..< 5].map(\.id)),
+            try #require(unsplit.requests(for: Array(batch[0 ..< 2])).requests.first),
+            try #require(unsplit.requests(for: Array(batch[2 ..< 4])).requests.first),
+            try #require(unsplit.requests(for: Array(batch[4 ..< 5])).requests.first),
         ]
 
         let actual = sut.requests(for: batch)
@@ -65,10 +65,10 @@ struct MixpanelBatchSplittingTests {
         let records = (0 ..< 3).map { index in
             EventRecord(event: Searched(query: "q\(index)"), timestamp: Date(timeIntervalSince1970: 1_795_442_607 + Double(index)), sourceLocation: nil)
         }
-        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let twoRecordBytes = try #require(unsplit.requests(for: Array(records[0 ..< 2])).requests.first).body.body.count
-        let exact = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: twoRecordBytes, maximumRecordByteCount: .max))
-        let short = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: twoRecordBytes - 1, maximumRecordByteCount: .max))
+        let exact = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: twoRecordBytes, maximumRecordByteCount: .max), now: { Date(timeIntervalSince1970: 1_795_442_607) })
+        let short = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: twoRecordBytes - 1, maximumRecordByteCount: .max), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let expectedExact = [2, 1]
         let expectedShort = [1, 1, 1]
 
@@ -86,10 +86,10 @@ struct MixpanelBatchSplittingTests {
         let envelopeBytes = 2
         let small = EventRecord(event: Searched(query: "q"), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let large = EventRecord(event: Searched(query: String(repeating: "x", count: 500)), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil)
-        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let unsplit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let largeBytes = try #require(unsplit.requests(for: [large]).requests.first).body.body.count - envelopeBytes
-        let atLimit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: .max, maximumRecordByteCount: largeBytes))
-        let underLimit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: .max, maximumRecordByteCount: largeBytes - 1))
+        let atLimit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: .max, maximumRecordByteCount: largeBytes), now: { Date(timeIntervalSince1970: 1_795_442_607) })
+        let underLimit = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, limit: try BatchLimit(maximumRecordCount: .max, maximumByteCount: .max, maximumRecordByteCount: largeBytes - 1), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let expectedSkipped = [SkippedRecord<MixpanelEncodingError>(recordID: large.id, eventName: "searched", schemaVersion: 1, reason: .oversized(byteCount: largeBytes))]
         let expectedSent = [small.id]
 
@@ -105,7 +105,7 @@ struct MixpanelBatchSplittingTests {
     @Test("By default, an event of 999,999 bytes is sent and one of 1,000,000 is left out as oversized, and the rest is sent")
     func oversizedForMixpanel() throws {
         let plan = try TrackingPlan(schemas: [Searched.schema])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan)
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: plan, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let probe = EventRecord(event: Searched(query: ""), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         // An event's JSON without its query's characters: the probe's body less the array's brackets.
         let overhead = try #require(sut.requests(for: [probe]).requests.first).body.body.count - 2
@@ -124,7 +124,7 @@ struct MixpanelBatchSplittingTests {
 
     @Test("By default, events totalling more than 2,000,000 bytes go in more than one request, each within it")
     func splitByMixpanelBytes() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         // Three events of about 800,000 bytes: two fit in 2,000,000 bytes, three don't.
         let batch = (0 ..< 3).map { index in
             EventRecord(event: Searched(query: String(repeating: "x", count: 800_000)), timestamp: Date(timeIntervalSince1970: 1_795_442_607 + Double(index)), sourceLocation: nil)
@@ -140,7 +140,7 @@ struct MixpanelBatchSplittingTests {
 
     @Test("An empty batch makes no request")
     func emptyBatch() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Searched.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
 
         let actual = sut.requests(for: [])
 

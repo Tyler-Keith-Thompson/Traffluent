@@ -49,10 +49,10 @@ struct MixpanelRecoveryTests {
             try? FileManager.default.removeItem(atPath: copy)
         }
         let endpoint = try #require(URL(string: "https://mixpanel.example.com/import"))
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { tracked })
         let transport = GatedTransport()
         let tracker = Tracker(store: try SegmentStore(events: [CheckoutStarted.self], directory: .init(directory)), enrichers: [.sessions(kinds: [])], now: { tracked })
-        let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: transport, encoder: sut))
+        let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: transport, encoder: sut, now: { tracked }))
         let sending = Task { try await delivery.execute() }
         tracker.track(CheckoutStarted(cartSize: 1))
         for await _ in transport.arrivals { break }

@@ -1,4 +1,4 @@
-/// Why ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:)``
+/// Why ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:now:)``
 /// couldn't make a destination.
 public enum MixpanelSetupError: Error, Sendable, Hashable {
     /// The project token is empty, or only whitespace. Mixpanel ingests nothing without one.

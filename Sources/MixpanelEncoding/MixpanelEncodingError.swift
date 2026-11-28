@@ -23,6 +23,12 @@ public enum MixpanelEncodingError: Error, Sendable, Hashable {
     /// The record's timestamp is no `time` Mixpanel takes: it is NaN, infinite, further from 1970
     /// than `Int64.max` milliseconds, or before 1971-01-01, which Mixpanel rejects.
     case unrepresentableTimestamp
+    /// The record was tracked more than 119 hours before the batch was encoded or more than an
+    /// hour after it, or the clock the encoder reads gave a NaN or infinite time. Mixpanel's track
+    /// API drops an event more than 5 days old while answering 200, the hour to spare being for a
+    /// queue on Mixpanel's side and clocks that disagree, and rejects one more than an hour in the
+    /// future.
+    case timestampOutsideWindow
     /// The event would have `count` properties, 255 or more, which Mixpanel drops an event for.
     /// `count` includes the members the encoder writes (`token`, `time`, `distinct_id`,
     /// `$insert_id`, `ip`, `$device_id` for a record with a session) and the default properties of

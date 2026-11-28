@@ -24,7 +24,7 @@ struct MixpanelContextTests {
 
     @Test("The standard context is Mixpanel's default properties: $app_version_string, $app_build_number, $model, $wifi, $os and $os_version")
     func properties() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
         context[DeviceKey.self] = DeviceKey.Value(model: "Mac16,1", formFactor: .mac)
@@ -43,7 +43,7 @@ struct MixpanelContextTests {
         (NetworkKey.Value.wifi, true), (.cellular, false), (.wiredEthernet, false), (.other, false), (.offline, false),
     ])
     func wifi(network: NetworkKey.Value, expected: Bool) throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[NetworkKey.self] = network
         let record = EventRecord(event: Opened(count: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil, context: context)
@@ -57,7 +57,7 @@ struct MixpanelContextTests {
 
     @Test("An application with no version or build sends neither, and one with a build alone sends $app_build_number")
     func partialApplication() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var noneContext = ServiceContext.topLevel
         noneContext[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: nil, build: nil)
         var buildContext = ServiceContext.topLevel
@@ -78,7 +78,7 @@ struct MixpanelContextTests {
         DeviceKey.Value.FormFactor.phone, .pad, .mac, .tv, .watch, .vision,
     ])
     func unmappedLeftOut(formFactor: DeviceKey.Value.FormFactor) throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: nil, build: nil)
         context[DeviceKey.self] = DeviceKey.Value(model: "Model1,1", formFactor: formFactor)
@@ -101,7 +101,7 @@ struct MixpanelContextTests {
 
     @Test("A context with only a session adds only the session; the sample rate isn't sent")
     func sessionOnly() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Opened.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         context[SampleRateKey.self] = try SampleRate(0.5)
@@ -118,7 +118,7 @@ struct MixpanelContextTests {
 
     @Test("An event's own properties named as a default property without its $ stay as they are, beside the context's")
     func propertyNamedAsADefault() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Upgraded.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [Upgraded.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
         context[DeviceKey.self] = DeviceKey.Value(model: "iPhone17,1", formFactor: .phone)

@@ -80,8 +80,8 @@ A request can carry a deadline, the latest time it may be sent, which an encoder
 that misdates or ignores events past some age while still answering 2xx. The destination reads its
 `now:` clock before every attempt, the first included, and once the deadline has passed it stops
 sending the request and reports it as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. The
-Google Analytics and Matomo encoders set one; a request without one is retried for as long as it
-takes.
+Google Analytics, Matomo, Aptabase and Mixpanel encoders set one; a request without one is retried
+for as long as it takes.
 
 The bootstrapped tracing instrument, or the one you pass as `instrument:`, injects the trace
 context of each request's first record into its header fields, so a server that extracts it joins
@@ -297,9 +297,13 @@ more than 3 deep. Last, the encoder leaves out a record whose timestamp is befor
 or has no epoch-milliseconds form, and one too large for Mixpanel. The destination reports each on
 `dropReports` as `HTTPDropReport.skipped(_:)`.
 
-Mixpanel doesn't report every loss. Its track API ingests only events from the last 5 days, and
-it answers status 1 to a request it ingests some of, so a record older than that when it is sent,
-such as one a store kept through a long time offline, counts as delivered and isn't stored.
+Mixpanel's track API ingests only events from the last 5 days, and answers status 1 to a request
+it ingests some of, so the destination doesn't send it an older record. The encoder leaves out a
+record tracked more than 119 hours (5 days less an hour, for clocks that disagree) before its
+batch is encoded, such as one a store kept through a long time offline, or more than an hour after,
+which Mixpanel rejects too, and reports it as `HTTPDropReport.skipped(_:)`. Each request has a
+deadline 119 hours after its oldest record was tracked; a request still being retried when it
+passes isn't sent again, and is reported as `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`.
 
 ### Segment, RudderStack and Customer.io
 

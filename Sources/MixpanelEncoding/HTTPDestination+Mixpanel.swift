@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 public import HTTPDestinations
 import Instrumentation
 public import TrackingPlans
@@ -19,6 +19,14 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
     /// token of no project, may still be answered 200 with nothing stored: check the project's
     /// Live View after setting it up.
     ///
+    /// Mixpanel's track API takes no event tracked more than 5 days before it arrives, and answers
+    /// 200 while storing nothing for one, so the encoder leaves out a record tracked more than 119
+    /// hours before it is encoded, or more than an hour after, which Mixpanel rejects too
+    /// (``MixpanelEncodingError/timestampOutsideWindow``). A request is
+    /// encoded once and retried as it is, so one still undelivered 119 hours after its oldest
+    /// record was tracked, by the time `now` gives, isn't sent again: it is dropped and reported as
+    /// `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`.
+    ///
     /// The encoder logs a notice for each property of `plan` named as one Mixpanel reserves, as
     /// every record of its event will be skipped
     /// (``MixpanelEncodingError/reservedPropertyName(event:property:)``).
@@ -37,6 +45,9 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
     ///   - backoff: How long to wait before each new attempt at a request; 2 seconds, doubling up
     ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - now: The wall-clock time a batch is encoded at, which the 119 hours are measured from,
+    ///     and each request's deadline is checked against before it is sent; the system's clock by
+    ///     default. When it reads NaN or infinite, every record is left out.
     /// - Returns: The destination.
     /// - Throws: ``MixpanelSetupError/emptyProjectToken`` for a token that is empty or only
     ///   whitespace, and ``MixpanelSetupError/malformedProjectToken`` for one holding a character
@@ -47,7 +58,8 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
         plan: TrackingPlan,
         transport: Transport,
         backoff: ExponentialBackoff = .mixpanel,
-        clock: some Clock<Duration> = ContinuousClock()
+        clock: some Clock<Duration> = ContinuousClock(),
+        now: @escaping @Sendable () -> Date = { Date.now }
     ) throws(MixpanelSetupError) -> HTTPDestination<Transport, MixpanelBatchEncoder> {
         // Trimmed once, so a token pasted with a newline is checked and sent without it.
         let projectToken = projectToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,15 +73,19 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
         guard projectToken.utf8.allSatisfy(\.isASCIIAlphanumeric) else {
             throw .malformedProjectToken
         }
+        let encoder = MixpanelBatchEncoder(projectToken: projectToken, plan: plan, now: now)
         // Mixpanel doesn't read a trace context, so the app's traces aren't sent to it.
         let instrument: any Instrument = NoOpInstrument()
         return HTTPDestination(
             endpoint: region.endpoint,
             instrument: instrument,
             transport: transport,
-            encoder: MixpanelBatchEncoder(projectToken: projectToken, plan: plan),
+            encoder: encoder,
             backoff: backoff,
-            clock: clock)
+            clock: clock,
+            // One clock for both, so the 119 hours a record is checked against when its batch is
+            // encoded are the ones its request's deadline ends.
+            now: now)
     }
 }
 
@@ -85,7 +101,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Mi
     ///     plan: plan)
     /// ```
     ///
-    /// It is ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:)``
+    /// It is ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:now:)``
     /// with a `URLSessionTransport`.
     ///
     /// - Parameters:
@@ -97,6 +113,9 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Mi
     ///   - backoff: How long to wait before each new attempt at a request; 2 seconds, doubling up
     ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - now: The wall-clock time a batch is encoded at, which the 119 hours are measured from,
+    ///     and each request's deadline is checked against before it is sent; the system's clock by
+    ///     default. When it reads NaN or infinite, every record is left out.
     /// - Returns: The destination.
     /// - Throws: ``MixpanelSetupError`` for an empty or malformed token, as the other spelling
     ///   says.
@@ -105,9 +124,10 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Mi
         region: MixpanelRegion,
         plan: TrackingPlan,
         backoff: ExponentialBackoff = .mixpanel,
-        clock: some Clock<Duration> = ContinuousClock()
+        clock: some Clock<Duration> = ContinuousClock(),
+        now: @escaping @Sendable () -> Date = { Date.now }
     ) throws(MixpanelSetupError) -> HTTPDestination<URLSessionTransport, MixpanelBatchEncoder> {
-        try mixpanel(projectToken: projectToken, region: region, plan: plan, transport: URLSessionTransport(), backoff: backoff, clock: clock)
+        try mixpanel(projectToken: projectToken, region: region, plan: plan, transport: URLSessionTransport(), backoff: backoff, clock: clock, now: now)
     }
 }
 

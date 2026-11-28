@@ -1,5 +1,5 @@
 public import Events
-import Foundation
+public import Foundation
 public import HTTPDestinations
 import JSONValues
 import Logging
@@ -9,7 +9,7 @@ public import TrackingPlans
 /// The ``/HTTPDestinations/BatchEncoder`` of Mixpanel's track API, so an `HTTPDestination` can send
 /// events to a Mixpanel project's `POST /track`.
 ///
-/// Make the destination with ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:)``,
+/// Make the destination with ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:now:)``,
 /// which fills in the endpoint, this encoder and Mixpanel's limits:
 ///
 /// ```swift
@@ -65,25 +65,36 @@ public import TrackingPlans
 /// `$`, as Mixpanel's own events' do, one with a property named as one Mixpanel reads for itself,
 /// one past Mixpanel's limits on properties, array elements or nesting, one whose event isn't
 /// `Encodable`, one that holds a value JSON can't, one whose timestamp is no
-/// `time` Mixpanel takes, and one too large for Mixpanel (``MixpanelEncodingError``).
+/// `time` Mixpanel takes, one tracked more than 119 hours (5 days less an hour) before the batch
+/// is encoded or more than an hour after, and one too large for Mixpanel
+/// (``MixpanelEncodingError``).
 /// ``requests(for:)`` returns them as `SkippedRecord`s, which `HTTPDestination` logs and reports
 /// on its `dropReports`.
 ///
 /// ``requests(for:)`` splits a batch into requests within the encoder's limit, ``batchLimit`` by
-/// default, and makes none for a batch with no record it can write, so `HTTPDestination` sends
-/// nothing for it. Mixpanel answers a request it reads with 200, so `HTTPDestination` retries one
+/// default, gives each a deadline 119 hours after its oldest record was tracked, and makes none
+/// for a batch with no record it can write, so `HTTPDestination` sends nothing for it. Mixpanel
+/// answers a request it reads with 200, so `HTTPDestination` retries one
 /// that gets no response, a 5xx, 408 or 429, and drops one it rejects, such as with 400, 401 or
 /// 413. It answers 200 as well to a request in which it finds no valid event, and says so in the
 /// body: with `verbose=1`, which the destination's endpoint sets, `{"status": 0, "error": ...}`.
 /// ``outcome(of:for:)`` reads that as rejected, so `HTTPDestination` drops the request and reports it
 /// with Mixpanel's error. A `status` of 1 means only that one event or more was well formed, not
 /// that the token names a project, so a wrong region, or a token of no project, may still be
-/// answered 200 with nothing stored: check the project's Live View after setting it up. Its track
-/// API ingests only events from the last 5 days: a record older than that when it is sent, such
-/// as one a store kept through a long time offline, is not stored, and is reported only when no
-/// event of its request was valid. A record sent again keeps its `$insert_id`. The bytes are
-/// the same for the same records on every run and platform: no whitespace, object members in the
-/// order of their names' UTF-8 bytes.
+/// answered 200 with nothing stored: check the project's Live View after setting it up.
+///
+/// The track API ingests only events from the last 5 days, and answers 200 while storing nothing
+/// for an older one. So a record older than that, such as one a store kept through a long time
+/// offline, is dropped and reported rather than sent: left out when its batch is encoded
+/// (``MixpanelEncodingError/timestampOutsideWindow``), or, when its request is still being retried
+/// at the deadline, dropped with the request and reported as
+/// `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`. The hour to spare is for a queue on
+/// Mixpanel's side and clocks that disagree. Mixpanel also rejects an event more than an hour in
+/// the future, so a record tracked more than an hour after its batch is encoded is left out as
+/// ``MixpanelEncodingError/timestampOutsideWindow`` too.
+///
+/// A record sent again keeps its `$insert_id`. The bytes are the same for the same records on
+/// every run and platform: no whitespace, object members in the order of their names' UTF-8 bytes.
 public struct MixpanelBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
@@ -174,17 +185,42 @@ public struct MixpanelBatchEncoder: BatchEncoder {
     /// Mixpanel drops an event whose property's value nests objects deeper than this.
     private static let objectDepthLimit = 3
 
+    // https://developer.mixpanel.com/reference/track-event (read 2026-11-27): /track takes
+    // "events that occurred within the last 5 days"; /import, with the project's secret, takes
+    // older ones, which an app never holds. An hour less, as the GA4, Matomo and Aptabase encoders
+    // keep an hour off their vendors' windows.
+    /// How long before a batch is encoded, or before its request is sent, a record may have been
+    /// tracked, in seconds: 119 hours. Mixpanel's track API takes an event up to 5 days old; the
+    /// hour to spare is for a queue on Mixpanel's side and clocks that disagree.
+    private static let windowSeconds: TimeInterval = (5 * 24 - 1) * 60 * 60
+
+    /// ``windowSeconds`` as the maximum age of a request's oldest record.
+    private static let window: Duration = .seconds(windowSeconds)
+
+    // https://developer.mixpanel.com/reference/track-event (read 2026-11-28) says "The limits for
+    // track are the same as /import", and https://developer.mixpanel.com/reference/import-events
+    // says "We will reject events with time values that are before 1971-01-01 or more than 1 hour
+    // in the future as measured on our servers". The track page also says a future time "will be
+    // overwritten with the current present time at ingestion", which holds within that hour. No
+    // hour to spare: the record and the batch's encoding read the same device clock, and the
+    // request reaches Mixpanel later than it is encoded, when the record is less far ahead.
+    /// How long after a batch is encoded a record may say it was tracked, in seconds: 1 hour,
+    /// past which Mixpanel rejects an event.
+    private static let latestOffset: TimeInterval = 60 * 60
+
     private static let logger = Logger(label: "MixpanelEncoding.MixpanelBatchEncoder")
 
     private let projectToken: String
     private let reader: PropertyReader
     private let limit: BatchLimit
+    private let now: @Sendable () -> Date
 
     /// Why a record was left out of the batch's requests.
     public typealias Failure = MixpanelEncodingError
 
     /// An encoder of the events `plan` describes, for the Mixpanel project of `projectToken`,
-    /// splitting each batch to `limit`.
+    /// splitting each batch to `limit`, leaving out records more than 119 hours older than `now`
+    /// gives, or more than an hour newer.
     ///
     /// - Parameters:
     ///   - projectToken: The project's token, from the project's settings: public, as every
@@ -194,14 +230,18 @@ public struct MixpanelBatchEncoder: BatchEncoder {
     ///   - plan: The tracking plan of every event the encoder is given: each record's event is
     ///     read through the schema of its name and `Event/schemaVersion` here.
     ///   - limit: The most each request holds; ``batchLimit``, Mixpanel's, by default.
+    ///   - now: The wall-clock time a batch is encoded at, read once a batch; the system's clock by
+    ///     default. When it reads NaN or infinite, every record is left out as
+    ///     ``MixpanelEncodingError/timestampOutsideWindow``.
     ///
     /// The encoder logs a notice for each property of `plan` named as one Mixpanel reads for
     /// itself, as it will skip every record of that event
     /// (``MixpanelEncodingError/reservedPropertyName(event:property:)``).
-    public init(projectToken: String, plan: TrackingPlan, limit: BatchLimit = MixpanelBatchEncoder.batchLimit) {
+    public init(projectToken: String, plan: TrackingPlan, limit: BatchLimit = MixpanelBatchEncoder.batchLimit, now: @escaping @Sendable () -> Date = { Date.now }) {
         self.projectToken = projectToken
         reader = PropertyReader(plan: plan)
         self.limit = limit
+        self.now = now
         // Logged once here, where the plan is set up, as every record of such an event will be
         // skipped: setup still succeeds, since the plan may hold events the app never sends here.
         for schema in plan.schemas {
@@ -211,25 +251,38 @@ public struct MixpanelBatchEncoder: BatchEncoder {
         }
     }
 
-    /// `batch` as the requests Mixpanel takes, each within the encoder's limit, with the records
-    /// left out of them.
+    /// `batch` as the requests Mixpanel takes, each within the encoder's limit and with a deadline
+    /// 119 hours after its oldest record was tracked, with the records left out of them.
     ///
     /// - Parameter batch: Records of tracked events, oldest first.
     /// - Returns: The requests, in order, none when no record can be written, and each record left
     ///   out, with why (``MixpanelEncodingError``): one it can't encode, one past Mixpanel's
-    ///   limits on properties, array elements or nesting, and one whose event is over
-    ///   the limit's bytes for one event, or for a request of it alone
+    ///   limits on properties, array elements or nesting or its window of time, and one whose
+    ///   event is over the limit's bytes for one event, or for a request of it alone
     ///   (``MixpanelEncodingError/oversized(byteCount:)``).
     /// - Complexity: O(*n* log *n*) in the batch's size, for sorting each object's members.
     public func requests(for batch: [EventRecord]) -> BatchRequests<MixpanelEncodingError> {
-        limit.requests(for: batch, in: .array) { record throws(MixpanelEncodingError) in
-            try json(of: record)
-        } oversized: { byteCount in
+        let encodedAt = now()
+        let encoding = { (record: EventRecord) throws(MixpanelEncodingError) -> JSON in
+            try json(of: record, encodedAt: encodedAt)
+        }
+        let oversized = { (byteCount: Int) -> MixpanelEncodingError in
             .oversized(byteCount: byteCount)
+        }
+        do {
+            // Each request's deadline is its oldest record's 119 hours, as Mixpanel checks an
+            // event's age when the request arrives, and a retry only ever arrives later. A record
+            // is reported once: one left out here is in no request, and a request past its
+            // deadline is never sent, so no `{"status": 0}` answer can report its records again.
+            return try limit.requests(for: batch, in: .array, maximumAge: Self.window, encoding: encoding, oversized: oversized)
+        } catch {
+            // Never reached: the window is a positive constant, and only a negative age throws.
+            // Requests without a deadline rather than a trap (D10).
+            return limit.requests(for: batch, in: .array, encoding: encoding, oversized: oversized)
         }
     }
 
-    private func json(of record: EventRecord) throws(MixpanelEncodingError) -> JSON {
+    private func json(of record: EventRecord, encodedAt: Date) throws(MixpanelEncodingError) -> JSON {
         var properties: [String: JSON]
         do {
             // Never a Sensitive value: Mixpanel is a vendor's store, whatever the record reveals.
@@ -259,8 +312,22 @@ public struct MixpanelBatchEncoder: BatchEncoder {
         } catch {
             throw .unrepresentableTimestamp
         }
+        let offset = record.timestamp.timeIntervalSince(encodedAt)
+        // Before the window, so a record before 1971 is reported as unrepresentable under any
+        // clock: no clock makes it a `time` Mixpanel takes.
         guard time >= Self.earliestTime else {
             throw .unrepresentableTimestamp
+        }
+        // Measured from when the batch is encoded: Mixpanel answers 200 for a request whose event
+        // it drops for its time, so a record outside the window would be acknowledged and deleted
+        // without being stored. The future side has no deadline: a retry only ever arrives later,
+        // when the record is less far ahead. The timestamp is finite here, so the offset is NaN or
+        // infinite only for a `now` that is, and every record is then reported (D10): both
+        // comparisons are false for NaN, and each infinity falls outside one bound. Rejected:
+        // leaving such a clock to Mixpanel, which would drop the records it refuses without a
+        // report.
+        guard offset >= -Self.windowSeconds, offset <= Self.latestOffset else {
+            throw .timestampOutsideWindow
         }
         for (key, value) in record.mixpanelContext {
             properties[key] = value

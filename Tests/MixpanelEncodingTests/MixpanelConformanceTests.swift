@@ -33,7 +33,7 @@ struct MixpanelConformanceTests {
     @Test("The Mixpanel destination keeps every rule of a vendor destination, in every region", arguments: ConformanceCheck.allCases, [MixpanelRegion.us, .eu, .india])
     func conformance(check: ConformanceCheck, region: MixpanelRegion) async throws {
         let sut = DestinationConformance(limit: MixpanelBatchEncoder.batchLimit) { setup in
-            try HTTPDestination.mixpanel(projectToken: "0123456789abcdef0123456789abcdef", region: region, plan: setup.plan, transport: setup.transport, backoff: setup.backoff)
+            try HTTPDestination.mixpanel(projectToken: "0123456789abcdef0123456789abcdef", region: region, plan: setup.plan, transport: setup.transport, backoff: setup.backoff, now: { setup.timestamp })
         }
 
         try await sut.expect(check)
@@ -82,7 +82,7 @@ struct MixpanelConformanceTests {
             isRedelivered: true
         )
         let sut = DestinationConformance(limit: MixpanelBatchEncoder.batchLimit) { setup in
-            try HTTPDestination.mixpanel(projectToken: "0123456789abcdef0123456789abcdef", region: .us, plan: setup.plan, transport: setup.transport, backoff: setup.backoff)
+            try HTTPDestination.mixpanel(projectToken: "0123456789abcdef0123456789abcdef", region: .us, plan: setup.plan, transport: setup.transport, backoff: setup.backoff, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         }
 
         try await sut.expectRequests(of: [first, second], plan: plan, matchFixture: "hand-worked-batch", subdirectory: "Fixtures", in: .module)
@@ -93,7 +93,7 @@ struct MixpanelConformanceTests {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let record = EventRecord(event: CheckoutStarted(cartSize: 1, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let transport = ScriptedTransport([.status(.ok)])
-        let sut = try HTTPDestination.mixpanel(projectToken: " testprojecttoken\n", region: .us, plan: plan, transport: transport)
+        let sut = try HTTPDestination.mixpanel(projectToken: " testprojecttoken\n", region: .us, plan: plan, transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let expected = #","token":"testprojecttoken"}}]"#
 
         await sut.receive([record])
@@ -111,7 +111,7 @@ struct MixpanelConformanceTests {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])
         let record = EventRecord(event: CheckoutStarted(cartSize: 1, coupon: nil), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let transport = ScriptedTransport([.status(.ok)])
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: region, plan: plan, transport: transport)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: region, plan: plan, transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let expectedMethod = HTTPRequest.Method.post
         let expectedContentType = "application/json"
 

@@ -25,7 +25,7 @@ struct MixpanelIdentityTests {
 
     @Test("distinct_id and $device_id are the record's session, lowercase")
     func distinctIDIsTheSession() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "5D1E3B2A-9C4F-4E6A-8B7D-1F2E3D4C5B6A")!
         let record = EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil, context: context)
@@ -41,7 +41,7 @@ struct MixpanelIdentityTests {
 
     @Test("A record with no session, from a tracker without the sessions enricher, is sent with its own id as distinct_id and no $device_id")
     func sessionlessRecord() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         // No session in its context, and marked redelivered, as a store can hand one over.
         let record = EventRecord(
             id: UUID(uuidString: "2B4C6D8E-1A3F-4B5C-9D7E-0F1A2B3C4D5E")!,
@@ -62,7 +62,7 @@ struct MixpanelIdentityTests {
     // bytes, only alphanumeric characters or "-".
     @Test("$insert_id is the record's id in a form Mixpanel accepts: 36 bytes of lowercase hexadecimal digits and dashes")
     func insertIDFormat() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let ids = [UUID(uuidString: "FFFFFFFF-FFFF-4FFF-BFFF-FFFFFFFFFFFF")!, UUID(uuidString: "00000000-0000-4000-8000-000000000001")!]
         let batch = ids.map { EventRecord(id: $0, event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil) }
         let expected: [String?] = ["ffffffff-ffff-4fff-bfff-ffffffffffff", "00000000-0000-4000-8000-000000000001"]
@@ -78,7 +78,7 @@ struct MixpanelIdentityTests {
 
     @Test("No identifier but the session is sent: no $user_id, and not the vendor identifier, an app's account key or the trace")
     func noOtherIdentifier() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let session = UUID(uuidString: "01A208B7-E840-7A3E-8B4D-5C6E7F801234")!
         let vendorIdentifier = UUID(uuidString: "00000000-0000-4000-8000-00000000000B")!
         let recordID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
@@ -111,7 +111,7 @@ struct MixpanelIdentityTests {
 
     @Test("Every event's ip is \"0\", so Mixpanel adds no location from the request's address, with or without a session")
     func ipZero() throws {
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID(uuidString: "00000000-0000-4000-8000-00000000000A")!
         let batch = [

@@ -27,7 +27,7 @@ struct MixpanelResponseTests {
         let url = try #require(Bundle.module.url(forResource: "track-verbose-failure", withExtension: "json", subdirectory: "Fixtures"))
         let body = try Data(contentsOf: url)
         let transport = ScriptedTransport([.response(.ok, body: body), .status(.badRequest)])
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [
             EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil),
             EventRecord(event: CheckoutStarted(cartSize: 2), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil),

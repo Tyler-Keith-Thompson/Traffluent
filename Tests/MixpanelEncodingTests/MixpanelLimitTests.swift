@@ -62,7 +62,7 @@ struct MixpanelLimitTests {
     @Test("A record of 254 properties, counting the encoder's 5 members, is sent")
     func propertiesBelowLimitSent() throws {
         let schema = EventSchema(name: "wide", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Wide(count: 249), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expectedRequestCount = 1
 
@@ -75,7 +75,7 @@ struct MixpanelLimitTests {
     @Test("A record of 255 properties, counting the encoder's 5 members, is left out as tooManyProperties with the count")
     func propertiesAtLimitSkipped() throws {
         let schema = EventSchema(name: "wide", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Wide(count: 250), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "wide", schemaVersion: 1, reason: .tooManyProperties(event: "wide", count: 255))]
 
@@ -88,7 +88,7 @@ struct MixpanelLimitTests {
     @Test("A session's $device_id counts toward the 255 properties: 249 of the event's own with a session make 255")
     func deviceIDCounted() throws {
         let schema = EventSchema(name: "wide", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let record = EventRecord(event: Wide(count: 249), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil, context: context)
@@ -102,7 +102,7 @@ struct MixpanelLimitTests {
     @Test("A record holding an array of 254 elements is sent")
     func arrayBelowLimitSent() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: [Int](repeating: 1, count: 254)), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expectedRequestCount = 1
 
@@ -115,7 +115,7 @@ struct MixpanelLimitTests {
     @Test("A record holding an array of 255 elements is left out as tooManyArrayElements, naming the property and the count")
     func arrayAtLimitSkipped() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: [Int](repeating: 1, count: 255)), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .tooManyArrayElements(event: "holding", property: "value", count: 255))]
 
@@ -128,7 +128,7 @@ struct MixpanelLimitTests {
     @Test("An array of 255 elements inside an object in a property is left out as tooManyArrayElements, naming the property")
     func arrayInObjectSkipped() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: ["items": [Int](repeating: 1, count: 255)]), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .tooManyArrayElements(event: "holding", property: "value", count: 255))]
 
@@ -140,7 +140,7 @@ struct MixpanelLimitTests {
     @Test("An array of 255 elements inside a shorter array is left out as tooManyArrayElements with the longer count")
     func arrayInArraySkipped() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: [[Int](repeating: 1, count: 255)]), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .tooManyArrayElements(event: "holding", property: "value", count: 255))]
 
@@ -158,7 +158,7 @@ struct MixpanelLimitTests {
             var apple = [Int](repeating: 1, count: 255)
         }
         let schema = EventSchema(name: "two_lists", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: TwoLists(), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "two_lists", schemaVersion: 1, reason: .tooManyArrayElements(event: "two_lists", property: "apple", count: 255))]
 
@@ -170,7 +170,7 @@ struct MixpanelLimitTests {
     @Test("A property nesting objects 3 deep is sent")
     func depthAtLimitSent() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: Nest(depth: 3)), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expectedRequestCount = 1
 
@@ -183,7 +183,7 @@ struct MixpanelLimitTests {
     @Test("A property nesting objects 4 deep is left out as nestedTooDeeply, naming the property")
     func depthPastLimitSkipped() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: Nest(depth: 4)), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .nestedTooDeeply(event: "holding", property: "value"))]
 
@@ -196,7 +196,7 @@ struct MixpanelLimitTests {
     @Test("An array adds no depth: an array of objects nested 3 deep is sent")
     func arrayAddsNoDepth() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: [Nest(depth: 3)]), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expectedRequestCount = 1
 
@@ -209,7 +209,7 @@ struct MixpanelLimitTests {
     @Test("Objects nested 4 deep inside an array are left out as nestedTooDeeply")
     func depthInArraySkipped() throws {
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: [Nest(depth: 1), Nest(depth: 4)]), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .nestedTooDeeply(event: "holding", property: "value"))]
 
@@ -225,7 +225,7 @@ struct MixpanelLimitTests {
             var deep = Nest(depth: 3)
         }
         let schema = EventSchema(name: "holding", version: 1, consentCategory: .analytics, properties: [])
-        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]))
+        let sut = MixpanelBatchEncoder(projectToken: "testprojecttoken", plan: try TrackingPlan(schemas: [schema]), now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let record = EventRecord(event: Holding(value: Mixed()), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
         let expected = [SkippedRecord<MixpanelEncodingError>(recordID: record.id, eventName: "holding", schemaVersion: 1, reason: .nestedTooDeeply(event: "holding", property: "value"))]
 
@@ -241,7 +241,7 @@ struct MixpanelLimitTests {
         let transport = ScriptedTransport([.status(.ok)])
 
         #expect(throws: Never.self) {
-            try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: plan, transport: transport)
+            try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .us, plan: plan, transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         }
     }
 }
