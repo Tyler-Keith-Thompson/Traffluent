@@ -112,6 +112,14 @@ declares one (<doc:TrackingPlanWorkflow>).
 - `DiscoveredEvent.all` holds the events of the images loaded when it is called: the program and
   the dynamic libraries and frameworks it links. A library or plug-in opened later with `dlopen`
   adds its events from then on, so build the store and plan after it loads.
+- A library that loads or unloads while `DiscoveredEvent.all` runs is either read whole or left
+  out of that call. On Apple platforms one that dyld adds before the read starts is found; on Linux
+  a `dlopen` or `dlclose` waits for the read to finish, so the library is missed. The next call
+  sees the change.
+- Don't `dlclose` a library that declares events while the app runs. On Apple platforms dyld keeps
+  it mapped, so its events are still found. On Linux the loader unmaps it while the Swift runtime
+  keeps its types registered, and the process can crash later. Open plug-ins once and keep them
+  open, or open them with `RTLD_NODELETE`.
 - A module that declares events, linked into two images (a framework and the app, each holding a
   static copy), lists each of its events twice, and stores and plans refuse the duplicate. Link
   each such module into one image.
