@@ -29,19 +29,26 @@ but the counted metrics (`mallocCountTotal`, `retainCount` and the other non-tim
 `Benchmark.defaultConfiguration.metrics`) come from a second, native run that counts every thread
 at real timing. A window that returns before the work finishes gets a malloc count that changes
 from run to run while its instructions hold, and the two describe different work. So the last
-thing each iteration does is await what flushes or joins the work:
+thing each iteration does is wait for what joins the work. Build the queue and the group
+outside the loop, so their setup stays out of the window:
 
 ```swift
-Benchmark("Tracker: record 1,000 events") { benchmark in
+let queue = DispatchQueue(label: "benchmarks.greetings")
+let group = DispatchGroup()
+
+Benchmark("Greetings: interpolation on a queue") { benchmark in
     for _ in benchmark.scaledIterations {
-        let tracker = Tracker()
-        for event in events {
-            tracker.record(event)
+        for name in names {
+            queue.async(group: group) {
+                blackHole("Good day, \(name)!")
+            }
         }
-        await tracker.flush()
+        group.wait()
     }
 }
 ```
 
-`group.wait()` on a `DispatchGroup` does the same for work submitted to a queue directly.
+`group.wait()` blocks, which Swift allows only in a synchronous closure like this one. When the
+work belongs to a type of your own, the closure is async and its last step awaits the call that
+joins the work instead: a `flush()` the type defines, or a task group's `waitForAll()`.
 BenchmarkHarness states the rule in `docs/HowItWorks.md`, under "Counted metrics".
