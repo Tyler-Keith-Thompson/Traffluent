@@ -148,18 +148,19 @@ another type: `@Event`'s expansion can't reach a type that is a `private` member
 
 #### Limits
 
-- An object file in a static archive that nothing references brings no record into the program,
-  as the linker leaves it out. This holds for the library's own events too: each sits in a file of
-  its own, and an app on a Mac or Linux that links AutomaticControlTracking may never refer to
-  `ControlActivated`. SwiftPM links every object file of a program's modules. So does Bazel: from
-  rules_swift 3.0, `swift_library` is `alwayslink = True` unless a target says otherwise, and
-  rules_swift_package_manager sets it on every target of a package, Traffluent's included. Given
-  `-ObjC`, Apple's linker also loads each member that declares a Swift type or a protocol
-  conformance, though one holding only an extension that adds members is still left out; every
-  `@Event` declares a struct. Other builds that read archives on demand leave such files out: a
-  static library or static XCFramework linked without `-ObjC`, or a Bazel library with
-  `alwayslink = False` on Linux. To have such a library's events found, link it whole:
-  `-force_load` on Apple platforms, `--whole-archive` on Linux.
+- An event's record is in the program only if its object file is, and a linker that reads a
+  static archive on demand takes only the members something references
+  ([Platforms and linking](https://tyler-keith-thompson.github.io/LinkerSets/documentation/linkersets/platformsandlinking)
+  says when). This holds for the library's own events too: each sits in a file of its own, and an
+  app on a Mac or Linux that links AutomaticControlTracking may never refer to `ControlActivated`.
+  SwiftPM and Bazel link the event modules whole, Traffluent's included: SwiftPM links every
+  object file of a program's modules, `swift_library` is `alwayslink = True` unless a target says
+  otherwise, and rules_swift_package_manager sets it on every target of a package. With `-ObjC`,
+  Apple's linker also loads each member that declares a Swift type, and every `@Event` declares a
+  struct. Other builds leave such files out: a static library or static XCFramework linked without
+  `-ObjC`, or a Bazel target set to `alwayslink = False` on Linux. To have such a library's events
+  found, link it whole: `-force_load` on Apple platforms, `--whole-archive` on Linux, or
+  `alwayslink = True` on its Bazel target.
 - `DiscoveredEvent.all` holds the events of the images loaded when it is called: the program and
   the dynamic libraries and frameworks it links. A library or plug-in opened later with `dlopen`
   adds its events from then on, so build the store and plan after it loads.
@@ -183,7 +184,8 @@ another type: `@Event`'s expansion can't reach a type that is a `private` member
   only a warning (`ld: warning: duplicate symbol`) when `-dead_strip` is on, as Xcode turns it on
   by default, and the app links. This is LinkerSets' account of the linker, untested here. Link
   such an archive whole (`-force_load`), or pass `-Xlinker -fatal_warnings`, to keep it an error.
-  SwiftPM and Bazel link every module whole, and there a duplicate is an error.
+  SwiftPM, and Bazel for a `swift_library` left at `alwayslink = True`, link every object file,
+  and there a duplicate is an error.
 - An event declared inside a `private` or `fileprivate` type, or in an extension marked either
   way, isn't checked by the build: the symbol would be local to its file, and the linker never
   compares local symbols. Stores and plans still refuse its name at run time when it shares a
