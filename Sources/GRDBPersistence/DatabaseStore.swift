@@ -53,9 +53,37 @@ public import Persistence
 ///   from an identifier; and not the trace context, as its span ended with the earlier run.
 /// - **Deleting.** A record's row, its context included, is deleted once every destination has
 ///   received it, so a table whose records are all delivered is empty, and the store keeps no
-///   session apart from the records tracked in it. How long a deleted row's bytes remain in the
-///   file is up to the database's journal mode and `secure_delete` setting: in WAL mode, the
-///   log can hold them until SQLite writes over them or a checkpoint truncates it.
+///   session apart from the records tracked in it. Once a deletion commits, and in WAL mode once
+///   a later ``synchronize()`` succeeds, nothing of the deleted rows is left in the database's
+///   main file or its `-wal` file. The store's deletes run with SQLite's `secure_delete` ON, so
+///   the pages they free are zeroed, and its inserts with at least FAST, so a page they split
+///   keeps no old copy of a row; whatever the app set is put back after each, and the app's own
+///   tables are left to it.
+///
+///   Outside those two files the store promises nothing. A rollback journal the app keeps with
+///   `journal_mode=PERSIST` holds the pages a transaction changed, earlier rows' bytes among them,
+///   until a later transaction writes over them. And the file system may keep the blocks a
+///   truncated or deleted file gave up (the `-wal` after a checkpoint, a `-journal` after a
+///   commit) until it reuses them; nothing wipes those.
+///
+///   In WAL mode the log keeps a deleted row's earlier bytes until ``synchronize()``, which
+///   checkpoints the log into the main file and truncates it to nothing. While another connection
+///   reads or writes the database (a `DatabasePool` read with its transaction still open, a
+///   `DatabaseSnapshot`, an app extension), the log can't be truncated: ``synchronize()`` copies
+///   what it can, logs a notice and returns, and the delivered rows' bytes, `Sensitive` values and
+///   session included, stay in the `-wal` file until a later ``synchronize()`` runs once those
+///   connections are done. Called inside a transaction, ``synchronize()`` checkpoints nothing at
+///   all and logs a notice, so call it outside the app's own writes. To empty the log on the
+///   app's own schedule, a `DatabasePool` can run
+///   `try pool.barrierWriteWithoutTransaction { try $0.checkpoint(.truncate) }`, which waits for
+///   the pool's reads to end and throws a `DatabaseError` with `SQLITE_BUSY` while another
+///   connection still uses the log.
+///
+///   ``synchronize()`` waits for other connections only as long as the database's busy mode lets
+///   it. GRDB's default, `immediateError`, doesn't wait. Under `.timeout(t)` it waits up to `t`
+///   while a reader is open, and holds the database's writer meanwhile, so the app's writes wait
+///   with it. Under a `.callback` that always retries, it waits until every reader is done, which
+///   may be never; don't give the database such a handler.
 /// - **Reading back.** When a destination's full buffer drops a batch on its way through a
 ///   delivery, the delivery reads that batch's rows back, in one read, once the destination has
 ///   caught up, and hands their records to it in this run, each in the context it was tracked in,
@@ -81,8 +109,6 @@ public import Persistence
 /// from inside an access to the same database: GRDB's migrations aren't reentrant. Copies of a
 /// store share its table.
 public struct DatabaseStore: RecordStore {
-    // A deleted row's bytes can outlive it in the -wal file and in freed pages, as the doc above
-    // says; TRAF-146 tracks wiping them.
     /// The bound a store has unless it is given another: 5 MiB (5,242,880 bytes) of encoded records.
     public static let defaultByteBound = 5 * 1024 * 1024
 
@@ -195,7 +221,17 @@ public struct DatabaseStore: RecordStore {
     }
 
     /// Checkpoints the database when it is in WAL mode, which flushes its log to storage, so the
-    /// records committed so far survive power loss, not only the app ending.
+    /// records committed so far survive power loss, not only the app ending, then truncates the
+    /// log, so the bytes of rows deleted before the call are gone from it.
+    ///
+    /// It writes the log into the main file, syncs the main file to storage and shrinks the log,
+    /// so call it as the app moves to the background or terminates, not after every write.
+    ///
+    /// When another connection keeps the log in use, the checkpoint copies what it can, logs a
+    /// notice and leaves the rest to a later call; it waits for that connection only as long as
+    /// the database's busy mode lets it, holding the database's writer meanwhile. Inside a
+    /// transaction it checkpoints nothing and logs a notice. With a rollback journal it does
+    /// nothing.
     public func synchronize() {
         log.synchronize()
     }

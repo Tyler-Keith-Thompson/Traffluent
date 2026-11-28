@@ -140,18 +140,24 @@ final class DatabaseLog: Acknowledger {
                 // or not at all, inside a transaction or out of one.
                 var position: Int64 = 0
                 var eviction = Eviction()
-                try db.inSavepoint {
-                    let excess = state.withLock { $0.byteCount } + payload.count - byteBound
-                    if excess > 0 {
-                        eviction = try oldestRows(holding: excess, in: db)
-                        if let last = eviction.lastPosition {
-                            try db.execute(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position <= ?", arguments: [last])
+                // At least FAST for the insert: a page it splits or balances otherwise keeps stale
+                // copies of the cells it moves, an earlier record's bytes among them.
+                try Self.withSecureDelete(atLeast: .fast, in: db) {
+                    try db.inSavepoint {
+                        let excess = state.withLock { $0.byteCount } + payload.count - byteBound
+                        if excess > 0 {
+                            eviction = try oldestRows(holding: excess, in: db)
+                            if let last = eviction.lastPosition {
+                                try Self.withSecureDelete(atLeast: .on, in: db) {
+                                    try db.execute(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position <= ?", arguments: [last])
+                                }
+                            }
                         }
+                        try db.cachedStatement(sql: "INSERT INTO \(table.quotedDatabaseIdentifier) (timestamp, payload) VALUES (?, ?)")
+                            .execute(arguments: [record.timestamp.timeIntervalSinceReferenceDate, Data(payload)])
+                        position = db.lastInsertedRowID
+                        return .commit
                     }
-                    try db.cachedStatement(sql: "INSERT INTO \(table.quotedDatabaseIdentifier) (timestamp, payload) VALUES (?, ?)")
-                        .execute(arguments: [record.timestamp.timeIntervalSinceReferenceDate, Data(payload)])
-                    position = db.lastInsertedRowID
-                    return .commit
                 }
                 state.withLock { state in
                     state.byteCount += payload.count - eviction.byteCount
@@ -196,6 +202,9 @@ final class DatabaseLog: Acknowledger {
     func willDeliver(_ positions: [UInt64]) -> Set<UInt64> {
         do {
             try writer.unsafeReentrantWrite { db in
+                // No withSecureDelete(atLeast:in:), as the inserts and deletes have: SQLite stores 0
+                // and 1 in a row's header alone, so the row keeps its size and is overwritten in
+                // place, moving and freeing nothing that holds its old bytes.
                 try db.inSavepoint {
                     let statement = try db.cachedStatement(sql: "UPDATE \(table.quotedDatabaseIdentifier) SET isBeingDelivered = 1 WHERE position = ?")
                     for position in positions {
@@ -216,14 +225,16 @@ final class DatabaseLog: Acknowledger {
         do {
             try writer.unsafeReentrantWrite { db in
                 var deleted = (recordCount: 0, byteCount: 0)
-                try db.inSavepoint {
-                    let statement = try db.cachedStatement(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position = ? RETURNING length(payload)")
-                    for position in positions {
-                        guard let byteCount = try Int.fetchOne(statement, arguments: [Int64(truncatingIfNeeded: position)]) else { continue }
-                        deleted.recordCount += 1
-                        deleted.byteCount += byteCount
+                try Self.withSecureDelete(atLeast: .on, in: db) {
+                    try db.inSavepoint {
+                        let statement = try db.cachedStatement(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position = ? RETURNING length(payload)")
+                        for position in positions {
+                            guard let byteCount = try Int.fetchOne(statement, arguments: [Int64(truncatingIfNeeded: position)]) else { continue }
+                            deleted.recordCount += 1
+                            deleted.byteCount += byteCount
+                        }
+                        return .commit
                     }
-                    return .commit
                 }
                 state.withLock { state in
                     state.byteCount -= deleted.byteCount
@@ -274,12 +285,32 @@ final class DatabaseLog: Acknowledger {
 
     // MARK: Synchronizing
 
-    /// Checkpoints the database, which in WAL mode flushes its log to storage first.
+    /// Checkpoints the database, which in WAL mode flushes its log to storage first, then empties
+    /// the log, so the bytes of rows deleted before the call are gone from it.
+    ///
+    /// When other connections keep the log in use, the checkpoint copies what it can, as a passive
+    /// one does, logs a notice and leaves the rest to a later call. Inside a transaction it does
+    /// nothing, and logs a notice.
     func synchronize() {
+        // TRUNCATE rather than PASSIVE (TRAF-146): a passive checkpoint copies the log into the
+        // main file but leaves its frames, a delivered record's Sensitive values and session among
+        // them, in the -wal file until SQLite happens to write over them. TRUNCATE waits for
+        // readers only as long as the database's busy mode lets it (GRDB's default,
+        // immediateError, doesn't wait), and when it gives up with SQLITE_BUSY it has already done
+        // a passive checkpoint's work, so nothing is lost against the passive behaviour.
+        // Rejected: RESTART, which rewinds the log without shrinking it, so old frames stay on
+        // disk until they are overwritten; a truncate after every acknowledgement, which would add
+        // a sync of the main file to every delivered batch, where synchronize runs as the app
+        // moves to the background; and a busy timeout of zero around the checkpoint, which would
+        // replace the app's own busy handler with no way to put it back.
         do {
             try writer.unsafeReentrantWrite { db in
-                _ = try db.checkpoint(.passive)
+                _ = try db.checkpoint(.truncate)
             }
+        } catch let error as DatabaseError where error.resultCode == .SQLITE_BUSY {
+            Self.logger.notice("Checkpointed what it could of the database holding \(table), but couldn't empty its write-ahead log while other connections use it, so deleted records' bytes may stay in the -wal file until a later synchronize: \(error)")
+        } catch let error as DatabaseError where error.resultCode == .SQLITE_LOCKED {
+            Self.logger.notice("Didn't checkpoint the database holding \(table): synchronize ran inside a transaction, where SQLite checkpoints nothing, so records committed since the last checkpoint and deleted records' bytes stay in the -wal file until a synchronize outside one: \(error)")
         } catch {
             Self.logger.error("Couldn't checkpoint the database holding \(table): \(error)")
         }
@@ -353,9 +384,11 @@ final class DatabaseLog: Acknowledger {
             }
         }
         if !undecodable.isEmpty || !mismatched.isEmpty {
-            let statement = try db.makeStatement(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position = ?")
-            for position in undecodable + mismatched {
-                try statement.execute(arguments: [position])
+            try Self.withSecureDelete(atLeast: .on, in: db) {
+                let statement = try db.makeStatement(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position = ?")
+                for position in undecodable + mismatched {
+                    try statement.execute(arguments: [position])
+                }
             }
         }
         if !undecodable.isEmpty {
@@ -369,10 +402,80 @@ final class DatabaseLog: Acknowledger {
             recovery.byteCount -= oldest.byteCount
         }
         if let last = eviction.lastPosition, let report = eviction.report {
-            try db.execute(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position <= ?", arguments: [last])
+            try Self.withSecureDelete(atLeast: .on, in: db) {
+                try db.execute(sql: "DELETE FROM \(table.quotedDatabaseIdentifier) WHERE position <= ?", arguments: [last])
+            }
             reports.append(report)
         }
         return recovery
+    }
+}
+
+extension DatabaseLog {
+    /// A level of SQLite's `secure_delete`, ordered by how much of what a statement deletes,
+    /// moves or frees it zeroes.
+    fileprivate enum SecureDelete: Comparable {
+        /// Zeroes nothing.
+        case off
+        /// Zeroes deleted cells and moved cells' old copies inside a table's pages, but not the
+        /// pages a statement frees.
+        case fast
+        /// Zeroes everything, freed pages included.
+        case on
+
+        /// The level `PRAGMA secure_delete` reads back as `value`: 0, 1 or 2.
+        init(pragmaValue value: Int) {
+            switch value {
+            case 1: self = .on
+            case 2: self = .fast
+            default: self = .off
+            }
+        }
+
+        /// The level's name, which the pragma takes: it takes FAST only by name, and any nonzero
+        /// number as ON.
+        var name: String {
+            switch self {
+            case .off: "OFF"
+            case .fast: "FAST"
+            case .on: "ON"
+            }
+        }
+    }
+
+    /// Runs `body` with `secure_delete` at `level` or above, setting it to `level` when the
+    /// connection's is lower, then setting it back.
+    ///
+    /// A failure to set it back is logged: `body` has already run, so throwing would misreport
+    /// what it did, and a connection left zeroing costs only the I/O it spends.
+    fileprivate static func withSecureDelete<Result>(atLeast level: SecureDelete, in db: Database, _ body: () throws -> Result) throws -> Result {
+        // ON for a delete rather than FAST, Apple's default (TRAF-146): FAST zeroes deleted cells
+        // inside a table's pages but not the pages a delete frees, so a record bigger than a page
+        // leaves its overflow pages in the file, and a merge leaves the pages its cells moved out
+        // of. At least FAST for an insert, as a page split under OFF leaves the moved cells' old
+        // copies, which no later delete zeroes. Only around the store's own statements rather
+        // than set once on the connection, which would make the app's statements on its own
+        // tables pay for it too, and stay set after the store is gone. Only `main`'s, the schema
+        // the table is in, so an attached database keeps its own. The setting is the
+        // connection's, not a transaction's, so it applies inside an app's transaction as
+        // outside one. The read is a cached statement, as it runs on every append; the pragma is
+        // evaluated each time it is stepped, so the cached statement reads the current value.
+        let previous = SecureDelete(pragmaValue: try Int.fetchOne(db.cachedStatement(sql: "PRAGMA main.secure_delete")) ?? 0)
+        let raising = previous < level
+        if raising {
+            try db.execute(sql: "PRAGMA main.secure_delete = \(level.name)")
+        }
+        defer {
+            // `previous` was below `level`, so never ON: FAST or OFF.
+            if raising {
+                do {
+                    try db.execute(sql: "PRAGMA main.secure_delete = \(previous == .fast ? "FAST" : "OFF")")
+                } catch {
+                    logger.error("Couldn't set the database's secure_delete back to \(previous.name), so its later deletes zero what they free too: \(error)")
+                }
+            }
+        }
+        return try body()
     }
 }
 #endif

@@ -120,6 +120,9 @@ It makes the same promises as `SegmentStore`, and it doesn't read the rows Traff
 earlier wrote either: each is deleted at recovery and reported as `.undecodable`, or as
 `.versionMismatch` where its stored version differs from its type's. The worker commits each record
 before publishing it.
-A batch is marked before it goes out, and its rows are deleted once it is delivered. The table is
+A batch is marked before it goes out, and its rows are deleted once it is delivered, with the pages
+they free zeroed. In WAL mode the log keeps a deleted row's bytes until `store.synchronize()`
+truncates it, which it can't do while another connection is using the database (the module's
+article says what stays behind then). The table is
 bounded by its records' encoded bytes, with the oldest dropped and reported, and records are
 encoded the same way.

@@ -12,6 +12,9 @@
 # - Dropping the savepoint around an acknowledgement or a mark: a failure there fails the first
 #   statement, before anything is written, as SQLite's query_only does; only a failure partway
 #   through a batch, which no test can cause, would tell them apart.
+# - Dropping synchronize's catch of SQLITE_BUSY or SQLITE_LOCKED (TRAF-146): the error then
+#   reaches the last catch, which logs it at error level rather than notice, and tests don't pin
+#   logs.
 
 TESTS = ["PersistenceTests"]
 
@@ -57,7 +60,31 @@ MUTANTS = [
     Mutant("acknowledgednotdeleted", L, '"DELETE FROM \\(table.quotedDatabaseIdentifier) WHERE position = ? RETURNING length(payload)"', '"SELECT length(payload) FROM \\(table.quotedDatabaseIdentifier) WHERE position = ?"'),
     Mutant("acknowledgedbytesnotsubtracted", L, "state.byteCount -= deleted.byteCount", "", mode="stmt"),
     Mutant("acknowledgedpendingnotsubtracted", L, "state.pendingCount -= deleted.recordCount", "", mode="stmt"),
-    Mutant("nocheckpoint", L, "_ = try db.checkpoint(.passive)", "", mode="stmt"),
+    Mutant("nocheckpoint", L, "_ = try db.checkpoint(.truncate)", "", mode="stmt"),
+    # What a delivered or dropped record leaves on disk (TRAF-146): synchronize empties the log,
+    # the store's deletes run with secure_delete ON and its inserts with at least FAST, and the
+    # app's setting is put back after each.
+    Mutant("passivecheckpoint", L, "db.checkpoint(.truncate)", "db.checkpoint(.passive)"),
+    Mutant("restartcheckpoint", L, "db.checkpoint(.truncate)", "db.checkpoint(.restart)"),
+    # The insert's floor, then each delete's: the eviction to make room, the acknowledgement,
+    # recovery's undecodable rows and recovery's eviction.
+    Mutant("insertnotzeroed", L, ".fast", ".off", nth=0),
+    Mutant("evictionnotzeroed", L, ".on", ".off", nth=0),
+    Mutant("acknowledgementnotzeroed", L, ".on", ".off", nth=1),
+    Mutant("undecodablenotzeroed", L, ".on", ".off", nth=2),
+    Mutant("recoveryevictionnotzeroed", L, ".on", ".off", nth=3),
+    # Reading the pragma's 2 or 1 as the wrong level.
+    Mutant("onreadasoff", L, "self = .on", "self = .off", mode="stmt"),
+    # After onreadasoff, whose text its replacement would repeat.
+    Mutant("fastreadason", L, "self = .fast", "self = .on", mode="stmt"),
+    # A stmt mutant goes before an expr mutant inside it, which would change its text.
+    Mutant("securedeletenotset", L, 'try db.execute(sql: "PRAGMA main.secure_delete = \\(level.name)")', "", mode="stmt"),
+    Mutant("securedeletefast", L, "level.name", '"FAST"'),
+    Mutant("securedeletenotrestored", L, 'try db.execute(sql: "PRAGMA main.secure_delete = \\(previous == .fast ? "FAST" : "OFF")")', "", mode="stmt"),
+    Mutant("securedeleterestoredoff", L, 'previous == .fast ? "FAST" : "OFF"', '"OFF"'),
+    # The restore's copy of the condition, always true: a connection already at the level is set
+    # to FAST or OFF.
+    Mutant("securedeletealwaysrestored", L, "raising", "true", nth=2),
     # Recovery.
     Mutant("recoveredpendingzero", L, "recovered.records.count", "0"),
     Mutant("recovereduntagged", L, "record.deliveryTag = DeliveryTag(acknowledger: self, position: UInt64(recovered.position))", "", mode="stmt"),
