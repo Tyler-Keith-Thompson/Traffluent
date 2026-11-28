@@ -81,13 +81,19 @@ The collector writes the same Measurement Protocol requests as this module's enc
 client's events a request, at most 25 events and 100,000 bytes. The `client_id` is the record's
 session as two decimal halves, or the record's identifier when it has no session. Each event has
 a `session_id` from a version 7 session's start and a `timestamp_micros`, and ad consent is denied.
-Its parameters are the properties with every property the plan marks sensitive left out, objects
-and arrays flattened into names joined by `_`, and nulls left out. No `user_id`, user properties,
+Its parameters are the properties with every property the plan marks sensitive, at the version
+the record states, left out, objects and arrays flattened into names joined by `_`, and nulls left
+out. No `user_id`, user properties,
 location or device is sent, and no other context value. It skips the same records this module's
 encoder does (reserved or malformed names, more than 25 parameters, a string over 100 bytes), and
 a record more than 72 hours older or 15 minutes newer than the moment the collector encodes it.
 The collector logs each skipped record and counts it in the status. The app's `dropReports` don't
 hear of it, since the collector accepted the record.
+
+The collector checks each record against its plan at the version the record states, and rejects
+one at a version the plan doesn't hold. It reads a record with no version, from an app built with
+an earlier Traffluent, at version 1, or at the plan's lowest version of its event when the plan
+has no version 1, as `CollectorBatchDecoder` does.
 
 Only records the plan accepted, and that the collector stored for the first time, are queued to
 forward, in the same statement that stores them. So a rejected record is never forwarded, and
