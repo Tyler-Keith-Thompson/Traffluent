@@ -163,9 +163,12 @@ serve-example:
 # The checkout of BenchmarkHarness whose benchmark-harness tool records simulated baselines.
 BENCHMARK_HARNESS := env("BENCHMARK_HARNESS", home_directory() / "workspace" / "BenchmarkHarness")
 
+# The benchmark recipes pass their arguments as "$@" ([positional-arguments]), not {{args}}, which
+# just joins with spaces: a --filter regex such as "BASELINE raw write" stays one argument.
 [doc('Run the benchmarks, e.g. just bench, or just bench --target GreetingsBenchmarks')]
-bench *args="":
-    cd {{PROJECT_ROOT}}/Benchmarks && {{SWIFT}} package --allow-writing-to-package-directory benchmark {{args}}
+[positional-arguments]
+bench *args:
+    cd {{PROJECT_ROOT}}/Benchmarks && {{SWIFT}} package --allow-writing-to-package-directory benchmark "$@"
 
 [doc('Record the current results as the baseline named main')]
 bench-baseline:
@@ -175,16 +178,16 @@ bench-baseline:
 bench-compare:
     cd {{PROJECT_ROOT}}/Benchmarks && {{SWIFT}} package --allow-writing-to-package-directory benchmark baseline compare main
 
-[doc("Record the benchmarks' simulated counts (Callgrind in a Linux VM; steady on a busy machine) as the simulated baseline, measuring only targets whose code changed (Bazel caches the rest), e.g. just bench-simulated, or just bench-simulated --target X")]
-bench-simulated *args="": (_simulated-baseline "simulated" args)
+[doc("Record the benchmarks' simulated counts (Callgrind in a Linux VM; steady on a busy machine) as the simulated baseline, measuring only targets whose code changed (Bazel caches the rest), e.g. just bench-simulated, or just bench-simulated --target X; --remeasure measures again uncached")]
+[positional-arguments]
+bench-simulated *args:
+    BENCHMARK_HARNESS={{BENCHMARK_HARNESS}} python3 {{PROJECT_ROOT}}/scripts/bench_simulated.py simulated "$@"
 
 [doc("Record simulated counts as simulated-current and compare them against the simulated baseline, e.g. just bench-simulated-compare --target X")]
-bench-simulated-compare *args="": (_simulated-baseline "simulated-current" "--fresh " + args)
-    cd {{PROJECT_ROOT}}/Benchmarks && {{SWIFT}} package --allow-writing-to-package-directory benchmark baseline compare simulated simulated-current {{args}}
-
-[private]
-_simulated-baseline name args:
-    BENCHMARK_HARNESS={{BENCHMARK_HARNESS}} python3 {{PROJECT_ROOT}}/scripts/bench_simulated.py {{name}} {{args}}
+[positional-arguments]
+bench-simulated-compare *args:
+    BENCHMARK_HARNESS={{BENCHMARK_HARNESS}} python3 {{PROJECT_ROOT}}/scripts/bench_simulated.py simulated-current --fresh "$@"
+    cd {{PROJECT_ROOT}}/Benchmarks && {{SWIFT}} package --allow-writing-to-package-directory benchmark baseline compare simulated simulated-current "$@"
 
 [doc('Generate an Xcode project from the Bazel graph and open it')]
 generate *args="":

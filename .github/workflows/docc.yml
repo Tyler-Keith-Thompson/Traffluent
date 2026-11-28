@@ -68,8 +68,6 @@ jobs:
       - name: Generate the combined documentation
         run: |
           bazel build //:docs
-          # A directory the repository doesn't hold: docs/ holds docs/agents/, and cp into an
-          # existing directory nests the site one level down, under /docs/.
           cp -RL bazel-bin/docs ./_site
           chmod -R u+w ./_site
       - name: Deploy
