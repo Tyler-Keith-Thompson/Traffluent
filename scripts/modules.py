@@ -444,6 +444,10 @@ TEST_TARGETS = [
     # Holds two events of one name and version on purpose: a store or plan of every discovered
     # event refuses them, which no other target's binary can show.
     ("EventDiscoveryDuplicateTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
+    # Links the four modules that declare the library's own events and imports none of them, so
+    # nothing in its binary references an event's object file: discovery must find each event
+    # anyway, as in an app that links a module and never names its event.
+    ("UnreferencedEventDiscoveryTests", ["TrackingPlans", "Sessions", "LifecycleTracking", "SwiftUITracking", "AutomaticControlTracking"]),
     ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "linkersets/LinkerSetsMacroSupport", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT]),

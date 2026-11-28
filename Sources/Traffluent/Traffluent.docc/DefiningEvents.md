@@ -143,10 +143,17 @@ build doesn't check their names, and builds its stores and plans from explicit l
 #### Limits
 
 - An object file in a static archive that nothing references brings no record into the program,
-  as the linker leaves it out: CocoaPods' static libraries, a static XCFramework, or a Bazel
-  library with `alwayslink = False`. SwiftPM, and Bazel's `alwayslink = True`, link every object
-  file. To have such a library's events found, link it whole: `-force_load` on Apple platforms,
-  `--whole-archive` on Linux.
+  as the linker leaves it out. This holds for the library's own events too: each sits in a file of
+  its own, and an app on a Mac or Linux that links AutomaticControlTracking may never refer to
+  `ControlActivated`. SwiftPM links every object file of a program's modules. So does Bazel: from
+  rules_swift 3.0, `swift_library` is `alwayslink = True` unless a target says otherwise, and
+  rules_swift_package_manager sets it on every target of a package, Traffluent's included. Given
+  `-ObjC`, Apple's linker also loads each member that declares a Swift type or a protocol
+  conformance, though one holding only an extension that adds members is still left out; every
+  `@Event` declares a struct. Other builds that read archives on demand leave such files out: a
+  static library or static XCFramework linked without `-ObjC`, or a Bazel library with
+  `alwayslink = False` on Linux. To have such a library's events found, link it whole:
+  `-force_load` on Apple platforms, `--whole-archive` on Linux.
 - `DiscoveredEvent.all` holds the events of the images loaded when it is called: the program and
   the dynamic libraries and frameworks it links. A library or plug-in opened later with `dlopen`
   adds its events from then on, so build the store and plan after it loads.

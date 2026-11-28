@@ -30,10 +30,15 @@ internal import LinkerSetsRuntime
 /// ## Limits
 ///
 /// - An object file in a static archive that nothing references brings no record into the
-///   program: the linker leaves it out. That happens with CocoaPods' static libraries, a static
-///   XCFramework, or a Bazel library with `alwayslink = False`. SwiftPM, and Bazel's
-///   `alwayslink = True`, link every object file. Link such a library whole (`-force_load` on
-///   Apple platforms, `--whole-archive` on Linux) to have its events found.
+///   program: the linker leaves it out, the library's own events' files included. SwiftPM links
+///   every object file, and so does Bazel: from rules_swift 3.0, `swift_library` is
+///   `alwayslink = True` unless a target says otherwise, and rules_swift_package_manager sets it
+///   on every target of a package. Apple's linker, given `-ObjC`, also loads each member that
+///   declares a Swift type or a protocol conformance, though not one holding only an extension
+///   that adds members; every `@Event` declares a struct. A static library or static XCFramework
+///   linked without `-ObjC`, or a Bazel library with `alwayslink = False` on Linux, leaves its
+///   unreferenced events out. Link such a library whole
+///   (`-force_load` on Apple platforms, `--whole-archive` on Linux) to have its events found.
 /// - ``all`` holds the events of the images loaded when it is called: the program and the
 ///   dynamic libraries it links. A library opened later with `dlopen` adds its events from then on.
 /// - A library that loads or unloads while ``all`` is read is either read whole or left out of
