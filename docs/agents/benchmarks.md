@@ -19,3 +19,29 @@ what it measured. Quote a regex that holds a space
 a baseline reproduces, re-record with `--remeasure` (`just bench-simulated --target X
 --remeasure`): the harness measures again, uncached, and the file shouldn't change. To rewrite
 every entry (a change aimed at cache misses alone), delete the file first.
+
+## Ending the window after dispatched work drains
+
+A benchmark that starts work on a dispatch queue, a thread of its own or a dispatch-backed
+`TaskExecutor` (Afluent's `QueueExecutor` through `Task.detached(executorPreference:)`) must wait
+for that work inside its measured window. The simulated instruction counts leave such work out,
+but the counted metrics (`mallocCountTotal`, `retainCount` and the other non-time metrics in
+`Benchmark.defaultConfiguration.metrics`) come from a second, native run that counts every thread
+at real timing. A window that returns before the work finishes gets a malloc count that changes
+from run to run while its instructions hold, and the two describe different work. So the last
+thing each iteration does is await what flushes or joins the work:
+
+```swift
+Benchmark("Tracker: record 1,000 events") { benchmark in
+    for _ in benchmark.scaledIterations {
+        let tracker = Tracker()
+        for event in events {
+            tracker.record(event)
+        }
+        await tracker.flush()
+    }
+}
+```
+
+`group.wait()` on a `DispatchGroup` does the same for work submitted to a queue directly.
+BenchmarkHarness states the rule in `docs/HowItWorks.md`, under "Counted metrics".
