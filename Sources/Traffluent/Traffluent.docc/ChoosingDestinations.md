@@ -24,8 +24,10 @@ writes for it, so events need no `Codable` conformance and the wire format is yo
 A send that gets no response, or a 5xx, 408 or 429 status, is sent again after a wait, until it is
 answered with 2xx. So is one answered with a status your encoder lists in its
 `transientStatuses`, for a server that answers another failure to a request worth sending again.
-The waits start at 1 second and double up to 60 seconds; pass an `ExponentialBackoff` as
-`backoff:` for others, and a test clock as `clock:` in tests. The
+The nominal waits start at 1 second and double up to 60 seconds, and each wait is a random one
+shorter than that (full jitter), so apps refused at the same moment don't all retry at the same
+moment. Pass an `ExponentialBackoff` as `backoff:` for other waits, `jitter: .none` for the nominal
+ones, and in tests a test clock as `clock:` and a seeded generator as `randomNumberGenerator:`. The
 destination takes the next batch only once this one arrives, so a tracker's store keeps its records
 until then, and a batch still being retried when the app ends is sent again on the next launch.
 Other destinations aren't held up.
@@ -238,8 +240,10 @@ character other than a letter or digit, which no project token has. That check m
 Mixpanel answers 200 to a token it doesn't know and stores nothing.
 
 The destination retries 429 and 5xx responses and drops a request Mixpanel rejects, such as one
-answered with 400, 401 or 413. A wrong region, or a token of no project, may be answered with 200
-and nothing stored, so check the project's Live View after setting the destination up. A record
+answered with 400, 401 or 413. Its retries wait `ExponentialBackoff.mixpanel`: Mixpanel's
+recommended schedule, 2 s doubling to 60 s, with full jitter, which is Traffluent's choice rather
+than Mixpanel's. A wrong region, or a token of no project, may be answered with 200 and nothing
+stored, so check the project's Live View after setting the destination up. A record
 sent again in the same run keeps its `$insert_id` and `distinct_id`, and Mixpanel counts a repeat
 of an event's name, `time`, `distinct_id` and `$insert_id` once. A record a store recovers after a
 relaunch keeps its session, so it goes out with the same `distinct_id` and `$insert_id`, and
@@ -727,7 +731,7 @@ Heap takes 15,000 events a minute from one environment, shared by every device s
 about 21.6 million events a day at a steady rate, and less in a burst. It takes 1,000 events a
 minute from one identity, which here is one session, so a session whose own backlog holds more than
 1,000 events goes past it. Heap's docs don't say what it answers past either limit. A 429 is
-retried on the destination's backoff, without jitter or `Retry-After`, so a backlog can grow; a 400
+retried on the destination's jittered backoff, which doesn't read `Retry-After`, so a backlog can grow; a 400
 drops the whole request, reported as rejected. Requests keep Heap's bulk maximum of 1,000 events,
 as a smaller batch doesn't pace requests and so wouldn't avoid the limit.
 

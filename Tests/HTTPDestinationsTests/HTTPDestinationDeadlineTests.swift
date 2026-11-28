@@ -89,7 +89,7 @@ struct HTTPDestinationDeadlineTests {
         let wallClock = FollowingWallClock(start: Date(timeIntervalSince1970: 1_000_000), clock: clock)
         let deadline = Date(timeIntervalSince1970: 1_000_002.5)
         let transport = ScriptedTransport([.failure(.failed(reason: "offline"))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(deadlines: ["a": deadline]), clock: clock, now: wallClock.now)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(deadlines: ["a": deadline]), backoff: ExponentialBackoff(jitter: .none), clock: clock, now: wallClock.now)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expectedSentAt: [Duration] = [.zero, .seconds(1)]
         let expected = HTTPDropReport<Never>.deadlineExceeded(deadline: deadline, recordIDs: batch.map(\.id))
@@ -116,7 +116,7 @@ struct HTTPDestinationDeadlineTests {
         let clock = TestClock()
         let wallClock = FollowingWallClock(start: Date(timeIntervalSince1970: 1_000_000), clock: clock)
         let transport = ScriptedTransport([.failure(.failed(reason: "offline")), .success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), clock: clock, now: wallClock.now)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock, now: wallClock.now)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let request = EncodedRequest(body: EncodedBatch(body: Data("a".utf8), contentType: "text/plain"), recordIDs: batch.map(\.id), deadline: Date(timeIntervalSince1970: 1_000_001))
         let expectedSentAt: [Duration] = [.zero, .seconds(1)]
@@ -142,7 +142,7 @@ struct HTTPDestinationDeadlineTests {
         let clock = TestClock()
         let wallClock = FollowingWallClock(start: Date(timeIntervalSince1970: 1_000_000), clock: clock)
         let transport = ScriptedTransport([.failure(.failed(reason: "offline")), .success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), clock: clock, now: wallClock.now)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock, now: wallClock.now)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let deadline = Date(timeIntervalSince1970: 1_000_000.999)
         let request = EncodedRequest(body: EncodedBatch(body: Data("a".utf8), contentType: "text/plain"), recordIDs: batch.map(\.id), deadline: deadline)
@@ -224,7 +224,7 @@ struct HTTPDestinationDeadlineTests {
         // The first request fails once and is then delivered; the second is rejected, so its
         // report is the first unless the first request was reported before it.
         let transport = ScriptedTransport([.failure(.failed(reason: "offline")), .success(HTTPResponse(status: .ok)), .success(HTTPResponse(status: .badRequest))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), clock: clock, now: { .distantFuture })
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: DeadlineEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock, now: { .distantFuture })
         let batch = [
             EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),
             EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil),

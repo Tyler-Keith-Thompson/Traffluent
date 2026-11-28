@@ -77,18 +77,28 @@ struct MixpanelDeliveryTests {
     func transientRetried(status: HTTPResponse.Status) async throws {
         let transport = ScriptedTransport([.status(status), .status(.ok)])
         let clock = TestClock()
-        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .india, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, clock: clock)
+        let sut = try HTTPDestination.mixpanel(projectToken: "testprojecttoken", region: .india, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: try ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(60), jitter: .none), clock: clock)
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expectedRequestCount = 2
         let receiving = Task { await sut.receive(batch) }
 
+        // Mixpanel's schedule without jitter waits exactly 2 s before the first retry.
         while (try? await clock.checkSuspension()) != nil {}
-        await clock.advance(by: .seconds(1))
+        await clock.advance(by: .seconds(2))
         await receiving.value
 
         let bodies = transport.requests.map(\.body)
         #expect(bodies.count == expectedRequestCount)
         #expect(Set(bodies).count == 1)
+    }
+
+    @Test("Mixpanel's backoff is the one its docs recommend: a nominal 2 s doubling to 60 s, with full jitter")
+    func mixpanelBackoff() throws {
+        let expected = try ExponentialBackoff(initialDelay: .seconds(2), maximumDelay: .seconds(60), jitter: .full)
+
+        let actual = ExponentialBackoff.mixpanel
+
+        #expect(actual == expected)
     }
 
     @Test("A batch of events Mixpanel reserves isn't sent, and each record is reported as skipped with reservedEventName")

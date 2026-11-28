@@ -22,7 +22,7 @@ extension HTTPDestination where Encoding == AmplitudeBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``AmplitudeSetupError/emptyAPIKey`` for a key that is empty or only whitespace,
@@ -83,7 +83,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Am
     ///     default data center, or ``AmplitudeRegion/eu`` for a project in its EU one.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``AmplitudeSetupError`` for an empty key or an Experiment deployment key, as the

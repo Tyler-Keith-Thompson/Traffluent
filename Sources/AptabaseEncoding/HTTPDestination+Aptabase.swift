@@ -45,7 +45,7 @@ extension HTTPDestination where Encoding == AptabaseBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from,
     ///     and each request's deadline is checked against before it is sent; the system's clock by
@@ -131,7 +131,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Ap
     ///     its Debug mode.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     ///   - now: The wall-clock time a batch is encoded at, which the 23 hours are measured from,
     ///     and each request's deadline is checked against before it is sent; the system's clock by

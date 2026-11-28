@@ -32,7 +32,7 @@ extension HTTPDestination where Encoding == SegmentSpecBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``RudderStackSetupError/emptyWriteKey`` for a write key that is empty or only
@@ -93,7 +93,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Se
     ///     self-hosted data plane's.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``RudderStackSetupError`` for an empty write key, or a data plane URL that isn't a

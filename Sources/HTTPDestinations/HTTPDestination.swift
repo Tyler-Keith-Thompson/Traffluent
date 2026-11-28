@@ -119,8 +119,14 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     ///   - transport: What sends each request.
     ///   - encoder: What turns each batch into requests.
     ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up to
-    ///     60 seconds, by default.
+    ///     60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - randomNumberGenerator: The source of the backoff's jitter, which this destination, its
+    ///     copies and every request they retry draw from in turn, one draw a wait; the system's
+    ///     generator by default. Pass a seeded generator in tests only: it makes the waits
+    ///     reproducible while one request retries at a time (copies retrying at once share its
+    ///     draws in the order they ask), and in production it would make every device wait the
+    ///     same, which defeats the jitter.
     ///   - now: The wall-clock time, read before each attempt at a request with a deadline
     ///     (``EncodedRequest/deadline``); the system's clock by default.
     public init(
@@ -131,13 +137,17 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
         encoder: Encoding,
         backoff: ExponentialBackoff = ExponentialBackoff(),
         clock: some Clock<Duration> = ContinuousClock(),
+        randomNumberGenerator: some RandomNumberGenerator & Sendable = SystemRandomNumberGenerator(),
         now: @escaping @Sendable () -> Date = { Date.now }
     ) {
         request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)
         self.instrument = instrument
         self.transport = transport
         self.encoder = encoder
-        retryStrategy = { TransientFailureRetry(backoff, clock: clock) }
+        // One generator for every request, rather than a copy per request, which would give a
+        // seeded generator's same waits to each request, and to each destination copy.
+        let generator = SharedRandomNumberGenerator(randomNumberGenerator)
+        retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }
         self.now = now
         transientStatuses = Set(Encoding.transientStatuses.map(\.status))
     }

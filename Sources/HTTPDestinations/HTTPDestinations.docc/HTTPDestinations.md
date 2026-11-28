@@ -11,10 +11,17 @@ yours. It sends with `URLSession` through
 ``URLSessionTransport`` by default, or through any ``HTTPTransport`` you pass.
 
 A send that gets no response, or a 5xx, 408 or 429 status, is sent again after the next wait of its
-``ExponentialBackoff``: 1 second, doubling up to 60 seconds, unless you pass another. So is one
-answered with a status the encoder lists in ``BatchEncoder/transientStatuses``, which every encoder
-declares: empty for most servers, or each other failure its vendor answers to a request worth
-sending again, such as Aptabase's 418 for a slow upload. The
+``ExponentialBackoff``: nominally 1 second, doubling up to 60 seconds, unless you pass another. So
+is one answered with a status the encoder lists in ``BatchEncoder/transientStatuses``, which every
+encoder declares: empty for most servers, or each other failure its vendor answers to a request
+worth sending again, such as Aptabase's 418 for a slow upload.
+
+Each wait has full jitter by default: a random wait shorter than the nominal one, so apps refused
+at the same moment retry at different moments. Pass ``ExponentialBackoff/Jitter/none`` for the
+nominal waits. In tests, pass a seeded generator as `randomNumberGenerator:` for jittered waits
+that repeat from one run to the next, as long as one request retries at a time: copies of a
+destination retrying at once share the generator's draws in the order they ask for them. Never
+seed it in production, where every device would then wait the same, which defeats the jitter. The
 destination takes the next batch only once this one is delivered or dropped, so a tracker's store
 keeps the batch's records until then. A batch the endpoint answers with any other status, whose
 request can never be sent, or that the encoder can't encode is dropped, logged and reported on

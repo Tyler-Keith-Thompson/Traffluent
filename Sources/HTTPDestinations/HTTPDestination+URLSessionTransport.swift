@@ -16,8 +16,11 @@ extension HTTPDestination where Transport == URLSessionTransport {
     ///     default.
     ///   - encoder: What turns each batch into a request body.
     ///   - backoff: How long to wait before each new attempt at a batch; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
+    ///   - randomNumberGenerator: The source of the backoff's jitter, which this destination, its
+    ///     copies and every request they retry draw from in turn; the system's generator by
+    ///     default. Pass a seeded generator in tests only, as the designated initializer says.
     ///   - now: The wall-clock time, read before each attempt at a request with a deadline
     ///     (``EncodedRequest/deadline``); the system's clock by default.
     public init(
@@ -27,6 +30,7 @@ extension HTTPDestination where Transport == URLSessionTransport {
         encoder: Encoding,
         backoff: ExponentialBackoff = ExponentialBackoff(),
         clock: some Clock<Duration> = ContinuousClock(),
+        randomNumberGenerator: some RandomNumberGenerator & Sendable = SystemRandomNumberGenerator(),
         now: @escaping @Sendable () -> Date = { Date.now }
     ) {
         self.init(
@@ -37,6 +41,7 @@ extension HTTPDestination where Transport == URLSessionTransport {
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: now)
     }
 }

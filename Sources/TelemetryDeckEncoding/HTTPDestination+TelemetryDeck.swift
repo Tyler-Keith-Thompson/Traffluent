@@ -27,7 +27,7 @@ extension HTTPDestination where Encoding == TelemetryDeckBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``TelemetryDeckSetupError/emptyAppID`` for an app ID that is empty or only
@@ -85,7 +85,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Te
     ///     in Test Mode.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``TelemetryDeckSetupError`` for an empty app ID or a namespace TelemetryDeck

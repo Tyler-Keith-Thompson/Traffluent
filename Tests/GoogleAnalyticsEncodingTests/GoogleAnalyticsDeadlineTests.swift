@@ -57,7 +57,7 @@ struct GoogleAnalyticsDeadlineTests {
             return start.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
         }
         let transport = ScriptedTransport([.status(.serviceUnavailable)])
-        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, clock: clock, now: now)
+        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: now)
         let batch = [EventRecord(event: Searched(query: "a"), timestamp: tracked, sourceLocation: nil)]
         let expected = HTTPDropReport<GoogleAnalyticsEncodingError>.deadlineExceeded(deadline: tracked.addingTimeInterval(hours71), recordIDs: batch.map(\.id))
         let expectedRequestCount = 2

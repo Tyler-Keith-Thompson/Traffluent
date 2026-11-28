@@ -77,7 +77,7 @@ struct SegmentSpecDeliveryTests {
     func transientRetried(status: HTTPResponse.Status) async throws {
         let transport = ScriptedTransport([.status(status), .status(.ok)])
         let clock = TestClock()
-        let sut = try HTTPDestination.customerIO(apiKey: "pk_us_testkey", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, clock: clock)
+        let sut = try HTTPDestination.customerIO(apiKey: "pk_us_testkey", region: .us, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expectedRequestCount = 2
         let receiving = Task { await sut.receive(batch) }

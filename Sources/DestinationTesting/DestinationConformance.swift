@@ -331,10 +331,10 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
 }
 
 extension ExponentialBackoff {
-    /// A backoff of a nanosecond, so a retried request is sent again at once.
+    /// A backoff of a nanosecond, without jitter, so a retried request is sent again at once.
     fileprivate static var conformance: ExponentialBackoff {
         get throws(InvalidBackoff) {
-            try ExponentialBackoff(initialDelay: .nanoseconds(1), maximumDelay: .nanoseconds(1))
+            try ExponentialBackoff(initialDelay: .nanoseconds(1), maximumDelay: .nanoseconds(1), jitter: .none)
         }
     }
 }

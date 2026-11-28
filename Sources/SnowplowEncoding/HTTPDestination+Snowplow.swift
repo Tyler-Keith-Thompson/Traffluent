@@ -34,7 +34,7 @@ extension HTTPDestination where Encoding == SnowplowBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``SnowplowSetupError/invalidCollector`` for a collector URL that isn't `https`,
@@ -98,7 +98,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Sn
     ///   - appID: The app's ID, each event's `aid`.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``SnowplowSetupError`` for a collector URL that isn't a plain `https` URL of the

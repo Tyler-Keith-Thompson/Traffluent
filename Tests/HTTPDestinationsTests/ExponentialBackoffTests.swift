@@ -77,6 +77,40 @@ struct ExponentialBackoffTests {
         #expect(smallest.initialDelay == expectedSmallest)
     }
 
+    @Test("The default, and a backoff made from its delays with no jitter given, have full jitter")
+    func fullJitterByDefault() throws {
+        let expected = ExponentialBackoff.Jitter.full
+
+        let byDefault = ExponentialBackoff()
+        let fromDelays = try ExponentialBackoff(initialDelay: .seconds(1), maximumDelay: .seconds(2))
+
+        #expect(byDefault.jitter == expected)
+        #expect(fromDelays.jitter == expected)
+    }
+
+    @Test("Both initializers keep the jitter they are given, and the default's delays stay 1 s doubling to 60 s")
+    func keepsJitter() throws {
+        let expected = ExponentialBackoff.Jitter.none
+        let expectedInitial = Duration.seconds(1)
+        let expectedMaximum = Duration.seconds(60)
+
+        let byDefault = ExponentialBackoff(jitter: .none)
+        let fromDelays = try ExponentialBackoff(initialDelay: .seconds(1), maximumDelay: .seconds(2), jitter: .none)
+
+        #expect(byDefault.jitter == expected)
+        #expect(byDefault.initialDelay == expectedInitial)
+        #expect(byDefault.maximumDelay == expectedMaximum)
+        #expect(fromDelays.jitter == expected)
+    }
+
+    @Test("Backoffs that differ only in jitter are unequal")
+    func jitterInEquality() {
+        let full = ExponentialBackoff(jitter: .full)
+        let none = ExponentialBackoff(jitter: .none)
+
+        #expect(full != none)
+    }
+
     @Test("Waiting before a retry numbered below 1 throws NonPositiveRetry", arguments: [0, -1, Int.min])
     func retryBelowOne(_ retry: Int) {
         let sut = ExponentialBackoff()

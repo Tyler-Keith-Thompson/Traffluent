@@ -10,9 +10,10 @@ the project token, posts to the `/track` endpoint of the project's data residenc
 (``MixpanelRegion``) with a ``MixpanelBatchEncoder``, and splits each batch to Mixpanel's limits
 (``MixpanelBatchEncoder/batchLimit``): 2,000 events and 2 MB a request. A batch with no record the
 encoder can write, an empty one included, makes no request. It retries no response, a 5xx, 408
-and 429, and drops and reports any other status. The token goes in each event, so no header field
-is needed, and no trace context is sent. `import Traffluent` leaves this module out; import it on
-its own.
+and 429, waiting ``HTTPDestinations/ExponentialBackoff/mixpanel``: Mixpanel's recommended
+schedule, 2 s doubling to 60 s. The full jitter on top is Traffluent's own choice. It drops and
+reports any other status. The token goes in each event, so no header field is needed, and no
+trace context is sent. `import Traffluent` leaves this module out; import it on its own.
 
 The project token is public: Mixpanel's own apps and web pages ship it. The destination takes
 nothing else. Never put the project's secret or a service account's credentials in an app; they
@@ -80,6 +81,7 @@ covers what Mixpanel receives, and why, in more detail.
 - ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:)``
 - ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:transport:backoff:clock:)``
 - ``MixpanelRegion``
+- ``HTTPDestinations/ExponentialBackoff/mixpanel``
 - ``MixpanelSetupError``
 
 ### Encoding batches

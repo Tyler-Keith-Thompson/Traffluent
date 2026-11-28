@@ -6,6 +6,8 @@
 # test, or a note here saying why it is equivalent to the original.
 #
 # Known equivalent mutants (left out, as they would survive by design):
+# - ExponentialBackoff's `jitter: Jitter = .full` defaults: a public function's default argument
+#   can't call the internal __mutant switch, so they can't be planted; fullJitterByDefault pins them.
 # - Dropping or changing a `logger.error` in `receive(_:)` or a `logger.notice` in `Attempt.run()`:
 #   logs are for developers, and tests don't pin them (AGENTS.md). What each outcome is, which
 #   decides what is logged, is pinned through `send(_:)` and `dropReports`.
@@ -29,7 +31,8 @@
 # Not pinned: URLSessionTransport's `.badURL` and `.appTransportSecurityRequiresSecureConnection`
 # as invalid requests (no URL reliably produces either on both macOS and Linux in a test; the
 # `.unsupportedURL` case beside them is pinned with a `foo://` URL). And the URLSession
-# convenience init passing `backoff:` on (urlsessionbackoffignored would survive). Its sends go to a real URLSession, and with no server to count requests, a test
+# convenience init passing `backoff:` and `randomNumberGenerator:` on (urlsessionbackoffignored and
+# urlsessiongeneratorignored would survive). Its sends go to a real URLSession, and with no server to count requests, a test
 # can't tell one wait from another; the designated init's tests pin what a backoff does.
 #
 # `injectedaftercontenttype` comes before the other mutants of those lines, which would otherwise
@@ -105,9 +108,9 @@ MUTANTS = [
     Mutant("encodingidslost", D, "reporter.report(.notEncoded(error, recordIDs: batch.map(\\.id)))", "reporter.report(.notEncoded(error, recordIDs: []))", mode="stmt"),
     Mutant("reportsneverend", D, "reports.finish()", "", mode="stmt"),
     # Attempts and retries.
-    Mutant("backoffignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock) }", "retryStrategy = { TransientFailureRetry(ExponentialBackoff(), clock: clock) }", mode="stmt"),
-    Mutant("clockignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock) }", "retryStrategy = { TransientFailureRetry(backoff, clock: ContinuousClock()) }", mode="stmt"),
-    Mutant("strategysharedacrossbatches", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock) }", "let strategy = TransientFailureRetry(backoff, clock: clock)\n        retryStrategy = { strategy }", mode="stmt"),
+    Mutant("backoffignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }", "retryStrategy = { TransientFailureRetry(ExponentialBackoff(), clock: clock, generator: generator) }", mode="stmt"),
+    Mutant("clockignored", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }", "retryStrategy = { TransientFailureRetry(backoff, clock: ContinuousClock(), generator: generator) }", mode="stmt"),
+    Mutant("strategysharedacrossbatches", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }", "let strategy = TransientFailureRetry(backoff, clock: clock, generator: generator)\n        retryStrategy = { strategy }", mode="stmt"),
     Mutant("everystatusdelivered", D, "status.kind == .successful", "true"),
     Mutant("nostatusdelivered", D, "status.kind == .successful", "false"),
     Mutant("below300delivered", D, "status.kind == .successful", "status.code < 300"),
@@ -137,9 +140,9 @@ MUTANTS = [
     # Each mutant of the strategy's expression puts its own copy before the original's, so a later
     # one's `nth` skips those copies: for afluentcapsooner, backofftripled's and retriescapped's
     # (uncappedwaits' has no maxDelay); for afluentinitialismaximum, all three.
-    Mutant("backofftripled", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 3, maxDelay: backoff.maximumDelay)"),
-    Mutant("retriescapped", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxCount: 5, maxDelay: backoff.maximumDelay)"),
-    Mutant("uncappedwaits", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay)", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2)"),
+    Mutant("backofftripled", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay, jitter: backoff.jitter.afluentJitter(using: generator))", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 3, maxDelay: backoff.maximumDelay, jitter: backoff.jitter.afluentJitter(using: generator))"),
+    Mutant("retriescapped", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay, jitter: backoff.jitter.afluentJitter(using: generator))", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxCount: 5, maxDelay: backoff.maximumDelay, jitter: backoff.jitter.afluentJitter(using: generator))"),
+    Mutant("uncappedwaits", R, "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, maxDelay: backoff.maximumDelay, jitter: backoff.jitter.afluentJitter(using: generator))", "ExponentialBackoffStrategy(initialDelay: backoff.initialDelay, multiplier: 2, jitter: backoff.jitter.afluentJitter(using: generator))"),
     Mutant("afluentcapsooner", R, "backoff.maximumDelay", "backoff.initialDelay", nth=2),
     Mutant("afluentinitialismaximum", R, "backoff.initialDelay", "backoff.maximumDelay", nth=3),
     # ExponentialBackoff.
@@ -158,6 +161,22 @@ MUTANTS = [
     Mutant("halfmaximum", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "guard delay < maximumDelay / 2 else { return maximumDelay }", mode="stmt"),
     Mutant("uncapped", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "", mode="stmt"),
     Mutant("capreturnsdelay", E, "guard delay < maximumDelay - delay else { return maximumDelay }", "guard delay < maximumDelay - delay else { return delay }", mode="stmt"),
+    # Jitter (TRAF-124). seededWaits and waitsMatchReference catch the full-jitter mutants; the
+    # tests that pin exact waits with `.none` (waitsMatchDelayBeforeRetry, defaultDelaySequence)
+    # catch the ones that jitter a `.none` backoff; copiesShareGenerator catches a generator per
+    # request, which replays the same first draw for every request.
+    Mutant("defaultjitterunkept", E, "self.jitter = jitter", "self.jitter = .none", mode="stmt", nth=0),
+    Mutant("delaysjitterunkept", E, "self.jitter = jitter", "self.jitter = .none", mode="stmt", nth=1),
+    Mutant("fulljitternone", R, "BackoffJitter.full(using: generator)", "BackoffJitter.none"),
+    Mutant("nonejitterfull", R, "BackoffJitter.none", "BackoffJitter.full(using: generator)", nth=0),
+    # The three strategy mutants above copy the jitter argument into theirs, so the original is
+    # the fourth.
+    Mutant("jitterunread", R, "backoff.jitter.afluentJitter(using: generator)", "ExponentialBackoff.Jitter.full.afluentJitter(using: generator)", nth=3),
+    Mutant("generatorignored", D, "SharedRandomNumberGenerator(randomNumberGenerator)", "SharedRandomNumberGenerator(SystemRandomNumberGenerator())"),
+    Mutant("generatorperrequest", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }", "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: SharedRandomNumberGenerator(randomNumberGenerator)) }", mode="stmt"),
+    # A draw from a copy leaves the shared generator where it was, so every wait repeats its first
+    # draw; seededWaits and copiesShareGenerator catch it.
+    Mutant("drawsfromcopy", "SharedRandomNumberGenerator.swift", "box.generator.withLock { $0.next() }", "{ var copy = box.generator.withLock { $0 }; return copy.next() }()"),
     # The URLSession convenience init.
     Mutant("urlsessioninstrumentignored", S, """self.init(
             endpoint: endpoint,
@@ -167,6 +186,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: now)""", """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
@@ -175,6 +195,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: now)""", mode="stmt"),
     Mutant("urlsessionclockignored", S, """self.init(
             endpoint: endpoint,
@@ -184,6 +205,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: now)""", """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
@@ -192,6 +214,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: ContinuousClock(),
+            randomNumberGenerator: randomNumberGenerator,
             now: now)""", mode="stmt"),
     Mutant("urlsessionnowignored", S, """self.init(
             endpoint: endpoint,
@@ -201,6 +224,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: now)""", """self.init(
             endpoint: endpoint,
             headerFields: headerFields,
@@ -209,6 +233,7 @@ MUTANTS = [
             encoder: encoder,
             backoff: backoff,
             clock: clock,
+            randomNumberGenerator: randomNumberGenerator,
             now: { Date.now })""", mode="stmt"),
     # Deadlines (TRAF-134).
     Mutant("nowignored", D, "self.now = now", "self.now = { Date.now }", mode="stmt"),

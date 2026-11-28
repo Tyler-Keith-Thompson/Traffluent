@@ -145,7 +145,7 @@ struct AptabaseDeliveryTests {
         let tracked = Date(timeIntervalSince1970: 1_795_442_607)
         let transport = ScriptedTransport([.status(418), .status(418), .status(.ok), .status(.badRequest)])
         let clock = TestClock()
-        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, clock: clock, now: { tracked })
+        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: { tracked })
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: tracked, sourceLocation: nil)]
         let later = [EventRecord(event: CheckoutStarted(cartSize: 2), timestamp: tracked, sourceLocation: nil)]
         // One request sent before the first wait, a second before the second: each waits the

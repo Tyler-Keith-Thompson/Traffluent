@@ -56,7 +56,7 @@ extension HTTPDestination where Encoding == GoogleAnalyticsBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     ///   - now: The wall-clock time a batch is encoded at, and each request's deadline is checked
     ///     against before it is sent; the system's clock by default.
@@ -139,7 +139,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Go
     ///     endpoint, or ``GoogleAnalyticsRegion/eu``.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     ///   - now: The wall-clock time a batch is encoded at, and each request's deadline is checked
     ///     against before it is sent; the system's clock by default.

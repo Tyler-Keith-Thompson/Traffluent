@@ -62,7 +62,7 @@ struct HTTPDestinationStoreTests {
         let store = try SegmentStore(events: [Tapped.self], directory: directory)
         let tracker = Tracker(store: store)
         let transport = ScriptedTransport([.failure(.failed(reason: "offline")), .success(HTTPResponse(status: .serviceUnavailable)), .success(HTTPResponse(status: .ok))])
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let delivery = tracker.records.batch(strategy: .count(2)).deliver(to: sut)
         var attempts = transport.attempts.makeAsyncIterator()
         let expectedWhileRetried = [2, 2]

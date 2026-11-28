@@ -32,8 +32,8 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
     ///     ``MixpanelRegion/eu`` or ``MixpanelRegion/india``.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
-    ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///   - backoff: How long to wait before each new attempt at a request; 2 seconds, doubling up
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``MixpanelSetupError/emptyProjectToken`` for a token that is empty or only
@@ -44,7 +44,7 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
         region: MixpanelRegion,
         plan: TrackingPlan,
         transport: Transport,
-        backoff: ExponentialBackoff = ExponentialBackoff(),
+        backoff: ExponentialBackoff = .mixpanel,
         clock: some Clock<Duration> = ContinuousClock()
     ) throws(MixpanelSetupError) -> HTTPDestination<Transport, MixpanelBatchEncoder> {
         // Trimmed once, so a token pasted with a newline is checked and sent without it.
@@ -92,8 +92,8 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Mi
     ///   - region: Where the project's data resides: ``MixpanelRegion/us``, Mixpanel's default,
     ///     ``MixpanelRegion/eu`` or ``MixpanelRegion/india``.
     ///   - plan: The tracking plan of every event the destination is given.
-    ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///   - backoff: How long to wait before each new attempt at a request; 2 seconds, doubling up
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``MixpanelSetupError`` for an empty or malformed token, as the other spelling
@@ -102,11 +102,28 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Mi
         projectToken: String,
         region: MixpanelRegion,
         plan: TrackingPlan,
-        backoff: ExponentialBackoff = ExponentialBackoff(),
+        backoff: ExponentialBackoff = .mixpanel,
         clock: some Clock<Duration> = ContinuousClock()
     ) throws(MixpanelSetupError) -> HTTPDestination<URLSessionTransport, MixpanelBatchEncoder> {
         try mixpanel(projectToken: projectToken, region: region, plan: plan, transport: URLSessionTransport(), backoff: backoff, clock: clock)
     }
+}
+
+extension ExponentialBackoff {
+    /// Mixpanel's recommended schedule, 2 s doubling to 60 s, with full jitter: a nominal wait of
+    /// 2 seconds before the first retry, doubling up to 60 seconds. Mixpanel recommends the
+    /// schedule; the full jitter is Traffluent's, as for every destination.
+    public static let mixpanel: ExponentialBackoff = {
+        // Mixpanel's guidance starts at 2 s and doubles to 60 s, adding 1 to 5 s of jitter. The
+        // schedule is followed; the jitter is full, as for every other vendor, rather than added
+        // on top: full jitter spreads a wave of apps refused together over the whole wait, which
+        // a few seconds added to a wait of a minute barely does. Rejected: keeping the 1 s default,
+        // which retries into Mixpanel's rate limiter sooner than it asks.
+        //
+        // The initializer throws only for a delay that isn't positive or a maximum below it, and
+        // these literals are neither, so the fallback is never taken; a test pins the delays.
+        (try? ExponentialBackoff(initialDelay: Duration.seconds(2), maximumDelay: Duration.seconds(60))) ?? ExponentialBackoff()
+    }()
 }
 
 extension MixpanelRegion {

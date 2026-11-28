@@ -140,4 +140,9 @@ MUTANTS = [
     Mutant("noos", C, 'properties["$os"] = .string(operatingSystem.name)', "", mode="stmt"),
     Mutant("osasversion", C, 'properties["$os"] = .string(operatingSystem.name)', 'properties["$os"] = .string(operatingSystem.version)', mode="stmt"),
     Mutant("noosversion", C, 'properties["$os_version"] = .string(operatingSystem.version)', "", mode="stmt"),
+    # Mixpanel's backoff (TRAF-124). The factories' `backoff: ExponentialBackoff = .mixpanel`
+    # default isn't planted: a public default argument can't call the internal mutant switch, and
+    # with jitter drawn from the system generator no test could tell 1 s from 2 s for certain.
+    Mutant("mixpanelbackoffinitial", F, "Duration.seconds(2)", "Duration.seconds(1)"),
+    Mutant("mixpanelbackoffmaximum", F, "Duration.seconds(60)", "Duration.seconds(120)"),
 ]

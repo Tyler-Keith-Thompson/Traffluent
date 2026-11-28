@@ -34,7 +34,7 @@ extension HTTPDestination where Encoding == SegmentSpecBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``CustomerIOSetupError/emptyAPIKey`` for a key that is empty or only whitespace,
@@ -106,7 +106,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == Se
     ///   - region: Where the workspace is: ``CustomerIORegion/us`` or ``CustomerIORegion/eu``.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``CustomerIOSetupError`` for an empty key, a private key, or a key of the other

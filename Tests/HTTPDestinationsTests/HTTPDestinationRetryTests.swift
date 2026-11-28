@@ -141,7 +141,7 @@ struct HTTPDestinationRetryTests {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let transport = ScriptedTransport([.failure(.failed(reason: "offline")), .failure(.failed(reason: "offline")), .success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let rejected = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
         let expectedSentAt: [Duration] = [.zero, .seconds(1), .seconds(3)]
@@ -171,7 +171,7 @@ struct HTTPDestinationRetryTests {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let transport = ScriptedTransport([.success(HTTPResponse(status: .init(code: code))), .success(HTTPResponse(status: .noContent))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expected: [Duration] = [.zero, .seconds(1)]
         var attempts = transport.attempts.makeAsyncIterator()
@@ -205,14 +205,14 @@ struct HTTPDestinationRetryTests {
         await #expect(throws: Never.self) { try await clock.checkSuspension() }
     }
 
-    @Test("The waits are the default backoff's, 1 s doubling to 60 s and then 60 s each, each wait exactly that long on the clock")
+    @Test("Without jitter, the waits are the default backoff's, 1 s doubling to 60 s and then 60 s each, each wait exactly that long on the clock")
     func defaultDelaySequence() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let expectedWaits: [Duration] = [.seconds(1), .seconds(2), .seconds(4), .seconds(8), .seconds(16), .seconds(32), .seconds(60), .seconds(60), .seconds(60)]
         let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.failure(.failed(reason: "offline")), count: expectedWaits.count)
         let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         var attempts = transport.attempts.makeAsyncIterator()
         let receiving = Task { await sut.receive(batch) }
@@ -236,7 +236,7 @@ struct HTTPDestinationRetryTests {
     func givenBackoffCapped() async throws {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
-        let backoff = try ExponentialBackoff(initialDelay: .milliseconds(300), maximumDelay: .seconds(1))
+        let backoff = try ExponentialBackoff(initialDelay: .milliseconds(300), maximumDelay: .seconds(1), jitter: .none)
         let expectedWaits: [Duration] = [.milliseconds(300), .milliseconds(600), .seconds(1), .seconds(1)]
         let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.success(HTTPResponse(status: .serviceUnavailable)), count: expectedWaits.count)
         let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)
@@ -256,7 +256,7 @@ struct HTTPDestinationRetryTests {
         #expect(actual == expectedWaits)
     }
 
-    @Test("For any backoff of whole milliseconds under 295 s, each wait on the clock is exactly the backoff's delay(beforeRetry:) for that retry")
+    @Test("For any backoff of whole milliseconds under 295 s without jitter, each wait on the clock is exactly the backoff's delay(beforeRetry:) for that retry")
     func waitsMatchDelayBeforeRetry() async throws {
         await propertyCheck(count: 100, input: Gen.uint64(in: .min ... .max)) { seed in
             var random = Xoshiro256StarStar(seed: seed)
@@ -271,7 +271,7 @@ struct HTTPDestinationRetryTests {
             // 80 background-priority tasks, some 40,000 over the 100 cases, which a loaded
             // machine starves past the suite's time limit (TRAF-143).
             let clock = AdvancingClock()
-            let backoff = try ExponentialBackoff(initialDelay: .milliseconds(initialMilliseconds), maximumDelay: .milliseconds(maximumMilliseconds))
+            let backoff = try ExponentialBackoff(initialDelay: .milliseconds(initialMilliseconds), maximumDelay: .milliseconds(maximumMilliseconds), jitter: .none)
             let expectedWaits = try (1 ... retries).map { try backoff.delay(beforeRetry: $0) }
             let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.failure(.failed(reason: "offline")), count: retries)
             let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)
@@ -296,7 +296,7 @@ struct HTTPDestinationRetryTests {
         let offline = Result<HTTPResponse, HTTPTransportError>.failure(.failed(reason: "offline"))
         let delivered = Result<HTTPResponse, HTTPTransportError>.success(HTTPResponse(status: .ok))
         let transport = ScriptedTransport([offline, offline, delivered, offline, delivered], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let first = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let second = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
         let expected: [Duration] = [.seconds(1), .seconds(2), .zero, .seconds(1)]
@@ -364,7 +364,7 @@ struct HTTPDestinationRetryTests {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let transport = ScriptedTransport([.success(HTTPResponse(status: 418)), .success(HTTPResponse(status: 418)), .success(HTTPResponse(status: .ok)), .success(HTTPResponse(status: .badRequest))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let later = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
         let expectedSentAt: [Duration] = [.zero, .seconds(1), .seconds(3), .seconds(3)]
@@ -412,7 +412,7 @@ struct HTTPDestinationRetryTests {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let transport = ScriptedTransport([.success(HTTPResponse(status: .init(code: code))), .success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: TeapotRetryingEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expected: [Duration] = [.zero, .seconds(1)]
         var attempts = transport.attempts.makeAsyncIterator()
@@ -449,7 +449,7 @@ struct HTTPDestinationRetryTests {
         let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
         let clock = TestClock()
         let transport = ScriptedTransport([.failure(.cancelled), .success(HTTPResponse(status: .ok))], clock: clock)
-        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: ExponentialBackoff(jitter: .none), clock: clock)
         let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
         let expected: [Duration] = [.zero, .seconds(1)]
         var attempts = transport.attempts.makeAsyncIterator()

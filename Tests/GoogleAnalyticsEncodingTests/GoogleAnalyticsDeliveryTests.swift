@@ -84,7 +84,7 @@ struct GoogleAnalyticsDeliveryTests {
     func transientRetried(status: HTTPResponse.Status) async throws {
         let transport = ScriptedTransport([.status(status), .status(.noContent)])
         let clock = TestClock()
-        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, clock: clock, now: { Date(timeIntervalSince1970: 1_795_442_607) })
+        let sut = try HTTPDestination.googleAnalytics(measurementID: "G-TEST000000", apiSecret: "testapisecret", region: .global, plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: { Date(timeIntervalSince1970: 1_795_442_607) })
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
         let expectedRequestCount = 2
         let receiving = Task { await sut.receive(batch) }

@@ -288,12 +288,12 @@ bad row in a dashboard.
   standard context as properties (rejected: flattening app and device fields into each event's
   properties, which Heap has no built-in keys for and which would collide with adopters' names).
   The 15,000 events a minute per app_id is shared by every device (about 21.6M a day at a steady
-  rate); Heap doesn't say whether it answers 429 (retried on the backoff, no jitter, no
-  `Retry-After`, so a backlog can grow) or 400 (the whole request dropped as rejected), and the
+  rate); Heap doesn't say whether it answers 429 (retried on the backoff, with full jitter
+  from TRAF-124 but no `Retry-After`, so a backlog can grow) or 400 (the whole request dropped as rejected), and the
   docs describe both. A session's own backlog of over 1,000 events passes the per-identity limit;
   kept 1,000 events a request (rejected: smaller batches, which don't pace requests).
-  Deduplication holds within one identity, so a record recovered after a relaunch, sent under its
-  record ID, may be stored twice, as for Amplitude (TRAF-122).
+  Deduplication holds within one identity; a record recovered after a relaunch keeps its session
+  (TRAF-122), so it is resent under the identity of its first send.
   Aptabase (TRAF-110, decided 2026-11-27): `AptabaseEncoding` posts a JSON array of events to
   `/api/v0/events` with the app key in `App-Key`, from every platform: the key is public (the
   SDKs ship it, and the server's own comment says anyone can send any key). Sources, read
@@ -364,7 +364,7 @@ bad row in a dashboard.
   all removed. Traffluent may offer it as an opt-in enricher where the platform has it, never
   stored by Traffluent and never a fallback to a generated ID.
   Adopters who want one write their own Enricher and own that decision, including its consent.
-  Amended 2026-11-27 (TRAF-122, the agent's default while the owner's answer is pending): a store
+  Amended 2026-11-27 (TRAF-122, the owner): a store
   may write a record's session ID into that record's own stored bytes, and only there, so a record
   recovered after a relaunch reaches vendors under the ID it was first sent with; it is deleted
   when the store deletes the record's bytes (a SegmentStore: once its whole segment is

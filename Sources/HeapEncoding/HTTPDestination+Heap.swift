@@ -26,7 +26,7 @@ extension HTTPDestination where Encoding == HeapBatchEncoder {
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - transport: What sends each request.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``HeapSetupError/emptyAppID`` for an app ID that is empty or only whitespace, and
@@ -74,7 +74,7 @@ extension HTTPDestination where Transport == URLSessionTransport, Encoding == He
     ///     ``HeapRegion/eu``.
     ///   - plan: The tracking plan of every event the destination is given.
     ///   - backoff: How long to wait before each new attempt at a request; 1 second, doubling up
-    ///     to 60 seconds, by default.
+    ///     to 60 seconds, with full jitter, by default.
     ///   - clock: The clock the waits are measured on.
     /// - Returns: The destination.
     /// - Throws: ``HeapSetupError`` for an empty or malformed app ID, as the other spelling says.

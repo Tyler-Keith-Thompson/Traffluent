@@ -45,7 +45,7 @@ struct MatomoDeadlineTests {
             return start.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
         }
         let transport = ScriptedTransport([.status(.serviceUnavailable)])
-        let sut = try HTTPDestination.matomo(url: url, siteID: 1, dimensions: [:], category: "Shop", plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, clock: clock, now: now)
+        let sut = try HTTPDestination.matomo(url: url, siteID: 1, dimensions: [:], category: "Shop", plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: now)
         let batch = [EventRecord(event: Searched(query: "a"), timestamp: tracked, sourceLocation: nil)]
         let expected = HTTPDropReport<MatomoEncodingError>.deadlineExceeded(deadline: tracked.addingTimeInterval(hours23), recordIDs: batch.map(\.id))
         let expectedRequestCount = 2

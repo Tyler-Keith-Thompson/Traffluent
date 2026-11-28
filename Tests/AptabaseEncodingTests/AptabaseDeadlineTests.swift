@@ -46,7 +46,7 @@ struct AptabaseDeadlineTests {
             return start.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
         }
         let transport = ScriptedTransport([.status(.serviceUnavailable)])
-        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, clock: clock, now: now)
+        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: now)
         let batch = [EventRecord(event: Searched(query: "a"), timestamp: tracked, sourceLocation: nil)]
         let expected = HTTPDropReport<AptabaseEncodingError>.deadlineExceeded(deadline: tracked.addingTimeInterval(hours23), recordIDs: batch.map(\.id))
         let expectedRequestCount = 2
@@ -78,7 +78,7 @@ struct AptabaseDeadlineTests {
             return start.addingTimeInterval(Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
         }
         let transport = ScriptedTransport([.status(418)])
-        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, clock: clock, now: now)
+        let sut = try HTTPDestination.aptabase(appKey: "A-EU-1234567890", isDebug: false, plan: try TrackingPlan(schemas: [Searched.schema]), transport: transport, backoff: ExponentialBackoff(jitter: .none), clock: clock, now: now)
         let batch = [EventRecord(event: Searched(query: "a"), timestamp: tracked, sourceLocation: nil)]
         let expected = HTTPDropReport<AptabaseEncodingError>.deadlineExceeded(deadline: tracked.addingTimeInterval(hours23), recordIDs: batch.map(\.id))
         let expectedRequestCount = 2

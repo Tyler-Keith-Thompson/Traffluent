@@ -150,7 +150,7 @@ struct PostHogDeliveryTests {
         let clock = TestClock()
         let encoder = PostHogBatchEncoder(projectToken: "phc_test", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]))
         let stub = PostHogStub([.serviceUnavailable, .ok])
-        let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder, clock: clock)
+        let sut = HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: stub, encoder: encoder, backoff: ExponentialBackoff(jitter: .none), clock: clock)
         var context = ServiceContext.topLevel
         context[SessionKey.self] = UUID()
         let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context)]

@@ -121,9 +121,9 @@ Heap takes 15,000 events a minute from one environment, and every device sending
 that limit: at a steady rate it is about 21.6 million events a day across all your users, and a
 burst, such as many devices sending their backlogs at once, reaches it sooner. Heap's docs don't
 say what it answers past the limit. If it answers 429, the destination retries the request on its
-backoff, without jitter and without reading `Retry-After`, so devices retry on the same schedule
-and a backlog can grow rather than shrink. If it answers 400, the destination drops the whole
-request and reports it as rejected, and its records are lost.
+backoff, with full jitter, so devices refused together retry at different moments. It doesn't
+read `Retry-After`, though, so a backlog can still grow. If it answers 400, the destination drops
+the whole request and reports it as rejected, and its records are lost.
 
 Heap also takes 30 requests in 30 seconds and 1,000 events a minute from one identity, which is
 one session here. A session whose own backlog holds more than 1,000 events, such as one that ran

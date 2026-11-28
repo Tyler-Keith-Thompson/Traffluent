@@ -65,7 +65,7 @@ public struct StoreAnalytics: Sendable {
     ///   - enrichers: What every record's context gains; ``enrichers`` by default.
     ///   - transport: What sends each batch; `URLSession` by default.
     ///   - backoff: How long to wait before sending a batch again after a transient failure; 1
-    ///     second, doubling up to 60, by default.
+    ///     second, doubling up to 60, with full jitter, by default.
     ///   - clock: The clock batches are timed and failed sends are retried on.
     ///   - trackingPlan: The plan the collector encodes each record through; the store's,
     ///     `TrackingPlan.store`, by default. When it throws, nothing is delivered,
