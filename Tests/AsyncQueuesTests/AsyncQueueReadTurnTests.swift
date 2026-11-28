@@ -1,24 +1,28 @@
-// Which reader reaches the queue first decides which path a read takes, so these tests run their
-// tasks on the main serial executor (swift-concurrency-extras), which runs every job in the order
-// it was enqueued: a reader that sends its gate and then reads is waiting for its turn before the
-// test resumes. It changes a global hook, so the suite runs its tests one at a time.
+// Which reader reaches the queue first decides which path a read takes, so each test runs itself
+// and its tasks on a serial queue of its own (Afluent's QueueExecutor, as their task executor). The
+// queue runs one job at a time: a reader's nonisolated call to next() goes on in the job already
+// running, rather than being enqueued again, and nothing else on the queue runs until the reader
+// suspends in its wait. So a reader that sends its gate and then reads is waiting for its turn
+// before the test resumes. That holds while the suite and the reader closures stay nonisolated
+// (@MainActor would win over the task executor) and nothing suspends between a reader's gate and
+// its read. The queue is the test's own, not a hook every task in the process goes through, so the
+// tests may run alongside any others.
 import Afluent
 import AsyncQueues
-import ConcurrencyExtras
 import Testing
 
-@MainActor
-@Suite("AsyncQueue: one reader at a time", .serialized, .timeLimit(.minutes(1)))
+@Suite("AsyncQueue: one reader at a time", .timeLimit(.minutes(1)))
 struct AsyncQueueReadTurnTests {
     @Test("A second reader that starts while the first waits gets none of the first's elements, and once the first's iterator is released reads on in order")
     func secondReaderWaitsForRelease() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
             let expectedFirst = [0, 1, 2, 3]
             let expectedSecond = [4, 5]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 // The first read takes the turn, which the iterator keeps until this task releases it.
@@ -32,7 +36,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
                 for await number in sut {
@@ -58,13 +62,14 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A second reader that starts while the first reads on ends once the first's iteration ends and the queue finishes, the first getting every element")
     func secondReaderEndsAfterFirst() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
             let expectedFirst = [0, 1, 2]
             let expectedSecond: [Int] = []
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 for await number in sut {
                     numbers.append(number)
@@ -74,7 +79,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
                 for await number in sut {
@@ -97,7 +102,8 @@ struct AsyncQueueReadTurnTests {
 
     @Test("Once the first reader's iteration ends, a waiting reader reads on in order, though the first's iterator is still held")
     func secondReaderWaitsForEnd() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             // Its job ignores the cancelled task awaiting it, so that task holds its iterator until
             // the test lets it go.
@@ -107,7 +113,7 @@ struct AsyncQueueReadTurnTests {
             let releaseFirst = SingleValueSubject<Void>()
             let expectedFirstEnd: Int? = nil
             let expectedSecond = [1, 2]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 _ = await iterator.next()
                 try? firstHoldsTurn.send()
@@ -120,7 +126,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 var iterator = sut.makeAsyncIterator()
                 for _ in 1 ... 2 {
@@ -146,13 +152,14 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A waiting reader whose task is cancelled returns nil, and the reader holding the turn keeps every element")
     func waitingReaderCancelled() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
             let expectedFirst = [0, 1, 2]
             let expectedSecond: Int? = nil
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -165,7 +172,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 try? secondAboutToRead.send()
                 return await iterator.next()
@@ -186,12 +193,13 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A reader whose task is already cancelled as another holds the turn returns nil rather than wait")
     func cancelledReaderDoesNotWait() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let expectedFirst = [0, 1]
             let expectedSecond: Int? = nil
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -222,14 +230,15 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A reader that starts between the first reader's reads waits too, and the first keeps every element")
     func readerBetweenReadsWaits() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let firstReadsOn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
             let expectedFirst = [0, 1, 2]
             let expectedSecond = [3]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -244,7 +253,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
                 for await number in sut {
@@ -269,7 +278,8 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A reader holding the turn whose read is cancelled returns nil and takes nothing, and a waiting reader then reads on from that element")
     func holderCancelledHandsOn() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let holder = SerialTaskQueue()
             let firstHoldsTurn = SingleValueSubject<Void>()
@@ -278,7 +288,7 @@ struct AsyncQueueReadTurnTests {
             let secondAboutToRead = SingleValueSubject<Void>()
             let expectedFirst = [0]
             let expectedSecond = [1, 2]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -291,7 +301,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
                 for await number in sut {
@@ -317,7 +327,8 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A reader handed the turn holds it: a third reader waits until the second's iteration ends, then reads on")
     func handedTurnIsHeld() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
@@ -326,7 +337,7 @@ struct AsyncQueueReadTurnTests {
             let expectedFirst = [0, 1]
             let expectedSecond = [2, 3]
             let expectedThird = [4]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -336,7 +347,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
@@ -351,7 +362,7 @@ struct AsyncQueueReadTurnTests {
             let actualFirst = await first.value
             sut.enqueue(2)
             try await secondHoldsTurn.execute()
-            let third = Task {
+            let third = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? thirdAboutToRead.send()
                 for await number in sut {
@@ -375,7 +386,8 @@ struct AsyncQueueReadTurnTests {
 
     @Test("Readers waiting for the turn take it in the order they started to wait")
     func waitersTakeTurnInOrder() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstHoldsTurn = SingleValueSubject<Void>()
             let secondAboutToRead = SingleValueSubject<Void>()
@@ -383,7 +395,7 @@ struct AsyncQueueReadTurnTests {
             let expectedFirst = [0, 1]
             let expectedSecond = [2]
             let expectedThird = [3]
-            let first = Task {
+            let first = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 if let number = await iterator.next() { numbers.append(number) }
@@ -393,7 +405,7 @@ struct AsyncQueueReadTurnTests {
             }
             sut.enqueue(0)
             try await firstHoldsTurn.execute()
-            let second = Task {
+            let second = Task(executorPreference: executor) {
                 var iterator = sut.makeAsyncIterator()
                 var numbers: [Int] = []
                 try? secondAboutToRead.send()
@@ -401,7 +413,7 @@ struct AsyncQueueReadTurnTests {
                 return numbers
             }
             try await secondAboutToRead.execute()
-            let third = Task {
+            let third = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? thirdAboutToRead.send()
                 for await number in sut {
@@ -427,7 +439,8 @@ struct AsyncQueueReadTurnTests {
 
     @Test("A copy of the iterator holding the turn that reads from another task while the original waits returns nil, and the original keeps the turn and every element")
     func copyReadingConcurrentlyKeepsTurn() async throws {
-        try await withMainSerialExecutor {
+        let executor = QueueExecutor.queue(label: "AsyncQueueReadTurnTests")
+        try await withTaskExecutorPreference(executor) {
             let sut = AsyncQueue<Int>(name: "numbers")
             let firstAboutToRead = SingleValueSubject<Void>()
             let firstHasRead = SingleValueSubject<Void>()
@@ -436,10 +449,10 @@ struct AsyncQueueReadTurnTests {
             let expectedCopy: Int? = nil
             let expectedFirst = [1, 2]
             let expectedLater: [Int] = []
-            let original = sut.makeAsyncIterator()
             // The iterator isn't Sendable, so only unchecked code reads copies of it from two
             // tasks, as this test does on purpose.
-            let first = Task {
+            nonisolated(unsafe) let original = sut.makeAsyncIterator()
+            let first = Task(executorPreference: executor) {
                 nonisolated(unsafe) var iterator = original
                 var numbers: [Int] = []
                 try? firstAboutToRead.send()
@@ -453,14 +466,14 @@ struct AsyncQueueReadTurnTests {
                 return numbers
             }
             try await firstAboutToRead.execute()
-            let copy = Task {
+            let copy = Task(executorPreference: executor) {
                 nonisolated(unsafe) var iterator = original
                 return await iterator.next()
             }
             let actualCopy = await copy.value
             sut.enqueue(1)
             try await firstHasRead.execute()
-            let later = Task {
+            let later = Task(executorPreference: executor) {
                 var numbers: [Int] = []
                 try? laterAboutToRead.send()
                 for await number in sut {

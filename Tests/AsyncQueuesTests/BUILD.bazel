@@ -22,7 +22,6 @@ swift_library(
         "@swiftpkg_afluent//:Afluent",
         "@swiftpkg_swift_collections//:DequeModule",
         "@swiftpkg_swift_property_based//:PropertyBased",
-        "@swiftpkg_swift_concurrency_extras//:ConcurrencyExtras",
         "//Tests/TraffluentTestSupport",
     ],
 )

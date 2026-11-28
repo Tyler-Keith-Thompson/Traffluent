@@ -69,9 +69,6 @@ PACKAGES = [
     ("swift-log", "https://github.com/apple/swift-log", "1.17.2"),
     # Tests only: TestClock, to drive a batching strategy's clock.
     ("swift-clocks", "https://github.com/pointfreeco/swift-clocks", "1.1.0"),
-    # Tests only: withMainSerialExecutor, which orders tasks so a cancellation lands where a test
-    # puts it.
-    ("swift-concurrency-extras", "https://github.com/pointfreeco/swift-concurrency-extras", "1.4.3"),
     # SegmentStore's file I/O: FileDescriptor and FilePath, the same code on Apple platforms and
     # Linux. Foundation's FileHandle was rejected: it has no positioned truncate on every
     # platform and its errors are untyped.
@@ -413,12 +410,12 @@ TEST_TARGETS = [
     ("EventDiscoveryDuplicateTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
     ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", TEST_SUPPORT]),
     ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
-    ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
+    ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
-    ("HTTPDestinationsTests", ["HTTPDestinations", "Destinations", "Events", "Persistence", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-http-types/HTTPTypes", "swift-property-based/PropertyBased", "swift-system/SystemPackage", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT, "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras"]),
+    ("HTTPDestinationsTests", ["HTTPDestinations", "Destinations", "Events", "Persistence", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-http-types/HTTPTypes", "swift-property-based/PropertyBased", "swift-system/SystemPackage", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT, "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),
     ("CollectorEncodingTests", ["CollectorEncoding", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-json-schema/JSONSchema", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("TrackersTests", ["Trackers", "AsyncQueues", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swift-concurrency-extras/ConcurrencyExtras", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees", TEST_SUPPORT]),
+    ("TrackersTests", ["Trackers", "AsyncQueues", "Destinations", "Events", "Persistence", "afluent/Afluent", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing", "swiftprng/Generators", "swiftprng/Sampling", "swiftprng/SeedTrees", TEST_SUPPORT]),
     ("SwiftUITrackingTests", ["SwiftUITracking", "UIKitTracking", "EventMacros", "Events", "Persistence", "swift-cbor/CBOR", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("AppKitTrackingTests", ["AppKitTracking", "Events", "Trackers"]),
     ("AutomaticScreenTrackingTests", ["AutomaticScreenTracking", "AutomaticControlTracking", "SwiftUITracking", "UIKitTracking", "AppKitTracking", "Events", "Trackers", "swift-property-based/PropertyBased", TEST_SUPPORT]),
@@ -426,9 +423,9 @@ TEST_TARGETS = [
     ("LifecycleTrackingTests", ["LifecycleTracking", "Events", "Persistence", "swift-cbor/CBOR", "Trackers", "Destinations", "afluent/Afluent", "swift-system/SystemPackage", "swift-property-based/PropertyBased"]),
     ("SessionsTests", ["Sessions", "Events", "Persistence", "swift-cbor/CBOR", "Trackers", "LifecycleTracking", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
     ("StandardContextTests", ["StandardContext", "Events", "Persistence", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swift-system/SystemPackage", TEST_SUPPORT]),
-    ("AsyncQueuesTests", ["AsyncQueues", "afluent/Afluent", "swift-collections/DequeModule", "swift-property-based/PropertyBased", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
+    ("AsyncQueuesTests", ["AsyncQueues", "afluent/Afluent", "swift-collections/DequeModule", "swift-property-based/PropertyBased", TEST_SUPPORT]),
     ("ChecksumsTests", ["Checksums", "swift-property-based/PropertyBased", TEST_SUPPORT]),
-    ("PersistenceTests", ["Persistence", "AsyncQueues", "swift-cbor/CBOR", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-system/SystemPackage", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", "swift-concurrency-extras/ConcurrencyExtras", TEST_SUPPORT]),
+    ("PersistenceTests", ["Persistence", "AsyncQueues", "swift-cbor/CBOR", "GRDBPersistence", "grdb.swift/GRDB", "Checksums", "Events", "Trackers", "Destinations", "afluent/Afluent", "swift-distributed-tracing/Instrumentation", "swift-system/SystemPackage", "swift-property-based/PropertyBased", "swiftcbor/SwiftCBOR", TEST_SUPPORT]),
     ("PropertyJSONTests", ["PropertyJSON", "JSONValues", "EventMacros", "Events", "HTTPDestinations", "Persistence", "TrackingPlans", "Sessions", "StandardContext", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT]),
     ("DestinationTestingTests", ["DestinationTesting", "JSONValues", "HTTPDestinations", "PropertyJSON", "Events", "TrackingPlans", "swift-distributed-tracing/Instrumentation", "swift-http-types/HTTPTypes"]),
     ("PostHogEncodingTests", ["PostHogEncoding", "PropertyJSON", "DestinationTesting", "Destinations", "HTTPDestinations", "swift-http-types/HTTPTypes", "EventMacros", "Events", "Persistence", "TrackingPlans", "Trackers", "Sessions", "StandardContext", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", TEST_SUPPORT]),

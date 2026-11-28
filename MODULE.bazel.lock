@@ -633,7 +633,6 @@
                 "@swiftpkg_swift_distributed_tracing//:pkg_info.json": "swift-distributed-tracing",
                 "@swiftpkg_swift_log//:pkg_info.json": "swift-log",
                 "@swiftpkg_swift_clocks//:pkg_info.json": "swift-clocks",
-                "@swiftpkg_swift_concurrency_extras//:pkg_info.json": "swift-concurrency-extras",
                 "@swiftpkg_swift_system//:pkg_info.json": "swift-system",
                 "@swiftpkg_grdb.swift//:pkg_info.json": "grdb.swift",
                 "@swiftpkg_swift_http_types//:pkg_info.json": "swift-http-types",
@@ -812,27 +811,6 @@
               "commit": "82440fa0a8b1c381a6d1e8e0fc7bbba53ec63204",
               "remote": "https://github.com/pointfreeco/swift-clocks",
               "version": "1.1.1",
-              "env": {},
-              "env_inherit": [],
-              "cached_json_directory": "",
-              "make_files_read_only": false,
-              "replace_scm_with_registry": false,
-              "target_deps": {},
-              "module_aliases": {},
-              "dep_module_aliases": "",
-              "bazel_target_mods": "",
-              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
-              "system_sdk_deps": false,
-              "binary_target_deps": false
-            }
-          },
-          "swiftpkg_swift_concurrency_extras": {
-            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
-            "attributes": {
-              "bazel_package_name": "swiftpkg_swift_concurrency_extras",
-              "commit": "8a4260f7373493435bd21194585c95b72bfdd401",
-              "remote": "https://github.com/pointfreeco/swift-concurrency-extras",
-              "version": "1.4.3",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -1057,6 +1035,27 @@
               "binary_target_deps": false
             }
           },
+          "swiftpkg_swift_concurrency_extras": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_swift_concurrency_extras",
+              "commit": "8a4260f7373493435bd21194585c95b72bfdd401",
+              "remote": "https://github.com/pointfreeco/swift-concurrency-extras",
+              "version": "1.4.3",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "make_files_read_only": false,
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": "",
+              "bazel_target_mods": "",
+              "package_repos": "@@rules_swift_package_manager++swift_deps+swift_deps_package_repos//:package_repos.json",
+              "system_sdk_deps": false,
+              "binary_target_deps": false
+            }
+          },
           "swiftpkg_swift_issue_reporting": {
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
@@ -1088,7 +1087,6 @@
             "swiftpkg_swift_distributed_tracing",
             "swiftpkg_swift_log",
             "swiftpkg_swift_clocks",
-            "swiftpkg_swift_concurrency_extras",
             "swiftpkg_swift_system",
             "swiftpkg_grdb.swift",
             "swiftpkg_swift_http_types",

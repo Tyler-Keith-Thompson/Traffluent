@@ -28,7 +28,6 @@ swift_library(
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
         "@swiftpkg_swift_distributed_tracing//:Tracing",
         "@swiftpkg_swift_distributed_tracing//:InMemoryTracing",
-        "@swiftpkg_swift_concurrency_extras//:ConcurrencyExtras",
         "@swiftpkg_swiftprng//:Generators",
         "@swiftpkg_swiftprng//:Sampling",
         "@swiftpkg_swiftprng//:SeedTrees",

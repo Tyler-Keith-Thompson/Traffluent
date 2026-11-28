@@ -446,8 +446,15 @@ library with none of that can skip this section.
   `expected…` and `actual`. Where the call itself is the rule, `verify(mock)` pins it:
   `.called(.once)`, or `.called(.never)` for one that must not happen.
 - **Deterministic concurrency.** Never sleep to let something happen. Order concurrent work with
-  gates the test opens (a stub that awaits a `SingleValueSubject` the test sends), advance a
-  `TestClock`, and run main-actor tests under `withMainSerialExecutor` (swift-concurrency-extras).
+  gates the test opens (a stub that awaits a `SingleValueSubject` the test sends) and advance a
+  `TestClock`. A test whose result depends on which task gets somewhere first (a reader parked
+  in its wait before the next one starts) runs on a serial queue of its own: Afluent's
+  `QueueExecutor.queue(label:)`, with the body under `withTaskExecutorPreference(executor)` and
+  each reader started with `Task(executorPreference: executor)`. Two conditions keep it ordered:
+  the suite and the reader closures stay nonisolated, because `@MainActor` wins over the
+  preference, and nothing suspends between a reader's gate and its read. Not
+  `withMainSerialExecutor`: it swaps a hook for the whole process, and `swift test` runs every
+  test target in one process.
   A suite that awaits carries `.timeLimit(.minutes(1))`, so a hang fails rather than stalls.
 - **Unhappy paths.** Every failure a seam can produce (a timeout, no network, a malformed
   response, a missing resource) has a test of what the caller sees.
