@@ -351,7 +351,7 @@ struct EventMacroUniqueKeyExpansionTests {
                 """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Event reads an event's name from its name: argument, which the linker checks no other event shares; give the name there, as a string literal, rather than as a member",
+                    message: "@Event reads an event's name from its name: argument, which no other event may share; give the name there, as a string literal, rather than as a member",
                     line: 3, column: 5),
             ],
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
@@ -437,7 +437,7 @@ struct EventMacroUniqueKeyExpansionTests {
                 """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Event reads an event's name from its name: argument, which the linker checks no other event shares; give the name there, as a string literal, rather than as a member",
+                    message: "@Event reads an event's name from its name: argument, which no other event may share; give the name there, as a string literal, rather than as a member",
                     line: 3, column: 5,
                     fixIts: [FixItSpec(message: "Move the name into @Event(name:)")]),
             ],
@@ -467,7 +467,7 @@ struct EventMacroUniqueKeyExpansionTests {
                 """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Event reads an event's name from its name: argument, which the linker checks no other event shares; give the name there, as a string literal, rather than as a member",
+                    message: "@Event reads an event's name from its name: argument, which no other event may share; give the name there, as a string literal, rather than as a member",
                     line: 3, column: 5),
             ],
             macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],

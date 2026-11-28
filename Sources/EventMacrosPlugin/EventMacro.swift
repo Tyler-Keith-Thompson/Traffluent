@@ -97,7 +97,7 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         let argumentDiagnostics = EventArguments.arguments(of: node).diagnostics + nameMemberDiagnostics(of: structure, attribute: node)
         let expands = argumentDiagnostics.isEmpty && propertyDiagnostics.isEmpty && enumDiagnostics(of: held, in: enums).isEmpty
         guard isRecorded && expands else { return [] }
-        return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)
+        return try recordPeers(of: node, providingPeersOf: declaration, in: context)
     }
 
     /// The name of an event whose attribute gives no `name:`: `Event`'s default, the type's name.

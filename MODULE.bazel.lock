@@ -619,7 +619,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//swift/Package.resolved 4765125b3765ceb875f044a1cd64ba739059f81bb0863d635b387d717029459e"
+          "FILE:@@//swift/Package.resolved 345e748a608c580be93b4454d476dff69ce7e2874b82e1bf9c9c8d61fb48769e"
         ],
         "generatedRepoSpecs": {
           "swift_deps_info": {
@@ -745,9 +745,9 @@
             "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
             "attributes": {
               "bazel_package_name": "swiftpkg_linkersets",
-              "commit": "ccf30249acdb7654fa84bb3909443aec5c64918a",
+              "commit": "80e941243756f82582d594b8230e4bc30733174e",
               "remote": "https://github.com/Tyler-Keith-Thompson/LinkerSets",
-              "version": "0.0.33",
+              "version": "0.0.35",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",

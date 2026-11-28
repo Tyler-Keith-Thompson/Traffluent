@@ -43,9 +43,9 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .emptyName:
             "@Event's name must not be empty"
         case .nameMember:
-            "@Event reads an event's name from its name: argument, which the linker checks no other event shares; give the name there, as a string literal, rather than as a member"
+            "@Event reads an event's name from its name: argument, which no other event may share; give the name there, as a string literal, rather than as a member"
         case .discoverableNameMember:
-            "@_DiscoverableEvent names the event after its type, which the linker checks no other event shares; remove this member, or rename the type"
+            "@_DiscoverableEvent names the event after its type, which no other event may share; remove this member, or rename the type"
         case .versionNotAPositiveLiteral:
             "@Event's version must be a positive integer literal"
         case .constraintNotAKeyword:

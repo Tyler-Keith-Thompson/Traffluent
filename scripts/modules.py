@@ -58,10 +58,12 @@ PACKAGES = [
     # depend on LinkerSetsRuntime alone and build no swift-syntax; the modules that write their own
     # events' records (Sessions, SwiftUITracking, AutomaticControlTracking, LifecycleTracking)
     # depend on EventMacros, which re-exports the record type the expansion names, and so build
-    # EventMacrosPlugin, as any module that uses @Event does
-    # (TRAF-126). from: on purpose (the owner, TRAF-126): a LinkerSets release that breaks the
-    # macro-support API is fixed here when it happens, rather than capped.
-    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.33"),
+    # EventMacrosPlugin, as any module that uses @Event does (TRAF-126). The floor is 0.0.34, whose
+    # uniqueKeyInPrivateScope (LS-32) lets an event in a private or fileprivate scope keep its
+    # record without its unique key (TRAF-152). from: on purpose (the owner, TRAF-126): a
+    # LinkerSets release that breaks the macro-support API is fixed here when it happens, rather
+    # than capped.
+    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.34"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),

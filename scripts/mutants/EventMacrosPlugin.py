@@ -15,8 +15,6 @@
 # structure.typeName` or `return nil`. @Event's peer reports nameNotALiteral from the arguments and
 # writes no record before LinkerSets asks for the key, and @_DiscoverableEvent takes no name:, so no
 # expansion reaches it; it stays so the key never stands in for a name it didn't read (TRAF-139).
-# And dropping `&& modifier.detail == nil` from isInPrivateScope: only `private(set)` and its kin
-# carry a detail, and no type or extension takes one; it stays to judge scopes as LinkerSets does.
 #
 # Left out because no mutant run compiles it: IntegerLiteralExprSyntax+RepresentedLiteralValue.swift,
 # swift-syntax 600's backport of representedLiteralValue, sits under
@@ -209,9 +207,9 @@ MUTANTS = [
     # EventMacro: the discovery record, the peer LinkerSets' expansion writes (recordPeers, from
     # EventMacro's own LinkerSetMacro conformance), the __DiscoverableEvent conformance the record
     # holds the struct as, and the mapping of LinkerSets' refusals to the note or to silence.
-    Mutant("recordalwaysdropped", M, "return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", "return []", mode="stmt"),
+    Mutant("recordalwaysdropped", M, "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", "return []", mode="stmt"),
     # The peer's guard: anything but a struct gets no record (the extension reports notAStruct).
-    Mutant("recordbesidenonstruct", M, "return []", "return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", mode="stmt", nth=2),
+    Mutant("recordbesidenonstruct", M, "return []", "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", mode="stmt", nth=2),
     Mutant("recordbesideargumenterrors", M, "argumentDiagnostics.isEmpty", "true"),
     Mutant("recordbesidepropertyerrors", M, "propertyDiagnostics.isEmpty", "true"),
     Mutant("recordbesideenumerrors", M, "enumDiagnostics(of: held, in: enums).isEmpty", "true"),
@@ -254,13 +252,9 @@ MUTANTS = [
     Mutant("fixitnocomma", M, "existing.isEmpty ? nil : .commaToken(trailingTrivia: .space)", "nil"),
     Mutant("fixitnamelast", M, "[name] + existing", "existing + [name]"),
     Mutant("fixitmemberkept", M, "structure.memberBlock.members.filter { $0.decl.id != DeclSyntax(member).id }", "structure.memberBlock.members"),
-    # The peer path @Event and @_DiscoverableEvent share: no key in a private or fileprivate scope.
-    Mutant("privatescopekeyed", L, "!context.isInPrivateScope", "true"),
-    Mutant("everyscopeunkeyed", L, "!context.isInPrivateScope", "false"),
-    Mutant("fileprivatescopekeyed", L, "[.keyword(.private), .keyword(.fileprivate)].contains(modifier.name.tokenKind)", "modifier.name.tokenKind == .keyword(.private)"),
-    Mutant("privatescopeonly", L, "[.keyword(.private), .keyword(.fileprivate)].contains(modifier.name.tokenKind)", "modifier.name.tokenKind == .keyword(.fileprivate)"),
-    Mutant("privatescopeinnermost", L, "lexicalContext", "Array(lexicalContext.prefix(1))"),
-    Mutant("discoverablepeerkeyed", L, "try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", "try recordPeers(of: node, providingPeersOf: declaration, in: context)"),
+    # What @Event and @_DiscoverableEvent share in a private or fileprivate scope: no key, rather
+    # than LinkerSets' refusal. Which scopes count is LinkerSets' rule (uniqueKeyInPrivateScope).
+    Mutant("privatescopekeyrefused", L, ".omitted", "UniqueKeyInPrivateScope.refused"),
     # @_DiscoverableEvent's name and key.
     Mutant("discoverablenameomitted", V, "structure?.nameMember == nil ? [name] : []", "[ExtensionDeclSyntax]()"),
     Mutant("discoverablenamebesidemember", V, "structure?.nameMember == nil ? [name] : []", "[name]"),

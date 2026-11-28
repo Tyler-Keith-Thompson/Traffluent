@@ -160,7 +160,7 @@ struct DiscoverableEventMacroExpansionTests {
                 """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@_DiscoverableEvent names the event after its type, which the linker checks no other event shares; remove this member, or rename the type",
+                    message: "@_DiscoverableEvent names the event after its type, which no other event may share; remove this member, or rename the type",
                     line: 3, column: 5),
             ],
             macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
@@ -195,6 +195,37 @@ struct DiscoverableEventMacroExpansionTests {
                     }
                 }
                 """,
+            macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
+    @Test("A static name the struct declares itself is an error at the member in a private type too")
+    func nameMemberInPrivateType() {
+        assertMacroExpansion(
+            """
+            private enum Lifecycle {
+                @_DiscoverableEvent
+                struct Opened {
+                    static let name = "opened"
+                }
+            }
+            """,
+            expandedSource: """
+                private enum Lifecycle {
+                    struct Opened {
+                        static let name = "opened"
+                    }
+                }
+
+                extension Lifecycle.Opened: Events.__DiscoverableEvent {
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@_DiscoverableEvent names the event after its type, which no other event may share; remove this member, or rename the type",
+                    line: 4, column: 9),
+            ],
             macroSpecs: ["_DiscoverableEvent": MacroSpec(type: DiscoverableEventMacro.self, conformances: ["__DiscoverableEvent"])],
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
