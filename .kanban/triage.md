@@ -246,11 +246,17 @@ bad row in a dashboard.
   entities, PHP's trim), so nothing is silently cut. Batching is 20 requests (Matomo's iOS SDK's)
   and 1,000,000 bytes (under nginx's 1 MiB default; Matomo documents none). `lang` comes from
   `LocaleKey`; no `rand`, `send_image`, `ua` or `res`. Matomo answers 200 to invalid requests and
-  doesn't deduplicate, so the docs say a wrong site ID loses everything silently and a resent
-  record counts twice; older records need a relay of the adopter's with a token, which the library
-  doesn't provide. With `bulk_requests_require_authentication` on, Matomo 6.0 answers 400
-  (dropped, reported) and 5.14 answers 500 (retried until cancelled), so the docs say to leave it
-  off.
+  doesn't deduplicate, so a wrong site ID is reported as `rejectedInBody` with QueuedTracking's
+  queue off and lost silently with it on, and a resent record counts twice; older records need
+  a relay of the adopter's with a token, which the library doesn't provide. With
+  `bulk_requests_require_authentication` on, Matomo 6.0 answers 401 (recorded with
+  QueuedTracking off; dropped, reported) and 5.14 answers 500 (retried until cancelled), so the
+  docs say to leave it off. A 200's `{"tracked":n,"invalid":m}` is read against the request's count (TRAF-123):
+  all invalid is rejected, short of the count or both 0 transient, the rest delivered. Recorded
+  against a local Matomo 6.0.0 on 2026-11-28 (TRAF-148): the counts hold with QueuedTracking
+  off, but with its queue on Matomo answers every bulk request with a GIF before checking it, so
+  the request is delivered and the queue later drops the invalid ones unreported. Rejected:
+  treating the GIF as transient, which would resend and double-count every valid request there.
   Heap (TRAF-109, decided 2026-11-27): `HeapEncoding` posts Heap's server-side bulk track
   request, `{"app_id":…,"events":[…]}`, to `https://heapanalytics.com/api/track`, or
   `https://c.eu.heap-api.com/api/track` for the EU data center (`HeapRegion`, no default), from

@@ -331,7 +331,8 @@ RESOURCES = {
     "SnowplowEncodingTests": [("copy", "Fixtures")],
     # The requests DestinationConformance compares TelemetryDeckBatchEncoder's with, byte for byte.
     "TelemetryDeckEncodingTests": [("copy", "Fixtures")],
-    # The requests DestinationConformance compares MatomoBatchEncoder's with, byte for byte.
+    # The requests DestinationConformance compares MatomoBatchEncoder's with, byte for byte, and
+    # the answers a local Matomo gave to recorded requests (Fixtures/RecordedAnswers).
     "MatomoEncodingTests": [("copy", "Fixtures")],
     # The requests DestinationConformance compares HeapBatchEncoder's with, byte for byte.
     "HeapEncodingTests": [("copy", "Fixtures")],

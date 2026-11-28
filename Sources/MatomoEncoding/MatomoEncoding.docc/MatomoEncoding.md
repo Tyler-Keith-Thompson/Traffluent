@@ -184,14 +184,19 @@ site, the destination drops the request and reports it as
 others, the refused ones are lost with only a notice in the log, as the answer doesn't say which
 they were. When its counts add up to fewer than the request's tracking requests, or are both 0,
 Matomo skipped some without saying so, as after a database lock wait timeout, and the destination
-sends the request again until its deadline; Matomo counts the ones it had tracked twice. Whether
-a server with the QueuedTracking plugin counts queued requests as tracked is unverified: if it
-doesn't, every request there is sent again until its deadline. Check that the first events show
-up in the site's Visits Log.
+sends the request again until its deadline; Matomo counts the ones it had tracked twice.
+
+A server with the QueuedTracking plugin's queue turned on answers every bulk request with an
+image as soon as it queues the request, before it checks any tracking request in it. The
+destination counts the request as delivered. The server stores the valid tracking requests
+later, and it drops the rest, such as those for a site ID of no site, without reporting them. On
+such a server, check the site ID before you ship, and check that the first events show up in the
+site's Visits Log.
+
 A server set to require a token for every bulk request (`bulk_requests_require_authentication`)
-refuses each one: Matomo 6.0 answers 400, which the destination drops and reports, and Matomo 5.14
-answers 500, which the destination retries until the request is cancelled. Leave that setting
-off.
+refuses each one: Matomo 6.0 without the QueuedTracking queue answers 401, which the destination
+drops and reports, and Matomo 5.14 answers 500, which the destination retries until the request
+is cancelled. Leave that setting off.
 
 Matomo doesn't remove duplicates. A record is sent more than once when a request is retried after
 Matomo stored it but the answer was lost, when a delivery sends a cancelled batch again, and when

@@ -730,8 +730,10 @@ destination drops the request and reports it as `HTTPDropReport.rejectedInBody`.
 some and refused others, its answer doesn't say which without a token, so the request counts as
 delivered and the destination logs a notice. When the counts fall short of the request, Matomo
 skipped some, as after a database lock wait timeout, and the destination sends the request again
-until its 23-hour deadline. Check that the first events reach the site's Visits
-Log. It doesn't remove duplicates, so
+until its 23-hour deadline. A server with the QueuedTracking plugin's queue turned on answers
+every bulk request with an image, so the request counts as delivered, and the server later drops
+the invalid tracking requests without reporting them: there, check the site ID before you ship.
+Check that the first events reach the site's Visits Log. It doesn't remove duplicates, so
 a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
 
 ### Heap

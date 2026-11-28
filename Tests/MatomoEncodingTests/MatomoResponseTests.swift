@@ -17,21 +17,19 @@ private struct MatomoResponseTests {
         var cartSize: Int
     }
 
-    // The fixture is the answer matomo-org/matomo 6.0.0's plugins/BulkTracking/Tracker/Response.php
-    // writes, {"status":"success","tracked":n,"invalid":m}, for a bulk request of one tracking
-    // request that threw UnexpectedWebsiteFoundException (a site ID of no site), counted as
-    // invalid by Handler.php.
+    // The fixture is the answer a local Matomo 6.0.0, QueuedTracking off, gave a bulk request of
+    // three tracking requests for a site ID of no site (Fixtures/RecordedAnswers/README.md).
 
-    @Test("A 200 saying Matomo refused the request's one tracking request is sent once, then dropped and reported as rejected in its body")
+    @Test("A 200 saying Matomo refused the request's three tracking requests is sent once, then dropped and reported as rejected in its body")
     func allInvalidReported() async throws {
-        let fixture = try #require(Bundle.module.url(forResource: "bulk-none-tracked", withExtension: "json", subdirectory: "Fixtures"))
+        let fixture = try #require(Bundle.module.url(forResource: "unknown-site", withExtension: "body", subdirectory: "Fixtures/RecordedAnswers/queue-off"))
         let body = try Data(contentsOf: fixture)
         let url = try #require(URL(string: "https://analytics.example.com/stats/"))
         let transport = ScriptedTransport([.response(.ok, body: body), .status(.badRequest)])
         let sut = try HTTPDestination.matomo(url: url, siteID: 1, dimensions: [:], category: "Shop", plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), transport: transport, now: { Date(timeIntervalSince1970: 1_795_442_607) })
-        let batch = [EventRecord(event: CheckoutStarted(cartSize: 1), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
-        let rejected = [EventRecord(event: CheckoutStarted(cartSize: 2), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
-        let expected = HTTPDropReport<MatomoEncodingError>.rejectedInBody(status: .ok, reason: "Matomo refused all 1 of the request's tracking requests as invalid, as it does for a site ID of no site", recordIDs: batch.map(\.id))
+        let batch = (1 ... 3).map { EventRecord(event: CheckoutStarted(cartSize: $0), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil) }
+        let rejected = [EventRecord(event: CheckoutStarted(cartSize: 4), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
+        let expected = HTTPDropReport<MatomoEncodingError>.rejectedInBody(status: .ok, reason: "Matomo refused all 3 of the request's tracking requests as invalid, as it does for a site ID of no site", recordIDs: batch.map(\.id))
         let expectedRequestCount = 2
 
         await sut.receive(batch)

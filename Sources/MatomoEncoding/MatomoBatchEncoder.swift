@@ -90,9 +90,18 @@ public struct MatomoBatchEncoder: BatchEncoder {
     // (a cdt outside the window, say). Handler.php skips, uncounted, a tracking request that hit
     // a database lock wait timeout, and Tracker.php logs none when record_statistics is 0, so a
     // count short of the request's can't tell a passing lock from tracking turned off: it is sent
-    // again, which the request's 23-hour deadline bounds. Not verified: the QueuedTracking plugin
-    // queues tracking requests rather than logging them, and its queued ones may not count as
-    // tracked, which would send every request again until its deadline on such an installation.
+    // again, which the request's 23-hour deadline bounds.
+    // Recorded from a local Matomo 6.0.0 on 2026-11-28 (Tests/MatomoEncodingTests/Fixtures/
+    // RecordedAnswers): the counts are as the source says, a site ID of no site and a cdt two days
+    // old each counted invalid, tracked 0 and invalid 0 with record_statistics 0, and tracked the
+    // rows stored. With QueuedTracking 6.0.5's queue on, every bulk request it queues is answered
+    // with a 1x1 GIF, image/gif, before any tracking request is checked, so the body isn't an
+    // answer and the request is delivered; the queue later drops the invalid ones, unreported.
+    // Rejected: treating the GIF as transient, which would resend every request on such a server
+    // until its deadline and store each valid one again. Not verified: whether the queue checks
+    // cdt against the time a request arrived or the time it is processed. If the latter, a
+    // backlog of more than about an hour drops records 23 to 24 hours old, which the 23-hour
+    // window lets through.
     /// What Matomo's 2xx answer to `request` means: transient when Matomo counted fewer of its
     /// tracking requests than were sent, rejected when it refused every one it counted, and
     /// delivered otherwise.
@@ -107,7 +116,10 @@ public struct MatomoBatchEncoder: BatchEncoder {
     /// ``/HTTPDestinations/ResponseOutcome/rejected(reason:)``, so `HTTPDestination` drops the
     /// request and reports it. When it tracked some and refused others, the answer says how many
     /// but not which, so the request is delivered, with a notice logged. A body that isn't such an
-    /// answer, an empty one or one with a negative count included, is delivered.
+    /// answer, an empty one or one with a negative count included, is delivered. That includes
+    /// the image a server with the QueuedTracking plugin's queue on sends for every bulk request,
+    /// before it checks any tracking request: such a server stores the valid ones later and drops
+    /// the others, a site ID of no site included, without a report.
     ///
     /// - Parameters:
     ///   - response: The 2xx answer.
