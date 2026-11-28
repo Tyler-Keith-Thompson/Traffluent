@@ -68,10 +68,12 @@ jobs:
       - name: Generate the combined documentation
         run: |
           bazel build //:docs
-          cp -RL bazel-bin/docs ./docs
-          chmod -R u+w ./docs
+          # A directory the repository doesn't hold: docs/ holds docs/agents/, and cp into an
+          # existing directory nests the site one level down, under /docs/.
+          cp -RL bazel-bin/docs ./_site
+          chmod -R u+w ./_site
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
+          publish_dir: ./_site
