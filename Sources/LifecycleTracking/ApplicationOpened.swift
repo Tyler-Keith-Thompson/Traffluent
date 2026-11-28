@@ -1,11 +1,12 @@
 public import Events
-internal import LinkerSets
+internal import EventMacros
 
 /// The app was opened: launched, or brought back to the foreground when ``fromBackground``. What
 /// `trackLifecycle` tracks as it starts, and each time the app returns from the background.
 ///
 /// It is `Codable`, so a store keeps it once its `events` list `ApplicationOpened.self`,
 /// and its ``schema`` goes in a tracking plan beside the app's own events.
+@_DiscoverableEvent
 public struct ApplicationOpened: Event, Codable, Hashable {
     /// Whether the app came back from the background, rather than being launched.
     public var fromBackground: Bool
@@ -25,11 +26,4 @@ public struct ApplicationOpened: Event, Codable, Hashable {
     public init(fromBackground: Bool) {
         self.fromBackground = fromBackground
     }
-}
-
-// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
-// the library's own modules don't depend on the macro.
-extension ApplicationOpened: __DiscoverableEvent {
-    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
-    private static let discoveryRecord: any __DiscoverableEvent.Type = ApplicationOpened.self
 }

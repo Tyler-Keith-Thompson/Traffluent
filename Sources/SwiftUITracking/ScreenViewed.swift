@@ -1,5 +1,5 @@
 public import Events
-internal import LinkerSets
+internal import EventMacros
 
 /// Someone viewed the screen named ``screen``: what `trackScreen(_:)` tracks each time its view
 /// appears.
@@ -7,6 +7,7 @@ internal import LinkerSets
 /// It is `Codable`, so a store keeps it once its `events` list `ScreenViewed.self`, and its
 /// ``schema`` goes in a tracking plan beside the app's own events. It builds on every platform, so
 /// a tracking plan or a collector off Apple platforms can name it too.
+@_DiscoverableEvent
 public struct ScreenViewed: Event, Codable, Hashable {
     /// The viewed screen's name.
     public var screen: String
@@ -26,11 +27,4 @@ public struct ScreenViewed: Event, Codable, Hashable {
     public init(screen: String) {
         self.screen = screen
     }
-}
-
-// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
-// the library's own modules don't depend on the macro.
-extension ScreenViewed: __DiscoverableEvent {
-    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
-    private static let discoveryRecord: any __DiscoverableEvent.Type = ScreenViewed.self
 }

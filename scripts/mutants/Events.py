@@ -13,10 +13,11 @@
 # - A pattern check's fallback when the pattern doesn't compile: the factory compiled it already,
 #   so the fallback can't run.
 #
-# Left out because a schema can't switch it: the kind in each of the library's own records,
-# `@LinkerSetEntry(kind: 0x6576_6E74)` in Sessions, SwiftUITracking, AutomaticControlTracking and
-# LifecycleTracking. The macro takes the kind as a literal, so a switch around it doesn't compile.
-# DiscoveredEventTests.everyEvent names each of those events, so a wrong kind there fails it.
+# Left out because a schema can't switch it: `@_DiscoverableEvent` on each of the library's own
+# events in Sessions, SwiftUITracking, AutomaticControlTracking and LifecycleTracking. An
+# attribute isn't an expression or a statement, so no switch goes around it.
+# DiscoveredEventTests.everyEvent names each of those events, so a missing record fails it; the
+# record's kind is EventMacrosPlugin's, planted there (EventMacrosPlugin.py's recordkindwrong).
 
 # EventDiscoveryTests, then EventDiscoveryDuplicateTests, reach discovery (DiscoveredEvent.swift,
 # LinkerSetKind+Events.swift, the library's own records in Sessions and the other modules) and the

@@ -34,6 +34,9 @@ D = "EventMacroDiagnostic.swift"
 C = "DeclaredConstraint.swift"
 X = "ConstrainedMacro.swift"
 R = "RawValueEnum.swift"
+L = "EventLinkerSetMacro.swift"
+V = "DiscoverableEventMacro.swift"
+E = "EventRecordMacro.swift"
 # A schema property's entry, as EventMacro.swift writes it.
 PROPERTY = r'"        Events.EventSchema.Property(name: \"\(property.name)\", typeName: \"\(property.typeName)\", isOptional: \(property.isOptional), \(defaultValue)hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.\(property.identifier)), keywords: \(property.keywords)\(enumeration)),"'
 
@@ -207,8 +210,12 @@ MUTANTS = [
     Mutant("recordbesideundiscoverable", M, "isRecorded && expands", "expands"),
     Mutant("discoverableunconformed", M, 'discovery.isRecorded ? [("__DiscoverableEvent", "Events.__DiscoverableEvent")] : []', "[]"),
     Mutant("undiscoverableconformed", M, 'discovery.isRecorded ? [("__DiscoverableEvent", "Events.__DiscoverableEvent")] : []', '[("__DiscoverableEvent", "Events.__DiscoverableEvent")]'),
-    Mutant("recordkindwrong", M, "0x6576_6E74", "0x6576_6E75"),
-    Mutant("recordholdsany", M, '"Events.__DiscoverableEvent"', "nil", nth=0),
+    # EventLinkerSetMacro: what @Event's and @_DiscoverableEvent's records share. The kind is
+    # caught by the expansion tests, and against Events' LinkerSetKind.events by
+    # //Tests/EventDiscoveryTests, which no mutant run reaches.
+    Mutant("recordkindwrong", L, "0x6576_6E74", "0x6576_6E75"),
+    Mutant("recordholdsany", L, '"Events.__DiscoverableEvent"', "nil"),
+    Mutant("recordmacrolinkersets", L, '"__eventRecord"', '"linkerSetRecord"'),
     Mutant("discoverynoteunsaid", M, "discovery.note.map(context.diagnose)", "", mode="stmt"),
     # Any other refusal (a local struct's) recorded: recordPeers then throws LinkerSets' error.
     Mutant("otherrefusalrecorded", M, "return .refused", "return .recorded", mode="stmt"),
@@ -216,4 +223,9 @@ MUTANTS = [
     Mutant("genericnoteatdeclaration", M, "structure.genericParameterClause.map(Syntax.init) ?? refusal.node", "refusal.node"),
     Mutant("nestedrefusalsilent", M, "return .noted(Diagnostic(node: structure.name, message: EventMacroDiagnostic.nestedInGenericNotDiscovered))", "return .refused", mode="stmt"),
     Mutant("nestednotedasgeneric", M, "EventMacroDiagnostic.nestedInGenericNotDiscovered", "EventMacroDiagnostic.genericNotDiscovered"),
+    # @_DiscoverableEvent: the conformance only where the compiler asks for it, and #__eventRecord,
+    # LinkerSets' record under Traffluent's name.
+    Mutant("handwrittenconformsalways", V, "guard !protocols.isEmpty else { return [] }", "", mode="stmt"),
+    Mutant("handwrittenunconformed", V, 'return [try ExtensionDeclSyntax("extension \\(type.trimmed): Events.__DiscoverableEvent {}")]', "return []", mode="stmt"),
+    Mutant("eventrecordempty", E, "try LinkerSetRecordMacro.expansion(of: node, in: context)", "[]"),
 ]

@@ -10,23 +10,15 @@ import SwiftSyntaxMacros
 /// and its coding: a keyed container of its stored properties, each under its name, an optional's
 /// `nil` left out, read back with each property's default value when its key is missing.
 ///
-/// Beside the struct it places a LinkerSets record of Traffluent's event kind, `"evnt"`, holding the
-/// struct as an `any Events.__DiscoverableEvent.Type`, which `DiscoveredEvent.all` reads, and
-/// conforms the struct to `__DiscoverableEvent`; a generic struct, or one nested in a generic type,
-/// gets a note instead.
+/// Beside the struct it places a LinkerSets record of Traffluent's event kind, `"evnt"`, a call of
+/// `#__eventRecord` (`EventLinkerSetMacro`) holding the struct as an
+/// `any Events.__DiscoverableEvent.Type`, which `DiscoveredEvent.all` reads, and conforms the
+/// struct to `__DiscoverableEvent`; a generic struct, or one nested in a generic type, gets a note
+/// instead.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
-public struct EventMacro: ExtensionMacro, LinkerSetMacro {
-    // The kind Events reads, LinkerSetKind.events: the two must stay the same number, which
-    // DiscoveredEventTests' everyEvent checks.
-    public static func kind(of attribute: AttributeSyntax) -> UInt32 { 0x6576_6E74 }  // "evnt"
-
-    // Qualified with its module, so a type of the same name where @Event is used can't stand in.
-    public static func requiredConformance(of attribute: AttributeSyntax) -> TypeSyntax? {
-        "Events.__DiscoverableEvent"
-    }
-
+public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,

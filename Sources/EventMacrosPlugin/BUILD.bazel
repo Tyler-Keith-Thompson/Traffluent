@@ -2,7 +2,7 @@
 
 load("//tools:swift_rules.bzl", "swift_compiler_plugin")
 
-# The @Event macro's implementation: the extension it adds to an event's struct.
+# The implementations of @Event, the extension and discovery record it adds to an event's struct; @Constrained; @_DiscoverableEvent, the record and conformance of an event written by hand; and #__eventRecord, the record both write.
 swift_compiler_plugin(
     name = "EventMacrosPlugin",
     srcs = [":srcs"],

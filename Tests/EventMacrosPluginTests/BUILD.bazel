@@ -44,7 +44,9 @@ swift_library(
     visibility = ["//:__pkg__"],
     deps = [
         ":EventMacrosPluginLibrary",
+        "@swiftpkg_linkersets//:LinkerSetsMacroSupport",
         "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxBuilder",
         "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
         "@swiftpkg_swift_syntax//:SwiftSyntaxMacroExpansion",
         "@swiftpkg_swift_syntax//:SwiftSyntaxMacrosGenericTestSupport",

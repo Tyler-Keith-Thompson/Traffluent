@@ -13,7 +13,7 @@ swift_library(
     module_name = "SwiftUITracking",
     deps = [
         "//Sources/Events",
-        "@swiftpkg_linkersets//:LinkerSets",
+        "//Sources/EventMacros",
         "//Sources/Trackers",
         "//Sources/UIKitTracking",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
@@ -38,6 +38,7 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/EventMacros:EventMacrosDocumentation",
         "//Sources/Trackers:TrackersDocumentation",
         "//Sources/UIKitTracking:UIKitTrackingDocumentation",
     ],

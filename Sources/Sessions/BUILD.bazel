@@ -13,7 +13,7 @@ swift_library(
     module_name = "Sessions",
     deps = [
         "//Sources/Events",
-        "@swiftpkg_linkersets//:LinkerSets",
+        "//Sources/EventMacros",
         "//Sources/Trackers",
         "@swiftpkg_swift_distributed_tracing//:Instrumentation",
     ],
@@ -37,6 +37,7 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/EventMacros:EventMacrosDocumentation",
         "//Sources/Trackers:TrackersDocumentation",
     ],
     tags = ["manual"],

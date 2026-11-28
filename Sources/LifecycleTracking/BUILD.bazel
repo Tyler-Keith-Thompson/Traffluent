@@ -13,7 +13,7 @@ swift_library(
     module_name = "LifecycleTracking",
     deps = [
         "//Sources/Events",
-        "@swiftpkg_linkersets//:LinkerSets",
+        "//Sources/EventMacros",
         "//Sources/Persistence",
         "//Sources/Trackers",
         "@swiftpkg_afluent//:Afluent",
@@ -40,6 +40,7 @@ docc_archive(
     catalog = glob(["*.docc/**"], allow_empty = True),
     deps = [
         "//Sources/Events:EventsDocumentation",
+        "//Sources/EventMacros:EventMacrosDocumentation",
         "//Sources/Persistence:PersistenceDocumentation",
         "//Sources/Trackers:TrackersDocumentation",
     ],

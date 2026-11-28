@@ -8,8 +8,8 @@ import Sessions
 import SwiftUITracking
 import Testing
 
-// This target's binary holds the events of its three files, DiscoveryFixtures' two and the
-// library's own of the modules it links, and no two of one name.
+// This target's binary holds the events of its three files, DiscoveryFixtures' three (one nested
+// in a class) and the library's own of the modules it links, and no two of one name.
 
 @Event(name: "discovery_signed_up")
 struct DiscoverySignedUp {
@@ -81,6 +81,7 @@ struct DiscoveredEventTests {
             "discovery_plan_viewed",
             "discovery_screen_shown",
             "discovery_signed_up",
+            "fixture_cart_emptied",
             "fixture_checkout_started",
             "fixture_opened",
         ]
@@ -106,6 +107,9 @@ struct DiscoveredEventTests {
             DiscoveryPlanViewed.schema,
             DiscoveryScreens.Shown.schema,
             DiscoverySignedUp.schema,
+            EventSchema(name: "fixture_cart_emptied", version: 1, consentCategory: .analytics, properties: [
+                EventSchema.Property(name: "itemCount", typeName: "Int", isOptional: false),
+            ]),
             EventSchema(name: "fixture_checkout_started", version: 1, consentCategory: .analytics, properties: [
                 EventSchema.Property(name: "cartSize", typeName: "Int", isOptional: false),
             ]),

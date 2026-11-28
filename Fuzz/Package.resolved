@@ -1,5 +1,5 @@
 {
-  "originHash" : "37993d6215220d37f3ba82e9b6c8806b9f8214955f654e0eb02af65c948ad026",
+  "originHash" : "3a0f2499bac96dfc50ceb04f54da68e4e6e04ffd3f543089cab930dfc930bd0f",
   "pins" : [
     {
       "identity" : "afluent",
@@ -20,6 +20,24 @@
       }
     },
     {
+      "identity" : "linkersets",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Tyler-Keith-Thompson/LinkerSets",
+      "state" : {
+        "revision" : "0474da375798c51facec7af54d90bf4fff22c4c9",
+        "version" : "0.0.31"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "97fd57437fc94cfa6b62f2b8f84c50f433534e17",
+        "version" : "1.7.5"
+      }
+    },
+    {
       "identity" : "swift-cbor",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/brokenhandsio/swift-cbor",
@@ -35,6 +53,15 @@
       "state" : {
         "revision" : "88754449ab766a739610b660e117762115fabc9c",
         "version" : "1.7.6"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto",
+      "state" : {
+        "revision" : "b0b1963823fe828065ef49c09c8c9489f43cf7be",
+        "version" : "5.2.0"
       }
     },
     {

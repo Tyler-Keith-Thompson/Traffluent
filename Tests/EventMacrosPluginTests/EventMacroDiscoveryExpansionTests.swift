@@ -1,10 +1,10 @@
 // The record @Event places in the binary for DiscoveredEvent.all, pinned. Each test is
 // self-contained.
 //
-// A test whose expected source holds a discovery record sits under
-// `#if canImport(SwiftSyntax602)`: swift-syntax 600's and 601's assertMacroExpansion drop the
-// `#if objectFormat(...)` lines of a peer's expansion, so the record can't be pinned there. The
-// others run on every swift-syntax the plugin accepts.
+// A discovery record is pinned as the one #__eventRecord call the expansion writes, which
+// assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
+// behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
+// same on every swift-syntax the plugin accepts.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -15,7 +15,6 @@ import Testing
 
 @Suite("@Event discovery record expansions")
 struct EventMacroDiscoveryExpansionTests {
-    #if canImport(SwiftSyntax602)
     @Test("A struct gets a LinkerSets record of the events kind beside it, holding it as a __DiscoverableEvent, which the extension conforms it to")
     func record() {
         assertMacroExpansion(
@@ -28,27 +27,9 @@ struct EventMacroDiscoveryExpansionTests {
                 struct SignedUp {
                 }
 
-                #if objectFormat(MachO)
-                @section("__DATA_CONST,__linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(SignedUp.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(ELF) && _pointerBitWidth(_64)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 32, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(SignedUp.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(ELF) && _pointerBitWidth(_32)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 20, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(SignedUp.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(Wasm)
-                @section("linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(SignedUp.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(COFF)
-                @section(".lnkset$M") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(SignedUp.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #endif
+                private enum __macro_local_15linkerSetRecordfMu_ {
+                    #__eventRecord(kind: 0x65766E74, storing: SignedUp.self as any (Events.__DiscoverableEvent).Type)
+                }
 
                 nonisolated extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     static var name: String {
@@ -75,9 +56,7 @@ struct EventMacroDiscoveryExpansionTests {
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
-    #endif
 
-    #if canImport(SwiftSyntax602)
     @Test("A struct that already conforms to Event still gets its record and the __DiscoverableEvent conformance")
     func alreadyAnEvent() {
         assertMacroExpansion(
@@ -90,27 +69,9 @@ struct EventMacroDiscoveryExpansionTests {
                 struct Opened: Event, Codable {
                 }
 
-                #if objectFormat(MachO)
-                @section("__DATA_CONST,__linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Opened.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(ELF) && _pointerBitWidth(_64)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 32, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Opened.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(ELF) && _pointerBitWidth(_32)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 20, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Opened.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(Wasm)
-                @section("linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Opened.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(COFF)
-                @section(".lnkset$M") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Opened.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #endif
+                private enum __macro_local_15linkerSetRecordfMu_ {
+                    #__eventRecord(kind: 0x65766E74, storing: Opened.self as any (Events.__DiscoverableEvent).Type)
+                }
 
                 nonisolated extension Opened: Events.__DiscoverableEvent {
                     static var schema: Events.EventSchema {
@@ -133,7 +94,46 @@ struct EventMacroDiscoveryExpansionTests {
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
-    #endif
+
+    @Test("A struct nested in a final class gets its record as a member of the class, naming it through the class, as a class's static members can hold one")
+    func nestedInClass() {
+        assertMacroExpansion(
+            """
+            final class Outer {
+                @Event
+                struct Inner {
+                }
+            }
+            """,
+            expandedSource: """
+                final class Outer {
+                    struct Inner {
+                    }
+
+                    #__eventRecord(kind: 0x65766E74, storing: Outer.Inner.self as any (Events.__DiscoverableEvent).Type)
+                }
+
+                nonisolated extension Outer.Inner: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
+                    }
+
+                    private enum CodingKeys: Swift.CodingKey {
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
+                    }
+                }
+                """,
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
 
     @Test("A generic struct gets no record or __DiscoverableEvent conformance, as a record holds one concrete type, and a note at its generic clause saying to list it")
     func generic() {

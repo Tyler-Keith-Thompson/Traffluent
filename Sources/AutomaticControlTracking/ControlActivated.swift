@@ -1,5 +1,5 @@
 public import Events
-internal import LinkerSets
+internal import EventMacros
 
 /// Someone activated the control named ``control``, such as by tapping a button or flipping a
 /// switch: what `trackControlsAutomatically(_:)` tracks for each activation it discovers.
@@ -7,6 +7,7 @@ internal import LinkerSets
 /// It is `Codable`, so a store keeps it once its `events` list `ControlActivated.self`, and
 /// its ``schema`` goes in a tracking plan beside the app's own events. It builds on every
 /// platform, so a tracking plan or a collector off Apple platforms can name it too.
+@_DiscoverableEvent
 public struct ControlActivated: Event, Codable, Hashable {
     /// The activated control's name: its accessibility identifier, unless the predicate given to
     /// `trackControlsAutomatically(_:)` named it otherwise.
@@ -37,11 +38,4 @@ public struct ControlActivated: Event, Codable, Hashable {
         self.control = control
         self.kind = kind
     }
-}
-
-// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
-// the library's own modules don't depend on the macro.
-extension ControlActivated: __DiscoverableEvent {
-    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
-    private static let discoveryRecord: any __DiscoverableEvent.Type = ControlActivated.self
 }

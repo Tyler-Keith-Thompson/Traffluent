@@ -46,22 +46,22 @@ PACKAGES = [
     # A tracker's records go through a PassthroughSubject, are batched by `batch(strategy:)`, and
     # are delivered by a DeferredTask.
     ("afluent", "https://github.com/Tyler-Keith-Thompson/Afluent", "1.1.49"),
-    # DiscoveredEvent.all: @Event's expansion and the library's own events place a record of
-    # Traffluent's kind in the binary (LinkerSetMacro, which EventMacro conforms to, in the
-    # macro's plugin; @LinkerSetEntry in the library's modules), and LinkerSet reads every loaded
-    # image's records, on Mach-O through dyld and on ELF through dl_iterate_phdr, a shared or
-    # dlopen'ed library's included. From 0.0.23: 0.0.20 added recordPeers(of:providingPeersOf:in:)
-    # and refusal(of:providingPeersOf:in:), which the macro calls (LS-20), and 0.0.23 split out
-    # LinkerSetsRuntime, whose record type the expansion names (LS-19). Capped below 0.0.24
-    # (TRAF-131): from 0.0.24 the expansion is a #linkerSetRecord call, a macro of the LinkerSets
-    # product, which Events' dependents don't see, so every @Event fails to compile on a fresh
-    # SwiftPM resolve. TRAF-128 adopts it and lifts the cap. Events and EventMacros, which only
-    # read records or name their type, depend on LinkerSetsRuntime, which builds no macro, so a
-    # module that depends on Events alone builds no swift-syntax (TRAF-126). The LinkerSets
-    # product builds its @LinkerSetEntry plugin, and so swift-syntax, for the modules that write
-    # their own events' records with it: Sessions, SwiftUITracking, AutomaticControlTracking and
-    # LifecycleTracking.
-    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "range:0.0.23..<0.0.24"),
+    # DiscoveredEvent.all: @Event's expansion, and @_DiscoverableEvent beside the library's own
+    # hand-written events, place a record of Traffluent's kind in the binary (LinkerSetMacro, which
+    # both macros conform to in EventMacrosPlugin, through LinkerSetsMacroSupport), and LinkerSet
+    # reads every loaded image's records, on Mach-O through dyld and on ELF through dl_iterate_phdr,
+    # a shared or dlopen'ed library's included. From 0.0.29: 0.0.23 split out LinkerSetsRuntime,
+    # which builds no macro (LS-19); 0.0.24 made a record one #linkerSetRecord-style call, which
+    # LinkerSetsMacroSupport expands per object format (LS-24); and 0.0.29 added recordMacroName
+    # (LS-26), so the call is EventMacros' own #__eventRecord and no module needs the LinkerSets
+    # product, whose @LinkerSetEntry plugin is a second macro plugin. Events, Trackers and the rest
+    # depend on LinkerSetsRuntime alone and build no swift-syntax; the modules that write their own
+    # events' records (Sessions, SwiftUITracking, AutomaticControlTracking, LifecycleTracking)
+    # depend on EventMacros, which re-exports the record type the expansion names, and so build
+    # EventMacrosPlugin, as any module that uses @Event does
+    # (TRAF-126). from: on purpose (the owner, TRAF-126): a LinkerSets release that breaks the
+    # macro-support API is fixed here when it happens, rather than capped.
+    ("linkersets", "https://github.com/Tyler-Keith-Thompson/LinkerSets", "0.0.31"),
     # ServiceContext (InstrumentationContext): the context every event record carries, read
     # through typed keys; it holds the active span's context, which joins events to traces.
     ("swift-distributed-tracing", "https://github.com/apple/swift-distributed-tracing", "1.7.4"),
@@ -95,11 +95,10 @@ PACKAGES = [
     # `#if canImport(SwiftSyntax601)` in Sources/EventMacrosPlugin. The upper bound is one past the
     # newest release, 604. Tested (TRAF-120) with Swift 6.4 in a SwiftPM package of the plugin and
     # EventMacrosPluginTests pinned exactly to 600.0.0, 600.0.1, 601.0.1, 602.0.0, 603.0.0 and
-    # 604.0.0; this repository resolves the newest. The expansion tests whose expected source
-    # holds a discovery record run from 602 (`#if canImport(SwiftSyntax602)`), as 600's and 601's
-    # assertMacroExpansion drop a peer's `#if objectFormat(...)` lines; the rest, the version
-    # literal's radix (on a generic struct, which gets no record) and the diagnostics included,
-    # run on every release from 600 (TRAF-119, at 600.0.0 and 604.0.0). Mockable 0.6.5 caps swift-syntax below 604
+    # 604.0.0; this repository resolves the newest. Every expansion test runs on every release
+    # from 600: a discovery record is pinned as its one #__eventRecord call, which holds no
+    # `#if objectFormat(...)` lines for 600's and 601's assertMacroExpansion to drop (TRAF-128,
+    # 51 tests at 600.0.0 and 604.0.0 with LinkerSets 0.0.31). Mockable 0.6.5 caps swift-syntax below 604
     # (509..<604), so an adopter's package using both resolves within 600..<604. Mockable is no
     # dependency here (its row below is commented out), so it never narrows this resolution.
     ("swift-syntax", "https://github.com/swiftlang/swift-syntax", "range:600.0.0..<605.0.0"),
@@ -202,13 +201,13 @@ MODULES = [
     # Imports Testing, so it is a product of its own that a vendor module adds to its test target alone.
     ("DestinationTesting", "Pipeline", "DestinationConformance: the checks every vendor destination passes, run from its module's tests through a ScriptedTransport: its requests match recorded fixtures byte for byte, Sensitive values are sent only with the adopter's opt-in, it sends what a tracker's consent and accepting(_:) hand it and nothing else, a record over the vendor's limit is skipped and reported, transient failures are retried while rejections are dropped and reported, and no trace context leaves in the header fields; each check records a Swift Testing issue.", ["AsyncQueues", "Events", "Destinations", "HTTPDestinations", "PropertyJSON", "Trackers", "TrackingPlans", "afluent/Afluent", "swift-distributed-tracing/InMemoryTracing", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-http-types/HTTPTypes"]),
     # Instrumentation
-    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; the views are Apple platforms only, while ScreenViewed and ScreenKey build everywhere.", ["Events", "linkersets/LinkerSets", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
+    ("SwiftUITracking", "Instrumentation", "EnvironmentValues.tracker, set with tracker(_:) and bridged to UIKit's TrackerTrait, and the modifiers trackOnAppear(_:), trackOnTap(_:), trackChange(of:_:) and trackScreen(_:), which tracks ScreenViewed and stamps the events tracked inside the screen with its ScreenKey; the views are Apple platforms only, while ScreenViewed and ScreenKey build everywhere.", ["Events", "EventMacros", "Trackers", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
     ("UIKitTracking", "Instrumentation", "TrackerTrait: the tracker in a UIKit trait collection, set with traitOverrides.tracker on a window scene, view controller or view and read as traitCollection.tracker; and UIControl.track(_:for:), which tracks an event through the tracker its control's traits hold when the action fires; iOS, iPadOS, tvOS, visionOS and Mac Catalyst only, empty elsewhere.", ["Events", "Trackers"]),
     ("AppKitTracking", "Instrumentation", "TrackerProviding: a responder, window delegate or application delegate that holds a tracker; NSView.tracker, the tracker of the nearest one a view's actions reach; and NSControl.track(_:), which tracks an event through it each time the control sends its action, beside the action; macOS only, empty elsewhere.", ["Events", "Trackers"]),
     ("AutomaticScreenTracking", "Instrumentation", "trackScreensAutomatically(kinds:_:), on a UIWindowScene or an NSWindow: opt-in screen views, which track ScreenViewed through each screen's own tracker as its view controller appears, named after the controller or the SwiftUI view it hosts, renamed or skipped by a predicate given the DiscoveredScreen, and left to a manual trackScreen(_:) where the screen has one; without swizzling; Apple platforms but watchOS, empty elsewhere.", ["Events", "Trackers", "SwiftUITracking", "UIKitTracking", "AppKitTracking"]),
-    ("AutomaticControlTracking", "Instrumentation", "trackControlsAutomatically(_:), on a UIWindowScene: opt-in control activations, which track ControlActivated through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a predicate given the DiscoveredControl, with its screen as ScreenKey; SwiftUI's controls left to trackOnTap(_:); without swizzling; ControlActivated on every platform, the discovery iOS, iPadOS, tvOS, visionOS and Mac Catalyst only.", ["Events", "linkersets/LinkerSets", "Trackers", "SwiftUITracking", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
-    ("LifecycleTracking", "Instrumentation", "trackLifecycle(kinds:version:versionStore:notificationCenter:), on a Tracker: opt-in application lifecycle events, ApplicationInstalled, ApplicationUpdated, ApplicationOpened, ApplicationBackgrounded and ApplicationTerminated, from UIApplication's, WKApplication's or NSApplication's notifications, installs and updates decided from the version a VersionStore keeps; on backgrounding, the tracker's records made durable and LifecycleBatchStrategy's batches flushed; each kind can be turned off; on Linux, opened as it starts and terminated as it finishes.", ["Events", "linkersets/LinkerSets", "Persistence", "Trackers", "afluent/Afluent", "swift-system/SystemPackage", "swift-log/Logging"]),
-    ("Sessions", "Instrumentation", "Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a version 7 UUID (its start time, then random bits) the enricher keeps in memory only and a store keeps only beside each of its records, deleted with the record's bytes, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays; and Sampler.sessions(where:rate:), which keeps or drops whole sessions.", ["Events", "linkersets/LinkerSets", "Trackers", "swift-distributed-tracing/Instrumentation"]),
+    ("AutomaticControlTracking", "Instrumentation", "trackControlsAutomatically(_:), on a UIWindowScene: opt-in control activations, which track ControlActivated through each control's own tracker when a touch activates a UIKit control, named after its accessibility identifier and never its text, renamed or skipped by a predicate given the DiscoveredControl, with its screen as ScreenKey; SwiftUI's controls left to trackOnTap(_:); without swizzling; ControlActivated on every platform, the discovery iOS, iPadOS, tvOS, visionOS and Mac Catalyst only.", ["Events", "EventMacros", "Trackers", "SwiftUITracking", "UIKitTracking", "swift-distributed-tracing/Instrumentation"]),
+    ("LifecycleTracking", "Instrumentation", "trackLifecycle(kinds:version:versionStore:notificationCenter:), on a Tracker: opt-in application lifecycle events, ApplicationInstalled, ApplicationUpdated, ApplicationOpened, ApplicationBackgrounded and ApplicationTerminated, from UIApplication's, WKApplication's or NSApplication's notifications, installs and updates decided from the version a VersionStore keeps; on backgrounding, the tracker's records made durable and LifecycleBatchStrategy's batches flushed; each kind can be turned off; on Linux, opened as it starts and terminated as it finishes.", ["Events", "EventMacros", "Persistence", "Trackers", "afluent/Afluent", "swift-system/SystemPackage", "swift-log/Logging"]),
+    ("Sessions", "Instrumentation", "Enricher.sessions(timeout:kinds:): opt-in sessions, an enricher that stamps every record's context with its SessionKey, a version 7 UUID (its start time, then random bits) the enricher keeps in memory only and a store keeps only beside each of its records, deleted with the record's bytes, and starts a new session when a record comes after the timeout's inactivity, measured between records' timestamps, tracking SessionEnded(duration:) and SessionStarted before it; each kind can be turned off while the key stays; and Sampler.sessions(where:rate:), which keeps or drops whole sessions.", ["Events", "EventMacros", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     ("StandardContext", "Instrumentation", "Opt-in enrichers of the context every app sends: Enricher.application(), .device(), .operatingSystem(), .locale(), .network() and .vendorIdentifier(), each setting its typed key (ApplicationKey, DeviceKey, OperatingSystemKey, LocaleKey, NetworkKey, VendorIdentifierKey); static values read once, as the enricher is made; the network's connection from an NWPathMonitor the enricher owns; the OS's identifierForVendor, never stored or generated; device, network and vendor identifier absent off Apple platforms.", ["Events", "Trackers", "swift-distributed-tracing/Instrumentation"]),
     # Persistence
     ("Checksums", "Persistence", "CRC32: the reflected CRC-32 checksum (polynomial 0xEDB88320) of raw bytes, sliced by 8.", []),
@@ -334,7 +333,7 @@ RESOURCES = {
 # test's plugin dependency for the host and loads it as a plugin, not as a module. (In the
 # plugin's own package that library's swiftmodule would collide with the plugin's.)
 MACROS = [
-    ("EventMacrosPlugin", "Schema", "The @Event macro's implementation: the extension it adds to an event's struct.", [
+    ("EventMacrosPlugin", "Schema", "The implementations of @Event, the extension and discovery record it adds to an event's struct; @Constrained; @_DiscoverableEvent, the record and conformance of an event written by hand; and #__eventRecord, the record both write.", [
         "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros",
         "swift-syntax/SwiftCompilerPlugin", "swift-syntax/SwiftDiagnostics", "linkersets/LinkerSetsMacroSupport",
     ]),
@@ -409,7 +408,7 @@ TEST_TARGETS = [
     # event refuses them, which no other target's binary can show.
     ("EventDiscoveryDuplicateTests", ["Events", "EventMacros", "Persistence", "GRDBPersistence", "grdb.swift/GRDB", "TrackingPlans", "swift-system/SystemPackage"]),
     ("TrackerTestingTests", ["TrackerTesting", "Trackers", "Events", "swift-property-based/PropertyBased", "swift-distributed-tracing/Instrumentation", TEST_SUPPORT]),
-    ("EventMacrosPluginTests", ["EventMacrosPlugin", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
+    ("EventMacrosPluginTests", ["EventMacrosPlugin", "linkersets/LinkerSetsMacroSupport", "swift-syntax/SwiftSyntax", "swift-syntax/SwiftSyntaxBuilder", "swift-syntax/SwiftSyntaxMacros", "swift-syntax/SwiftSyntaxMacroExpansion", "swift-syntax/SwiftSyntaxMacrosGenericTestSupport"]),
     ("DestinationsTests", ["Destinations", "Events", "Trackers", "afluent/Afluent", "swift-clocks/Clocks", "swift-distributed-tracing/Instrumentation", "swift-property-based/PropertyBased", "swiftprng/Generators", "swiftprng/Sampling", TEST_SUPPORT]),
     ("LoggingDestinationsTests", ["LoggingDestinations", "Destinations", "Events", "Trackers", "swift-log/Logging", "swift-log/InMemoryLogging", "swift-distributed-tracing/Instrumentation"]),
     ("TracingDestinationsTests", ["TracingDestinations", "Destinations", "Events", "Trackers", "swift-distributed-tracing/Instrumentation", "swift-distributed-tracing/Tracing", "swift-distributed-tracing/InMemoryTracing"]),

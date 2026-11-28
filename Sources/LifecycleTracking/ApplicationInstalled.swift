@@ -1,11 +1,12 @@
 public import Events
-internal import LinkerSets
+internal import EventMacros
 
 /// The app ran for the first time on this device, at ``version``: what `trackLifecycle` tracks as
 /// it starts when its version store holds no version yet.
 ///
 /// It is `Codable`, so a store keeps it once its `events` list `ApplicationInstalled.self`,
 /// and its ``schema`` goes in a tracking plan beside the app's own events.
+@_DiscoverableEvent
 public struct ApplicationInstalled: Event, Codable, Hashable {
     /// The version installed.
     public var version: String
@@ -25,11 +26,4 @@ public struct ApplicationInstalled: Event, Codable, Hashable {
     public init(version: String) {
         self.version = version
     }
-}
-
-// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
-// the library's own modules don't depend on the macro.
-extension ApplicationInstalled: __DiscoverableEvent {
-    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
-    private static let discoveryRecord: any __DiscoverableEvent.Type = ApplicationInstalled.self
 }

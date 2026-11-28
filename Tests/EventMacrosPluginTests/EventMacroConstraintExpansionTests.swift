@@ -1,10 +1,10 @@
 // The expansions @Constrained leads @Event to, pinned, and the errors either reports. Each test is
 // self-contained.
 //
-// A test whose expected source holds a discovery record sits under
-// `#if canImport(SwiftSyntax602)`: swift-syntax 600's and 601's assertMacroExpansion drop the
-// `#if objectFormat(...)` lines of a peer's expansion, so the record can't be pinned there. The
-// others run on every swift-syntax the plugin accepts.
+// A discovery record is pinned as the one #__eventRecord call the expansion writes, which
+// assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
+// behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
+// same on every swift-syntax the plugin accepts.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -15,7 +15,6 @@ import Testing
 
 @Suite("@Constrained expansions")
 struct EventMacroConstraintExpansionTests {
-    #if canImport(SwiftSyntax602)
     @Test("Declared constraints join the schema's keywords, typed by the property, and are checked in order, an optional's when it holds a value")
     func structure() {
         assertMacroExpansion(
@@ -37,27 +36,9 @@ struct EventMacroConstraintExpansionTests {
                     public var page: Int
                 }
 
-                #if objectFormat(MachO)
-                @section("__DATA_CONST,__linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(ELF) && _pointerBitWidth(_64)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 32, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(ELF) && _pointerBitWidth(_32)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 20, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(Wasm)
-                @section("linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(COFF)
-                @section(".lnkset$M") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #endif
+                private enum __macro_local_15linkerSetRecordfMu_ {
+                    #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
+                }
 
                 nonisolated extension Searched: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
                     public static var schema: Events.EventSchema {
@@ -149,7 +130,6 @@ struct EventMacroConstraintExpansionTests {
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
-    #endif
 
     @Test("@Constrained adds no declarations of its own")
     func peerAddsNothing() {
@@ -286,7 +266,6 @@ struct EventMacroConstraintExpansionTests {
         )
     }
 
-    #if canImport(SwiftSyntax602)
     @Test("Equal bounds, and a bound with no partner, are satisfiable")
     func satisfiableBounds() {
         assertMacroExpansion(
@@ -303,27 +282,9 @@ struct EventMacroConstraintExpansionTests {
                     var query: String
                 }
 
-                #if objectFormat(MachO)
-                @section("__DATA_CONST,__linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(ELF) && _pointerBitWidth(_64)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 32, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(ELF) && _pointerBitWidth(_32)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 20, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(Wasm)
-                @section("linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(COFF)
-                @section(".lnkset$M") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #endif
+                private enum __macro_local_15linkerSetRecordfMu_ {
+                    #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
+                }
 
                 nonisolated extension Searched {
                     static var schema: Events.EventSchema {
@@ -394,7 +355,6 @@ struct EventMacroConstraintExpansionTests {
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
-    #endif
 
     @Test("A pattern's example must satisfy the property's other string keywords too")
     func exampleAgainstLengths() {
@@ -421,7 +381,6 @@ struct EventMacroConstraintExpansionTests {
         )
     }
 
-    #if canImport(SwiftSyntax602)
     @Test("A qualified @EventMacros.Constrained is read too, and a raw string pattern keeps its backslashes")
     func qualifiedAndRaw() {
         assertMacroExpansion(
@@ -438,27 +397,9 @@ struct EventMacroConstraintExpansionTests {
                     var query: String
                 }
 
-                #if objectFormat(MachO)
-                @section("__DATA_CONST,__linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(ELF) && _pointerBitWidth(_64)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 32, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(ELF) && _pointerBitWidth(_32)
-                @section(".note.linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Note = (11, 20, 1, (76, 105, 110, 107, 101, 114, 83, 101, 116, 115, 0, 0), (0x65766E74, 0, { outValue, type, _, _ in
-                            LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                        }, 0, 0))
-                #elseif objectFormat(Wasm)
-                @section("linker_sets") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #elseif objectFormat(COFF)
-                @section(".lnkset$M") @used private let __macro_local_15linkerSetRecordfMu_: LinkerSetsRuntime.LinkerSetRecord.Literal = (0x65766E74, 0, { outValue, type, _, _ in
-                        LinkerSetsRuntime.LinkerSetRecord.__store(Searched.self as any (Events.__DiscoverableEvent).Type, into: outValue, ifAsked: type)
-                    }, 0, 0)
-                #endif
+                private enum __macro_local_15linkerSetRecordfMu_ {
+                    #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
+                }
 
                 nonisolated extension Searched {
                     static var schema: Events.EventSchema {
@@ -505,7 +446,6 @@ struct EventMacroConstraintExpansionTests {
             failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
         )
     }
-    #endif
 }
 
 extension String {

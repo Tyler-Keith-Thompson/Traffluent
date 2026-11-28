@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Tyler-Keith-Thompson/LinkerSets",
       "state" : {
-        "revision" : "b1b31aa7c2391121490a5b31d5d2f3c4f32774cb",
-        "version" : "0.0.23"
+        "revision" : "0474da375798c51facec7af54d90bf4fff22c4c9",
+        "version" : "0.0.31"
       }
     },
     {

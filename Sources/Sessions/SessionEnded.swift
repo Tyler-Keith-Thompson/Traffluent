@@ -1,5 +1,5 @@
 public import Events
-internal import LinkerSets
+internal import EventMacros
 
 /// A session ended, having lasted ``duration``: what `Enricher.sessions(timeout:kinds:)` tracks
 /// when an event comes after the timeout's inactivity, before the next session's
@@ -10,6 +10,7 @@ internal import LinkerSets
 ///
 /// It is `Codable`, so a store keeps it once its `events` list `SessionEnded.self`, and its
 /// ``schema`` goes in a tracking plan beside the app's own events.
+@_DiscoverableEvent
 public struct SessionEnded: Event, Codable, Hashable {
     /// The time from the session's first event to its last; zero for a session of one event.
     public var duration: Duration
@@ -59,11 +60,4 @@ public struct SessionEnded: Event, Codable, Hashable {
         case seconds
         case attoseconds
     }
-}
-
-// The record DiscoveredEvent.all finds this event by, of the kind and type @Event's records have:
-// the library's own modules don't depend on the macro.
-extension SessionEnded: __DiscoverableEvent {
-    @LinkerSetEntry(kind: 0x6576_6E74)  // "evnt", the kind Events reads; everyEvent checks it
-    private static let discoveryRecord: any __DiscoverableEvent.Type = SessionEnded.self
 }
