@@ -1,17 +1,67 @@
-// The example of the GoogleAnalyticsEncoding module's landing article
+// The examples of the GoogleAnalyticsEncoding module's landing article
 // (Sources/GoogleAnalyticsEncoding/GoogleAnalyticsEncoding.docc/GoogleAnalyticsEncoding.md),
-// verbatim, so the article cannot drift from the code. The factory is compiled for macOS and Linux
-// alone, as is the example.
+// verbatim, so the article cannot drift from the code. The app's example sends to the collector and
+// compiles everywhere; the factory is compiled for macOS and Linux alone, as is its example. The
+// collector's environment block is shell, which no test compiles.
 
-#if os(macOS) || os(Linux)
-import DestinationTesting
 import EventMacros
 import Foundation
-import GoogleAnalyticsEncoding
-import HTTPDestinations
 import Testing
 import TrackingPlans
 import Traffluent
+
+@Suite("GoogleAnalyticsEncoding module examples: through the collector", .timeLimit(.minutes(1)))
+struct GoogleAnalyticsEncodingCollectorExamplesTests {
+    // Not `signed_up`, which the other suite declares: the list-free TrackingPlan() discovers both.
+    @Event(name: "checkout_started")
+    struct CheckoutStarted {
+        var items: Int
+    }
+
+    @Test("Getting an app's events to Google Analytics")
+    func gettingAnAppsEventsToGoogleAnalytics() async throws {
+        let collectorURL = try #require(URL(string: "https://collector.example.com/v1/batches"))
+        let apiKey = "k3y"
+        let memory = InMemoryDestination()
+        let recording = Tracker(enrichers: [.sessions()])
+        let recordingDelivery = recording.records.batch().deliver(to: memory)
+        recording.track(CheckoutStarted(items: 2))
+        await recording.finish()
+        try await recordingDelivery.execute()
+
+        let plan = try TrackingPlan()
+        let collector = HTTPDestination(
+            endpoint: collectorURL,  // https://collector.example.com/v1/batches
+            headerFields: [.authorization: "Bearer \(apiKey)"],  // the collector's API key, not Google's
+            encoder: CollectorBatchEncoder(plan: plan))
+        // The sessions enricher gives each record the session the collector sends as its client_id.
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: collector)
+
+        // Nothing is tracked through `tracker`, so nothing is sent and the example runs without a
+        // network. An encoder of the same plan is checked against the recorded batch instead: each
+        // record carries the session the collector forwards as its client_id.
+        await tracker.finish()
+        try await delivery.execute()
+        let encoded = CollectorBatchEncoder(plan: plan).batch(of: memory.records)
+        let body = try #require(encoded.body)
+        let json = try #require(try JSONSerialization.jsonObject(with: body.body) as? [String: Any])
+        let records = try #require(json["records"] as? [[String: Any]])
+        let context = try #require(records.first?["context"] as? [String: Any])
+        let session = try #require(memory.records.first?.context[SessionKey.self])
+        let expectedSession = session.uuidString
+        let expectedCount = memory.records.count
+
+        #expect(encoded.skippedRecords.isEmpty)
+        #expect(records.count == expectedCount)
+        #expect(context["session"] as? String == expectedSession)
+    }
+}
+
+#if os(macOS) || os(Linux)
+import DestinationTesting
+import GoogleAnalyticsEncoding
+import HTTPDestinations
 
 @Suite("GoogleAnalyticsEncoding module examples", .timeLimit(.minutes(1)))
 struct GoogleAnalyticsEncodingModuleExamplesTests {

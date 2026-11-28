@@ -251,6 +251,51 @@ struct ChoosingDestinationsSegmentSpecExamplesTests {
 }
 
 // Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
+// them, so a second `signed_up` would make it throw. The app's half of the collector route to
+// Google Analytics; the collector's environment block beside it is shell, which no test compiles.
+@Suite("Choosing destinations examples: Google Analytics through the collector", .timeLimit(.minutes(1)))
+struct ChoosingDestinationsGoogleAnalyticsCollectorExamplesTests {
+    @Test("Google Analytics through the collector")
+    func googleAnalyticsThroughTheCollector() async throws {
+        let collectorURL = try #require(URL(string: "https://collector.example.com/v1/batches"))
+        let apiKey = "k3y"
+        let memory = InMemoryDestination()
+        let recording = Tracker(enrichers: [.sessions()])
+        let recordingDelivery = recording.records.batch().deliver(to: memory)
+        recording.track(ChoosingDestinationsExamplesTests.SignedUp(plan: "pro"))
+        await recording.finish()
+        try await recordingDelivery.execute()
+
+        let plan = try TrackingPlan()
+        let collector = HTTPDestination(
+            endpoint: collectorURL,  // https://collector.example.com/v1/batches
+            headerFields: [.authorization: "Bearer \(apiKey)"],  // the collector's API key, not Google's
+            encoder: CollectorBatchEncoder(plan: plan))
+        // The sessions enricher gives each record the session the collector sends as its client_id.
+        let tracker = Tracker(enrichers: [.sessions()])
+        let delivery = tracker.records.batch().deliver(to: collector)
+
+        // Nothing is tracked through `tracker`, so nothing is sent and the example runs without a
+        // network. An encoder of the same plan is checked against the recorded batch instead: each
+        // record carries the session the collector forwards as its client_id.
+        await tracker.finish()
+        try await delivery.execute()
+        let encoded = CollectorBatchEncoder(plan: plan).batch(of: memory.records)
+        let body = try #require(encoded.body)
+        let json = try #require(try JSONSerialization.jsonObject(with: body.body) as? [String: Any])
+        let records = try #require(json["records"] as? [[String: Any]])
+        let context = try #require(records.first?["context"] as? [String: Any])
+        let session = try #require(memory.records.first?.context[SessionKey.self])
+        let expectedSession = session.uuidString
+        let expectedCount = memory.records.count
+
+        #expect(encoded.skippedRecords.isEmpty)
+        #expect(records.count == expectedCount)
+        #expect(context["session"] as? String == expectedSession)
+    }
+}
+
+// Declares no event: this target's other suites have, and the list-free TrackingPlan() discovers
 // them, so a second `signed_up` would make it throw. The factory is compiled for macOS and Linux
 // alone, as is the example.
 #if os(macOS) || os(Linux)

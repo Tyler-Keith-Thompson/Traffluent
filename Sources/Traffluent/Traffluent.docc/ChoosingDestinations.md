@@ -122,7 +122,7 @@ public HTTP ingestion API, so no vendor SDK is linked.
 | Segment | ``/SegmentSpecEncoding`` | `HTTPDestination.segment(writeKey:region:plan:)` | Each record as a Segment-spec track call of an anonymous user: its session as `anonymousId`, its identifier as `messageId`, its time in ISO 8601, its properties through your plan, the standard context in the spec's `context` fields, and `context.ip` as `0.0.0.0`; no `userId`, `identify` or traits |
 | RudderStack | ``/SegmentSpecEncoding`` | `HTTPDestination.rudderStack(writeKey:dataPlane:plan:)` | The same track calls as Segment, at your data plane, with `request_ip` as `0.0.0.0` too |
 | Customer.io Data Pipelines | ``/SegmentSpecEncoding`` | `HTTPDestination.customerIO(apiKey:region:plan:)` | The same track calls as Segment, in strict mode |
-| Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time |
+| Google Analytics 4 (from a server) | ``/GoogleAnalyticsEncoding`` | `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` | Each record as a Measurement Protocol event of an anonymous client: its session as `client_id`, the session's start as `session_id`, its time in microseconds, its properties through your plan as `params`, and ad consent as denied; no `user_id`, user properties or standard context. The factory takes the stream's API secret, so it builds for macOS and Linux alone and refuses a Mac app at run time. An app sends to TraffluentCollector instead, which forwards to Google Analytics (<doc:ChoosingDestinations#Google-Analytics>) |
 | Snowplow | ``/SnowplowEncoding`` | `HTTPDestination.snowplow(collector:vendor:appID:plan:)` | Each record as a self-describing event whose schema, `iglu:<vendor>/<name>/jsonschema/<version>-0-0`, your plan's Iglu export writes: its session as `sid` and nothing else to identify it, its identifier as `eid`, its time in epoch milliseconds as `dtm` and `ttm`, its properties through your plan, and the standard context as Snowplow's `mobile_context` and `application` entities; no `duid`, `uid` or cookie, as every request carries `SP-Anonymous` |
 | TelemetryDeck | ``/TelemetryDeckEncoding`` | `HTTPDestination.telemetryDeck(appID:namespace:testMode:plan:)` | Each record as an Ingest API v3 signal: its session, hashed with SHA-256, as `clientUser` and the session itself as `sessionID`, so user counts are session counts; its time in ISO 8601 as `receivedAt`, its properties through your plan, flattened to dotted names, the standard context as TelemetryDeck's built-in `TelemetryDeck.` parameters, and `isTestMode` as you pass it; no other identifier |
 | Matomo | ``/MatomoEncoding`` | `HTTPDestination.matomo(url:siteID:dimensions:category:plan:)` | Each record as a Matomo event in a bulk tracking request: your category as `e_c` and its name as `e_a`, the last 64 bits of its session as the visitor `_id`, so visitors are sessions, its time in Unix seconds as `cdt`, its locale as `lang`, and the properties you map as numbered custom dimensions; no `uid`, `cid` or `token_auth`, so a record over 23 hours old is skipped |
@@ -416,12 +416,59 @@ refusing; a 400 for anything else drops the whole request.
 
 ### Google Analytics
 
-To send to a Google Analytics 4 web or data stream from a server, make the destination with
-`HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)` (module
-``/GoogleAnalyticsEncoding``). It posts to the Measurement Protocol's `/mp/collect` endpoint:
-`.global` for Google's default, or `.eu` to have Google collect the data in the EU. The
-destination sends no trace context in the header fields, and splits each batch into requests of
-one client's events, at most 25 events and 100 KB each.
+An app's events reach a Google Analytics 4 web stream through TraffluentCollector, which forwards
+the records it accepts over the Measurement Protocol. The app holds no Google secret: it sends to
+the collector with a `CollectorBatchEncoder`, as in <doc:ChoosingDestinations#A-server>, and its
+tracker's sessions enricher gives each record the session the collector sends as its `client_id`.
+In the app, in Swift:
+
+```swift
+let plan = try TrackingPlan()
+let collector = HTTPDestination(
+    endpoint: collectorURL,  // https://collector.example.com/v1/batches
+    headerFields: [.authorization: "Bearer \(apiKey)"],  // the collector's API key, not Google's
+    encoder: CollectorBatchEncoder(plan: plan))
+// The sessions enricher gives each record the session the collector sends as its client_id.
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: collector)
+```
+
+The measurement ID, the API secret and the region are set in the collector's environment, not in
+Swift and not in the app:
+
+```sh
+SERVER_GA4_MEASUREMENT_ID=G-ABC123                 # the web stream's measurement ID
+SERVER_GA4_API_SECRET=replace-with-the-api-secret  # one of that stream's Measurement Protocol API secrets
+SERVER_GA4_REGION=global                           # or eu; global when unset
+SERVER_TRACKING_PLAN=/srv/tracking-plan            # the exported plan, required to forward
+```
+
+The measurement ID and the API secret are set together; with neither set, nothing is forwarded.
+The collector refuses to start when only some are set, when the region is neither
+`global` nor `eu`, or when it has no tracking plan, which marks the properties it must never send.
+Its `GET /v1/admin/forwarding` route and Forwarding screens report the stream, the region, the
+pending, forwarded and skipped counts and the last failure, and never the API secret.
+
+The collector writes the same requests as this section's encoder below: the session as
+`client_id`, a version 7 session's start as `session_id`, `timestamp_micros`, ad consent denied,
+and the properties as `params`, flattened with `_`, with nulls and every property the plan marks
+sensitive left out. It sends no `user_id`, user properties, location, device or other context
+value. It skips the records the encoder below leaves out for Google Analytics' naming and size
+rules, and a record more than 72 hours older or 15 minutes newer than the moment it is encoded;
+the collector logs and counts each, and the app's `dropReports` don't hear of them. It queues only
+the records the plan accepted and it stored for the first time, so rejected records and the records
+of a batch the app sends again are never forwarded, and neither are records stored before forwarding was
+configured. It forwards from that durable queue, and sends a record again when a post fails or the
+collector stops before settling it, so one Google stored before the answer was lost is counted
+twice. The Measurement Protocol answers 2xx even for a wrong measurement ID or API secret: check
+the property's Realtime report after setting the variables.
+
+To send from a server of your own instead, such as a relay in front of Google Analytics, make the
+destination there with `HTTPDestination.googleAnalytics(measurementID:apiSecret:region:plan:)`
+(module ``/GoogleAnalyticsEncoding``); the rest of this section describes it. It posts to the
+Measurement Protocol's `/mp/collect` endpoint: `.global` for Google's default, or `.eu` to have
+Google collect the data in the EU. The destination sends no trace context in the header fields,
+and splits each batch into requests of one client's events, at most 25 events and 100 KB each.
 
 The Measurement Protocol takes only requests carrying one of the stream's API secrets, and anyone
 who holds that secret can send events to the property, spam included. An app's binary can be read,
@@ -433,12 +480,10 @@ also throws for an empty measurement ID, for one that isn't `G-` followed by upp
 digits, and for an empty API secret. The secret is in every request's URL, so don't log the
 destination, its requests or a transport's URLs.
 
-An app's events reach Google Analytics only through a server of yours, which Traffluent doesn't
-provide yet: TraffluentCollector doesn't forward to Google Analytics, and Traffluent has no decoder
-that turns a collector batch back into records. That server decodes each event the app sent into
-the same `@Event` type, remakes its `EventRecord` with the app's identifier, timestamp and a
-context whose `SessionKey` is the app's session, and hands the records to the destination's
-`receive(_:)`. It doesn't track them again through a tracker with `.sessions()`, which would send
+Traffluent has no decoder that turns a collector batch back into records, so a relay decodes each
+event the app sent into the same `@Event` type, remakes its `EventRecord` with the app's
+identifier, timestamp and a context whose `SessionKey` is the app's session, and hands the records
+to the destination's `receive(_:)`. It doesn't track them again through a tracker with `.sessions()`, which would send
 every user of the app as one `client_id`. A server that tracks its own events does use a tracker:
 
 ```swift

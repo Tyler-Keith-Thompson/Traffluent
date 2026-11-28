@@ -12,7 +12,9 @@ call. It checks the measurement ID and the API secret, and posts to the Measurem
 (``GoogleAnalyticsBatchEncoder/batchLimit``): 25 events and 100 KB a request. A batch with no
 record the encoder can write, an empty one included, makes no request. The destination retries no
 response, a 5xx, 408 and 429, and drops and reports any other status. No trace context is sent.
-`import Traffluent` leaves this module out; import it on its own.
+`import Traffluent` leaves this module out; import it on its own. An app doesn't use it:
+its events reach Google Analytics through TraffluentCollector (Getting an app's events to Google
+Analytics, below).
 
 ### The API secret stays on a server
 
@@ -36,12 +38,73 @@ default: `.global` is Google's default endpoint, and `.eu` has Google collect th
 
 ### Getting an app's events to Google Analytics
 
-An app's events reach Google Analytics through a server of yours: the app sends them there, and
-the server makes this destination and hands it the records. Traffluent doesn't provide that server
-yet. TraffluentCollector receives an app's batches, but it doesn't forward them to Google
-Analytics, and Traffluent has no decoder that turns a collector batch back into records.
+An app's events reach Google Analytics through TraffluentCollector, which forwards the records it
+accepts to a Google Analytics 4 web stream over the Measurement Protocol. The app holds no Google
+secret and doesn't link this module. It sends to the collector as any source does: an
+`HTTPDestination` with a `CollectorBatchEncoder` (module `CollectorEncoding`) and the
+collector's API key. Its tracker's sessions enricher gives each record the session that the
+collector sends as its `client_id`. In the app, in Swift:
 
-Until it does, the server's job is:
+```swift
+import TrackingPlans
+import Traffluent
+
+let plan = try TrackingPlan()
+let collector = HTTPDestination(
+    endpoint: collectorURL,  // https://collector.example.com/v1/batches
+    headerFields: [.authorization: "Bearer \(apiKey)"],  // the collector's API key, not Google's
+    encoder: CollectorBatchEncoder(plan: plan))
+// The sessions enricher gives each record the session the collector sends as its client_id.
+let tracker = Tracker(enrichers: [.sessions()])
+let delivery = tracker.records.batch().deliver(to: collector)
+```
+
+The measurement ID, the API secret and the region are set in the collector's environment, not in
+Swift and not in the app:
+
+```sh
+SERVER_GA4_MEASUREMENT_ID=G-ABC123                 # the web stream's measurement ID
+SERVER_GA4_API_SECRET=replace-with-the-api-secret  # one of that stream's Measurement Protocol API secrets
+SERVER_GA4_REGION=global                           # or eu; global when unset
+SERVER_TRACKING_PLAN=/srv/tracking-plan            # the exported plan, required to forward
+```
+
+Set the measurement ID and the API secret together; with neither set, nothing is forwarded. A
+variable set empty counts as unset. The collector refuses to start, in development as in
+production, when only some are set, when the region is neither `global` nor `eu`, or when it has
+no tracking plan, which it needs because the plan marks which properties are sensitive. Its
+`GET /v1/admin/forwarding` route, and the Forwarding screens of its web UI and iOS app, report the
+measurement ID and the region, how many records are pending, forwarded and skipped, and the last
+failure. No route answers the API secret.
+
+The collector writes the same Measurement Protocol requests as this module's encoder: one
+client's events a request, at most 25 events and 100,000 bytes. The `client_id` is the record's
+session as two decimal halves, or the record's identifier when it has no session. Each event has
+a `session_id` from a version 7 session's start and a `timestamp_micros`, and ad consent is denied.
+Its parameters are the properties with every property the plan marks sensitive left out, objects
+and arrays flattened into names joined by `_`, and nulls left out. No `user_id`, user properties,
+location or device is sent, and no other context value. It skips the same records this module's
+encoder does (reserved or malformed names, more than 25 parameters, a string over 100 bytes), and
+a record more than 72 hours older or 15 minutes newer than the moment the collector encodes it.
+The collector logs each skipped record and counts it in the status. The app's `dropReports` don't
+hear of it, since the collector accepted the record.
+
+Only records the plan accepted, and that the collector stored for the first time, are queued to
+forward, in the same statement that stores them. So a rejected record is never forwarded, and
+neither are the records of a batch the app sends again, which the collector holds already. Records it
+stored while forwarding wasn't configured aren't forwarded later. A service drains the queue: it
+claims up to 100 records for 60 seconds, so collectors sharing a database never send one record
+at the same time, posts them, and settles the ones Google Analytics took. A record whose post
+failed, or whose collector stopped, is sent again once its claim lapses, so one Google stored
+before the answer was lost is counted twice. The Measurement Protocol answers 2xx with a wrong
+measurement ID or API secret too, so a record sent counts as forwarded whatever Google made of
+it: check the property's Realtime report after setting the variables.
+
+### Sending from a server of your own
+
+To send from a server of yours instead, such as a relay in front of Google Analytics, make this
+destination there and hand it the records. Traffluent has no decoder that turns a collector batch
+back into records, so a relay's job is:
 
 1. Read each event the app sent (its name, version, identifier, timestamp, properties and session)
    and decode it into the same `@Event` type the app tracked, from a module the app and the server
@@ -71,6 +134,8 @@ let googleAnalytics = try HTTPDestination.googleAnalytics(
 let tracker = Tracker(enrichers: [.sessions()])
 let delivery = tracker.records.batch().deliver(to: googleAnalytics)
 ```
+
+The rest of this article describes this module's destination.
 
 ### What Google Analytics receives
 
