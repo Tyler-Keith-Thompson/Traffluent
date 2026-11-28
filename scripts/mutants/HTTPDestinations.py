@@ -50,10 +50,12 @@ R = "TransientFailureRetry.swift"
 # sleep, leave its tests waiting on a test clock nobody advances, so they are caught by the
 # suite's time limit.
 #
-# So are the backoff mutants that wait longer or stop retrying (backofftripled, retriescapped,
-# uncappedwaits, afluentinitialismaximum): the retry tests, waitsMatchDelayBeforeRetry among them,
-# advance the clock by the expected waits only, so a longer wait or a missing attempt leaves them
-# waiting. afluentcapsooner, whose waits are shorter, fails an assertion on the waits.
+# The backoff mutants that wait longer or stop retrying (backofftripled, retriescapped,
+# uncappedwaits, afluentinitialismaximum) are caught both ways. waitsMatchDelayBeforeRetry runs on
+# a clock whose sleeps return at once, so it fails an assertion on the waits or the sleep count.
+# Its TestClock siblings advance the clock by the expected waits only, so a longer wait or a
+# missing attempt leaves them waiting, and the suite's time limit catches them. afluentcapsooner,
+# whose waits are shorter, fails an assertion on the waits in both.
 MUTANTS = [
     Mutant("methodput", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .put, url: endpoint, headerFields: headerFields)", mode="stmt"),
     Mutant("noheaderfields", D, "request = HTTPRequest(method: .post, url: endpoint, headerFields: headerFields)", "request = HTTPRequest(method: .post, url: endpoint)", mode="stmt"),

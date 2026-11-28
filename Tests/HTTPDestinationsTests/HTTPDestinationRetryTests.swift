@@ -55,16 +55,15 @@ struct HTTPDestinationRetryTests {
     /// `attempts`.
     final class ScriptedTransport: HTTPTransport {
         let script: [Result<HTTPResponse, HTTPTransportError>]
-        let clock: TestClock<Duration>
-        let start: TestClock<Duration>.Instant
+        let elapsed: @Sendable () -> Duration
         let sentAt = Mutex<[Duration]>([])
         let bodies = Mutex<[Data]>([])
         let (attempts, attempted) = AsyncStream.makeStream(of: Int.self)
 
-        init(_ script: [Result<HTTPResponse, HTTPTransportError>], clock: TestClock<Duration>) {
+        init(_ script: [Result<HTTPResponse, HTTPTransportError>], clock: some Clock<Duration>) {
             self.script = script
-            self.clock = clock
-            start = clock.now
+            let start = clock.now
+            elapsed = { start.duration(to: clock.now) }
         }
 
         var attemptCount: Int {
@@ -73,7 +72,7 @@ struct HTTPDestinationRetryTests {
 
         func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
             let attempt = sentAt.withLock { sentAt in
-                sentAt.append(start.duration(to: clock.now))
+                sentAt.append(elapsed())
                 return sentAt.count
             }
             bodies.withLock { $0.append(body) }
@@ -99,6 +98,41 @@ struct HTTPDestinationRetryTests {
                 sawCancellation.withLock { $0 = Task.isCancelled }
                 throw .cancelled
             }
+        }
+    }
+
+    /// A clock whose sleep moves it to the sleep's deadline and returns at once, counting its
+    /// sleeps.
+    // Not swift-clocks' ImmediateClock, which does the same but calls swift-concurrency-extras'
+    // Task.megaYield on every sleep: 20 background-priority tasks a retry, which still stretched
+    // waitsMatchDelayBeforeRetry to 15 s under load (TRAF-143).
+    final class AdvancingClock: Clock, Sendable {
+        struct Instant: InstantProtocol {
+            var offset: Duration
+
+            func advanced(by duration: Duration) -> Instant {
+                Instant(offset: offset + duration)
+            }
+
+            func duration(to other: Instant) -> Duration {
+                other.offset - offset
+            }
+
+            static func < (lhs: Instant, rhs: Instant) -> Bool {
+                lhs.offset < rhs.offset
+            }
+        }
+
+        let current = Mutex(Instant(offset: .zero))
+        let sleepCount = Mutex(0)
+
+        var now: Instant { current.withLock { $0 } }
+        var minimumResolution: Duration { .zero }
+
+        func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+            try Task.checkCancellation()
+            sleepCount.withLock { $0 += 1 }
+            current.withLock { $0 = max($0, deadline) }
         }
     }
 
@@ -230,25 +264,28 @@ struct HTTPDestinationRetryTests {
             let maximumMilliseconds = random.integer(in: initialMilliseconds ... 295_000)
             let retries = random.integer(in: 1 ... 10)
             let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
-            let clock = TestClock()
+            // An AdvancingClock, not a TestClock: each sleep moves the clock to its deadline and
+            // returns, so the gaps between attempts are the waits HTTPDestination asked for, with
+            // nothing for the test to time. A TestClock needs checkSuspension and advance per
+            // retry, which swift-clocks spends in swift-concurrency-extras' Task.megaYield: about
+            // 80 background-priority tasks, some 40,000 over the 100 cases, which a loaded
+            // machine starves past the suite's time limit (TRAF-143).
+            let clock = AdvancingClock()
             let backoff = try ExponentialBackoff(initialDelay: .milliseconds(initialMilliseconds), maximumDelay: .milliseconds(maximumMilliseconds))
             let expectedWaits = try (1 ... retries).map { try backoff.delay(beforeRetry: $0) }
             let failures = Array(repeating: Result<HTTPResponse, HTTPTransportError>.failure(.failed(reason: "offline")), count: retries)
             let transport = ScriptedTransport(failures + [.success(HTTPResponse(status: .ok))], clock: clock)
             let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: IdentifiersEncoder(), backoff: backoff, clock: clock)
             let batch = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
-            var attempts = transport.attempts.makeAsyncIterator()
-            let receiving = Task { await sut.receive(batch) }
+            // One sleep a retry, so a wait split into several sleeps can't match the gaps.
+            let expectedSleeps = retries
 
-            for wait in expectedWaits {
-                _ = await attempts.next()
-                while (try? await clock.checkSuspension()) != nil {}
-                await clock.advance(by: wait)
-            }
-            await receiving.value
+            await sut.receive(batch)
 
             let actual = transport.sentAt.withLock { sentAt in zip(sentAt.dropFirst(), sentAt).map { $0 - $1 } }
+            let actualSleeps = clock.sleepCount.withLock { $0 }
             #expect(actual == expectedWaits, "seed \(seed)")
+            #expect(actualSleeps == expectedSleeps, "seed \(seed)")
         }
     }
 
