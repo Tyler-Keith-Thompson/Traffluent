@@ -85,13 +85,12 @@ MUTANTS = [
     Mutant("abandonedstops", D, 'logger.error("Stopped sending a request, whose wait before the next attempt threw: \\(error)")', "return", mode="stmt"),
     Mutant("instrumentignored", D, "self.instrument = instrument", "self.instrument = InstrumentationSystem.instrument", mode="stmt"),
     # Outcomes and reports.
-    Mutant("noretry", D, """let response = try await DeferredTask { try await attempt.run() }
-                .retry(retryStrategy())
-                .execute()
-            return .delivered(response)""", """let response = try await DeferredTask { try await attempt.run() }
-                .execute()
-            return .delivered(response)""", mode="stmt"),
-    Mutant("deliveredascancelled", D, "return .delivered(response)", "return .cancelled", mode="stmt", nth=1),
+    # A strategy that never retries, in place of the destination's. It replaces the assignment in
+    # the initializer: `send`'s `let response = …` is a declaration, which a stmt mutant can't
+    # wrap, and an expr mutant on `retryStrategy()` gives `.retry(_:)` an `any RetryStrategy` from
+    # the schema's ternary, which Swift won't open for its generic parameter.
+    Mutant("noretry", D, "retryStrategy = { TransientFailureRetry(backoff, clock: clock, generator: generator) }", "retryStrategy = { RetryByCountStrategy(retryCount: 0) }", mode="stmt"),
+    Mutant("deliveredascancelled", D, "return .delivered(response)", "return .cancelled", mode="stmt"),
     Mutant("rejectedascancelled", D, "return .rejected(response)", "return .cancelled", mode="stmt"),
     Mutant("rejectionnotreported", D, "reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))", "", mode="stmt"),
     Mutant("rejectionstatuslost", D, "reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))", "reporter.report(.rejected(status: .badRequest, recordIDs: request.recordIDs))", mode="stmt"),
