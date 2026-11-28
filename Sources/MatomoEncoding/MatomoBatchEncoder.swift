@@ -5,6 +5,7 @@ import JSONValues
 import Logging
 public import PropertyJSON
 import StandardContext
+import Synchronization
 public import TrackingPlans
 
 /// The ``/HTTPDestinations/BatchEncoder`` of Matomo's bulk tracking API, so an `HTTPDestination` can
@@ -119,14 +120,16 @@ public struct MatomoBatchEncoder: BatchEncoder {
     /// answer, an empty one or one with a negative count included, is delivered. That includes
     /// the image a server with the QueuedTracking plugin's queue on sends for every bulk request,
     /// before it checks any tracking request: such a server stores the valid ones later and drops
-    /// the others, a site ID of no site included, without a report.
+    /// the others, a site ID of no site included, without a report. The encoder logs a notice the
+    /// first time its destination gets an answer that isn't a bulk answer
+    /// (``didReceive(_:for:)``).
     ///
     /// - Parameters:
     ///   - response: The 2xx answer.
     ///   - request: The request it answers, a tracking request for each of its records.
     /// - Returns: Whether Matomo stored the request's tracking requests, as far as its answer says.
     public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
-        guard let answer = try? JSONDecoder().decode(BulkAnswer.self, from: response.body), answer.tracked >= 0, answer.invalid >= 0 else {
+        guard let answer = BulkAnswer(reading: response.body) else {
             return .delivered
         }
         let sent = request.recordIDs.count
@@ -142,6 +145,42 @@ public struct MatomoBatchEncoder: BatchEncoder {
             logger.notice("Matomo tracked \(answer.tracked) of a bulk request's tracking requests and refused \(answer.invalid), without saying which")
         }
         return .delivered
+    }
+
+    // Per encoder, not per process (N2): the factory makes an encoder for each destination, so
+    // each destination, and its copies, which share the encoder's notice, logs its own. Rejected:
+    // returning the answer as transient or rejected, which would resend or drop every request
+    // to a QueuedTracking server, whose valid tracking requests it stores; and holding the flag
+    // in HTTPDestination, which would put Matomo's notice in the vendor-neutral module.
+    // Decoded again after outcome(of:for:)'s decode, rather than handing its answer over: an
+    // answer of a few dozen bytes, once a network request.
+    /// Logs a notice the first time Matomo gives this encoder's destination a 2xx answer that
+    /// isn't a bulk answer with tracking counts, as a server with the QueuedTracking plugin's
+    /// queue on answers every bulk request.
+    ///
+    /// The notice says that tracking requests the server refuses won't be reported. It is a hint,
+    /// not proof of QueuedTracking: any 2xx body that isn't Matomo's bulk answer logs it, such as
+    /// an HTML page from a proxy in front of Matomo, an empty body, or JSON without both counts.
+    /// The answer stays ``/HTTPDestinations/ResponseOutcome/delivered``, as
+    /// ``outcome(of:for:)`` says. The encoder and its copies log it once, so one destination logs
+    /// it once; another destination made by `HTTPDestination.matomo(...)`, with an encoder of its
+    /// own, logs its own.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers.
+    public func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest) {
+        guard BulkAnswer(reading: response.body) == nil else { return }
+        answerWithoutCountsNotice.logIfFirst(to: Self.logger)
+    }
+
+    // The one observable the notice's tests need (TRAF-155 criteria 1 and 3): tests don't pin
+    // logs, and HTTPDestination keeps its encoder private, so a test reads the count here, or
+    // through the destination (HTTPDestination+Matomo.swift).
+    /// How many times this encoder and its copies have logged the notice of a 2xx answer without
+    /// tracking counts (``didReceive(_:for:)``): 0 or 1.
+    package var answerWithoutCountsNoticeCount: Int {
+        answerWithoutCountsNotice.loggedCount
     }
 
     // From Matomo's Tracking HTTP API reference, https://developer.matomo.org/api-reference/tracking-api
@@ -199,6 +238,9 @@ public struct MatomoBatchEncoder: BatchEncoder {
     private let siteID: String
     private let category: String
     private let dimensions: [String: Int]
+    /// The notice of a 2xx answer without tracking counts, and whether it has been logged. A
+    /// reference its copies share, so a destination's copies log it once between them.
+    private let answerWithoutCountsNotice = AnswerWithoutCountsNotice()
 
     /// Why a record was left out of the batch's requests.
     public typealias Failure = MatomoEncodingError
@@ -395,4 +437,40 @@ private struct BulkAnswer: Decodable {
     let tracked: Int
     /// How many it refused.
     let invalid: Int
+
+    /// The answer `body` holds: `nil` for a body that isn't JSON with both counts, or that has a
+    /// negative one.
+    init?(reading body: Data) {
+        guard let answer = try? JSONDecoder().decode(BulkAnswer.self, from: body), answer.tracked >= 0, answer.invalid >= 0 else {
+            return nil
+        }
+        self = answer
+    }
+}
+
+/// The notice of a 2xx answer without tracking counts, and how many times an encoder has logged
+/// it. Its copies share one, so a destination logs it once however many copies get such an
+/// answer.
+private final class AnswerWithoutCountsNotice: Sendable {
+    // A Mutex rather than an actor: didReceive(_:for:) runs inside HTTPDestination's synchronous
+    // throws(AttemptFailure) step for a 2xx, which can't await an actor, and it takes the lock
+    // once a 2xx answer. Switch to an actor if BatchEncoder's hook becomes async.
+    private let count = Mutex(0)
+
+    /// How many times the notice has been logged: 0 or 1.
+    var loggedCount: Int {
+        count.withLock { $0 }
+    }
+
+    /// Logs the notice to `logger` unless it has been logged before.
+    ///
+    /// The log and the count are written under one lock, so two copies answered at once log it
+    /// once between them.
+    func logIfFirst(to logger: Logger) {
+        count.withLock { count in
+            guard count == 0 else { return }
+            logger.notice("Matomo's answer holds no tracking counts, as with QueuedTracking's queue on: tracking requests the server refuses won't be reported")
+            count += 1
+        }
+    }
 }

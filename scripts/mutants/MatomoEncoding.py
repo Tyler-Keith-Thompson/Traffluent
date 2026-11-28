@@ -31,6 +31,12 @@
 #   clock tests pin the outcome.
 # - The notices the encoder's initializer logs for unmapped properties and refused names: logs
 #   are for developers, and tests don't pin them (AGENTS.md, Logging).
+# - The notice's logger.notice line removed on its own, leaving `count += 1`: the count is what
+#   tests read, as tests don't pin logs (AGENTS.md). noticenotlogged removes the log and its
+#   count together.
+# - A process-wide notice in place of the encoder's: mutate.py's schemata can't declare the
+#   global it would need. factoryDestinationsLogTheirOwn and encodersLogTheirOwn pin that each
+#   destination's encoder has its own.
 # - Mutants only a case pattern could hold, which mutate.py's switches can't: one scalar dropped
 #   from isTrimmedByPHP or from matomoStoredValue's removed or escaped ones, and a string
 #   dimension value written as JSON (the dimensions tests send strings unquoted). The category and
@@ -192,8 +198,19 @@ MUTANTS = [
     Mutant("nonetrackeddelivered", B, "answer.tracked > 0", "answer.tracked >= 0"),
     Mutant("allinvaliddelivered", B, """return .rejected(reason: "Matomo refused all \\(answer.invalid) of the request's tracking requests as invalid, as it does for a site ID of no site")""", "return .delivered", mode="stmt"),
     Mutant("unreadablerejected", B, "return .delivered", 'return .rejected(reason: "")', mode="stmt", nth=0),
-    # The rejection's count of invalid requests. Last, as allinvaliddelivered's text holds it, and
-    # after shortfallinclusive's text adds one: the guard's, the shortfall's two, the both-0
-    # check's and the transient reason's come before it.
-    Mutant("invalidcountlost", B, "answer.invalid", "0", nth=5),
+    # The rejection's count of invalid requests. Last of the counts, as allinvaliddelivered's text
+    # holds it, and after shortfallinclusive's text adds one: the shortfall's two, the both-0
+    # check's and the transient reason's come before it (the negative-count guard is in
+    # BulkAnswer, after outcome).
+    Mutant("invalidcountlost", B, "answer.invalid", "0", nth=4),
+
+    # The notice of a 2xx answer without tracking counts (TRAF-155).
+    Mutant("noticeforbulkanswer", B, "guard BulkAnswer(reading: response.body) == nil else { return }", "", mode="stmt"),
+    Mutant("noticenevercalled", B, "answerWithoutCountsNotice.logIfFirst(to: Self.logger)", "", mode="stmt"),
+    # The logging path: logged for every such answer, never, or uncounted.
+    Mutant("noticeeverytime", B, "guard count == 0 else { return }", "", mode="stmt"),
+    Mutant("noticeafterfirst", B, "count == 0", "count == 1"),
+    Mutant("noticenotlogged", B, """logger.notice("Matomo's answer holds no tracking counts, as with QueuedTracking's queue on: tracking requests the server refuses won't be reported")
+            count += 1""", "", mode="stmt"),
+    Mutant("noticeuncounted", B, "count += 1", "", mode="stmt"),
 ]

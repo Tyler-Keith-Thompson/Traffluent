@@ -399,4 +399,56 @@ struct HTTPDestinationResponseOutcomeTests {
             #expect(actualReports == expectedReports, "seed \(seed)")
         }
     }
+
+    /// Encodes a batch as ``DeliveringEncoder`` does, counts every 2xx as delivered, and keeps
+    /// each answer it takes note of, with the records of the request it answers, in `noted`,
+    /// which its copies share.
+    struct NotingEncoder: BatchEncoder {
+        static let transientStatuses: Set<TransientStatus> = []
+
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
+        final class Noted: Sendable {
+            let answers = Mutex<[(body: Data, recordIDs: [UUID])]>([])
+        }
+
+        let noted = Noted()
+
+        func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest) {
+            noted.answers.withLock { $0.append((body: response.body, recordIDs: request.recordIDs)) }
+        }
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
+            let body = EncodedBatch(body: Data(batch.map(\.id.uuidString).joined(separator: "\n").utf8), contentType: "text/plain")
+            return BatchRequests(requests: [EncodedRequest(body: body, recordIDs: batch.map(\.id))], skippedRecords: [])
+        }
+    }
+
+    @Test("The destination's encoder takes note of each 2xx answer, with the request it answers, and of no 5xx it retries or 4xx it drops")
+    func encoderNotesEachSuccess() async throws {
+        let endpoint = try #require(URL(string: "https://collector.example.com/batches"))
+        let transport = ScriptedTransport([
+            .success(HTTPTransportResponse(head: HTTPResponse(status: .serviceUnavailable), body: Data("busy".utf8))),
+            .success(HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data("first".utf8))),
+            .success(HTTPTransportResponse(head: HTTPResponse(status: .accepted), body: Data("second".utf8))),
+            .success(HTTPTransportResponse(head: HTTPResponse(status: .badRequest), body: Data("refused".utf8))),
+        ])
+        let encoder = NotingEncoder()
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: encoder, backoff: try ExponentialBackoff(initialDelay: .nanoseconds(1), maximumDelay: .nanoseconds(1), jitter: .none), clock: AdvancingClock())
+        let first = [EventRecord(event: SignedUp(plan: "a"), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil)]
+        let second = [EventRecord(event: SignedUp(plan: "b"), timestamp: Date(timeIntervalSince1970: 1), sourceLocation: nil)]
+        let refused = [EventRecord(event: SignedUp(plan: "c"), timestamp: Date(timeIntervalSince1970: 2), sourceLocation: nil)]
+        let expectedBodies = [Data("first".utf8), Data("second".utf8)]
+        let expectedRecordIDs = [first.map(\.id), second.map(\.id)]
+
+        await sut.receive(first)
+        await sut.receive(second)
+        await sut.receive(refused)
+
+        let actual = encoder.noted.answers.withLock { $0 }
+        #expect(actual.map(\.body) == expectedBodies)
+        #expect(actual.map(\.recordIDs) == expectedRecordIDs)
+    }
 }

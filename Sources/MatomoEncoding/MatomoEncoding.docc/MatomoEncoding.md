@@ -193,6 +193,19 @@ later, and it drops the rest, such as those for a site ID of no site, without re
 such a server, check the site ID before you ship, and check that the first events show up in the
 site's Visits Log.
 
+The first time a destination gets a 2xx answer that isn't Matomo's bulk answer with its counts,
+it logs a notice at notice level, with the label `MatomoEncoding.MatomoBatchEncoder`: "Matomo's
+answer holds no tracking counts, as with QueuedTracking's queue on: tracking requests the server
+refuses won't be reported". Each destination logs it once, its copies included, however many such
+answers follow, and another destination made by
+``HTTPDestinations/HTTPDestination/matomo(url:siteID:dimensions:category:plan:backoff:clock:now:)``
+logs its own. The request still counts as delivered. The
+notice is a hint, not proof. It says that answers from this server can't show refused tracking
+requests. It doesn't show that QueuedTracking is on: an HTML page from a proxy in front of Matomo,
+an empty body or other JSON logs it too. And it doesn't show that anything was refused: a
+QueuedTracking server stores every valid tracking request. A bulk answer with its counts, from a
+server without the queue, never logs it.
+
 A server set to require a token for every bulk request (`bulk_requests_require_authentication`)
 refuses each one: Matomo 6.0 without the QueuedTracking queue answers 401, which the destination
 drops and reports, and Matomo 5.14 answers 500, which the destination retries until the request

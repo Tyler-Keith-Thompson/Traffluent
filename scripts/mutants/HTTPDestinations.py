@@ -289,4 +289,6 @@ MUTANTS = [
             }
             return false""", mode="stmt"),
     Mutant("responsebodydropped", U, "return HTTPTransportResponse(head: head, body: responseBody)", "return HTTPTransportResponse(head: head, body: Data())", mode="stmt"),
+    # The encoder's note of each 2xx answer (TRAF-155).
+    Mutant("didreceiveskipped", D, "encoder.didReceive(response, for: encoded)", "", mode="stmt"),
 ]

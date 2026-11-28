@@ -95,6 +95,30 @@ extension AcmeBatchEncoder {
     }
 }
 
+/// Sends what Acme's encoder sends, leaving out the records `isSent` refuses.
+struct FilteredAcmeEncoder: BatchEncoder {
+    typealias Failure = AcmeEncodingError
+
+    static var transientStatuses: Set<TransientStatus> { AcmeBatchEncoder.transientStatuses }
+
+    let inner: AcmeBatchEncoder
+    let isSent: @Sendable (EventRecord) -> Bool
+
+    static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        AcmeBatchEncoder.outcome(of: response, for: request)
+    }
+
+    func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest) {
+        inner.didReceive(response, for: request)
+    }
+
+    func requests(for batch: [EventRecord]) -> BatchRequests<AcmeEncodingError> {
+        let sent = batch.filter(isSent)
+        guard !sent.isEmpty else { return BatchRequests(requests: [], skippedRecords: []) }
+        return inner.requests(for: sent)
+    }
+}
+
 /// Why the Acme factory couldn't make a destination.
 enum AcmeSetupError: Error, Hashable {
     case emptyAPIKey
@@ -200,6 +224,25 @@ private struct WritingAVendorDestinationExamplesTests {
         let actual = try #require(transport.requests.first)
         #expect(String(decoding: actual.body, as: UTF8.self) == expectedBody)
         #expect(actual.request.url?.absoluteString == expectedURL)
+    }
+
+    @Test("The wrapping encoder sends what Acme's sends for the records it keeps, and sends nothing for a batch it keeps none of")
+    func filteredAcmeEncoder() async throws {
+        let endpoint = try #require(URL(string: "https://acme.example.com/v1/events"))
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+        let transport = ScriptedTransport([.status(.ok)])
+        let inner = AcmeBatchEncoder(apiKey: "test-key", plan: plan)
+        let encoder = FilteredAcmeEncoder(inner: inner) { ($0.event as? SignedUp)?.plan != "internal" }
+        let sut = HTTPDestination(endpoint: endpoint, transport: transport, encoder: encoder)
+        let kept = EventRecord(event: SignedUp(plan: "pro", email: Sensitive("ada@example.com")), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)
+        let left = EventRecord(event: SignedUp(plan: "internal", email: Sensitive("grace@example.com")), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil)
+        let expectedBodies = inner.requests(for: [kept]).requests.map(\.body.body)
+
+        await sut.receive([kept, left])
+        await sut.receive([left])
+
+        let actual = transport.requests.map(\.body)
+        #expect(actual == expectedBodies)
     }
 
     @Test("The Acme factory throws emptyAPIKey for an empty key and invalidHost for an http host")

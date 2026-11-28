@@ -185,6 +185,34 @@ extension AcmeBatchEncoder {
 
 An encoder that wraps another forwards its `outcome(of:for:)` the same way
 (`static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome { Inner.outcome(of: response, for: request) }`).
+It forwards `didReceive(_:for:)` to the encoder it wraps too, or the wrapped encoder never takes
+note of an answer, such as a vendor's notice logged once per destination:
+
+```swift
+/// Sends what Acme's encoder sends, leaving out the records `isSent` refuses.
+struct FilteredAcmeEncoder: BatchEncoder {
+    typealias Failure = AcmeEncodingError
+
+    static var transientStatuses: Set<TransientStatus> { AcmeBatchEncoder.transientStatuses }
+
+    let inner: AcmeBatchEncoder
+    let isSent: @Sendable (EventRecord) -> Bool
+
+    static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        AcmeBatchEncoder.outcome(of: response, for: request)
+    }
+
+    func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest) {
+        inner.didReceive(response, for: request)
+    }
+
+    func requests(for batch: [EventRecord]) -> BatchRequests<AcmeEncodingError> {
+        let sent = batch.filter(isSent)
+        guard !sent.isEmpty else { return BatchRequests(requests: [], skippedRecords: []) }
+        return inner.requests(for: sent)
+    }
+}
+```
 
 ### The factory
 

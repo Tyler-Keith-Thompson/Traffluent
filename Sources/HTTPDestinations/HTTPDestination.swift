@@ -100,7 +100,9 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
     // would lengthen every spelling of the type for one call per batch beside a network request.
     private let instrument: any Instrument
     private let transport: Transport
-    private let encoder: Encoding
+    // Package, not private: a vendor module's tests read what its encoder kept of the answers it
+    // took note of (MatomoEncoding's notice count) through the destination its factory made.
+    package let encoder: Encoding
     // A closure making each request's strategy, built where the clock's type is known, rather than
     // a third generic parameter for the clock, for the same reason as `instrument`; and rather
     // than an `any Clock<Duration>`, which Afluent's strategy can't take, and Swift won't open
@@ -240,7 +242,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
         request.headerFields[.contentType] = encoded.body.contentType
-        let attempt = Attempt<Transport, Encoding>(transport: transport, request: request, encoded: encoded, transientStatuses: transientStatuses, now: now)
+        let attempt = Attempt(transport: transport, encoder: encoder, request: request, encoded: encoded, transientStatuses: transientStatuses, now: now)
         do {
             // Built for this request alone: Afluent's strategy keeps its count of retries, and a
             // cancelled unit of work stays cancelled.
@@ -290,9 +292,11 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
 
 /// One send of a batch's request, which throws what kept it from being delivered.
 ///
-/// Generic over the encoder, whose ``BatchEncoder/outcome(of:for:)`` reads a 2xx answer's body.
+/// Generic over the encoder, whose ``BatchEncoder/outcome(of:for:)`` reads a 2xx answer's body,
+/// after the encoder takes note of it (``BatchEncoder/didReceive(_:for:)``).
 private struct Attempt<Transport: HTTPTransport, Encoding: BatchEncoder>: Sendable {
     let transport: Transport
+    let encoder: Encoding
     let request: HTTPRequest
     let encoded: EncodedRequest
     /// The statuses retried beside ``HTTPResponse/Status/isTransient``'s, from the encoder.
@@ -346,6 +350,7 @@ private struct Attempt<Transport: HTTPTransport, Encoding: BatchEncoder>: Sendab
     /// `response`, a 2xx answer, when its encoder reads the body as delivered; throws the
     /// ``AttemptFailure`` of one it reads as storing nothing.
     private func delivered(_ response: HTTPTransportResponse) throws(AttemptFailure) -> HTTPResponse {
+        encoder.didReceive(response, for: encoded)
         switch Encoding.outcome(of: response, for: encoded) {
         case .delivered:
             return response.head

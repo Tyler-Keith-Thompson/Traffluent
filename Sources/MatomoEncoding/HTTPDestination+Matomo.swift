@@ -79,6 +79,17 @@ extension HTTPDestination where Encoding == MatomoBatchEncoder {
     }
 }
 
+extension HTTPDestination where Encoding == MatomoBatchEncoder {
+    // The encoder's one observable (MatomoBatchEncoder.answerWithoutCountsNoticeCount), read
+    // through a destination the factory made, so a test pins the notice per destination: tests
+    // don't pin logs, and the factory doesn't hand out its encoder.
+    /// How many times this destination and its copies have logged the notice of a 2xx answer
+    /// without tracking counts: 0 or 1.
+    package var answerWithoutCountsNoticeCount: Int {
+        encoder.answerWithoutCountsNoticeCount
+    }
+}
+
 extension HTTPDestination where Transport == URLSessionTransport, Encoding == MatomoBatchEncoder {
     /// A destination that sends batches to the site `siteID` of the Matomo installation at `url`,
     /// each event in `category` and each property `dimensions` maps as its custom dimension, with

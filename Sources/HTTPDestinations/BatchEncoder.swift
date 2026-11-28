@@ -99,4 +99,31 @@ public protocol BatchEncoder: Sendable {
     /// - Returns: Whether the request's records were delivered, refused for good, or refused for
     ///   now.
     static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome
+
+    /// Takes note of the successful (2xx) answer `response` to `request`, one of this encoder's
+    /// requests, before ``outcome(of:for:)`` reads it; by default, nothing.
+    ///
+    /// ``HTTPDestination`` calls it for every 2xx answer, and only for those, on a copy of the
+    /// encoder it was made with. It is for what a vendor's answers say about the destination
+    /// rather than about one request, such as a notice logged the first time the vendor answers
+    /// in a way that hides refused records. State that the destination's copies should share
+    /// belongs in a reference the encoder holds, a `final class` holding a `Mutex`, so each
+    /// destination made with an encoder of its own keeps its own. It may run for several sends at
+    /// once, and the request's outcome waits for it, so it returns promptly. It can't change what
+    /// the answer means, which stays the vendor fact ``outcome(of:for:)`` states. An encoder that
+    /// wraps another forwards it to the wrapped encoder.
+    ///
+    /// - Parameters:
+    ///   - response: The answer: a 2xx status, its header fields and its body.
+    ///   - request: The request it answers, as the encoder made it.
+    func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest)
+}
+
+extension BatchEncoder {
+    /// Takes no note of the answer, whose meaning is ``outcome(of:for:)``'s alone.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers.
+    public func didReceive(_ response: HTTPTransportResponse, for request: EncodedRequest) {}
 }
