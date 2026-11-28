@@ -6,7 +6,7 @@ import Trackers
 
 extension View {
     /// Makes this view the screen named `screen`: it tracks ``ScreenViewed`` each time the view
-    /// appears, and every event tracked from inside it carries `screen` as its ``ScreenKey``.
+    /// appears, and every event tracked from inside it carries `screen` as its ``/Events/ScreenKey``.
     ///
     /// ```swift
     /// CheckoutView()

@@ -8,6 +8,7 @@ import HTTPTypes
 import Instrumentation
 import Persistence
 import Sessions
+import StandardContext
 import Synchronization
 import Testing
 import Trackers
@@ -15,7 +16,8 @@ import TrackingPlans
 
 // A record a store recovers after a relaunch keeps its session (TRAF-122), so a resend of a
 // record whose first send got no answer goes out under the identity of that send, and the collector
-// can tell it is a copy rather than a new user's event.
+// can tell it is a copy rather than a new user's event. It keeps its sample rate and standard
+// context too (TRAF-145), so the resend is weighted and attributed as the first send was.
 
 // Private: its events share their names with other events of this test target, and @Event
 // leaves a private type's events out of the link check of names (DefiningEvents, Limits).
@@ -81,5 +83,60 @@ private struct CollectorRecoveryTests {
         #expect(recovered.isRedelivered)
         #expect(actualFirst == expected)
         #expect(actualRecovered == expected)
+    }
+
+    @Test("A record a SegmentStore recovers after the app ended while its request awaited an answer goes out with its first send's context, sample rate and standard context included, all but the identifier for vendor")
+    func recoveredRecordKeepsTheContextOfItsFirstSend() async throws {
+        let tracked = Date(timeIntervalSince1970: 1_795_442_607)
+        let directory = NSTemporaryDirectory() + "CollectorRecoveryTests-\(UUID().uuidString)"
+        let copy = directory + "-copy"
+        defer {
+            try? FileManager.default.removeItem(atPath: directory)
+            try? FileManager.default.removeItem(atPath: copy)
+        }
+        let endpoint = try #require(URL(string: "https://collector.example.com/v1/records"))
+        let sut = CollectorBatchEncoder(plan: try TrackingPlan(schemas: [CheckoutStarted.schema]), instrument: NoOpInstrument())
+        let transport = GatedTransport()
+        let rate = try SampleRate(0.25)
+        let enrichers: [Enricher] = [
+            .sessions(kinds: []),
+            .application(ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")),
+            .device(DeviceKey.Value(model: "iPhone17,1", formFactor: .phone)),
+            .operatingSystem(OperatingSystemKey.Value(name: "iOS", version: "26.1.0")),
+            .locale(Locale(identifier: "fr_CA")),
+            Enricher { context in
+                context[NetworkKey.self] = .cellular
+                context[SampleRateKey.self] = rate
+                context[VendorIdentifierKey.self] = Sensitive(UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!)
+            },
+        ]
+        let tracker = Tracker(store: try SegmentStore(events: [CheckoutStarted.self], directory: .init(directory)), enrichers: enrichers, now: { tracked })
+        let delivery = tracker.records.batch(strategy: .count(1)).deliver(to: HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: transport, encoder: sut))
+        let sending = Task { try await delivery.execute() }
+        tracker.track(CheckoutStarted(cartSize: 1))
+        for await _ in transport.arrivals { break }
+        // The request is out and unanswered. The app ends here: the next launch opens the store on
+        // what it left.
+        try FileManager.default.copyItem(atPath: directory, toPath: copy)
+        transport.opened.finish()
+        await tracker.finish()
+        try await sending.value
+        let firstBody = try #require(transport.bodies.withLock { $0.first })
+        let recovered = try #require(try SegmentStore(events: [CheckoutStarted.self], directory: .init(copy)).takeRecoveredRecords().first)
+        func context(_ body: Data) throws -> [String: Any] {
+            let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            let record = try #require((object["records"] as? [[String: Any]])?.first)
+            return try #require(record["context"] as? [String: Any])
+        }
+        let first = try context(firstBody)
+        let expectedMembers = ["application", "device", "locale", "network", "operatingSystem", "sampleRate", "session"]
+        var expected = first
+        expected.removeValue(forKey: "vendorIdentifier")
+
+        let actual = try context(try #require(sut.requests(for: [recovered]).requests.first).body.body)
+
+        #expect(first["vendorIdentifier"] != nil)
+        #expect(actual.keys.sorted() == expectedMembers)
+        #expect(NSDictionary(dictionary: actual) == NSDictionary(dictionary: expected))
     }
 }

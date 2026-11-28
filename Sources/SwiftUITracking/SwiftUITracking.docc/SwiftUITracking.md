@@ -68,8 +68,9 @@ covers all three frameworks.
 
 The documentation site is built on Linux, where this module's views aren't there, so their
 symbols have no pages of their own here. Their doc comments are in the sources, and Xcode shows
-them for an Apple target. ``ScreenViewed`` and ``ScreenKey`` build on every platform, so a
-tracking plan or a collector off Apple platforms can name them.
+them for an Apple target. ``ScreenViewed`` builds on every platform, as does
+``/Events/ScreenKey``, in the `Events` module, so a tracking plan or a collector off Apple
+platforms can name them.
 
 ### Setting the tracker
 
@@ -86,4 +87,3 @@ tracking plan or a collector off Apple platforms can name them.
 
 - `View.trackScreen(_:)`
 - ``ScreenViewed``
-- ``ScreenKey``

@@ -4,7 +4,7 @@ load("//tools:docc.bzl", "docc_archive")
 load("//tools:resources.bzl", "module_resources", "module_resources_data")
 load("//tools:swift_rules.bzl", "swift_library")
 
-# Opt-in enrichers of the context every app sends: Enricher.application(), .device(), .operatingSystem(), .locale(), .network() and .vendorIdentifier(), each setting its typed key (ApplicationKey, DeviceKey, OperatingSystemKey, LocaleKey, NetworkKey, VendorIdentifierKey); static values read once, as the enricher is made; the network's connection from an NWPathMonitor the enricher owns; the OS's identifierForVendor, never stored or generated; device, network and vendor identifier absent off Apple platforms.
+# Opt-in enrichers of the context every app sends: Enricher.application(), .device(), .operatingSystem(), .locale(), .network() and .vendorIdentifier(), each setting its typed key (ApplicationKey, DeviceKey, OperatingSystemKey, LocaleKey and NetworkKey, from Events, which a store keeps beside each record, and VendorIdentifierKey); static values read once, as the enricher is made; the network's connection from an NWPathMonitor the enricher owns; the OS's identifierForVendor, never stored or generated; device, network and vendor identifier absent off Apple platforms.
 swift_library(
     name = "StandardContext",
     # `Bundle.module`, as SwiftPM generates it, for the resources below.

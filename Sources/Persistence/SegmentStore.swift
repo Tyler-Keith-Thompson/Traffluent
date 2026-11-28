@@ -26,14 +26,24 @@ public import SystemPackage
 ///   other, are never written, and are lost if the app ends first. The first record of each such
 ///   type is reported as ``DropReport/notPersisted(event:)``, so a type left out by mistake,
 ///   such as one that conforms to `Event` by hand, shows up.
-/// - **A recovered record's session.** A record keeps the `SessionKey` of its context, written in
-///   the record's own bytes, so a record recovered after a relaunch carries the session it was
-///   tracked in, and a vendor destination sends it under the same identity as the first time. A
-///   record written without a session comes back with none. The rest of its context is not kept:
-///   a recovered record is otherwise in the top-level `ServiceContext`, as its span ended with
-///   the earlier run.
+/// - **A recovered record's context.** A record keeps these keys of its context, written in the
+///   record's own bytes, so a record recovered after a relaunch reaches destinations as it was
+///   tracked:
+///   - `SessionKey`, so a vendor destination sends it under the same identity as the first time;
+///   - `SampleRateKey`, so it is weighted by the rate it was sampled at;
+///   - `ScreenKey`, `ApplicationKey`, `DeviceKey`, `OperatingSystemKey`, `LocaleKey` and
+///     `NetworkKey`, so it is attributed to where it was tracked, not to the run that uploads it.
+///     A locale is kept as its identifier, so a preference the identifier doesn't spell is lost.
+///
+///   The store writes these keys whatever set them, so don't build a screen name, or an app or
+///   device value, from user data.
+///
+///   A key the record didn't have comes back absent. No other key is kept, so a recovered record
+///   is otherwise in the top-level `ServiceContext`: not `VendorIdentifierKey`, which Traffluent
+///   never stores; not a key of the app's own, such as an account's, which the store can't tell
+///   from an identifier; and not the trace context, as its span ended with the earlier run.
 /// - **Deleting.** A segment is deleted as a whole once every record in it is delivered, so a
-///   log whose records are all delivered holds no files. A record's session goes with its
+///   log whose records are all delivered holds no files. A record's context goes with its
 ///   segment: the store keeps no session apart from the records tracked in it. A segment kept
 ///   for one undelivered record keeps its delivered ones too, sessions and all. Only recovery
 ///   rewrites a segment: one still holding

@@ -45,7 +45,7 @@ let targets: [Target] = [
     // The store's analytics on Linux, without a screen.
     .executableTarget(name: "CommandLineExample", dependencies: [
         "StoreAnalytics", "StoreModel",
-        library("HTTPDestinations"), library("LifecycleTracking"), library("Sessions"), library("StandardContext"), library("Trackers"),
+        library("Events"), library("HTTPDestinations"), library("LifecycleTracking"), library("Sessions"), library("StandardContext"), library("Trackers"),
         httpTypes, system,
     ]),
     // The server: a stand-in collector for the store app, and routes that track their own requests.

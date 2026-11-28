@@ -29,7 +29,7 @@ extension EnvironmentValues {
     /// The environment reaches a button's action, where a `withTracker` binding doesn't: SwiftUI
     /// runs actions on tasks of its own. Inside a view given `trackScreen(_:)`, the tracker is
     /// one enriched with the screen, so every event tracked through it carries the screen's
-    /// ``ScreenKey``.
+    /// ``/Events/ScreenKey``.
     ///
     /// Until a tracker is set, it tracks as `Tracker.current` does with nothing bound: through the
     /// tracker `Tracker.bootstrap(_:)` made the process's default, looked up as each event is

@@ -32,7 +32,8 @@ What Aptabase does with these events depends on more than the events themselves:
   its session.
 - Its breakdowns by operating system, app version, build, device model and locale come from the
   standard context. Give the tracker the standard context enrichers, or those breakdowns are
-  empty. A recovered record keeps only the session of its context, so it shows none of them.
+  empty. A store keeps the standard context beside each record, so a record recovered after a
+  relaunch is broken down by the app version, system and device it was tracked on.
 - `isDebug` decides where events go. Aptabase shows events marked as debug events only in its
   Debug mode, apart from your users' events, and keeps them for months rather than years.
 - Aptabase requires an `sdkVersion` with every event, and keeps it, but its events dashboard

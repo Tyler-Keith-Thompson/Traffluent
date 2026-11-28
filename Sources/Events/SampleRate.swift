@@ -1,5 +1,5 @@
-/// The fraction of events, or of groups of events, a ``Sampler`` keeps: a probability from 0, none,
-/// to 1, every one.
+/// The fraction of events, or of groups of events, a `Sampler` (module `Trackers`) keeps: a
+/// probability from 0, none, to 1, every one.
 ///
 /// ```swift
 /// let sampler = Sampler.events(of: Scrolled.self, rate: try SampleRate(0.1))
@@ -26,7 +26,7 @@ public struct SampleRate: Hashable, Sendable {
 
     /// The rate of keeping what both this rate and `other` keep: their product, which is in
     /// 0 ... 1 as both are.
-    func multiplied(by other: SampleRate) -> SampleRate {
+    package func multiplied(by other: SampleRate) -> SampleRate {
         SampleRate(product: value * other.value)
     }
 }

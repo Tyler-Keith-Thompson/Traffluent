@@ -2,7 +2,7 @@ public import Foundation
 public import Events
 
 extension Enricher {
-    /// An enricher that sets every record's ``LocaleKey`` to `locale`.
+    /// An enricher that sets every record's ``/Events/LocaleKey`` to `locale`.
     ///
     /// ```swift
     /// let tracker = Tracker(enrichers: [.locale()])

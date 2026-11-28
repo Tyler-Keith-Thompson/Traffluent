@@ -1,3 +1,4 @@
+import Events
 import Foundation
 import LifecycleTracking
 import Sessions

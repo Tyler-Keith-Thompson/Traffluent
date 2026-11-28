@@ -107,7 +107,8 @@ account.signOut()
 tracker.track(CheckoutStarted(itemCount: 1))  // carries SessionKey only
 ```
 
-A store keeps only the session of a record's context, so a record recovered from an earlier run
+A store keeps only the library's own keys of a record's context (its session, sample rate,
+screen and standard context), never one of yours, so a record recovered from an earlier run
 arrives with its `SessionKey` but without your identifier.
 
 ### Keep it from destinations

@@ -22,6 +22,10 @@ every event like ``Tracker/noOp`` and logs a warning for the first one at each c
 alone, for code a task-local context doesn't reach. To enrich only what one destination receives, apply
 `enriched(by:)` to that destination instead (module `Destinations`).
 
+A sampler's rate is a ``/Events/SampleRate``, and each record it keeps carries that rate as its
+``/Events/SampleRateKey``; both are in the `Events` module, as a store keeps the rate beside its
+record.
+
 The tracker reports every event it drops: one that breaks a declared constraint on
 ``Tracker/rejectionReports``, one a sampler leaves out on ``Tracker/samplingDropReports``, and a
 record a consent drops on ``Consent/dropReports``.
@@ -64,9 +68,6 @@ The umbrella guide on this area is
 ### Sampling
 
 - ``Sampler``
-- ``SampleRate``
-- ``SampleRateKey``
-- ``InvalidSampleRate``
 
 ### Consent
 

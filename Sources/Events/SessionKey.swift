@@ -19,8 +19,8 @@ public import Instrumentation
 /// A store keeps it beside each record of the session, as part of the record's own bytes, and it
 /// is deleted when the store deletes the record's bytes (a `SegmentStore`: once its whole segment
 /// is delivered). So a record recovered after a relaunch carries the session it was tracked in,
-/// and a destination sends it under the same identifier as before. It is the only part of a record's context a store keeps, and a store never keeps
-/// it apart from a record.
+/// and a destination sends it under the same identifier as before. It is the one identifier in a
+/// record's context a store keeps, and a store never keeps it apart from a record.
 public enum SessionKey: ServiceContextKey {
     /// The session's identifier.
     public typealias Value = UUID

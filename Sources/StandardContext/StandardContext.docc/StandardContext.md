@@ -6,8 +6,11 @@ Stamp every event with the app, device, operating system, locale and network con
 
 Each standard value has an enricher of its own, and nothing is added to a record until the app
 builds its tracker with that enricher. Each one sets a typed `ServiceContext` key whose value a
-destination reads from the record's context: ``ApplicationKey``, ``DeviceKey``,
-``OperatingSystemKey``, ``LocaleKey``, ``NetworkKey`` and ``VendorIdentifierKey``.
+destination reads from the record's context: ``/Events/ApplicationKey``, ``/Events/DeviceKey``,
+``/Events/OperatingSystemKey``, ``/Events/LocaleKey``, ``/Events/NetworkKey`` and
+``VendorIdentifierKey``. The first five are in the `Events` module, as a store keeps them beside
+each record, so a record recovered after a relaunch carries the values it was tracked with. This
+module reads the values the platform reports.
 
 The app, device, operating system and locale are read once, when the enricher is made, never per
 event. The network connection changes while the app runs, so on Apple platforms `network()` starts
@@ -19,7 +22,7 @@ nothing, and a server or tool, whose process usually has no Info.plist, passes i
 `vendorIdentifier()`, made on the main actor, adds the platform's identifier for vendor as a
 `Sensitive` value. It is the one identifier here that outlives a session, so add it only when the
 app has decided to and has the user's consent. It is never stored or made up: on macOS and Linux,
-which have none, records carry no key.
+which have none, records carry no key, and a store never writes it.
 
 For the session an event was tracked in, use `Sessions`.
 
@@ -41,27 +44,22 @@ covers each value and the identifier for vendor in more detail.
 ### The app
 
 - ``Events/Enricher/application(_:)``
-- ``ApplicationKey``
 
 ### The device
 
 - ``Events/Enricher/device(_:)``
-- ``DeviceKey``
 
 ### The operating system
 
 - ``Events/Enricher/operatingSystem(_:)``
-- ``OperatingSystemKey``
 
 ### The locale
 
 - ``Events/Enricher/locale(_:)``
-- ``LocaleKey``
 
 ### The network connection
 
 - ``Events/Enricher/network()``
-- ``NetworkKey``
 
 ### The identifier for vendor
 

@@ -1,7 +1,7 @@
 public import Events
 
 extension Enricher {
-    /// An enricher that sets every record's ``NetworkKey`` to the connection the device uses when
+    /// An enricher that sets every record's ``/Events/NetworkKey`` to the connection the device uses when
     /// the tracker's worker reaches it, or, given to a destination with `enriched(by:)`, when the
     /// delivery hands that destination the record's batch.
     ///
@@ -28,7 +28,7 @@ extension Enricher {
         #endif
     }
 
-    /// An enricher that sets every record's ``NetworkKey`` to what `connection` returns when the
+    /// An enricher that sets every record's ``/Events/NetworkKey`` to what `connection` returns when the
     /// tracker's worker reaches it, or a destination's delivery does, or sets nothing for `nil`.
     ///
     /// - Parameter connection: The connection now; it runs where the enricher does (the tracker's

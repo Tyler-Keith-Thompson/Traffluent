@@ -1,7 +1,7 @@
 public import Instrumentation
 
-/// The `ServiceContext` key of the rate a record was kept at, which a tracker's ``Sampler``s set on
-/// the context of every record they keep.
+/// The `ServiceContext` key of the rate a record was kept at, which a tracker's samplers (`Sampler`,
+/// module `Trackers`) set on the context of every record they keep.
 ///
 /// A destination weights each record by it, counting one kept at 0.1 as ten:
 ///
@@ -10,8 +10,9 @@ public import Instrumentation
 /// ```
 ///
 /// A record that several samplers kept carries the product of their rates, the probability that
-/// it was kept. One no sampler applies to carries no key: it was kept for certain. Nor does one a
-/// store recovered from an earlier run, as a store keeps only the session of a record's context.
+/// it was kept. One no sampler applies to carries no key: it was kept for certain. A store keeps
+/// the rate beside its record, so a record recovered after a relaunch is weighted as it was when
+/// it was tracked.
 public enum SampleRateKey: ServiceContextKey {
     /// The rate the record was kept at.
     public typealias Value = SampleRate

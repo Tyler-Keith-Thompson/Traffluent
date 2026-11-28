@@ -15,14 +15,14 @@
 TESTS = ["StandardContextTests"]
 
 A = "Enricher+Application.swift"
-AK = "ApplicationKey.swift"
+AK = "ApplicationKey+Bundle.swift"
 D = "Enricher+Device.swift"
-DK = "DeviceKey.swift"
+DK = "DeviceKey+Current.swift"
 O = "Enricher+OperatingSystem.swift"
-OK = "OperatingSystemKey.swift"
+OK = "OperatingSystemKey+Current.swift"
 L = "Enricher+Locale.swift"
 N = "Enricher+Network.swift"
-NK = "NetworkKey.swift"
+NK = "NetworkKey+Path.swift"
 V = "Enricher+VendorIdentifier.swift"
 VK = "VendorIdentifierKey.swift"
 
@@ -41,7 +41,7 @@ MUTANTS = [
     Mutant("localeperevent", L, "context[LocaleKey.self] = locale", "context[LocaleKey.self] = Locale(identifier: \"en_US_POSIX\")", mode="stmt"),
     # What the platform reads.
     Mutant("versionisbuild", AK, "\"CFBundleShortVersionString\"", "\"CFBundleVersion\""),
-    Mutant("osversionnopatch", OK, "            return Value(name: name, version: \"\\(version.majorVersion).\\(version.minorVersion).\\(version.patchVersion)\")", "            return Value(name: name, version: \"\\(version.majorVersion).\\(version.minorVersion)\")", mode="stmt"),
+    Mutant("osversionnopatch", OK, "        return OperatingSystemKey.Value(name: name, version: \"\\(version.majorVersion).\\(version.minorVersion).\\(version.patchVersion)\")", "        return OperatingSystemKey.Value(name: name, version: \"\\(version.majorVersion).\\(version.minorVersion)\")", mode="stmt"),
     Mutant("padisphone", DK, "            self = .pad", "            self = .phone", mode="stmt"),
     # The network: read per event, and a path mapped to its connection.
     Mutant("networkonce", N, "connection()", "Optional(NetworkKey.Value.wifi)"),

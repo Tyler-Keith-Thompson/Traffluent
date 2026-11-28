@@ -16,7 +16,7 @@ internal import SeedTrees
 /// ```
 ///
 /// Each sampler decides on its own, and a record is kept only if every sampler that applies to it
-/// keeps it. A kept record carries the product of their rates as its ``SampleRateKey``; one no
+/// keeps it. A kept record carries the product of their rates as its ``/Events/SampleRateKey``; one no
 /// sampler applies to is always kept and carries no key. Each dropped record is reported on
 /// ``Tracker/samplingDropReports``.
 ///

@@ -1,5 +1,6 @@
 #if canImport(Network)
 import Dispatch
+internal import Events
 internal import Network
 import Synchronization
 

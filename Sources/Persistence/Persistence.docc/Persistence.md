@@ -21,6 +21,11 @@ synthesized conformance, reads back to within a rounding of a microsecond's scal
 types, such as one that conforms to `Event` by hand without being listed, are delivered in this
 run but never written, and reported once as ``DropReport/notPersisted(event:)``.
 
+A record keeps its session, sample rate, screen and standard context (app, device, operating
+system, locale and network) beside it, so a record recovered after a relaunch reaches destinations
+as it was tracked. No other key of its context is kept: not the identifier for vendor, a key of
+the app's own, or the trace. ``SegmentStore`` lists each key.
+
 A store doesn't read the records Traffluent 0.0.44 or earlier wrote, in an earlier format:
 ``SegmentStore`` deletes their segments and reports each as a corruption.
 

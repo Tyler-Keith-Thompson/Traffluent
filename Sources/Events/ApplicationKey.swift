@@ -1,14 +1,17 @@
-public import Foundation
 public import Instrumentation
 
 /// The `ServiceContext` key of the app an event was tracked in: its bundle identifier, version and
-/// build, which `Enricher.application(_:)` sets on every record's context.
+/// build, which `Enricher.application(_:)` (module `StandardContext`) sets on every record's
+/// context.
 ///
 /// A destination reads it from each record's context:
 ///
 /// ```swift
 /// let version = record.context[ApplicationKey.self]?.version  // "2.4.1"
 /// ```
+///
+/// A store keeps it beside its record, so a record recovered after a relaunch carries the app it
+/// was tracked in, not the one that delivers it.
 public enum ApplicationKey: ServiceContextKey {
     /// An app's bundle identifier, version and build, each `nil` where its bundle doesn't say.
     public struct Value: Hashable, Sendable {
@@ -29,25 +32,6 @@ public enum ApplicationKey: ServiceContextKey {
             self.bundleIdentifier = bundleIdentifier
             self.version = version
             self.build = build
-        }
-
-        /// The app `bundle` describes, read from its Info.plist.
-        ///
-        /// - Parameter bundle: The bundle to read, such as an app extension's containing app.
-        public init(bundle: Bundle) {
-            self.init(
-                bundleIdentifier: bundle.bundleIdentifier,
-                version: bundle.infoDictionary?["CFBundleShortVersionString"] as? String,
-                build: bundle.infoDictionary?["CFBundleVersion"] as? String
-            )
-        }
-
-        /// The running app, as its main bundle describes it.
-        ///
-        /// On Linux a process usually has no Info.plist, so each value is `nil`: a server or tool
-        /// passes its own to `Enricher.application(_:)`.
-        public static var current: Value {
-            Value(bundle: .main)
         }
     }
 }

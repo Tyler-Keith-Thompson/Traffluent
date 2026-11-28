@@ -62,4 +62,5 @@ for await report in tracker.samplingDropReports {
 A session's decision is made from the seed and the session's identifier alone, so nothing records
 it. The sampler keeps only the current session's decision, in memory, and writes nothing, the
 identifier included. Records that a store recovered from an earlier run were sampled in that run,
-and come back with their session but without their rate.
+and come back with their session and their rate, so a destination weights them as it would have
+then. A tracker doesn't sample them again.

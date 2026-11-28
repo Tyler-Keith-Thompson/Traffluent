@@ -106,9 +106,9 @@ struct RecordStoreSessionTests {
         #expect(actual.context.isEmpty)
     }
 
-    @Test("Only the session is kept of a record's context: another key comes back absent", arguments: StoreKind.all)
-    func onlyTheSessionIsKept(kind: StoreKind) throws {
-        enum ScreenNameKey: ServiceContextKey {
+    @Test("A key of the app's own in a record's context comes back absent beside its session, as a store keeps only its listed keys", arguments: StoreKind.all)
+    func ownKeyNotKeptBesideSession(kind: StoreKind) throws {
+        enum RegionKey: ServiceContextKey {
             typealias Value = String
         }
         let path = StoreKind.temporaryPath()
@@ -116,7 +116,7 @@ struct RecordStoreSessionTests {
         let expected = UUID(uuidString: "019A2B3C-4D5E-7F60-8172-839405A6B7C8")!
         var context = ServiceContext.topLevel
         context[SessionKey.self] = expected
-        context[ScreenNameKey.self] = "Checkout"
+        context[RegionKey.self] = "eu-west"
         let store = try kind.open(at: path, events: [Tapped.self]).store
         _ = store.append(EventRecord(event: Tapped(number: 1), timestamp: Date(timeIntervalSince1970: 0), sourceLocation: nil, context: context))
         let copy = path + "-copy"
@@ -126,7 +126,7 @@ struct RecordStoreSessionTests {
         let actual = try #require(try kind.open(at: copy, events: [Tapped.self]).store.takeRecoveredRecords().first)
 
         #expect(actual.context[SessionKey.self] == expected)
-        #expect(actual.context[ScreenNameKey.self] == nil)
+        #expect(actual.context[RegionKey.self] == nil)
         #expect(actual.context.count == 1)
     }
 

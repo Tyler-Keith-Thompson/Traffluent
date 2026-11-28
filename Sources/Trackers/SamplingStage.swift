@@ -39,7 +39,7 @@ struct SamplingStage {
     }
 
     /// Whether every sampler that applies to `record` keeps it; if so, and any applies, sets
-    /// `record`'s ``SampleRateKey`` to the product of their rates.
+    /// `record`'s ``/Events/SampleRateKey`` to the product of their rates.
     ///
     /// Every sampler that applies decides, even once another has dropped the record, so each
     /// one's stream moves the same whatever the others decide.

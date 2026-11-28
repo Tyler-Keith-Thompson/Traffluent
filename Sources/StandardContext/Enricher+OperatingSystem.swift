@@ -1,7 +1,7 @@
 public import Events
 
 extension Enricher {
-    /// An enricher that sets every record's ``OperatingSystemKey`` to `operatingSystem`.
+    /// An enricher that sets every record's ``/Events/OperatingSystemKey`` to `operatingSystem`.
     ///
     /// ```swift
     /// let tracker = Tracker(enrichers: [.operatingSystem()])

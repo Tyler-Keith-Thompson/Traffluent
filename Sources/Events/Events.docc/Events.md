@@ -79,7 +79,23 @@ The umbrella guide on this area is
 - ``EventRecord``
 - ``SourceLocation``
 - ``Enricher``
+
+### Context a store keeps
+
+The keys a store writes beside each record, so a record recovered after a relaunch carries them as
+it was tracked. Other modules set them: `Sessions`, a tracker's samplers (`Trackers`), the screen
+modifiers (`SwiftUITracking`, `AutomaticControlTracking`) and `StandardContext`.
+
 - ``SessionKey``
+- ``SampleRateKey``
+- ``SampleRate``
+- ``InvalidSampleRate``
+- ``ScreenKey``
+- ``ApplicationKey``
+- ``DeviceKey``
+- ``OperatingSystemKey``
+- ``LocaleKey``
+- ``NetworkKey``
 
 ### Stores
 

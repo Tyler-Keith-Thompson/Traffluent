@@ -190,6 +190,19 @@ let benchmarks: @Sendable () -> Void = {
         context[SessionKey.self] = UUID(uuidString: "019A2B3C-4D5E-7F60-8172-839405A6B7C8")
         return records.map { EventRecord(id: $0.id, event: $0.event, timestamp: $0.timestamp, sourceLocation: location, context: context) }
     }()
+    // The same records with every context key a store keeps, as a tracker with the sessions and
+    // standard context enrichers, a sampler and a screen stamps them.
+    let contextRecords: [EventRecord] = {
+        var context = sessionRecords[0].context
+        context[SampleRateKey.self] = try? SampleRate(0.25)
+        context[ScreenKey.self] = "Checkout"
+        context[ApplicationKey.self] = ApplicationKey.Value(bundleIdentifier: "com.example.shop", version: "2.4.1", build: "418")
+        context[DeviceKey.self] = DeviceKey.Value(model: "iPhone17,1", formFactor: .phone)
+        context[OperatingSystemKey.self] = OperatingSystemKey.Value(name: "iOS", version: "26.1.0")
+        context[LocaleKey.self] = Locale(identifier: "fr_CA")
+        context[NetworkKey.self] = .wifi
+        return records.map { EventRecord(id: $0.id, event: $0.event, timestamp: $0.timestamp, sourceLocation: location, context: context) }
+    }()
     let positional = records.map {
         PositionalRecord(id: $0.id, timestamp: $0.timestamp, fileID: location.fileID, function: location.function, line: location.line, column: location.column, name: Tapped.name, number: ($0.event as! Tapped).number, screen: "Checkout")
     }
@@ -284,6 +297,35 @@ let benchmarks: @Sendable () -> Void = {
             // Closed before the store under measurement opens: one store per directory at a time.
             let earlier = try SegmentStore(events: [Tapped.self], directory: .init(directory))
             for record in sessionRecords {
+                _ = earlier.append(record)
+            }
+        }
+        benchmark.startMeasurement()
+        let store = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+        blackHole(store.takeRecoveredRecords())
+        benchmark.stopMeasurement()
+    }
+
+    // The append above, of records that carry every context key a store keeps.
+    Benchmark("record: SegmentStore append, with the kept context", configuration: .init(scalingFactor: .kilo)) { benchmark in
+        let directory = scratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let store = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+        benchmark.startMeasurement()
+        for record in contextRecords {
+            blackHole(store.append(record))
+        }
+        benchmark.stopMeasurement()
+    }
+
+    // The recovery above, of records that carry every context key a store keeps.
+    Benchmark("record: SegmentStore recovery, with the kept context", configuration: .init(scalingFactor: .kilo)) { benchmark in
+        let directory = scratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        do {
+            // Closed before the store under measurement opens: one store per directory at a time.
+            let earlier = try SegmentStore(events: [Tapped.self], directory: .init(directory))
+            for record in contextRecords {
                 _ = earlier.append(record)
             }
         }

@@ -23,7 +23,7 @@ K = "Worker.swift"
 D = "DroppedRecords.swift"
 N = "ConsentDropReport.swift"
 J = "RejectionReport.swift"
-R = "SampleRate.swift"
+R = "SampleRate.swift"  # in Events, as a store keeps the rate (TRAF-145): module="Events"
 P = "Sampler.swift"
 A = "SamplingStage.swift"
 O = "SamplingDropReport.swift"
@@ -230,10 +230,10 @@ MUTANTS = [
     Mutant("shortcircuit", A, "samplers[index].selects(record)", "keeps && samplers[index].selects(record)"),
     Mutant("anydecisionkeeps", A, "keeps = keeps && decision", "keeps = keeps || decision", mode="stmt"),
     Mutant("ratenotmultiplied", A, "rate?.multiplied(by: samplers[index].rate) ?? samplers[index].rate", "samplers[index].rate"),
-    Mutant("productisother", R, "value * other.value", "other.value"),
+    Mutant("productisother", R, "value * other.value", "other.value", module="Events"),
     Mutant("ratenotstamped", A, "record.context[SampleRateKey.self] = rate", "", mode="stmt"),
-    Mutant("ratetopbound", R, "(0 ... 1).contains(value)", "(0 ..< 1).contains(value)"),
-    Mutant("rateunbounded", R, "(0 ... 1).contains(value)", "value >= 0"),
+    Mutant("ratetopbound", R, "(0 ... 1).contains(value)", "(0 ..< 1).contains(value)", module="Events"),
+    Mutant("rateunbounded", R, "(0 ... 1).contains(value)", "value >= 0", module="Events"),
     Mutant("anyeventtype", P, "$0.event is E", "true"),
     Mutant("ungroupeddropped", P, "return nil", "return false", mode="stmt"),
     Mutant("stalegroup", P, "latest.group == group", "true"),

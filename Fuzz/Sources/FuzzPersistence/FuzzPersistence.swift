@@ -16,7 +16,17 @@
 // holding a value of another type, an unknown event type, bytes past its map or a version other
 // than its type's must not. A record's session, a UUID string under `session`, comes back as its
 // context's SessionKey, and one without it comes back sessionless (TRAF-122); a session that
-// isn't a UUID string, null included, makes the record undecodable.
+// isn't a UUID string, null included, makes the record undecodable. So do the other context keys
+// a store keeps (TRAF-145), members of a map under `context`: the sample rate (a double in
+// 0 ... 1 under `sampleRate`), the screen (text under `screen`), the app (a map of
+// `bundleIdentifier`, `version` and `build`, each there or not, under `application`), the device
+// (a map of `model` and its form factor's name under `device`), the operating system (a map of
+// `name` and `version` under `operatingSystem`), the locale (its identifier under `locale`) and
+// the network connection (its name under `network`). Each comes back as its key, or the key is
+// absent when the member is; a member of another name is skipped; a form factor or network name
+// no case has, as a later release might write, reads as that key absent (the whole device, for a
+// form factor) and the record is kept; and a member holding anything else, null included, or a
+// `context` that isn't a map, makes the record undecodable.
 
 import AsyncQueues
 import Checksums
@@ -74,6 +84,11 @@ enum FuzzPersistence {
         value < 0 ? head(1, UInt64(-1 - value)) : head(0, UInt64(value))
     }
 
+    /// A double-precision float.
+    static func double(_ value: Double) -> [UInt8] {
+        [0xFB] + bigEndian(value.bitPattern, count: 8)
+    }
+
     /// A CBOR map of `entries`, in order.
     static func map(_ entries: [(key: String, value: [UInt8])]) -> [UInt8] {
         head(5, UInt64(entries.count)) + entries.flatMap { text($0.key) + $0.value }
@@ -83,12 +98,12 @@ enum FuzzPersistence {
     /// timestamp, event name, version (left out when `nil`, a record with no version to compare),
     /// call site and event, with `extra` entries after them.
     static func recordPayload(id: UUID, name: String, version: Int? = 1, event: [UInt8], extra: [(key: String, value: [UInt8])] = []) -> [UInt8] {
-        recordPayload(id: id, name: name, version: version, session: nil, event: event, extra: extra)
+        recordPayload(id: id, name: name, version: version, context: [], event: event, extra: extra)
     }
 
-    /// The payload of a record whose session, when there is one, is `session`'s bytes under
-    /// `session`, before its event.
-    static func recordPayload(id: UUID, name: String, version: Int?, session: [UInt8]?, event: [UInt8], extra: [(key: String, value: [UInt8])]) -> [UInt8] {
+    /// The payload of a record whose context members, `session` and `context`, are `context`,
+    /// before its event.
+    static func recordPayload(id: UUID, name: String, version: Int?, context: [(key: String, value: [UInt8])], event: [UInt8], extra: [(key: String, value: [UInt8])]) -> [UInt8] {
         let location = map([("fileID", text("App/File.swift")), ("function", text("f()")), ("line", integer(1)), ("column", integer(1))])
         var entries: [(key: String, value: [UInt8])] = [
             ("id", text(id.uuidString)),
@@ -100,9 +115,7 @@ enum FuzzPersistence {
             entries.append(("version", integer(version)))
         }
         entries.append(("sourceLocation", location))
-        if let session {
-            entries.append(("session", session))
-        }
+        entries += context
         entries.append(("event", event))
         return [0] + map(entries + extra)
     }
@@ -116,12 +129,34 @@ enum FuzzPersistence {
         return map(entries)
     }
 
-    /// A record frame the fuzzer built: the record's identifier, event and session.
+    /// A record frame the fuzzer built: the record's identifier, event and the context keys it
+    /// holds.
     struct Built: Hashable {
         var id: UUID
         var event: Tapped
         var session: UUID?
+        var sampleRate: Double?
+        var screen: String?
+        var application: ApplicationKey.Value?
+        var device: DeviceKey.Value?
+        var operatingSystem: OperatingSystemKey.Value?
+        var locale: String?
+        var network: NetworkKey.Value?
+
+        /// How many keys a recovered record's context holds.
+        var contextCount: Int {
+            [session != nil, sampleRate != nil, screen != nil, application != nil, device != nil, operatingSystem != nil, locale != nil, network != nil].filter { $0 }.count
+        }
     }
+
+    /// Each network connection and its name in a record map.
+    /// Each network connection and its name in a record map, and a name no case has, which reads as
+    /// no connection.
+    static let networks: [(name: String, value: NetworkKey.Value?)] = [("wifi", .wifi), ("cellular", .cellular), ("wiredEthernet", .wiredEthernet), ("other", .other), ("offline", .offline), ("satellite", nil)]
+
+    /// Each form factor and its name in a record map, and a name no case has, which reads as no
+    /// device.
+    static let formFactors: [(name: String, value: DeviceKey.Value.FormFactor?)] = [("phone", .phone), ("pad", .pad), ("mac", .mac), ("tv", .tv), ("watch", .watch), ("vision", .vision), ("car", nil)]
 
     /// What the model reads from a segment's bytes.
     struct Reading {
@@ -188,7 +223,7 @@ enum FuzzPersistence {
                     // Keys reordered, or ones the store doesn't know, in the event or the record:
                     // written by another release, and still decodable.
                     let eventBytes = eventMap(event, reversed: input.int(below: 2) == 0, unknown: input.int(below: 2) == 0)
-                    let extra: [(key: String, value: [UInt8])] = input.int(below: 2) == 0 ? [("context", map([("k", text("v"))]))] : []
+                    let extra: [(key: String, value: [UInt8])] = input.int(below: 2) == 0 ? [("unknown", map([("k", text("v"))]))] : []
                     // Version 1, written or left out.
                     let version: Int? = input.int(below: 3) == 0 ? nil : 1
                     // A session from a few values, in uppercase as Foundation writes it or in
@@ -196,21 +231,79 @@ enum FuzzPersistence {
                     // without one, or written before stores kept sessions, has.
                     let session: UUID? = input.int(below: 3) == 0 ? nil : UUID(uuid: (0x01, 0x9A, 0, 0, 0, 0, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, UInt8(input.int(below: 3))))
                     let sessionText = session.map { input.int(below: 4) == 0 ? $0.uuidString.lowercased() : $0.uuidString }
-                    let payload = recordPayload(id: id, name: "Tapped", version: version, session: sessionText.map(text), event: eventBytes, extra: extra)
-                    built[Array(payload.dropFirst())] = Built(id: id, event: event, session: session)
+                    // The other kept keys, each there or not, at their bounds among their values.
+                    let sampleRate: Double? = input.int(below: 2) == 0 ? nil : [0, 0.25, 1, .leastNonzeroMagnitude, 1.0.nextDown][input.int(below: 5)]
+                    let screen: String? = input.int(below: 2) == 0 ? nil : ["", "Cart", "Checkout"][input.int(below: 3)]
+                    let network = input.int(below: 2) == 0 ? nil : networks[input.int(below: networks.count)]
+                    let system: OperatingSystemKey.Value? = input.int(below: 2) == 0 ? nil : OperatingSystemKey.Value(name: "iOS", version: "26.\(input.int(below: 3)).0")
+                    let application: ApplicationKey.Value? = input.int(below: 2) == 0 ? nil : ApplicationKey.Value(
+                        bundleIdentifier: input.int(below: 2) == 0 ? nil : "com.example.shop",
+                        version: input.int(below: 2) == 0 ? nil : "2.4.\(input.int(below: 3))",
+                        build: input.int(below: 2) == 0 ? nil : ""
+                    )
+                    let device = input.int(below: 2) == 0 ? nil : (model: ["", "iPhone17,1"][input.int(below: 2)], formFactor: formFactors[input.int(below: formFactors.count)])
+                    let locale: String? = input.int(below: 2) == 0 ? nil : ["en", "fr_CA", "ja_JP"][input.int(below: 3)]
+                    var members: [(key: String, value: [UInt8])] = []
+                    if let sampleRate { members.append(("sampleRate", double(sampleRate))) }
+                    if let screen { members.append(("screen", text(screen))) }
+                    if let network { members.append(("network", text(network.name))) }
+                    if let system { members.append(("operatingSystem", map([("name", text(system.name)), ("version", text(system.version))]))) }
+                    if let application {
+                        var fields: [(key: String, value: [UInt8])] = []
+                        if let value = application.bundleIdentifier { fields.append(("bundleIdentifier", text(value))) }
+                        if let value = application.version { fields.append(("version", text(value))) }
+                        if let value = application.build { fields.append(("build", text(value))) }
+                        members.append(("application", map(fields)))
+                    }
+                    if let device { members.append(("device", map([("model", text(device.model)), ("formFactor", text(device.formFactor.name))]))) }
+                    if let locale { members.append(("locale", text(locale))) }
+                    // In another order too, as another encoder might write them, and with a member
+                    // of another name, as a later release might add.
+                    if input.int(below: 2) == 0 { members.reverse() }
+                    if input.int(below: 4) == 0 { members.insert(("region", text("eu-west")), at: 0) }
+                    var context: [(key: String, value: [UInt8])] = []
+                    if let sessionText { context.append(("session", text(sessionText))) }
+                    if !members.isEmpty { context.append(("context", map(members))) }
+                    let payload = recordPayload(id: id, name: "Tapped", version: version, context: context, event: eventBytes, extra: extra)
+                    built[Array(payload.dropFirst())] = Built(
+                        id: id, event: event, session: session, sampleRate: sampleRate, screen: screen, application: application,
+                        device: device.flatMap { device in device.formFactor.value.map { DeviceKey.Value(model: device.model, formFactor: $0) } },
+                        operatingSystem: system, locale: locale, network: network.flatMap(\.value)
+                    )
                     bytes += frame(payload)
                     records += 1
                 case 3:
                     // A record the store can't decode: an unlisted type, bytes past its map, an
                     // event missing a required property, one whose property has another type, a
                     // readable event stored at another version than Tapped's, 1, or one whose
-                    // session isn't a UUID string.
+                    // context member isn't in its form: a session that isn't a UUID string, a
+                    // sample rate outside 0 ... 1 or written as an integer, a screen that isn't
+                    // text, an app whose field isn't text, a device without its model or form
+                    // factor, a network connection that isn't text, an operating system without
+                    // its version, a locale that isn't text, or null.
                     let id = UUID(uuid: (9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
                     let payload: [UInt8]
                     switch input.int(below: 6) {
                     case 5:
-                        let session = [integer(7), text("not-a-uuid"), map([]), [0xF6]][input.int(below: 4)]
-                        payload = recordPayload(id: id, name: "Tapped", version: 1, session: session, event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false), extra: [])
+                        let members: [(key: String, value: [UInt8])] = [
+                            ("session", integer(7)), ("session", text("not-a-uuid")), ("session", map([])), ("session", [0xF6]),
+                            ("sampleRate", double(1.0.nextUp)), ("sampleRate", double(-Double.leastNonzeroMagnitude)), ("sampleRate", double(.nan)), ("sampleRate", integer(1)), ("sampleRate", [0xF6]),
+                            ("screen", integer(3)), ("screen", [0xF6]),
+                            ("application", [0xF6]), ("application", text("com.example.shop")), ("application", map([("version", [0xF6])])), ("application", map([("build", integer(418))])),
+                            ("device", [0xF6]), ("device", map([("formFactor", text("phone"))])), ("device", map([("model", text("iPhone17,1"))])), ("device", map([("model", text("iPhone17,1")), ("formFactor", [0xF6])])), ("device", map([("model", text("iPhone17,1")), ("formFactor", integer(1))])),
+                            ("locale", [0xF6]), ("locale", integer(1)),
+                            ("network", integer(0)), ("network", [0xF6]),
+                            ("operatingSystem", map([("name", text("iOS"))])), ("operatingSystem", [0xF6]),
+                            ("context", [0xF6]), ("context", text("Checkout")), ("context", integer(1)),
+                        ]
+                        let member = members[input.int(below: members.count)]
+                        // The session is a member of the record map, the rest of the context map,
+                        // which is itself malformed in the last cases.
+                        let context: (key: String, value: [UInt8]) = switch member.key {
+                        case "session", "context": member
+                        default: ("context", map([member]))
+                        }
+                        payload = recordPayload(id: id, name: "Tapped", version: 1, context: [context], event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false), extra: [])
                     case 0: payload = recordPayload(id: id, name: "Other", event: map([]))
                     case 1: payload = recordPayload(id: id, name: "Tapped", event: eventMap(Tapped(number: 0, label: ""), reversed: false, unknown: false)) + [0x00]
                     case 2: payload = recordPayload(id: id, name: "Tapped", event: map([("number", integer(1))]))
@@ -270,8 +363,16 @@ enum FuzzPersistence {
             check(record.id == expectation.record.id, "recovered identifier \(record.id), model \(expectation.record.id)")
             check(record.isRedelivered == expectation.isRedelivered, "redelivered \(record.isRedelivered), model \(expectation.isRedelivered)")
             check(record.context[SessionKey.self] == expectation.record.session, "recovered session \(String(describing: record.context[SessionKey.self])), model \(String(describing: expectation.record.session))")
-            // The session is the only part of the context a store keeps.
-            check(record.context.count == (expectation.record.session == nil ? 0 : 1), "recovered a context of \(record.context.count) values")
+            check(record.context[SampleRateKey.self]?.value == expectation.record.sampleRate, "recovered sample rate \(String(describing: record.context[SampleRateKey.self])), model \(String(describing: expectation.record.sampleRate))")
+            check(record.context[ScreenKey.self] == expectation.record.screen, "recovered screen \(String(describing: record.context[ScreenKey.self])), model \(String(describing: expectation.record.screen))")
+            check(record.context[NetworkKey.self] == expectation.record.network, "recovered network \(String(describing: record.context[NetworkKey.self])), model \(String(describing: expectation.record.network))")
+            check(record.context[OperatingSystemKey.self] == expectation.record.operatingSystem, "recovered operating system \(String(describing: record.context[OperatingSystemKey.self])), model \(String(describing: expectation.record.operatingSystem))")
+            check(record.context[ApplicationKey.self] == expectation.record.application, "recovered app \(String(describing: record.context[ApplicationKey.self])), model \(String(describing: expectation.record.application))")
+            check(record.context[DeviceKey.self] == expectation.record.device, "recovered device \(String(describing: record.context[DeviceKey.self])), model \(String(describing: expectation.record.device))")
+            check(record.context[LocaleKey.self]?.identifier == expectation.record.locale, "recovered locale \(String(describing: record.context[LocaleKey.self])), model \(String(describing: expectation.record.locale))")
+            // Only the members the record holds come back: an entry of another name, in the record
+            // map or the context map, is no key.
+            check(record.context.count == expectation.record.contextCount, "recovered a context of \(record.context.count) values, model \(expectation.record.contextCount)")
         }
         // Dropped records beside ones to deliver: the segment is rewritten without them.
         let isRewritten = !expected.isEmpty && expected.count < model.records.count
@@ -292,6 +393,8 @@ enum FuzzPersistence {
                 check(match?.event as? Tapped == record.event as? Tapped, "read back \(String(describing: match?.event)), recovered \(record.event)")
                 check(match?.id == record.id, "read back identifier \(String(describing: match?.id)), recovered \(record.id)")
                 check(match?.context[SessionKey.self] == record.context[SessionKey.self], "read back session \(String(describing: match?.context[SessionKey.self])), recovered \(String(describing: record.context[SessionKey.self]))")
+                check(match?.context[SampleRateKey.self] == record.context[SampleRateKey.self], "read back sample rate \(String(describing: match?.context[SampleRateKey.self])), recovered \(String(describing: record.context[SampleRateKey.self]))")
+                check(match?.context.count == record.context.count, "read back a context of \(String(describing: match?.context.count)) values, recovered \(record.context.count)")
             }
         }
 

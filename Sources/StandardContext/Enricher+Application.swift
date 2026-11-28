@@ -1,7 +1,7 @@
 public import Events
 
 extension Enricher {
-    /// An enricher that sets every record's ``ApplicationKey`` to `application`.
+    /// An enricher that sets every record's ``/Events/ApplicationKey`` to `application`.
     ///
     /// ```swift
     /// let tracker = Tracker(enrichers: [.application()])

@@ -70,13 +70,26 @@ undelivered, each segment reported on `dropReports` as `.corruption`.
 The store makes the log durable against power loss too (`fsync`), once per batch. Call
 `store.synchronize()`, after `tracker.flush()`, as the app moves to the background or terminates.
 
-A recovered record keeps one value of its `ServiceContext`: its session's `SessionKey`, written in
-the record's own bytes and deleted when the store deletes them (a `SegmentStore`: once the record's
-whole segment is delivered). So a vendor destination sends it under the identity it was first sent
-with, and, where the vendor deduplicates, the vendor can drop a second copy. A record
-tracked without a session comes back without one. The rest of the context isn't kept: the
-record otherwise comes back in the top-level context, with no screen, standard context, sample
-rate or trace.
+A recovered record keeps these keys of its `ServiceContext`, written in the record's own bytes and
+deleted when the store deletes them (a `SegmentStore`: once the record's whole segment is
+delivered):
+
+- its session's `SessionKey`, so a vendor destination sends it under the identity it was first sent
+  with, and, where the vendor deduplicates, the vendor can drop a second copy;
+- its `SampleRateKey`, so a destination weights it by the rate it was sampled at;
+- its `ScreenKey` and its standard context (`ApplicationKey`, `DeviceKey`, `OperatingSystemKey`,
+  `LocaleKey`, `NetworkKey`), so it is counted under the screen, app version, device, system, locale
+  and network it was tracked on, not this run's. A locale is kept as its identifier.
+
+The store writes these keys whatever set them, so don't build a screen name, or an app or device
+value, from user data: an email address in a screen name would sit on disk until the record is
+delivered.
+
+A key the record didn't have comes back absent. Nothing else is kept, so the record otherwise comes
+back in the top-level context. A store never writes `VendorIdentifierKey`. It doesn't write a key
+of your own either, an account ID say, since it can't tell one from an identifier. Nor does it keep
+the trace, since the span ended with the earlier run. A destination
+that needs one of those must cope with a recovered record that lacks it.
 
 ### Changing an event's type
 

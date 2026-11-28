@@ -36,13 +36,22 @@ public import Persistence
 ///   they are delivered in this run like any other, are never written, and are lost if the app
 ///   ends first. The first record of each such type is reported as
 ///   `DropReport.notPersisted(event:)`, so a type left out by mistake shows up.
-/// - **A recovered record's session.** A record keeps the `SessionKey` of its context, written in
-///   its row's bytes, so a record recovered after a relaunch carries the session it was tracked
-///   in, and a vendor destination sends it under the same identity as the first time. A row
-///   written without a session comes back with none. The rest of its context is not kept: a
-///   recovered record is otherwise in the top-level `ServiceContext`, as its span ended with the
-///   earlier run.
-/// - **Deleting.** A record's row, its session included, is deleted once every destination has
+/// - **A recovered record's context.** A record keeps these keys of its context, written in its
+///   row's bytes, so a record recovered after a relaunch reaches destinations as it was tracked:
+///   - `SessionKey`, so a vendor destination sends it under the same identity as the first time;
+///   - `SampleRateKey`, so it is weighted by the rate it was sampled at;
+///   - `ScreenKey`, `ApplicationKey`, `DeviceKey`, `OperatingSystemKey`, `LocaleKey` and
+///     `NetworkKey`, so it is attributed to where it was tracked, not to the run that uploads it.
+///     A locale is kept as its identifier, so a preference the identifier doesn't spell is lost.
+///
+///   The store writes these keys whatever set them, so don't build a screen name, or an app or
+///   device value, from user data.
+///
+///   A key the record didn't have comes back absent. No other key is kept, so a recovered record
+///   is otherwise in the top-level `ServiceContext`: not `VendorIdentifierKey`, which Traffluent
+///   never stores; not a key of the app's own, such as an account's, which the store can't tell
+///   from an identifier; and not the trace context, as its span ended with the earlier run.
+/// - **Deleting.** A record's row, its context included, is deleted once every destination has
 ///   received it, so a table whose records are all delivered is empty, and the store keeps no
 ///   session apart from the records tracked in it. How long a deleted row's bytes remain in the
 ///   file is up to the database's journal mode and `secure_delete` setting: in WAL mode, the

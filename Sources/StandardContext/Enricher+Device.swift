@@ -1,7 +1,7 @@
 public import Events
 
 extension Enricher {
-    /// An enricher that sets every record's ``DeviceKey`` to `device`, or sets nothing for `nil`.
+    /// An enricher that sets every record's ``/Events/DeviceKey`` to `device`, or sets nothing for `nil`.
     ///
     /// ```swift
     /// let tracker = Tracker(enrichers: [.device()])
