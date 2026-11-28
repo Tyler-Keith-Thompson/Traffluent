@@ -9,8 +9,10 @@ import SnowplowEncoding
 import Testing
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("SnowplowBatchEncoder: skipped records")
-struct SnowplowSkippedRecordTests {
+private struct SnowplowSkippedRecordTests {
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

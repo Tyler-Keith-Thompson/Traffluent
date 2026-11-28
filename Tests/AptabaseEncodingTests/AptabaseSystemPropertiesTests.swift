@@ -11,8 +11,10 @@ import TrackingPlans
 // src/Features/Ingestion/EventBody.cs, read 2026-11-27): IsDebug; OSName up to 30 characters,
 // OSVersion 100, Locale 10, AppVersion 50, AppBuildNumber 20, DeviceModel 100; SdkVersion required,
 // up to 40. Its model validation answers 400 for the whole request past one.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("AptabaseBatchEncoder: system properties")
-struct AptabaseSystemPropertiesTests {
+private struct AptabaseSystemPropertiesTests {
     @Event(name: "opened")
     struct Opened {}
 

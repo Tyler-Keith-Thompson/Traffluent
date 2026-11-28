@@ -45,6 +45,12 @@ internal import LinkerSetsRuntime
 ///   open, or open them with `RTLD_NODELETE`.
 /// - A module that declares events, linked into two images, lists each of its events twice, and
 ///   stores and plans refuse the duplicate. Link each such module into one image.
+/// - Two events of one name in one linked image, the modules linked statically into one executable
+///   or library, fail to build: `@Event` gives each record a symbol named for the event's name,
+///   which the compiler or the linker refuses to define twice. Separate images are never compared,
+///   so a name shared with a dynamic library, a library opened with `dlopen`, or a module linked
+///   into two images is found only here, and a store or plan built from ``all`` refuses it. So is
+///   one declared inside a `private` or `fileprivate` type, whose symbol is local to its file.
 public struct DiscoveredEvent: Sendable {
     /// The event's type.
     public let type: any (Event & Codable).Type
@@ -60,8 +66,11 @@ public struct DiscoveredEvent: Sendable {
     /// Every event type the program links, ordered by the UTF-8 bytes of their names, then by
     /// version, then by the types' fully qualified names.
     ///
-    /// Two types may share a name: a store or a plan built from the list refuses them, as it
-    /// would the same types listed by hand.
+    /// Two types may share a name when they sit in separate images, or one is in a private type,
+    /// which the build doesn't compare: a store or a plan built from the list refuses them, as it
+    /// would the same types listed by hand. The fully qualified name of a type in a private scope
+    /// holds an address that changes between launches, so the order of such types of one name and
+    /// version, and the names a store's or plan's error gives for them, can change too.
     ///
     /// - Complexity: O(*n* log *n*) in the events, after a walk of the program's loaded images.
     public static var all: [DiscoveredEvent] {

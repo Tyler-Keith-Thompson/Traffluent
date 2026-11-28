@@ -9,8 +9,10 @@ import Foundation
 import Testing
 import Traffluent
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("Tracking events examples: bootstrap", .timeLimit(.minutes(1)))
-struct TrackingEventsExamplesExitTests {
+private struct TrackingEventsExamplesExitTests {
     @Event
     struct SignedUp {
         var plan: String

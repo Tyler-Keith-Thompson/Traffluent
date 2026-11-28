@@ -5,7 +5,8 @@
 // A discovery record is pinned as the one #__eventRecord call the expansion writes, which
 // assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
 // behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
-// same on every swift-syntax the plugin accepts.
+// same on every swift-syntax the plugin accepts. The function after it, whose symbol holds the
+// event's name so the linker refuses a second event of that name, is pinned as written.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -46,7 +47,14 @@ struct EventMacroEnumerationExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: CheckoutFailed.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_CheckoutFailed") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "reason", typeName: "Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.reason), keywords: Events.ValidationKeyword.keywords(of: \\Self.reason), enumeration: Events.EventSchema.Enumeration(cases: [.`paymentDeclined`, .`outOfStock`, .`networkUnavailable`] as [Self.Reason])),
@@ -138,7 +146,14 @@ struct EventMacroEnumerationExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Spelled.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Spelled") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Spelled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "own", typeName: "Self.Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.own), keywords: Events.ValidationKeyword.keywords(of: \\Self.own), enumeration: Events.EventSchema.Enumeration(cases: [.`a`] as [Self.Reason])),
@@ -274,7 +289,14 @@ struct EventMacroEnumerationExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Opened.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Opened") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "Plan", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.plan), keywords: Events.ValidationKeyword.keywords(of: \\Self.plan), enumeration: Events.EventSchema.Enumeration(of: \\Self.plan)),
@@ -394,7 +416,14 @@ struct EventMacroEnumerationExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: CheckoutFailed.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_CheckoutFailed") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension CheckoutFailed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "reason", typeName: "Reason", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.reason), keywords: Events.ValidationKeyword.keywords(of: \\Self.reason), enumeration: Events.EventSchema.Enumeration(cases: [.`declined`] as [Self.Reason])),
@@ -492,7 +521,14 @@ struct EventMacroEnumerationExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Shape.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Shape") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Shape: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "kind", typeName: "Kind", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.kind), keywords: Events.ValidationKeyword.keywords(of: \\Self.kind), enumeration: Events.EventSchema.Enumeration(cases: [.`Type`, .`self`, .`plain`] as [Self.Kind])),

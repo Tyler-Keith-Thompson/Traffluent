@@ -8,8 +8,10 @@ import Sessions
 import Testing
 import TraffluentTestSupport
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("EventRecord: pseudonymous identity and deduplication ID")
-struct PseudonymousIdentityTests {
+private struct PseudonymousIdentityTests {
     @Event(name: "opened")
     struct Opened {}
 

@@ -7,8 +7,10 @@ import TelemetryDeckEncoding
 import Testing
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TelemetryDeckBatchEncoder: identity")
-struct TelemetryDeckIdentityTests {
+private struct TelemetryDeckIdentityTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

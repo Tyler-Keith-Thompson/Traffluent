@@ -10,8 +10,10 @@ import TrackingPlans
 // EventsController.Multiple takes ("Too many events ... Maximum is 25.",
 // github.com/aptabase/aptabase at 89d36185, read 2026-11-27), and 1,000,000 bytes a request and an
 // event, the encoder's own bound, under the server's 30,000,000 and nginx's default 1 MiB.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("AptabaseBatchEncoder: splitting batches")
-struct AptabaseBatchSplittingTests {
+private struct AptabaseBatchSplittingTests {
     @Event(name: "searched")
     struct Searched {
         var query: String

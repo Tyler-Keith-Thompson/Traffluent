@@ -8,8 +8,10 @@ import Testing
 import TrackingPlans
 import TraffluentTestSupport
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("PropertyReader")
-struct PropertyReaderTests {
+private struct PropertyReaderTests {
     @Event(name: "signed_up", version: 2)
     struct SignedUp {
         var plan: String

@@ -10,6 +10,8 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
     case destructuringPattern
     case nameNotALiteral
     case emptyName
+    case nameMember
+    case discoverableNameMember
     case versionNotAPositiveLiteral
     case constraintNotAKeyword
     case countNotANonNegativeLiteral(keyword: String)
@@ -40,6 +42,10 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
             "@Event's name must be a string literal without interpolation"
         case .emptyName:
             "@Event's name must not be empty"
+        case .nameMember:
+            "@Event reads an event's name from its name: argument, which the linker checks no other event shares; give the name there, as a string literal, rather than as a member"
+        case .discoverableNameMember:
+            "@_DiscoverableEvent names the event after its type, which the linker checks no other event shares; remove this member, or rename the type"
         case .versionNotAPositiveLiteral:
             "@Event's version must be a positive integer literal"
         case .constraintNotAKeyword:
@@ -81,6 +87,8 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .destructuringPattern: "destructuringPattern"
         case .nameNotALiteral: "nameNotALiteral"
         case .emptyName: "emptyName"
+        case .nameMember: "nameMember"
+        case .discoverableNameMember: "discoverableNameMember"
         case .versionNotAPositiveLiteral: "versionNotAPositiveLiteral"
         case .constraintNotAKeyword: "constraintNotAKeyword"
         case .countNotANonNegativeLiteral: "countNotANonNegativeLiteral"
@@ -111,5 +119,20 @@ enum EventMacroDiagnostic: DiagnosticMessage, Error {
         case .genericNotDiscovered, .nestedInGenericNotDiscovered: true
         default: false
         }
+    }
+}
+
+/// The change the compiler offers beside a diagnostic.
+enum EventMacroFixIt: FixItMessage {
+    case moveNameToArgument
+
+    var message: String {
+        switch self {
+        case .moveNameToArgument: "Move the name into @Event(name:)"
+        }
+    }
+
+    var fixItID: MessageID {
+        MessageID(domain: "EventMacros", id: "moveNameToArgument")
     }
 }

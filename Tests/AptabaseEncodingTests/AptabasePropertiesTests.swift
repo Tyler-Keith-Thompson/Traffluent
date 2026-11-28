@@ -8,8 +8,10 @@ import TrackingPlans
 // strings "true" and "false", an array as "[Array]", an object as "{Object}" and null as ""
 // (github.com/aptabase/aptabase at 89d36185, EventBody.SplitProps, read 2026-11-27), so objects
 // and arrays are flattened and nulls left out.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("AptabaseBatchEncoder: properties")
-struct AptabasePropertiesTests {
+private struct AptabasePropertiesTests {
     struct Item: Codable, Hashable {
         var sku: String
         var gift: Bool

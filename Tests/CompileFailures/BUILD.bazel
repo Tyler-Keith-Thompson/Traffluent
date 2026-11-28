@@ -2,7 +2,18 @@
 # (tools/compile_failure_test.bzl). SwiftPM never sees this directory: no target holds it.
 
 load("//tools:compile_failure_test.bzl", "swift_compile_failure_test")
+load("//tools:link_test.bzl", "swift_link_test")
 load("//tools:swift_rules.bzl", "swift_library")
+
+# For the optimized link tests in Optimized/, a package of their own, as their modules take these
+# modules' names.
+exports_files([
+    "Checkout/OrderPlaced.swift",
+    "DistinctEventNames.swift",
+    "DuplicateEventNames.swift",
+    "Orders/OrderPlaced.swift",
+    "Shipping/OrderShipped.swift",
+])
 
 # @Event on a struct with a stored property whose type isn't Codable: the error names the
 # property, through the requirement the macro generates for each one.
@@ -342,6 +353,174 @@ swift_compile_failure_test(
     deps = [
         "//Sources/GoogleAnalyticsEncoding",
         "//Sources/HTTPDestinations",
+        "//Sources/TrackingPlans",
+    ],
+)
+
+# Event modules for the link checks below (tools/link_test.bzl), each declaring one public event.
+# Orders' and Checkout's share the name OrderPlaced; Fulfillment's has that name at version 2;
+# Shipping's is OrderShipped.
+swift_library(
+    name = "Orders",
+    testonly = True,
+    srcs = ["Orders/OrderPlaced.swift"],
+    module_name = "Orders",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_library(
+    name = "Checkout",
+    testonly = True,
+    srcs = ["Checkout/OrderPlaced.swift"],
+    module_name = "Checkout",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_library(
+    name = "Fulfillment",
+    testonly = True,
+    srcs = ["Fulfillment/PlacedOrder.swift"],
+    module_name = "Fulfillment",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_library(
+    name = "Shipping",
+    testonly = True,
+    srcs = ["Shipping/OrderShipped.swift"],
+    module_name = "Shipping",
+    deps = ["//Sources/EventMacros"],
+)
+
+# Two modules linked into one program, each with an event named OrderPlaced: the linker refuses the
+# program, naming the symbol of the name, the unique key @Event gives each event's record.
+# Checkout's archive is read on demand, as a build that doesn't force archives in reads it: its
+# record and its key's symbol come in together.
+swift_link_test(
+    name = "DuplicateEventNames",
+    size = "small",
+    expected_errors = [
+        "duplicate symbol",
+        "$linkerset_kind_65766E74_key_OrderPlaced",
+    ],
+    main = "DuplicateEventNames.swift",
+    on_demand = [":Checkout"],
+    tags = ["debug-only"],
+    deps = [
+        ":Checkout",
+        ":Orders",
+    ],
+)
+
+# The same name at another version clashes too: the key is the name alone.
+swift_link_test(
+    name = "DuplicateEventNamesAcrossVersions",
+    size = "small",
+    expected_errors = [
+        "duplicate symbol",
+        "$linkerset_kind_65766E74_key_OrderPlaced",
+    ],
+    main = "DuplicateEventNamesAcrossVersions.swift",
+    tags = ["debug-only"],
+    deps = [
+        ":Fulfillment",
+        ":Orders",
+    ],
+)
+
+# The control: events of different names link, and the program discovers both.
+swift_link_test(
+    name = "DistinctEventNames",
+    size = "small",
+    main = "DistinctEventNames.swift",
+    on_demand = [":Shipping"],
+    tags = ["debug-only"],
+    deps = [
+        ":Orders",
+        ":Shipping",
+        "//Sources/Events",
+    ],
+)
+
+# Two events of one name in one module: the compiler refuses the second definition of the symbol.
+swift_link_test(
+    name = "DuplicateEventNameInOneModule",
+    size = "small",
+    expected_errors = ["error: multiple definitions of symbol '$linkerset_kind_65766E74_key_order_5Fplaced'"],
+    main = "DuplicateEventNameInOneModule.swift",
+    plugins = {"//Sources/EventMacrosPlugin": "EventMacrosPlugin"},
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The control: two events of different names in one module compile, link and run, and the program
+# discovers both.
+swift_link_test(
+    name = "DistinctEventNamesInOneModule",
+    size = "small",
+    main = "DistinctEventNamesInOneModule.swift",
+    plugins = {"//Sources/EventMacrosPlugin": "EventMacrosPlugin"},
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# @Event in an extension that names a generic type's arguments, or has a where clause, compiles:
+# the macro sees the type is generic and leaves the record out with a note.
+swift_compile_failure_test(
+    name = "EventInSpecializedExtensionControl",
+    size = "small",
+    src = "EventInSpecializedExtensionControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# @Event declares the event's name itself, so a name declared where the macro can't read it, in an
+# extension or under #if, is a redeclaration the compiler refuses: the name can't differ from the
+# one the record's unique key checks.
+swift_compile_failure_test(
+    name = "EventNameElsewhere",
+    size = "small",
+    src = "EventNameElsewhere.swift",
+    expected_errors = [
+        "error: invalid redeclaration of 'name'",
+    ],
+    error_count = 2,
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# The same events with static members of other names compile.
+swift_compile_failure_test(
+    name = "EventNameElsewhereControl",
+    size = "small",
+    src = "EventNameElsewhereControl.swift",
+    plugin = "//Sources/EventMacrosPlugin",
+    plugin_module_name = "EventMacrosPlugin",
+    tags = ["debug-only"],
+    deps = ["//Sources/EventMacros"],
+)
+
+# Orders' and Checkout's sources again, each a shared library of its own that the program opens with
+# dlopen. The link check doesn't reach across images, so the program runs; it exits 0 only when
+# SegmentStore() and TrackingPlan() refuse the two events of one name at run time, naming both.
+swift_link_test(
+    name = "DuplicateEventNamesInLoadedLibraries",
+    size = "small",
+    loaded_libraries = {
+        "Orders/OrderPlaced.swift": "Orders",
+        "Checkout/OrderPlaced.swift": "Checkout",
+    },
+    main = "DuplicateEventNamesInLoadedLibraries.swift",
+    plugins = {"//Sources/EventMacrosPlugin": "EventMacrosPlugin"},
+    tags = ["debug-only"],
+    deps = [
+        "//Sources/EventMacros",
+        "//Sources/Events",
+        "//Sources/Persistence",
         "//Sources/TrackingPlans",
     ],
 )

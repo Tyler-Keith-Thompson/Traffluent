@@ -20,8 +20,10 @@ enum PlanTestsChannel: String, Codable {
     case email
 }
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TrackingPlan: raw-value enums")
-struct TrackingPlanEnumerationTests {
+private struct TrackingPlanEnumerationTests {
     @Event(name: "checkout_failed")
     struct CheckoutFailed {
         enum Reason: String, Codable {

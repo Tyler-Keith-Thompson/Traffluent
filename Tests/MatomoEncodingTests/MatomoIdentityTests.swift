@@ -14,8 +14,10 @@ import TraffluentTestSupport
 // read 2026-11-27): "_id ... must be a 16 characters hexadecimal string"; uid and cid set a user
 // and a forced visitor, and cip and cdt older than 24 hours need token_auth. D4: the session is
 // the only identifier sent.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MatomoBatchEncoder: identity")
-struct MatomoIdentityTests {
+private struct MatomoIdentityTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

@@ -4,7 +4,8 @@
 // A discovery record is pinned as the one #__eventRecord call the expansion writes, which
 // assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
 // behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
-// same on every swift-syntax the plugin accepts.
+// same on every swift-syntax the plugin accepts. The function after it, whose symbol holds the
+// event's name so the linker refuses a second event of that name, is pinned as written.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -40,7 +41,14 @@ struct EventMacroConstraintExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Searched") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Searched: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    public static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.minLength(1), .maxLength(8)] as [Events.ValidationKeyword])),
@@ -286,7 +294,14 @@ struct EventMacroConstraintExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Searched") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Searched {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.query), keywords: Events.ValidationKeyword.keywords(of: \\Self.query) + ([.minLength(3), .maxLength(3), .minimum(1), .maxItems(0)] as [Events.ValidationKeyword])),
@@ -401,7 +416,14 @@ struct EventMacroConstraintExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Searched.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Searched") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Searched {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "query", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \Self.query), keywords: Events.ValidationKeyword.keywords(of: \Self.query) + ([.pattern(#"^\d+$"#, example: "12")] as [Events.ValidationKeyword])),

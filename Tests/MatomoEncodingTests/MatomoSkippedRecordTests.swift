@@ -15,8 +15,10 @@ import TrackingPlans
 // (CustomDimensionsRequestProcessor); a cdt a day old or more needs token_auth, and one more than
 // a day ahead is refused (core/Tracker/Request.php). The encoder leaves out a record 23 hours or
 // more from when it is encoded.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MatomoBatchEncoder: skipped records")
-struct MatomoSkippedRecordTests {
+private struct MatomoSkippedRecordTests {
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

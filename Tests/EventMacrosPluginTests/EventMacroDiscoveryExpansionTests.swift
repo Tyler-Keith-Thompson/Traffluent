@@ -4,7 +4,8 @@
 // A discovery record is pinned as the one #__eventRecord call the expansion writes, which
 // assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
 // behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
-// same on every swift-syntax the plugin accepts.
+// same on every swift-syntax the plugin accepts. The function after it, whose symbol holds the
+// event's name so the linker refuses a second event of that name, is pinned as written.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -29,6 +30,9 @@ struct EventMacroDiscoveryExpansionTests {
 
                 private enum __macro_local_15linkerSetRecordfMu_ {
                     #__eventRecord(kind: 0x65766E74, storing: SignedUp.self as any (Events.__DiscoverableEvent).Type)
+                }
+
+                @_silgen_name("$linkerset_kind_65766E74_key_signed_5Fup") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
                 }
 
                 nonisolated extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
@@ -73,7 +77,14 @@ struct EventMacroDiscoveryExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Opened.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Opened") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Opened: Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -111,9 +122,16 @@ struct EventMacroDiscoveryExpansionTests {
                     }
 
                     #__eventRecord(kind: 0x65766E74, storing: Outer.Inner.self as any (Events.__DiscoverableEvent).Type)
+
+                    @_silgen_name("$linkerset_kind_65766E74_key_Inner") @used nonisolated static func __macro_local_18linkerSetUniqueKeyfMu_() {
+                    }
                 }
 
                 nonisolated extension Outer.Inner: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -148,6 +166,10 @@ struct EventMacroDiscoveryExpansionTests {
                 }
 
                 nonisolated extension Tapped: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -196,6 +218,10 @@ struct EventMacroDiscoveryExpansionTests {
                 }
 
                 nonisolated extension Box.Inner.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -230,6 +256,57 @@ struct EventMacroDiscoveryExpansionTests {
         }
     }
 
+    @Test("A struct in an extension that shows its type is generic, by generic arguments or a where clause, gets no record and the same note", arguments: [
+        ("extension Box<Int>", "Box<Int>.Opened"),
+        ("extension [Int]", "[Int].Opened"),
+        ("extension Box where Value == Int", "Box.Opened"),
+    ])
+    func inSpecializedExtension(extended: String, type: String) {
+        assertMacroExpansion(
+            """
+            \(extended) {
+                @Event
+                struct Opened {
+                }
+            }
+            """,
+            expandedSource: """
+                \(extended) {
+                    struct Opened {
+                    }
+                }
+
+                nonisolated extension \(type): Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
+                    static var schema: Events.EventSchema {
+                        Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
+                    }
+
+                    private enum CodingKeys: Swift.CodingKey {
+                    }
+
+                    func encode(to encoder: any Swift.Encoder) throws {
+                        _ = encoder.container(keyedBy: CodingKeys.self)
+                    }
+
+                    init(from decoder: any Swift.Decoder) throws {
+                        _ = try decoder.container(keyedBy: CodingKeys.self)
+                    }
+                }
+                """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@Event can't give a struct nested in a generic type the record DiscoveredEvent.all finds events by; list it explicitly, in SegmentStore(events:) and TrackingPlan(schemas:)",
+                    line: 3, column: 12, severity: .note),
+            ],
+            macroSpecs: ["Event": MacroSpec(type: EventMacro.self, conformances: ["Event", "Encodable", "Decodable", "__DiscoverableEvent"])],
+            failureHandler: { Issue.record(Comment(rawValue: $0.message)) }
+        )
+    }
+
     @Test("A struct declared in a function gets no record or __DiscoverableEvent conformance, and the macro reports nothing, leaving the compiler's one error")
     func local() {
         assertMacroExpansion(
@@ -249,6 +326,10 @@ struct EventMacroDiscoveryExpansionTests {
                 }
 
                 nonisolated extension open.Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }

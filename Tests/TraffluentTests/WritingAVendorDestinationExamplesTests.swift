@@ -121,8 +121,10 @@ extension HTTPDestination where Encoding == AcmeBatchEncoder {
     }
 }
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("Writing a vendor destination examples", .timeLimit(.minutes(1)))
-struct WritingAVendorDestinationExamplesTests {
+private struct WritingAVendorDestinationExamplesTests {
     @Event(name: "signed_up")
     struct SignedUp {
         var plan: String

@@ -7,8 +7,10 @@ import Sessions
 import StandardContext
 import Testing
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("EventRecord.standardContext")
-struct StandardContextTests {
+private struct StandardContextTests {
     @Event(name: "opened")
     struct Opened {}
 

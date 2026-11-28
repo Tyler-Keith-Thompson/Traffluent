@@ -15,8 +15,10 @@ import Trackers
 import TrackingPlans
 import TraffluentTestSupport
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("CollectorBatchDecoder: properties of any batch")
-struct CollectorBatchDecoderPropertyTests {
+private struct CollectorBatchDecoderPropertyTests {
     @Event(name: "purchased")
     struct Purchased: Equatable {
         var sku: String

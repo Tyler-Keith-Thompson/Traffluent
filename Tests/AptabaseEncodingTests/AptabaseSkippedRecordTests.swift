@@ -11,8 +11,10 @@ import TrackingPlans
 // string value cut past 180; a number read as a .NET decimal; a time readable as a DateTime, and
 // no more than a day old. .NET counts a string's length in UTF-16 code units, so an emoji outside
 // the Basic Multilingual Plane counts two.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("AptabaseBatchEncoder: skipped records")
-struct AptabaseSkippedRecordTests {
+private struct AptabaseSkippedRecordTests {
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

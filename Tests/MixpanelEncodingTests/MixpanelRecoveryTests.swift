@@ -17,8 +17,10 @@ import TrackingPlans
 // record whose first send got no answer goes out under the identity of that send, and Mixpanel
 // can tell it is a copy rather than a new user's event.
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MixpanelBatchEncoder: recovered records", .timeLimit(.minutes(1)))
-struct MixpanelRecoveryTests {
+private struct MixpanelRecoveryTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

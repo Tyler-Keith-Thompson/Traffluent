@@ -6,8 +6,10 @@ import TrackingPlans
 
 // Heap takes "a number or string" as each property's value
 // (https://developers.heap.io/reference/track-1, read 2026-11-27), so everything else is made one.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("HeapBatchEncoder: properties")
-struct HeapPropertiesTests {
+private struct HeapPropertiesTests {
     struct Item: Codable, Hashable {
         var sku: String
         var gift: Bool

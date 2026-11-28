@@ -84,23 +84,61 @@ discovered. Add it to the discovered ones where it is needed:
 `TrackingPlan(schemas: DiscoveredEvent.all.map(\.schema) + [Legacy.schema])`. A generic `@Event`
 struct, or one nested in a generic type's declaration, isn't discovered either, as a record holds
 one concrete type: the macro adds a note where it is declared, and you list it the same way.
-An `@Event` struct declared in an extension of a generic type doesn't compile (`static stored
-properties not supported in generic types`), as the macro can't tell from the extension that the
-type is generic; declare it outside the generic type instead.
+An `@Event` struct in an extension that shows the type is generic, by naming its arguments
+(`extension Box<Int>`, `extension [Int]`) or with a `where` clause, gets the same note. In a plain
+`extension Box` of a generic type it doesn't compile (`static stored properties not supported in
+generic types`), as the macro can't tell from the extension that the type is generic; declare it
+outside the generic type instead.
 
-Event names must be unique across the program. Two discovered events of one name make
-`SegmentStore()` and `DatabaseStore(database:)` throw `duplicateEventName`, as a store couldn't
-tell their records apart, and two of one name and version make `TrackingPlan()` throw
-`duplicateEvent`. Each error carries the name and both types' fully qualified names, such as
-`duplicateEventName("signed_up", firstType: "AppTests.SignupTests.SignedUp", secondType:
-"AppTests.CheckoutTests.SignedUp")`.
+Event names must be unique across the program, whatever their versions, as a store couldn't tell
+two events' records apart. Within one executable or library, the build checks this. Beside each
+event's record, `@Event` declares a function whose symbol is named for the event's name, so a
+second event of that name defines the symbol again. In one module the compiler refuses it
+(`multiple definitions of symbol`). Across the modules linked into one executable or library, the
+linker refuses it, naming the symbol and both object files:
+
+```
+duplicate symbol '_$linkerset_kind_65766E74_key_OrderPlaced' in:
+    .../libCheckout.a[2](OrderPlaced.swift.o)
+    .../libOrders.a[2](OrderPlaced.swift.o)
+```
+
+The symbol is `$linkerset_kind_65766E74_key_` followed by the name, with ASCII letters and digits
+kept and every other byte written as `_` and two hex digits, so `signed_up` reads `signed_5Fup`. The
+name is the one `name:` gives, or the type's name without it. `@Event` declares that name as the
+event's `name` itself, so the name can't differ from the one the build checks: a struct that
+declares a static `name` of its own is a compile error, with a Fix-It that moves a string literal
+into `@Event(name:)`, and a `name` declared in an extension or under `#if` is a redeclaration the
+compiler refuses.
+
+The library's own events are checked the same way, so their names are taken in a program that
+links their modules: `SessionStarted` and `SessionEnded` (`Sessions`), `ScreenViewed`
+(`SwiftUITracking`), `ControlActivated` (`AutomaticControlTracking`), and `ApplicationInstalled`,
+`ApplicationUpdated`, `ApplicationOpened`, `ApplicationBackgrounded` and `ApplicationTerminated`
+(`LifecycleTracking`). An app's `@Event struct SessionStarted`, or any event that `name:` gives one
+of these names, fails to link beside that module; give it another name.
+
+The build can't compare names across separate images, so the stores and the plan check again when
+they read the events. Two discovered events of one name make `SegmentStore()` and
+`DatabaseStore(database:)` throw `duplicateEventName`, and two of one name and version make
+`TrackingPlan()` throw `duplicateEvent`. Each error carries the name and both types' fully
+qualified names, such as `duplicateEventName("signed_up", firstType: "Checkout.SignedUp",
+secondType: "Signup.SignedUp")`. "Limits" below lists the cases only these errors catch.
 
 A test target is a program of its own, whose events are the ones it declares and links. A test
-target whose fixtures reuse a name, two tests that each declare a `signed_up` event, gets that
-error from `SegmentStore()` or `TrackingPlan()`. Either build the store or plan in the test from
-an explicit list, `SegmentStore(events: [SignedUp.self])`, or rename one of the fixtures. A
-tracking plan executable holds the events of the modules it links, so it links every module that
-declares one (<doc:TrackingPlanWorkflow>).
+target whose fixtures reuse a name, two tests that each declare a `signed_up` event, fails to
+build. Rename one of the fixtures, or declare them inside a `private` or `fileprivate` type, such
+as a private test suite: the build doesn't check names there (see "Limits"). The target then holds
+two events of one name, so `SegmentStore()` and `TrackingPlan()` throw in it; build the store or
+plan in such a test from an explicit list, `SegmentStore(events: [SignedUp.self])`. A unit test
+bundle that Xcode hosts in the app is an image of its own, apart from the app's, so a fixture there
+that shares an app event's name isn't refused by the build, only by a store or plan that reads
+both. A tracking plan executable holds the events of the modules it links, so it links every module
+that declares one (<doc:TrackingPlanWorkflow>).
+
+A program that needs several versions of one event as types at once, such as a relay that reads
+records stored at an older version, declares the older ones inside a `private` type, where the
+build doesn't check their names, and builds its stores and plans from explicit lists.
 
 #### Limits
 
@@ -123,6 +161,20 @@ declares one (<doc:TrackingPlanWorkflow>).
 - A module that declares events, linked into two images (a framework and the app, each holding a
   static copy), lists each of its events twice, and stores and plans refuse the duplicate. Link
   each such module into one image.
+- The build's check of names covers one linked image: the modules linked statically into one
+  executable or one library. A dynamic library or framework keeps its symbols apart from the app's,
+  an image opened with `dlopen` is never compared with the program, and a module linked into two
+  images has a copy of each symbol in each, so the build passes all three. The run-time errors
+  above catch them, when a store or plan reads the events.
+- With Apple's linker, a duplicate name in a static archive that the linker reads on demand is
+  only a warning (`ld: warning: duplicate symbol`) when `-dead_strip` is on, as Xcode turns it on
+  by default, and the app links. This is LinkerSets' account of the linker, untested here. Link
+  such an archive whole (`-force_load`), or pass `-Xlinker -fatal_warnings`, to keep it an error.
+  SwiftPM and Bazel link every module whole, and there a duplicate is an error.
+- An event declared inside a `private` or `fileprivate` type, or in an extension marked either
+  way, isn't checked by the build: the symbol would be local to its file, and the linker never
+  compares local symbols. Stores and plans still refuse its name at run time. An event that is
+  itself `private`, at file scope or in a wider type, is checked.
 
 ### Enum properties
 

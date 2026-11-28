@@ -15,8 +15,10 @@ import TrackingPlans
 // that begin with the `TelemetryDeck.` scope"), and its event members sit beside the parameters in
 // the flat event: appID, clientUser and receivedAt required, type, sessionID, isTestMode and
 // floatValue optional. It renames no key and rejects no other name.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TelemetryDeckBatchEncoder: skipped records")
-struct TelemetryDeckSkippedRecordTests {
+private struct TelemetryDeckSkippedRecordTests {
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

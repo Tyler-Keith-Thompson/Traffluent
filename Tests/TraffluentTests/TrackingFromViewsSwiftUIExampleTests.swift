@@ -8,9 +8,11 @@ import SwiftUI
 import Testing
 import Traffluent
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @MainActor
 @Suite("Tracking from views examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
-struct TrackingFromViewsSwiftUIExampleTests {
+private struct TrackingFromViewsSwiftUIExampleTests {
     @Event
     struct SignedUp {
         var plan: String

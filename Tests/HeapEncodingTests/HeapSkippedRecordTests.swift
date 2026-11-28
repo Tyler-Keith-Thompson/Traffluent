@@ -10,8 +10,10 @@ import TrackingPlans
 // string with fewer than 1024 characters"; `user_id`, `session_id` and `screen_name` not to be
 // used as keys; an ISO 8601 timestamp. Characters are counted as UTF-16 code units, so an emoji
 // outside the Basic Multilingual Plane counts two.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("HeapBatchEncoder: skipped records")
-struct HeapSkippedRecordTests {
+private struct HeapSkippedRecordTests {
     @Event(name: "checkout_started", version: 2)
     struct CheckoutStarted {
         var cartSize: Int

@@ -10,8 +10,10 @@ import TrackingPlans
 // (https://telemetrydeck.com/docs/ingest/default-parameters/, read 2026-11-27), in the forms its
 // SwiftSDK 2.14.2 writes them (DefaultSignalPayload): "<version> (build <build>)", and each system
 // version after the platform ("iOS 26.1.0", "iOS 26", "iOS 26.1").
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TelemetryDeckBatchEncoder: the standard context")
-struct TelemetryDeckContextTests {
+private struct TelemetryDeckContextTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

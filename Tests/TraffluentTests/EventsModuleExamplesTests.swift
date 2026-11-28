@@ -5,8 +5,10 @@ import Foundation
 import Testing
 import Traffluent
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("Events module examples", .timeLimit(.minutes(1)))
-struct EventsModuleExamplesTests {
+private struct EventsModuleExamplesTests {
     enum PlanName: Refinement {
         static var constraints: [Constraint<String>] {
             get throws(InvalidConstraint) { try [.minLength(1), .maxLength(32)] }

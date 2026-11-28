@@ -9,7 +9,12 @@
 ///
 /// The struct must have a static `schema`; `__DiscoverableEvent` requires one. A generic struct
 /// can't be given a record, and is refused.
-@attached(extension, conformances: __DiscoverableEvent)
+///
+/// The record's unique key is the event's name, the type's, which the macro declares as `name`
+/// in an extension of its own: so an app's `@Event` of the same name fails to link beside the
+/// library's event, as two `@Event`s of one name do. A static `name` the struct declares itself is
+/// an error. In a `private` or `fileprivate` type the record has no key, as `@Event`'s doesn't.
+@attached(extension, conformances: __DiscoverableEvent, names: named(name))
 @attached(peer)
 public macro _DiscoverableEvent() = #externalMacro(module: "EventMacrosPlugin", type: "DiscoverableEventMacro")
 

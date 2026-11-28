@@ -14,15 +14,21 @@ import TrackingPlans
 // This target's binary holds three events named "duplicated", two of them at one version, so a
 // store or a plan of every discovered event refuses them. They are declared out of order, so
 // DiscoveredEvent.all's order comes from its sort, not from the order of their records.
+//
+// They sit in a private enum: @Event leaves a private type's events out of the link check of
+// names, which would otherwise refuse the binary, so the run-time checks are what these tests
+// see. Their fully qualified names then hold the address of the enum's context, so the expected
+// names are read with String(reflecting:) rather than written out.
+private enum Duplicates {
+    @Event(name: "duplicated", version: 2)
+    struct DuplicatedGamma {}
 
-@Event(name: "duplicated", version: 2)
-struct DuplicatedGamma {}
+    @Event(name: "duplicated")
+    struct DuplicatedBeta {}
 
-@Event(name: "duplicated")
-struct DuplicatedBeta {}
-
-@Event(name: "duplicated")
-struct DuplicatedAlpha {}
+    @Event(name: "duplicated")
+    struct DuplicatedAlpha {}
+}
 
 @Event(name: "alone")
 struct Alone {}
@@ -37,9 +43,9 @@ struct DiscoveredDuplicateTests {
         let expected = [
             "\(String(reflecting: Unique.self)) Unique v1",
             "\(String(reflecting: Alone.self)) alone v1",
-            "\(String(reflecting: DuplicatedAlpha.self)) duplicated v1",
-            "\(String(reflecting: DuplicatedBeta.self)) duplicated v1",
-            "\(String(reflecting: DuplicatedGamma.self)) duplicated v2",
+            "\(String(reflecting: Duplicates.DuplicatedAlpha.self)) duplicated v1",
+            "\(String(reflecting: Duplicates.DuplicatedBeta.self)) duplicated v1",
+            "\(String(reflecting: Duplicates.DuplicatedGamma.self)) duplicated v2",
         ]
 
         let actual = DiscoveredEvent.all.map { "\(String(reflecting: $0.type)) \($0.type.name) v\($0.type.schemaVersion)" }
@@ -52,8 +58,8 @@ struct DiscoveredDuplicateTests {
         let directory = FilePath(NSTemporaryDirectory()).appending("DiscoveredDuplicateTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
         let expected = SegmentStoreError.duplicateEventName(
-            "duplicated", firstType: "EventDiscoveryDuplicateTests.DuplicatedAlpha",
-            secondType: "EventDiscoveryDuplicateTests.DuplicatedBeta")
+            "duplicated", firstType: String(reflecting: Duplicates.DuplicatedAlpha.self),
+            secondType: String(reflecting: Duplicates.DuplicatedBeta.self))
 
         #expect(throws: expected) {
             try SegmentStore(directory: directory)
@@ -66,15 +72,15 @@ struct DiscoveredDuplicateTests {
         defer { try? FileManager.default.removeItem(atPath: directory.string) }
 
         #expect(throws: Never.self) {
-            try SegmentStore(events: [Unique.self, DuplicatedAlpha.self], directory: directory)
+            try SegmentStore(events: [Unique.self, Duplicates.DuplicatedAlpha.self], directory: directory)
         }
     }
 
     @Test("TrackingPlan() throws duplicateEvent naming the two discovered types of one name and version")
     func trackingPlan() {
         let expected = TrackingPlanError.duplicateEvent(
-            "duplicated", version: 1, firstType: "EventDiscoveryDuplicateTests.DuplicatedAlpha",
-            secondType: "EventDiscoveryDuplicateTests.DuplicatedBeta")
+            "duplicated", version: 1, firstType: String(reflecting: Duplicates.DuplicatedAlpha.self),
+            secondType: String(reflecting: Duplicates.DuplicatedBeta.self))
 
         #expect(throws: expected) {
             try TrackingPlan()
@@ -83,7 +89,7 @@ struct DiscoveredDuplicateTests {
 
     @Test("A plan of one version of each name is accepted, so only one name and version refuses a plan")
     func trackingPlanVersions() throws {
-        let schemas = [DuplicatedAlpha.schema, DuplicatedGamma.schema, Alone.schema]
+        let schemas = [Duplicates.DuplicatedAlpha.schema, Duplicates.DuplicatedGamma.schema, Alone.schema]
 
         let actual = try TrackingPlan(schemas: schemas).schemas.map(\.version)
 
@@ -94,7 +100,7 @@ struct DiscoveredDuplicateTests {
         @Test("DatabaseStore(database:) throws duplicateEventName naming the first two discovered types of one name")
         func databaseStore() throws {
             let database = try DatabaseQueue()
-            let expected = ["duplicated", "EventDiscoveryDuplicateTests.DuplicatedAlpha", "EventDiscoveryDuplicateTests.DuplicatedBeta"]
+            let expected = ["duplicated", String(reflecting: Duplicates.DuplicatedAlpha.self), String(reflecting: Duplicates.DuplicatedBeta.self)]
 
             let actual = #expect(throws: DatabaseStoreError.self) {
                 try DatabaseStore(database: database)

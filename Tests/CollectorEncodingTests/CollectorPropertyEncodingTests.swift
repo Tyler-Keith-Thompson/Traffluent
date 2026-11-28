@@ -5,8 +5,10 @@ import Instrumentation
 import Testing
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("CollectorBatchEncoder: properties")
-struct CollectorPropertyEncodingTests {
+private struct CollectorPropertyEncodingTests {
     enum Lowercase: Refinement {
         static var constraints: [Constraint<String>] {
             get throws(InvalidConstraint) { try [.pattern("^[a-z]+$", example: "pro")] }

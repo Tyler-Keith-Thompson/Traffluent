@@ -5,8 +5,10 @@ import Testing
 import Tracing
 import Traffluent
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("What goes where examples")
-struct WhatGoesWhereExamplesTests {
+private struct WhatGoesWhereExamplesTests {
     @Event
     struct CheckoutFailed {
         enum Reason: String, Codable {

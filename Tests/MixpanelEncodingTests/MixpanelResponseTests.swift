@@ -8,8 +8,10 @@ import PropertyBased
 import Testing
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("Mixpanel's 200 answers", .timeLimit(.minutes(1)))
-struct MixpanelResponseTests {
+private struct MixpanelResponseTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

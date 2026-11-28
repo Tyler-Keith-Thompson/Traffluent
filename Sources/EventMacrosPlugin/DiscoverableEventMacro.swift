@@ -1,4 +1,5 @@
 import LinkerSetsMacroSupport
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
@@ -16,8 +17,29 @@ public struct DiscoverableEventMacro: ExtensionMacro, EventLinkerSetMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
+        let structure = declaration.as(StructDeclSyntax.self)
+        let access = structure?.modifiers.first { [.keyword(.public), .keyword(.package)].contains($0.name.tokenKind) }
+            .map { "\($0.name.text) " } ?? ""
+        // As @Event does: the name always declared, the value Event's default gives, so another
+        // declaration of it is a redeclaration and the name is always the key.
+        let name = try ExtensionDeclSyntax(
+            "nonisolated extension \(type.trimmed) {\n\(raw: access)static var name: String {\nString(describing: Self.self)\n}\n}"
+        )
+        // None beside a name member, which the peer reports; a redeclaration would add an error.
+        let names = structure?.nameMember == nil ? [name] : []
         // Empty when the struct already conforms: the compiler passes only what's missing.
-        guard !protocols.isEmpty else { return [] }
-        return [try ExtensionDeclSyntax("extension \(type.trimmed): Events.__DiscoverableEvent {}")]
+        guard !protocols.isEmpty else { return names }
+        return [try ExtensionDeclSyntax("extension \(type.trimmed): Events.__DiscoverableEvent {}")] + names
+    }
+
+    /// The type's name, which the event takes as its own.
+    ///
+    /// - Throws: A diagnostic at a `name` member the struct declares itself.
+    public static func uniqueKey(of declaration: some DeclSyntaxProtocol, attribute: AttributeSyntax) throws -> String? {
+        guard let structure = declaration.as(StructDeclSyntax.self) else { return nil }
+        if let member = structure.nameMember {
+            throw DiagnosticsError(diagnostics: [Diagnostic(node: member, message: EventMacroDiagnostic.discoverableNameMember)])
+        }
+        return structure.typeName
     }
 }

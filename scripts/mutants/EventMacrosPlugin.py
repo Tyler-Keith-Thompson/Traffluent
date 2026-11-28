@@ -10,7 +10,13 @@
 # entry point the compiler starts, is left out: only a real compile reaches it, which
 # //Tests/CompileFailures and //Tests/EventMacrosTests do under Bazel.
 #
-# Known equivalent mutants (left out, as they would survive by design): none.
+# Known equivalent mutants (left out, as they would survive by design): in EventLinkerSetMacro's
+# uniqueKey, the throw for a name: that isn't a string literal, replaced by `return
+# structure.typeName` or `return nil`. @Event's peer reports nameNotALiteral from the arguments and
+# writes no record before LinkerSets asks for the key, and @_DiscoverableEvent takes no name:, so no
+# expansion reaches it; it stays so the key never stands in for a name it didn't read (TRAF-139).
+# And dropping `&& modifier.detail == nil` from isInPrivateScope: only `private(set)` and its kin
+# carry a detail, and no type or extension takes one; it stays to judge scopes as LinkerSets does.
 #
 # Left out because no mutant run compiles it: IntegerLiteralExprSyntax+RepresentedLiteralValue.swift,
 # swift-syntax 600's backport of representedLiteralValue, sits under
@@ -52,7 +58,9 @@ MUTANTS = [
     # expected expansion holds the keyword. //Tests/CompileFailures:EventDefaultMainActorControl
     # compiles the real expansion, which no mutant run reaches.
     Mutant("extensionisolated", M, '"nonisolated extension \\(type.trimmedDescription)\\(inheritance) {\\n\\(body)\\n}"', '"extension \\(type.trimmedDescription)\\(inheritance) {\\n\\(body)\\n}"'),
-    Mutant("nameignored", M, 'arguments.name.map { "\\(access)static var name: String {\\n    \\($0)\\n}" }', "nil"),
+    Mutant("nameignored", M, 'arguments.name.map { "\\($0)" } ?? defaultName', "defaultName"),
+    # TRAF-139: the name always declared, the default as Event's own.
+    Mutant("namedefaultwrong", M, '"String(describing: Self.self)"', '"String(reflecting: Self.self)"'),
     Mutant("consentignored", M, 'arguments.consent.map { "\\(access)static var consentCategory: Events.ConsentCategory {\\n    \\($0)\\n}" }', "nil"),
     Mutant("versionfixed", M, "arguments.version", "Int?.some(1)"),
     # Two mutants of the property entry's literal: the first leaves the original once, in its
@@ -201,9 +209,9 @@ MUTANTS = [
     # EventMacro: the discovery record, the peer LinkerSets' expansion writes (recordPeers, from
     # EventMacro's own LinkerSetMacro conformance), the __DiscoverableEvent conformance the record
     # holds the struct as, and the mapping of LinkerSets' refusals to the note or to silence.
-    Mutant("recordalwaysdropped", M, "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", "return []", mode="stmt"),
+    Mutant("recordalwaysdropped", M, "return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", "return []", mode="stmt"),
     # The peer's guard: anything but a struct gets no record (the extension reports notAStruct).
-    Mutant("recordbesidenonstruct", M, "return []", "return try recordPeers(of: node, providingPeersOf: declaration, in: context)", mode="stmt", nth=2),
+    Mutant("recordbesidenonstruct", M, "return []", "return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", mode="stmt", nth=2),
     Mutant("recordbesideargumenterrors", M, "argumentDiagnostics.isEmpty", "true"),
     Mutant("recordbesidepropertyerrors", M, "propertyDiagnostics.isEmpty", "true"),
     Mutant("recordbesideenumerrors", M, "enumDiagnostics(of: held, in: enums).isEmpty", "true"),
@@ -225,7 +233,41 @@ MUTANTS = [
     Mutant("nestednotedasgeneric", M, "EventMacroDiagnostic.nestedInGenericNotDiscovered", "EventMacroDiagnostic.genericNotDiscovered"),
     # @_DiscoverableEvent: the conformance only where the compiler asks for it, and #__eventRecord,
     # LinkerSets' record under Traffluent's name.
-    Mutant("handwrittenconformsalways", V, "guard !protocols.isEmpty else { return [] }", "", mode="stmt"),
-    Mutant("handwrittenunconformed", V, 'return [try ExtensionDeclSyntax("extension \\(type.trimmed): Events.__DiscoverableEvent {}")]', "return []", mode="stmt"),
+    Mutant("handwrittenconformsalways", V, "guard !protocols.isEmpty else { return names }", "", mode="stmt"),
+    Mutant("handwrittenunconformed", V, 'return [try ExtensionDeclSyntax("extension \\(type.trimmed): Events.__DiscoverableEvent {}")] + names', "return names", mode="stmt"),
     Mutant("eventrecordempty", E, "try LinkerSetRecordMacro.expansion(of: node, in: context)", "[]"),
+    # TRAF-139: the record's unique key, the event's name. The expansion tests pin each key's
+    # symbol; //Tests/CompileFailures' DuplicateEventNames, DuplicateEventNamesAcrossVersions and
+    # DuplicateEventNameInOneModule link the real expansion, which no mutant run reaches.
+    Mutant("keynil", L, "declaration.as(StructDeclSyntax.self)", "Optional<StructDeclSyntax>.none"),
+    Mutant("keyalwaystypename", L, "EventArguments.arguments(of: attribute).arguments.name", "Optional<ExprSyntax>.none"),
+    Mutant("keyrawliteral", L, "name.as(StringLiteralExprSyntax.self)?.representedLiteralValue", "name.as(StringLiteralExprSyntax.self)?.segments.trimmedDescription"),
+    Mutant("typenamebackticked", "StructDeclSyntax+EventName.swift", 'return String(text.dropFirst().dropLast())', "return text", mode="stmt"),
+    Mutant("namememberanystatic", "StructDeclSyntax+EventName.swift", '$0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "name"', "true"),
+    Mutant("namememberinstance", "StructDeclSyntax+EventName.swift", "$0.name.tokenKind == .keyword(.static)", "true"),
+    Mutant("namememberunreported", M, "argumentDiagnostics + nameMemberDiagnostics(of: structure, attribute: node) + propertyDiagnostics", "argumentDiagnostics + propertyDiagnostics"),
+    Mutant("namememberpeerrecorded", M, "EventArguments.arguments(of: node).diagnostics + nameMemberDiagnostics(of: structure, attribute: node)", "EventArguments.arguments(of: node).diagnostics"),
+    # The Fix-It that moves a name member into name:.
+    Mutant("fixitdropped", M, "moveNameFixIt(of: member, in: structure, attribute: attribute).map { [$0] } ?? []", "[]"),
+    Mutant("fixitbesidename", M, "EventArguments.arguments(of: attribute).arguments.name == nil", "true"),
+    Mutant("fixitmultiplebindings", M, "member.bindings.count == 1", "true"),
+    Mutant("fixitnocomma", M, "existing.isEmpty ? nil : .commaToken(trailingTrivia: .space)", "nil"),
+    Mutant("fixitnamelast", M, "[name] + existing", "existing + [name]"),
+    Mutant("fixitmemberkept", M, "structure.memberBlock.members.filter { $0.decl.id != DeclSyntax(member).id }", "structure.memberBlock.members"),
+    # The peer path @Event and @_DiscoverableEvent share: no key in a private or fileprivate scope.
+    Mutant("privatescopekeyed", L, "!context.isInPrivateScope", "true"),
+    Mutant("everyscopeunkeyed", L, "!context.isInPrivateScope", "false"),
+    Mutant("fileprivatescopekeyed", L, "[.keyword(.private), .keyword(.fileprivate)].contains(modifier.name.tokenKind)", "modifier.name.tokenKind == .keyword(.private)"),
+    Mutant("privatescopeonly", L, "[.keyword(.private), .keyword(.fileprivate)].contains(modifier.name.tokenKind)", "modifier.name.tokenKind == .keyword(.fileprivate)"),
+    Mutant("privatescopeinnermost", L, "lexicalContext", "Array(lexicalContext.prefix(1))"),
+    Mutant("discoverablepeerkeyed", L, "try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)", "try recordPeers(of: node, providingPeersOf: declaration, in: context)"),
+    # @_DiscoverableEvent's name and key.
+    Mutant("discoverablenameomitted", V, "structure?.nameMember == nil ? [name] : []", "[ExtensionDeclSyntax]()"),
+    Mutant("discoverablenamebesidemember", V, "structure?.nameMember == nil ? [name] : []", "[name]"),
+    Mutant("discoverablenameunexported", V, '"\\($0.name.text) "', '""'),
+    # After handwrittenunconformed, whose replacement is the same statement, it occurs twice; the first is the guard's.
+    Mutant("discoverablenamewhenconforming", V, "return names", "return []", mode="stmt", nth=0),
+    Mutant("discoverablekeynil", V, "declaration.as(StructDeclSyntax.self)", "Optional<StructDeclSyntax>.none", nth=1),
+    Mutant("discoverablenamememberignored", V, "throw DiagnosticsError(diagnostics: [Diagnostic(node: member, message: EventMacroDiagnostic.discoverableNameMember)])", "", mode="stmt"),
+    Mutant("discoverablemessageevents", V, "EventMacroDiagnostic.discoverableNameMember", "EventMacroDiagnostic.nameMember"),
 ]

@@ -23,7 +23,8 @@
 /// the tracker encodes events, even when the struct is marked `@MainActor`; such a struct's stored
 /// properties must then be `Sendable`. The extension holds:
 ///
-/// - `static var name`, when `name` is given; otherwise the type's name, `Event`'s default.
+/// - `static var name`: `name` when it is given; otherwise the type's name,
+///   `String(describing: Self.self)`, the value of `Event`'s default.
 /// - `static var consentCategory`, when `consent` is given; otherwise ``/Events/ConsentCategory/analytics``.
 /// - `static var schemaVersion`, when `version` is given; otherwise 1, `Event`'s default.
 /// - `static var schema`: an ``/Events/EventSchema`` with the event's name, version and each stored
@@ -56,10 +57,26 @@
 /// struct as an `__DiscoverableEvent`, an underscored protocol the macro conforms it to and
 /// discovery reads, which the event's code doesn't use. A generic struct, or
 /// one nested in a generic type's declaration, gets no record, as a record holds one concrete
-/// type: it isn't discovered, and the macro adds a note saying to list it. A struct declared in an
-/// extension of a generic type doesn't compile (`static stored properties not supported in
-/// generic types`), as the extension doesn't say the type is generic; declare it outside the
-/// generic type.
+/// type: it isn't discovered, and the macro adds a note saying to list it. So does one in an
+/// extension that names the type's generic arguments (`extension Box<Int>`) or has a `where`
+/// clause. A struct declared in a plain extension of a generic type doesn't compile (`static
+/// stored properties not supported in generic types`), as the extension doesn't say the type is
+/// generic; declare it outside the generic type.
+///
+/// Beside the record the macro adds a function whose symbol is named for the event's name,
+/// `$linkerset_kind_65766E74_key_` and the name, its ASCII letters and digits as they are and every
+/// other byte as `_` and two hex digits. Two events of one name in one linked image, whatever their
+/// versions, define that symbol twice and fail to build: in one module the compiler refuses the
+/// second, and across the modules of one executable or library the linker does, naming the symbol.
+/// The check doesn't reach across images: a dynamic library, a library opened with `dlopen`, or a
+/// module linked into two images is caught only when a store or tracking plan reads
+/// ``/Events/DiscoveredEvent/all`` and throws for the duplicate name. A struct inside a `private`
+/// or `fileprivate` type or extension gets no such function, as its symbol would be local to the
+/// file, so only those run-time errors check its name. The name is the one `name` gives, or the
+/// type's, and the extension always declares it as `name`, so the name can't differ from the one
+/// checked: a struct that declares a static `name` itself is a compile error, with a Fix-It that
+/// moves a string literal into `name`, and one declared in an extension or under `#if` is a
+/// redeclaration.
 ///
 /// Every stored instance property is encoded, and needs a type annotation. Static and computed
 /// properties are left out, and so is a `let` with an initial value, which every value shares.
@@ -72,8 +89,8 @@
 /// list it in its inheritance clause, even when an extension adds it, since the macro sees only
 /// the struct; without it, the error is the macro's own, at that clause. Applying the macro to
 /// anything but a struct, a property with no type annotation, a `lazy` property, a destructuring
-/// pattern, a name that isn't a non-empty string literal and a version that isn't a positive
-/// integer literal are compile errors too.
+/// pattern, a name that isn't a non-empty string literal, a static `name` declared in the struct
+/// and a version that isn't a positive integer literal are compile errors too.
 ///
 /// ## Changing an event
 ///
@@ -125,7 +142,7 @@
 ///
 /// - Parameters:
 ///   - name: The name destinations record the event under, a string literal; the type's name when
-///     `nil`.
+///     `nil`. No other event in the program may share it, whatever its version.
 ///   - consent: The purpose the event is collected for; ``/Events/ConsentCategory/analytics`` when `nil`.
 ///   - version: The schema version, `Event.schemaVersion`: a positive integer literal, raised for
 ///     each breaking change; 1 by default.

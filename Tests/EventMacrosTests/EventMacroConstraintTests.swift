@@ -7,8 +7,10 @@ import Foundation
 import Testing
 import Trackers
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("@Constrained", .timeLimit(.minutes(1)))
-struct EventMacroConstraintTests {
+private struct EventMacroConstraintTests {
     enum PlanName: Refinement {
         static var constraints: [Constraint<String>] {
             get throws(InvalidConstraint) { try [.minLength(1), .maxLength(16)] }

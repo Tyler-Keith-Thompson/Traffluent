@@ -1,0 +1,71 @@
+# The link checks of //Tests/CompileFailures (tools/link_test.bzl) again, every module optimized
+# as a release build compiles it (-O, whole-module): the key's function, which nothing calls,
+# survives optimization, so the duplicate still fails to link and the control still links and
+# runs. A package of its own, as its modules take the names of that package's modules, whose
+# outputs would clash with theirs.
+
+load("//tools:link_test.bzl", "swift_link_test")
+load("//tools:swift_rules.bzl", "swift_library")
+
+OPTIMIZED = [
+    "-O",
+    "-wmo",
+]
+
+swift_library(
+    name = "Orders",
+    testonly = True,
+    srcs = ["//Tests/CompileFailures:Orders/OrderPlaced.swift"],
+    copts = OPTIMIZED,
+    module_name = "Orders",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_library(
+    name = "Checkout",
+    testonly = True,
+    srcs = ["//Tests/CompileFailures:Checkout/OrderPlaced.swift"],
+    copts = OPTIMIZED,
+    module_name = "Checkout",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_library(
+    name = "Shipping",
+    testonly = True,
+    srcs = ["//Tests/CompileFailures:Shipping/OrderShipped.swift"],
+    copts = OPTIMIZED,
+    module_name = "Shipping",
+    deps = ["//Sources/EventMacros"],
+)
+
+swift_link_test(
+    name = "DuplicateEventNamesOptimized",
+    size = "small",
+    copts = OPTIMIZED,
+    expected_errors = [
+        "duplicate symbol",
+        "$linkerset_kind_65766E74_key_OrderPlaced",
+    ],
+    main = "//Tests/CompileFailures:DuplicateEventNames.swift",
+    on_demand = [":Checkout"],
+    tags = ["debug-only"],
+    deps = [
+        ":Checkout",
+        ":Orders",
+    ],
+)
+
+swift_link_test(
+    name = "DistinctEventNamesOptimized",
+    size = "small",
+    copts = OPTIMIZED,
+    main = "//Tests/CompileFailures:DistinctEventNames.swift",
+    on_demand = [":Shipping"],
+    tags = ["debug-only"],
+    deps = [
+        ":Orders",
+        ":Shipping",
+        "//Sources/Events",
+    ],
+)

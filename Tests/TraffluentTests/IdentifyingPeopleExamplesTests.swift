@@ -31,8 +31,10 @@ final class SignedInAccount: Sendable {
     }
 }
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("Identifying people examples", .timeLimit(.minutes(1)))
-struct IdentifyingPeopleExamplesTests {
+private struct IdentifyingPeopleExamplesTests {
     @Event
     struct CheckoutStarted {
         var itemCount: Int

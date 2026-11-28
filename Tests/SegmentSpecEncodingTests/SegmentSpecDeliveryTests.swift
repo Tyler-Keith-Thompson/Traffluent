@@ -13,8 +13,10 @@ import Testing
 import Trackers
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("HTTPDestination.segment, .rudderStack and .customerIO through a tracker", .timeLimit(.minutes(1)))
-struct SegmentSpecDeliveryTests {
+private struct SegmentSpecDeliveryTests {
     @Event(name: "checkout_started")
     struct CheckoutStarted {
         var cartSize: Int

@@ -8,8 +8,10 @@ import Testing
 import Trackers
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("CollectorBatchDecoder: context")
-struct CollectorContextDecodingTests {
+private struct CollectorContextDecodingTests {
     @Event(name: "opened")
     struct Opened {}
 

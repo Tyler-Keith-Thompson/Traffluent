@@ -10,8 +10,10 @@ import Testing
 import Trackers
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("GoogleAnalyticsBatchEncoder")
-struct GoogleAnalyticsBatchEncoderTests {
+private struct GoogleAnalyticsBatchEncoderTests {
     @Event(name: "signed_up")
     struct SignedUp {
         var plan: String

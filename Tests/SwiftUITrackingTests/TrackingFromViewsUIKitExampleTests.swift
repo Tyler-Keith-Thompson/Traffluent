@@ -10,9 +10,11 @@ import UIKit
 import UIKitTracking
 
 extension SerializedSuites {
+    // Fileprivate: its events share their names with other events of this test target, and @Event
+    // leaves a fileprivate type's events out of the link check of names (DefiningEvents, Limits).
     @MainActor
     @Suite("Tracking from views examples: UIKit", .serialized, .timeLimit(.minutes(1)))
-    struct TrackingFromViewsUIKitExampleTests {
+    fileprivate struct TrackingFromViewsUIKitExampleTests {
         @Event
         struct SignedUp {
             var plan: String

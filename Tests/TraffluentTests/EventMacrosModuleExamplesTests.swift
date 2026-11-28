@@ -5,8 +5,10 @@
 import EventMacros
 import Testing
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("EventMacros module examples")
-struct EventMacrosModuleExamplesTests {
+private struct EventMacrosModuleExamplesTests {
     @Event(name: "search_performed", consent: .functional, version: 2)
     struct SearchPerformed {
         @Constrained(.minLength(1), .maxLength(200))

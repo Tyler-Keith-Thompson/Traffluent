@@ -11,8 +11,10 @@ import TrackingPlans
 // 1,000,000 bytes a body, under nginx's default client_max_body_size of 1 MiB. Matomo documents no
 // limit of its own (https://developer.matomo.org/api-reference/tracking-api, "Bulk Tracking", read
 // 2026-11-27).
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MatomoBatchEncoder: splitting batches")
-struct MatomoBatchSplittingTests {
+private struct MatomoBatchSplittingTests {
     @Event(name: "searched")
     struct Searched {
         var query: String

@@ -10,8 +10,10 @@ import StandardContext
 import Testing
 import TrackingPlans
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("HTTPDestination.segment, .rudderStack and .customerIO: conformance", .timeLimit(.minutes(1)))
-struct SegmentSpecConformanceTests {
+private struct SegmentSpecConformanceTests {
     @Event(name: "signed_up")
     struct SignedUp {
         var plan: String

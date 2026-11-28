@@ -5,8 +5,10 @@ import CBOR
 import EventMacros
 import Testing
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("@Event")
-struct EventMacroTests {
+private struct EventMacroTests {
     @Event
     struct SignedUp {
         var plan: String

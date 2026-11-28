@@ -9,8 +9,10 @@ import TrackingPlans
 
 // The reader's value-by-value cases run through CollectorEncodingTests, whose collector format
 // writes properties exactly as read here; these pin what the module itself decides.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("EventRecord.properties(types:writingSensitiveValues:)")
-struct EventRecordPropertiesTests {
+private struct EventRecordPropertiesTests {
     @Event(name: "signed_up")
     struct SignedUp {
         var plan: String

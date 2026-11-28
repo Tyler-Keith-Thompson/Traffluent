@@ -15,8 +15,10 @@ import TrackingPlans
 // 2026-11-27). The encoder keeps an hour off: 119 hours is 428,400 seconds. Its limits are
 // /import's, which rejects "time values that are ... more than 1 hour in the future"
 // (https://developer.mixpanel.com/reference/import-events, read 2026-11-28): 3,600 seconds.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MixpanelBatchEncoder: the 5-day window and request deadlines", .timeLimit(.minutes(1)))
-struct MixpanelDeadlineTests {
+private struct MixpanelDeadlineTests {
     @Event(name: "searched")
     struct Searched {
         var query: String

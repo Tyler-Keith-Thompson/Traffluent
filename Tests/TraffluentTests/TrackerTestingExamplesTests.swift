@@ -4,8 +4,10 @@ import Testing
 import TrackerTesting
 import Traffluent
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TrackerTesting examples", .timeLimit(.minutes(1)))
-struct TrackerTestingExamplesTests {
+private struct TrackerTestingExamplesTests {
     @Event
     struct SignedUp: Equatable {
         var plan: String
@@ -44,9 +46,11 @@ struct TrackerTestingExamplesTests {
 import AppKit
 import SwiftUI
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @MainActor
 @Suite("TrackerTesting examples: SwiftUI", .serialized, .timeLimit(.minutes(1)))
-struct TrackerTestingSwiftUIExampleTests {
+private struct TrackerTestingSwiftUIExampleTests {
     @Event
     struct CheckoutViewed: Equatable {}
 

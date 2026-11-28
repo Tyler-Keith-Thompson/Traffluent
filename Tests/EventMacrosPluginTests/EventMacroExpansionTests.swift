@@ -3,7 +3,8 @@
 // A discovery record is pinned as the one #__eventRecord call the expansion writes, which
 // assertMacroExpansion leaves unexpanded as it isn't in the table: the per-format declarations
 // behind it are LinkerSets' (LinkerSetRecordMacro), so these tests pin only Traffluent's part, the
-// same on every swift-syntax the plugin accepts.
+// same on every swift-syntax the plugin accepts. The function after it, whose symbol holds the
+// event's name so the linker refuses a second event of that name, is pinned as written.
 
 import EventMacrosPlugin
 import SwiftSyntax
@@ -34,7 +35,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: SignedUp.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_SignedUp") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension SignedUp: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "plan", typeName: "String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.plan), keywords: Events.ValidationKeyword.keywords(of: \\Self.plan)),
@@ -96,7 +104,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: CartViewed.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_CartViewed") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension CartViewed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    public static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     public static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "currency", typeName: "String", isOptional: false, hasDefaultValue: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.currency), keywords: Events.ValidationKeyword.keywords(of: \\Self.currency)),
@@ -158,6 +173,9 @@ struct EventMacroExpansionTests {
 
                 private enum __macro_local_15linkerSetRecordfMu_ {
                     #__eventRecord(kind: 0x65766E74, storing: AdClicked.self as any (Events.__DiscoverableEvent).Type)
+                }
+
+                @_silgen_name("$linkerset_kind_65766E74_key_ad_5Fclicked") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
                 }
 
                 nonisolated extension AdClicked: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
@@ -222,7 +240,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Opened.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Opened") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -324,6 +349,10 @@ struct EventMacroExpansionTests {
                 }
 
                 nonisolated extension Opened: Events.Event, Swift.Encodable, Swift.Decodable {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schemaVersion: Int {
                         \(expectedVersion)
                     }
@@ -368,6 +397,9 @@ struct EventMacroExpansionTests {
 
                 private enum __macro_local_15linkerSetRecordfMu_ {
                     #__eventRecord(kind: 0x65766E74, storing: Crashed.self as any (Events.__DiscoverableEvent).Type)
+                }
+
+                @_silgen_name("$linkerset_kind_65766E74_key_crash") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
                 }
 
                 nonisolated extension Crashed: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
@@ -418,11 +450,17 @@ struct EventMacroExpansionTests {
                 private enum __macro_local_15linkerSetRecordfMu_ {
                     #__eventRecord(kind: 0x65766E74, storing: A.self as any (Events.__DiscoverableEvent).Type)
                 }
+
+                @_silgen_name("$linkerset_kind_65766E74_key_a") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
                 package struct B {
                 }
 
                 private enum __macro_local_15linkerSetRecordfMu0_ {
                     #__eventRecord(kind: 0x65766E74, storing: B.self as any (Events.__DiscoverableEvent).Type)
+                }
+
+                @_silgen_name("$linkerset_kind_65766E74_key_B") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu0_() {
                 }
 
                 nonisolated extension A: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
@@ -447,6 +485,10 @@ struct EventMacroExpansionTests {
                 }
 
                 nonisolated extension B: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    package static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     package static var consentCategory: Events.ConsentCategory {
                         .functional
                     }
@@ -514,7 +556,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Shapes.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Shapes") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Shapes: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "assigned", typeName: "Bool", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.assigned), keywords: Events.ValidationKeyword.keywords(of: \\Self.assigned)),
@@ -606,7 +655,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Spellings.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Spellings") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Spellings: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "a", typeName: "Int", isOptional: true, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.a), keywords: Events.ValidationKeyword.keywords(of: \\Self.a)),
@@ -724,7 +780,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Keywords.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Keywords") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Keywords: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "default", typeName: "Int", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.`default`), keywords: Events.ValidationKeyword.keywords(of: \\Self.`default`)),
@@ -788,7 +851,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Purchased.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Purchased") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Purchased: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "at", typeName: "Date", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.at), keywords: Events.ValidationKeyword.keywords(of: \\Self.at)),
@@ -862,7 +932,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Scheduled.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Scheduled") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Scheduled: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "slots", typeName: "[Date]", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.slots), keywords: Events.ValidationKeyword.keywords(of: \\Self.slots)),
@@ -940,7 +1017,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Counted.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Counted") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Counted: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [
                             Events.EventSchema.Property(name: "label", typeName: "Swift.String", isOptional: false, hasInvalidConstraint: Events.ValidationKeyword.hasInvalidConstraint(of: \\Self.label), keywords: Events.ValidationKeyword.keywords(of: \\Self.label)),
@@ -1010,7 +1094,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Opened.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Opened") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Opened: Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -1048,7 +1139,14 @@ struct EventMacroExpansionTests {
                     #__eventRecord(kind: 0x65766E74, storing: Closed.self as any (Events.__DiscoverableEvent).Type)
                 }
 
+                @_silgen_name("$linkerset_kind_65766E74_key_Closed") @used nonisolated func __macro_local_18linkerSetUniqueKeyfMu_() {
+                }
+
                 nonisolated extension Closed {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }
@@ -1086,9 +1184,16 @@ struct EventMacroExpansionTests {
                     }
 
                     #__eventRecord(kind: 0x65766E74, storing: Checkout.Started.self as any (Events.__DiscoverableEvent).Type)
+
+                    @_silgen_name("$linkerset_kind_65766E74_key_Started") @used nonisolated static func __macro_local_18linkerSetUniqueKeyfMu_() {
+                    }
                 }
 
                 nonisolated extension Checkout.Started: Events.Event, Swift.Encodable, Swift.Decodable, Events.__DiscoverableEvent {
+                    static var name: String {
+                        String(describing: Self.self)
+                    }
+
                     static var schema: Events.EventSchema {
                         Events.EventSchema(name: Self.name, version: Self.schemaVersion, consentCategory: Self.consentCategory, properties: [])
                     }

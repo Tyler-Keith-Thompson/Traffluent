@@ -12,9 +12,11 @@ import SwiftSyntaxMacros
 ///
 /// Beside the struct it places a LinkerSets record of Traffluent's event kind, `"evnt"`, a call of
 /// `#__eventRecord` (`EventLinkerSetMacro`) holding the struct as an
-/// `any Events.__DiscoverableEvent.Type`, which `DiscoveredEvent.all` reads, and conforms the
-/// struct to `__DiscoverableEvent`; a generic struct, or one nested in a generic type, gets a note
-/// instead.
+/// `any Events.__DiscoverableEvent.Type`, which `DiscoveredEvent.all` reads, with the event's name
+/// as its unique key (`EventLinkerSetMacro.uniqueKey(of:attribute:)`), and conforms the struct to
+/// `__DiscoverableEvent`; a generic struct, or one nested in a generic type, gets a note instead.
+/// In a private or fileprivate type the record has no key. The extension always declares
+/// `name`, so no other declaration of it can differ from the key.
 ///
 /// The generated code names the library's types by their modules (`Events.Event`), so a type of
 /// the same name in the event's module can't capture them.
@@ -34,7 +36,7 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
         let enums = RawValueEnum.enums(in: structure.memberBlock.members)
         let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
-        let diagnostics = argumentDiagnostics + propertyDiagnostics + enumDiagnostics(of: held, in: enums)
+        let diagnostics = argumentDiagnostics + nameMemberDiagnostics(of: structure, attribute: node) + propertyDiagnostics + enumDiagnostics(of: held, in: enums)
         guard diagnostics.isEmpty else {
             diagnostics.forEach(context.diagnose)
             return []
@@ -52,7 +54,10 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         // The requirements come before the coding, so a property that isn't Codable is first
         // reported where the error names it.
         let members = [
-            arguments.name.map { "\(access)static var name: String {\n    \($0)\n}" },
+            // Always declared, the type's name as Event's default writes it when name: is omitted,
+            // so any other name the type declares (in an extension, under #if) is a redeclaration
+            // the compiler refuses: the name is then always the one the unique key checks.
+            "\(access)static var name: String {\n    \(arguments.name.map { "\($0)" } ?? defaultName)\n}",
             arguments.consent.map { "\(access)static var consentCategory: Events.ConsentCategory {\n    \($0)\n}" },
             arguments.version.map { "\(access)static var schemaVersion: Int {\n    \($0)\n}" },
             schema(of: Array(zip(properties, held)), access: access),
@@ -89,10 +94,48 @@ public struct EventMacro: ExtensionMacro, EventLinkerSetMacro {
         let (properties, propertyDiagnostics) = StoredProperty.properties(of: structure.memberBlock.members)
         let enums = RawValueEnum.enums(in: structure.memberBlock.members)
         let held = properties.map { RawValueEnum.held(by: $0, in: enums, structure: structure.name.text) }
-        let argumentDiagnostics = EventArguments.arguments(of: node).diagnostics
+        let argumentDiagnostics = EventArguments.arguments(of: node).diagnostics + nameMemberDiagnostics(of: structure, attribute: node)
         let expands = argumentDiagnostics.isEmpty && propertyDiagnostics.isEmpty && enumDiagnostics(of: held, in: enums).isEmpty
         guard isRecorded && expands else { return [] }
-        return try recordPeers(of: node, providingPeersOf: declaration, in: context)
+        return try eventRecordPeers(of: node, providingPeersOf: declaration, in: context)
+    }
+
+    /// The name of an event whose attribute gives no `name:`: `Event`'s default, the type's name.
+    private static let defaultName = "String(describing: Self.self)"
+
+    /// An error at a static `name` the struct declares itself: the name is the event's unique key,
+    /// which the macro reads from its `name:` argument and can't read from a member. A member that
+    /// stores a string literal, when the attribute gives no `name:`, gets a Fix-It moving it there.
+    private static func nameMemberDiagnostics(of structure: StructDeclSyntax, attribute: AttributeSyntax) -> [Diagnostic] {
+        guard let member = structure.nameMember else { return [] }
+        let fixIts = moveNameFixIt(of: member, in: structure, attribute: attribute).map { [$0] } ?? []
+        return [Diagnostic(node: member, message: EventMacroDiagnostic.nameMember, fixIts: fixIts)]
+    }
+
+    /// The Fix-It that removes `static let name = "…"` (or `var`) and gives its literal to the
+    /// attribute as `name:`, first among its arguments; none for a member it can't move.
+    private static func moveNameFixIt(of member: VariableDeclSyntax, in structure: StructDeclSyntax, attribute: AttributeSyntax) -> FixIt? {
+        guard EventArguments.arguments(of: attribute).arguments.name == nil,
+              let binding = member.bindings.first, member.bindings.count == 1,
+              let literal = binding.initializer?.value.as(StringLiteralExprSyntax.self)
+        else { return nil }
+        let existing = attribute.arguments?.as(LabeledExprListSyntax.self).map(Array.init) ?? []
+        let name = LabeledExprSyntax(
+            label: .identifier("name"),
+            colon: .colonToken(trailingTrivia: .space),
+            expression: ExprSyntax(literal.trimmed),
+            trailingComma: existing.isEmpty ? nil : .commaToken(trailingTrivia: .space)
+        )
+        let named = attribute
+            .with(\.leftParen, .leftParenToken())
+            .with(\.arguments, .argumentList(LabeledExprListSyntax([name] + existing)))
+            .with(\.rightParen, .rightParenToken())
+            .with(\.trailingTrivia, attribute.trailingTrivia)
+        let members = structure.memberBlock.members.filter { $0.decl.id != DeclSyntax(member).id }
+        return FixIt(message: EventMacroFixIt.moveNameToArgument, changes: [
+            .replace(oldNode: Syntax(attribute), newNode: Syntax(named)),
+            .replace(oldNode: Syntax(structure.memberBlock.members), newNode: Syntax(members)),
+        ])
     }
 
     /// An error at each enum declared in the struct that a property holds and that doesn't list

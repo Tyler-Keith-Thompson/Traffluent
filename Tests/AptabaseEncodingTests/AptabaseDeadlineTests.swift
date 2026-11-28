@@ -10,8 +10,10 @@ import TrackingPlans
 
 // Aptabase drops an event older than DateTime.UtcNow.AddDays(-1) when its request arrives, while
 // answering 200 (github.com/aptabase/aptabase at 89d36185, EventBody.IsValid, read 2026-11-27).
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("AptabaseBatchEncoder: request deadlines", .timeLimit(.minutes(1)))
-struct AptabaseDeadlineTests {
+private struct AptabaseDeadlineTests {
     @Event(name: "searched")
     struct Searched {
         var query: String

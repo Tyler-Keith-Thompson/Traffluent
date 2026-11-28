@@ -12,8 +12,10 @@ import TraffluentTestSupport
 // and each tracking request of a bulk request through PHP's parse_url and parse_str
 // (plugins/BulkTracking/Tracker/Requests.php, matomo-org/matomo 6.0.0), which reads `+` as a space
 // and `%XX` as a byte.
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("MatomoBatchEncoder: dimensions")
-struct MatomoDimensionsTests {
+private struct MatomoDimensionsTests {
     struct Cart: Codable, Hashable {
         var size: Int
         var currency: String

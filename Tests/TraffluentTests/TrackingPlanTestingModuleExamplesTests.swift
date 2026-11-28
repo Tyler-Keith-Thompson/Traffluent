@@ -10,8 +10,10 @@ import Testing
 import TrackingPlans
 import TrackingPlanTesting
 
+// Private: its events share their names with other events of this test target, and @Event
+// leaves a private type's events out of the link check of names (DefiningEvents, Limits).
 @Suite("TrackingPlanTesting module examples")
-struct TrackingPlanTestingModuleExamplesTests {
+private struct TrackingPlanTestingModuleExamplesTests {
     @Event(name: "signed_up")
     struct SignedUp {
         var plan: String
