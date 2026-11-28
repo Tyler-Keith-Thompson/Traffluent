@@ -18,6 +18,10 @@ struct HTTPDestinationTests {
     struct PlansEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -31,6 +35,10 @@ struct HTTPDestinationTests {
     /// Encodes a batch as its records' identifiers, one per line, as plain text.
     struct IdentifiersEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
+
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
@@ -55,9 +63,9 @@ struct HTTPDestinationTests {
             self.result = result
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             sent.withLock { $0.append(SentRequest(request: request, body: body)) }
-            return try result.get()
+            return try HTTPTransportResponse(head: result.get(), body: Data())
         }
     }
 
@@ -68,10 +76,10 @@ struct HTTPDestinationTests {
         let response = SingleValueSubject<HTTPResponse>()
         let sawCancellation = Mutex(false)
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             try? started.send()
             do {
-                return try await response.execute()
+                return try await HTTPTransportResponse(head: response.execute(), body: Data())
             } catch {
                 sawCancellation.withLock { $0 = Task.isCancelled }
                 throw .cancelled

@@ -95,6 +95,19 @@ public struct SnowplowBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: a Snowplow collector answers 200 to every request it can read, and events are
+    /// validated later in the pipeline, so its answer says nothing about them.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // The collector doesn't validate (cited below): an invalid or unregistered event becomes a
+        // failed event downstream, which no answer to the request can report.
+        .delivered
+    }
+
     // From Snowplow's docs, read on 2026-11-27:
     // - Example HTTP requests, https://docs.snowplow.io/docs/events/http-requests/ (the tp2 path,
     //   the payload_data 1-0-4 wrapper, the unstruct_event wrapper and contexts).

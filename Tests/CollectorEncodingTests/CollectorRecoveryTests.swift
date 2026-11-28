@@ -31,11 +31,11 @@ struct CollectorRecoveryTests {
         let (arrivals, arrived) = AsyncStream.makeStream(of: Void.self)
         let (gate, opened) = AsyncStream.makeStream(of: Void.self)
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             bodies.withLock { $0.append(body) }
             arrived.yield()
             for await _ in gate {}
-            return HTTPResponse(status: .ok)
+            return HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data())
         }
     }
 

@@ -10,9 +10,9 @@ public import HTTPTypes
 /// static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(418)).map { [$0] } ?? []
 /// ```
 ///
-/// Only a failure can be one: a client error (4xx) or a server error (5xx). A 2xx is always
-/// delivered, and a 1xx or 3xx, which ``HTTPDestination`` doesn't follow, is no failure a retry
-/// would mend.
+/// Only a failure can be one: a client error (4xx) or a server error (5xx). A 2xx is delivered
+/// unless the encoder's ``BatchEncoder/outcome(of:for:)`` reads its body otherwise, and a 1xx or 3xx,
+/// which ``HTTPDestination`` doesn't follow, is no failure a retry would mend.
 public struct TransientStatus: Sendable, Hashable {
     /// The status.
     public let status: HTTPResponse.Status

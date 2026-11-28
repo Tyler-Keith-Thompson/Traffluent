@@ -178,8 +178,16 @@ whose name would be left out.
 
 Matomo answers 200 to a bulk request it can read, whatever its tracking requests hold. One it
 refuses is counted as `invalid` in the answer's JSON and not stored, and only a request with a
-token learns which. So a wrong site ID, a site that doesn't exist, and events of a time Matomo
-refuses are lost without an error. Check that the first events show up in the site's Visits Log.
+token learns which. When the answer says Matomo refused every one, as for a site ID of no
+site, the destination drops the request and reports it as
+`HTTPDropReport.rejectedInBody(status:reason:recordIDs:)`. When it tracked some and refused
+others, the refused ones are lost with only a notice in the log, as the answer doesn't say which
+they were. When its counts add up to fewer than the request's tracking requests, or are both 0,
+Matomo skipped some without saying so, as after a database lock wait timeout, and the destination
+sends the request again until its deadline; Matomo counts the ones it had tracked twice. Whether
+a server with the QueuedTracking plugin counts queued requests as tracked is unverified: if it
+doesn't, every request there is sent again until its deadline. Check that the first events show
+up in the site's Visits Log.
 A server set to require a token for every bulk request (`bulk_requests_require_authentication`)
 refuses each one: Matomo 6.0 answers 400, which the destination drops and reports, and Matomo 5.14
 answers 500, which the destination retries until the request is cancelled. Leave that setting

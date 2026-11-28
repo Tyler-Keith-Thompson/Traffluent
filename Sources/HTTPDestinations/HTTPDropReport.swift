@@ -4,20 +4,27 @@ public import HTTPTypes
 /// A batch ``HTTPDestination`` dropped without delivering it, and why.
 ///
 /// A destination reports every batch it drops for good on ``HTTPDestination/dropReports``: one
-/// the endpoint rejected with a status that retrying won't change, one whose request the
+/// the endpoint rejected with a status that retrying won't change, or with a 2xx whose body says it
+/// stored nothing, one whose request the
 /// transport can never send, one whose request was still undelivered at its deadline, or one
 /// its encoder couldn't encode. It reports each record the encoder left out of a batch's requests
 /// too. A batch whose send failed for a while and was then delivered isn't reported, and neither
 /// is one whose delivery was cancelled. A dropped batch counts as received, so a store keeping its
 /// records forgets them. A crash or a cancellation between a report and the batch's
 /// acknowledgement leaves the store holding the batch, so after a relaunch the same record
-/// identifiers can be reported again, as ``rejected(status:recordIDs:)`` or
-/// ``deadlineExceeded(deadline:recordIDs:)``.
+/// identifiers can be reported again, as ``rejected(status:recordIDs:)``,
+/// ``rejectedInBody(status:reason:recordIDs:)`` or ``deadlineExceeded(deadline:recordIDs:)``.
 public enum HTTPDropReport<Failure: Error>: Sendable {
     /// The endpoint answered with `status`, a non-2xx status other than 408, 429, 5xx or one of
     /// the encoder's ``BatchEncoder/transientStatuses``, so the batch of the records identified
     /// by `recordIDs` (`EventRecord.id`), oldest first, was dropped.
     case rejected(status: HTTPResponse.Status, recordIDs: [UUID])
+    /// The endpoint answered with `status`, a 2xx, but the answer's body says the vendor stored
+    /// none of the records and won't if they are sent again (``BatchEncoder/outcome(of:for:)``
+    /// returned ``ResponseOutcome/rejected(reason:)``), for `reason`, so the batch of the records
+    /// identified by `recordIDs`, oldest first, was dropped. Mixpanel's track API, answering 200
+    /// with `{"status": 0, "error": ...}`, is one such vendor.
+    case rejectedInBody(status: HTTPResponse.Status, reason: String, recordIDs: [UUID])
     /// The transport can never send the request (``HTTPTransportError/invalidRequest(reason:)``:
     /// a malformed or unsupported URL, or one the platform refuses), for the reason `reason`, so
     /// the batch of the records identified by `recordIDs`, oldest first, was dropped.

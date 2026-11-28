@@ -14,7 +14,7 @@ struct ScriptedTransportTests {
         var actual: [HTTPResponse.Status] = []
 
         for _ in expected {
-            actual.append(try await sut.send(request, body: Data()).status)
+            actual.append(try await sut.send(request, body: Data()).head.status)
         }
 
         #expect(actual == expected)
@@ -29,7 +29,7 @@ struct ScriptedTransportTests {
         let expectedStatus = HTTPResponse.Status.ok
 
         _ = try await copy.send(request, body: Data([1]))
-        let actualStatus = try await sut.send(request, body: Data([2])).status
+        let actualStatus = try await sut.send(request, body: Data([2])).head.status
 
         #expect(sut.requests.map(\.body) == expectedBodies)
         #expect(copy.requests.map(\.body) == expectedBodies)
@@ -44,7 +44,25 @@ struct ScriptedTransportTests {
         var actual: [HTTPResponse.Status] = []
 
         for _ in expected {
-            actual.append(try await sut.send(request, body: Data()).status)
+            actual.append(try await sut.send(request, body: Data()).head.status)
+        }
+
+        #expect(actual == expected)
+    }
+
+    @Test("A scripted status answers with an empty body, and a scripted response with its body")
+    func responseBodies() async throws {
+        let body = Data(#"{"status":0}"#.utf8)
+        let sut = ScriptedTransport([.status(.ok), .response(.accepted, body: body)])
+        let request = HTTPRequest(method: .post, scheme: "https", authority: "example.com", path: "/")
+        let expected = [
+            HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data()),
+            HTTPTransportResponse(head: HTTPResponse(status: .accepted), body: body),
+        ]
+        var actual: [HTTPTransportResponse] = []
+
+        for _ in expected {
+            actual.append(try await sut.send(request, body: Data()))
         }
 
         #expect(actual == expected)
@@ -59,7 +77,7 @@ struct ScriptedTransportTests {
         await #expect(throws: HTTPTransportError.failed(reason: "scripted: no response")) {
             try await sut.send(request, body: Data())
         }
-        let actual = try await sut.send(request, body: Data()).status
+        let actual = try await sut.send(request, body: Data()).head.status
 
         #expect(actual == expected)
     }

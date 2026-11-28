@@ -13,8 +13,8 @@ import Trackers
 struct StoreAnalyticsDropsReadTurnTests {
     /// A transport that accepts every request and sends nothing.
     struct AcceptingTransport: HTTPTransport {
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
-            HTTPResponse(status: .noContent)
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
+            HTTPTransportResponse(head: HTTPResponse(status: .noContent), body: Data())
         }
     }
 

@@ -22,6 +22,10 @@ struct HTTPDestinationRetryTests {
     struct IdentifiersEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -35,6 +39,10 @@ struct HTTPDestinationRetryTests {
     struct TeapotRetryingEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(418)).map { [$0] } ?? []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             IdentifiersEncoder().requests(for: batch)
         }
@@ -44,6 +52,10 @@ struct HTTPDestinationRetryTests {
 
     struct FailingEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
+
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
 
         func requests(for batch: [EventRecord]) throws(Unencodable) -> BatchRequests<Unencodable> {
             throw Unencodable()
@@ -70,14 +82,14 @@ struct HTTPDestinationRetryTests {
             sentAt.withLock { $0.count }
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let attempt = sentAt.withLock { sentAt in
                 sentAt.append(elapsed())
                 return sentAt.count
             }
             bodies.withLock { $0.append(body) }
             attempted.yield(attempt)
-            return try script[min(attempt, script.count) - 1].get()
+            return try HTTPTransportResponse(head: script[min(attempt, script.count) - 1].get(), body: Data())
         }
     }
 
@@ -89,11 +101,11 @@ struct HTTPDestinationRetryTests {
         let sawCancellation = Mutex(false)
         let attemptCount = Mutex(0)
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             attemptCount.withLock { $0 += 1 }
             try? started.send()
             do {
-                return try await response.execute()
+                return try await HTTPTransportResponse(head: response.execute(), body: Data())
             } catch {
                 sawCancellation.withLock { $0 = Task.isCancelled }
                 throw .cancelled

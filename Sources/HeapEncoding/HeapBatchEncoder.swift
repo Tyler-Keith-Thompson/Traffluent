@@ -67,6 +67,18 @@ public struct HeapBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: Heap answers 200 only to a request it takes, and one it can't with 400.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // Heap's Track and Bulk Track references (cited below): 200 and 400, each with a body of
+        // `{}`, so a 2xx body says nothing more.
+        .delivered
+    }
+
     // From Heap's developer docs, read on 2026-11-27:
     // - Track, https://developers.heap.io/reference/track-1 (POST https://heapanalytics.com/api/track,
     //   or https://c.eu.heap-api.com/api/track for the EU data center; its OpenAPI definition's

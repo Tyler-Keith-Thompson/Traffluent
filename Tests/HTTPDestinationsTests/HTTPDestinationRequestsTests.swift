@@ -21,6 +21,10 @@ struct HTTPDestinationRequestsTests {
     struct PerRecordEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         typealias Failure = Unencodable
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Unencodable> {
@@ -41,10 +45,10 @@ struct HTTPDestinationRequestsTests {
             self.rejecting = rejecting
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let text = String(decoding: body, as: UTF8.self)
             sent.withLock { $0.append((request, text)) }
-            return HTTPResponse(status: rejecting.contains(text) ? .badRequest : .ok)
+            return HTTPTransportResponse(head: HTTPResponse(status: rejecting.contains(text) ? .badRequest : .ok), body: Data())
         }
     }
 
@@ -58,13 +62,13 @@ struct HTTPDestinationRequestsTests {
             self.failingOnce = failingOnce
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let text = String(decoding: body, as: UTF8.self)
             let isFirst = sent.withLock { sent in
                 defer { sent.append(text) }
                 return !sent.contains(text)
             }
-            return HTTPResponse(status: isFirst && failingOnce.contains(text) ? .serviceUnavailable : .ok)
+            return HTTPTransportResponse(head: HTTPResponse(status: isFirst && failingOnce.contains(text) ? .serviceUnavailable : .ok), body: Data())
         }
     }
 
@@ -80,13 +84,13 @@ struct HTTPDestinationRequestsTests {
             self.gated = gated
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let text = String(decoding: body, as: UTF8.self)
             sent.withLock { $0.append(text) }
-            guard text == gated else { return HTTPResponse(status: .ok) }
+            guard text == gated else { return HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data()) }
             try? started.send()
             do {
-                return try await response.execute()
+                return try await HTTPTransportResponse(head: response.execute(), body: Data())
             } catch {
                 throw .cancelled
             }
@@ -102,11 +106,11 @@ struct HTTPDestinationRequestsTests {
             self.answering = answering
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let text = String(decoding: body, as: UTF8.self)
             sent.withLock { $0.append(text) }
             guard answering.contains(text) else { throw .failed(reason: "offline") }
-            return HTTPResponse(status: .ok)
+            return HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data())
         }
     }
 

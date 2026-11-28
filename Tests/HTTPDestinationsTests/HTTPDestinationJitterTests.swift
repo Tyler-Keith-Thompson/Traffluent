@@ -19,6 +19,10 @@ struct HTTPDestinationJitterTests {
     struct IdentifiersEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         var deadline: Date?
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
@@ -40,12 +44,12 @@ struct HTTPDestinationJitterTests {
             elapsed = { start.duration(to: clock.now) }
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let attempt = sentAt.withLock { sentAt in
                 sentAt.append(elapsed())
                 return sentAt.count
             }
-            return try script[min(attempt, script.count) - 1].get()
+            return try HTTPTransportResponse(head: script[min(attempt, script.count) - 1].get(), body: Data())
         }
     }
 

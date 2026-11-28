@@ -102,6 +102,21 @@ public struct GoogleAnalyticsBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: the Measurement Protocol answers 2xx to every request it receives, with no body that
+    /// says whether it stored the events.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // The Measurement Protocol reference (cited below), read on 2026-11-27: /mp/collect answers
+        // 2xx to every request received, its body empty. Only the separate /debug/mp/collect
+        // endpoint returns validation messages, and it stores nothing, so it can't stand in for
+        // production sends.
+        .delivered
+    }
+
     // From Google's Measurement Protocol docs, read on 2026-11-27:
     // https://developers.google.com/analytics/devguides/collection/protocol/ga4/reference ("events[]
     // ... Up to 25 events can be sent per request", "Up to 25 parameters can be sent per event",

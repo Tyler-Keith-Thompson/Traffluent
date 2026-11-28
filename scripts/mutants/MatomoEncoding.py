@@ -180,4 +180,20 @@ MUTANTS = [
     Mutant("hexnibbles", U, "text.append(digits[Int(byte >> 4)])\n            text.append(digits[Int(byte & 0x0F)])", "text.append(digits[Int(byte & 0x0F)])\n            text.append(digits[Int(byte >> 4)])", mode="stmt"),
     Mutant("firstbytes", U, "[bytes.8, bytes.9, bytes.10, bytes.11, bytes.12, bytes.13, bytes.14, bytes.15]", "[bytes.0, bytes.1, bytes.2, bytes.3, bytes.4, bytes.5, bytes.6, bytes.7]"),
     Mutant("bytesreversed", U, "[bytes.8, bytes.9, bytes.10, bytes.11, bytes.12, bytes.13, bytes.14, bytes.15]", "[bytes.15, bytes.14, bytes.13, bytes.12, bytes.11, bytes.10, bytes.9, bytes.8]"),
+    # The bulk answer's counts (TRAF-123).
+    Mutant("negativetrackedread", B, "answer.tracked >= 0", "true"),
+    Mutant("negativeinvalidread", B, "answer.invalid >= 0", "true"),
+    Mutant("sentcountshort", B, "request.recordIDs.count", "(request.recordIDs.count - 1)"),
+    # shortfallignored holds shortfallinclusive's text, so it comes first.
+    Mutant("shortfallignored", B, "answer.tracked < sent && answer.invalid < sent - answer.tracked", "false"),
+    Mutant("shortfallinclusive", B, "answer.invalid < sent - answer.tracked", "answer.invalid <= sent - answer.tracked"),
+    Mutant("bothzeroignored", B, "(answer.tracked == 0 && answer.invalid == 0)", "false"),
+    Mutant("transientrejected", B, """return .transient(reason: "Matomo counted \\(answer.tracked) tracked and \\(answer.invalid) invalid of the request's \\(sent) tracking requests, and skipped the rest")""", 'return .rejected(reason: "")', mode="stmt"),
+    Mutant("nonetrackeddelivered", B, "answer.tracked > 0", "answer.tracked >= 0"),
+    Mutant("allinvaliddelivered", B, """return .rejected(reason: "Matomo refused all \\(answer.invalid) of the request's tracking requests as invalid, as it does for a site ID of no site")""", "return .delivered", mode="stmt"),
+    Mutant("unreadablerejected", B, "return .delivered", 'return .rejected(reason: "")', mode="stmt", nth=0),
+    # The rejection's count of invalid requests. Last, as allinvaliddelivered's text holds it, and
+    # after shortfallinclusive's text adds one: the guard's, the shortfall's two, the both-0
+    # check's and the transient reason's come before it.
+    Mutant("invalidcountlost", B, "answer.invalid", "0", nth=5),
 ]

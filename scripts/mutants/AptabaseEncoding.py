@@ -169,4 +169,8 @@ MUTANTS = [
     Mutant("localelanguageonly", S, 'tagged.utf16.count <= 10', 'false'),
     Mutant("localetaglength9", S, "tagged.utf16.count <= 10", "tagged.utf16.count < 10"),
     Mutant("localeidentifier", S, "language.languageCode?.identifier", "Optional(identifier)"),
+    # The 200 that says nothing was recorded (TRAF-123).
+    Mutant("refusaldelivered", B, "return .rejected(reason: refusal.error)", "return .delivered", mode="stmt"),
+    Mutant("refusalreasonlost", B, "refusal.error", '""'),
+    Mutant("unreadablerejected", B, "return .delivered", 'return .rejected(reason: "")', mode="stmt", nth=0),
 ]

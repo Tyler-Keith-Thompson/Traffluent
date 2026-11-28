@@ -22,6 +22,10 @@ struct HTTPDestinationStoreTests {
     struct IdentifiersEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -43,13 +47,13 @@ struct HTTPDestinationStoreTests {
             self.script = script
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let attempt = bodies.withLock { bodies in
                 bodies.append(String(decoding: body, as: UTF8.self))
                 return bodies.count
             }
             attempted.yield(attempt)
-            return try script[min(attempt, script.count) - 1].get()
+            return try HTTPTransportResponse(head: script[min(attempt, script.count) - 1].get(), body: Data())
         }
     }
 

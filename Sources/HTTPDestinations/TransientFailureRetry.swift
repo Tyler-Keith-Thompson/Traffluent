@@ -8,10 +8,14 @@ enum AttemptFailure: Error {
     case unanswered(reason: String)
     /// The endpoint answered with a status a later attempt may not get
     /// (``HTTPResponse/Status/isTransient``, or one of the encoder's
-    /// ``BatchEncoder/transientStatuses``); retried.
+    /// ``BatchEncoder/transientStatuses``), or with a 2xx whose body its encoder reads as storing
+    /// nothing for now (``ResponseOutcome/transient(reason:)``); retried.
     case unavailable(HTTPResponse)
     /// The endpoint answered with a status every attempt would get; not retried.
     case rejected(HTTPResponse)
+    /// The endpoint answered 2xx, with a body its encoder reads as storing nothing, for a reason
+    /// every attempt would meet (``ResponseOutcome/rejected(reason:)``); not retried.
+    case rejectedInBody(HTTPResponse, reason: String)
     /// The transport can never send the request; not retried.
     case invalidRequest(reason: String)
     /// The request's deadline passed before this attempt; not retried.
@@ -61,7 +65,7 @@ struct TransientFailureRetry<BackoffClock: Clock<Duration>>: RetryStrategy {
         switch error as? AttemptFailure {
         case .unanswered, .unavailable:
             return try await backoff.handle(error: error, beforeRetry: beforeRetry)
-        case .rejected, .invalidRequest, .deadlineExceeded, nil:
+        case .rejected, .rejectedInBody, .invalidRequest, .deadlineExceeded, nil:
             return false
         }
     }

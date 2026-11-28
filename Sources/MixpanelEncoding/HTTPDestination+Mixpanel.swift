@@ -10,12 +10,14 @@ extension HTTPDestination where Encoding == MixpanelBatchEncoder {
     ///
     /// The destination posts to the `/track` endpoint of `region`, encoded by a
     /// ``MixpanelBatchEncoder`` of `plan` within ``MixpanelBatchEncoder/batchLimit``, with `ip=0`,
-    /// so Mixpanel adds no location from the request's address, and sends no trace context in its
-    /// header fields. It retries what Mixpanel says to retry, no response, a 5xx, 408 or 429, and
-    /// drops and reports any other status, such as 400 for an invalid request. Mixpanel answers
-    /// 200 for a request whose events it doesn't store, so a wrong region, or a token of no
-    /// project, may be answered 200 with nothing stored: check the project's Live View after
-    /// setting it up.
+    /// so Mixpanel adds no location from the request's address, and `verbose=1`, so Mixpanel says
+    /// in its answer whether it found a valid event, and sends no trace context in its header
+    /// fields. It retries what Mixpanel says to retry, no response, a 5xx, 408 or 429, and drops
+    /// and reports any other status, such as 400 for an invalid request, and a 200 whose body is
+    /// `{"status": 0, "error": ...}`, reported as `HTTPDropReport.rejectedInBody` with Mixpanel's
+    /// error. A status of 1 doesn't confirm the token names a project, so a wrong region, or a
+    /// token of no project, may still be answered 200 with nothing stored: check the project's
+    /// Live View after setting it up.
     ///
     /// The encoder logs a notice for each property of `plan` named as one Mixpanel reserves, as
     /// every record of its event will be skipped
@@ -127,16 +129,17 @@ extension ExponentialBackoff {
 }
 
 extension MixpanelRegion {
-    /// The region's `/track` endpoint, with `ip=0` (https://developer.mixpanel.com/reference/track-event).
+    /// The region's `/track` endpoint, with `ip=0` and `verbose=1`
+    /// (https://developer.mixpanel.com/reference/track-event).
     fileprivate var endpoint: URL {
         // Foundation has no non-failable initializer for a literal URL. These literals always
         // parse, so the fallback is never taken, and the endpoint test pins all three. The URL
         // macro would check them at compile time, but it would add a macro package to every
         // adopter's build for three literals.
         switch self {
-        case .us: URL(string: "https://api.mixpanel.com/track?ip=0") ?? URL(fileURLWithPath: "/")
-        case .eu: URL(string: "https://api-eu.mixpanel.com/track?ip=0") ?? URL(fileURLWithPath: "/")
-        case .india: URL(string: "https://api-in.mixpanel.com/track?ip=0") ?? URL(fileURLWithPath: "/")
+        case .us: URL(string: "https://api.mixpanel.com/track?ip=0&verbose=1") ?? URL(fileURLWithPath: "/")
+        case .eu: URL(string: "https://api-eu.mixpanel.com/track?ip=0&verbose=1") ?? URL(fileURLWithPath: "/")
+        case .india: URL(string: "https://api-in.mixpanel.com/track?ip=0&verbose=1") ?? URL(fileURLWithPath: "/")
         }
     }
 }

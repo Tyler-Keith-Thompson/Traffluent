@@ -120,6 +120,31 @@ public struct AptabaseBatchEncoder: BatchEncoder {
         return [slowUpload]
     }()
 
+    // src/Features/Ingestion/ResolveAppKeyAttribute.cs (89d36185, read 2026-11-27): a missing,
+    // unknown or locked App-Key is answered 200 ("the same status as success", so SDKs that retry
+    // every failure don't resend for ever) with `{"error": "<reason> Events are not being
+    // recorded."}`; EventsController.cs answers a request it takes with `{}`.
+    /// What Aptabase's 2xx answer means: rejected when its body is an object holding an `error`,
+    /// and delivered otherwise.
+    ///
+    /// Aptabase answers a request whose app key is missing, of no app, or of an account it has
+    /// locked, such as one past its plan's monthly events, with 200 and `{"error": ...}`, storing
+    /// nothing. That is ``/HTTPDestinations/ResponseOutcome/rejected(reason:)``, with Aptabase's
+    /// error as the reason, so `HTTPDestination` drops the request and reports it: sending it again
+    /// wouldn't change the key. Any other body, `{}` as Aptabase answers a request it takes
+    /// included, is delivered.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: Whether Aptabase took the request's events, as far as its answer says.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        guard let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body) else {
+            return .delivered
+        }
+        return .rejected(reason: refusal.error)
+    }
+
     /// What every event's `systemProps.sdkVersion` says, which Aptabase requires and keeps with
     /// each event: the library's name, as no constant holds its version.
     static let sdkVersion = "Traffluent"
@@ -353,4 +378,10 @@ private final class NoticedSystemProperties: Sendable {
     func insert(_ name: String) -> Bool {
         names.withLock { $0.insert(name).inserted }
     }
+}
+
+/// Aptabase's answer to a request whose app key it refuses.
+private struct Refusal: Decodable {
+    /// Why, such as "Owner account is locked. Events are not being recorded."
+    let error: String
 }

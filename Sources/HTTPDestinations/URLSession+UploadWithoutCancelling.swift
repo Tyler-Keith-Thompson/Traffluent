@@ -7,7 +7,8 @@
     import Synchronization
 
     extension URLSession {
-        /// Uploads `body` with `request` and returns the response, and never cancels the upload.
+        /// Uploads `body` with `request` and returns the response and its body, and never cancels
+        /// the upload.
         ///
         /// FoundationNetworking traps ("Trying to access a behaviour for a task that in not in the
         /// registry", TaskRegistry.swift) when a `URLSessionTask` is cancelled while it fails:
@@ -22,30 +23,36 @@
         ///   arrives, the session's error when none arrives, `URLError(.unsupportedURL)` for a
         ///   request `URLRequest` can't hold, or `URLError(.badServerResponse)` for a response that
         ///   isn't HTTP.
-        func uploadWithoutCancelling(for request: HTTPRequest, from body: Data) async throws -> HTTPResponse {
+        func uploadWithoutCancelling(for request: HTTPRequest, from body: Data) async throws -> HTTPTransportResponse {
             guard let urlRequest = URLRequest(httpRequest: request) else {
                 throw URLError(.unsupportedURL)
             }
             let upload = Upload()
-            let urlResponse = try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URLResponse, any Error>) in
+            let received = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Received, any Error>) in
                     guard upload.wait(continuation) else {
                         continuation.resume(throwing: CancellationError())
                         return
                     }
-                    let task = uploadTask(with: urlRequest, from: body) { _, response, error in
-                        upload.finish(response.map(Result.success) ?? .failure(error ?? URLError(.badServerResponse)))
+                    let task = uploadTask(with: urlRequest, from: body) { data, response, error in
+                        upload.finish(response.map { .success(Received(response: $0, body: data ?? Data())) } ?? .failure(error ?? URLError(.badServerResponse)))
                     }
                     task.resume()
                 }
             } onCancel: {
                 upload.cancel()
             }
-            guard let response = (urlResponse as? HTTPURLResponse)?.httpResponse else {
+            guard let head = (received.response as? HTTPURLResponse)?.httpResponse else {
                 throw URLError(.badServerResponse)
             }
-            return response
+            return HTTPTransportResponse(head: head, body: received.body)
         }
+    }
+
+    /// What an upload's completion handler received: the response, and its body.
+    private struct Received: Sendable {
+        let response: URLResponse
+        let body: Data
     }
 
     /// Who resumes an upload's continuation: its completion handler or its caller's cancellation,
@@ -56,7 +63,7 @@
     private final class Upload: Sendable {
         private enum State {
             case starting
-            case waiting(CheckedContinuation<URLResponse, any Error>)
+            case waiting(CheckedContinuation<Received, any Error>)
             case cancelled
             case finished
         }
@@ -65,7 +72,7 @@
 
         /// Stores `continuation` for `finish` or `cancel` to resume; `false` when the caller was
         /// already cancelled, so the upload mustn't start.
-        func wait(_ continuation: CheckedContinuation<URLResponse, any Error>) -> Bool {
+        func wait(_ continuation: CheckedContinuation<Received, any Error>) -> Bool {
             state.withLock { state in
                 guard case .starting = state else {
                     return false
@@ -76,7 +83,7 @@
         }
 
         /// Resumes the continuation with the upload's outcome, unless the caller was cancelled.
-        func finish(_ result: Result<URLResponse, any Error>) {
+        func finish(_ result: Result<Received, any Error>) {
             take(becoming: .finished)?.resume(with: result)
         }
 
@@ -85,7 +92,7 @@
             take(becoming: .cancelled)?.resume(throwing: CancellationError())
         }
 
-        private func take(becoming next: State) -> CheckedContinuation<URLResponse, any Error>? {
+        private func take(becoming next: State) -> CheckedContinuation<Received, any Error>? {
             state.withLock { state in
                 switch state {
                 case .starting:

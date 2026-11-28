@@ -126,10 +126,10 @@ MUTANTS = [
     Mutant("bootstrappedinstrument", F, "NoOpInstrument()", "InstrumentationSystem.instrument"),
     # The endpoints. Before usaseu, which writes the EU endpoint again, these write the US one
     # again, so usaseu takes the first.
-    Mutant("indianoipquery", F, '"https://api-in.mixpanel.com/track?ip=0"', '"https://api-in.mixpanel.com/track"'),
-    Mutant("indiaasus", F, '"https://api-in.mixpanel.com/track?ip=0"', '"https://api.mixpanel.com/track?ip=0"'),
-    Mutant("euasus", F, '"https://api-eu.mixpanel.com/track?ip=0"', '"https://api.mixpanel.com/track?ip=0"'),
-    Mutant("usaseu", F, '"https://api.mixpanel.com/track?ip=0"', '"https://api-eu.mixpanel.com/track?ip=0"', nth=0),
+    Mutant("indianoipquery", F, '"https://api-in.mixpanel.com/track?ip=0&verbose=1"', '"https://api-in.mixpanel.com/track?verbose=1"'),
+    Mutant("indiaasus", F, '"https://api-in.mixpanel.com/track?ip=0&verbose=1"', '"https://api.mixpanel.com/track?ip=0&verbose=1"'),
+    Mutant("euasus", F, '"https://api-eu.mixpanel.com/track?ip=0&verbose=1"', '"https://api.mixpanel.com/track?ip=0&verbose=1"'),
+    Mutant("usaseu", F, '"https://api.mixpanel.com/track?ip=0&verbose=1"', '"https://api-eu.mixpanel.com/track?ip=0&verbose=1"', nth=0),
     # Context.
     Mutant("noappversion", C, 'properties["$app_version_string"] = .string(version)', "", mode="stmt"),
     Mutant("noappbuild", C, 'properties["$app_build_number"] = .string(build)', "", mode="stmt"),
@@ -145,4 +145,23 @@ MUTANTS = [
     # with jitter drawn from the system generator no test could tell 1 s from 2 s for certain.
     Mutant("mixpanelbackoffinitial", F, "Duration.seconds(2)", "Duration.seconds(1)"),
     Mutant("mixpanelbackoffmaximum", F, "Duration.seconds(60)", "Duration.seconds(120)"),
+    # The verbose answer (TRAF-123).
+    # Quoted, as an expression can't sit inside a string literal. Applied after the endpoint
+    # mutants, whose text holds the US literal on the EU and India lines and the EU literal on the
+    # US line, so the US and EU ones pick their own line with nth.
+    Mutant("usnotverbose", F, '"https://api.mixpanel.com/track?ip=0&verbose=1"', '"https://api.mixpanel.com/track?ip=0"', nth=0),
+    Mutant("eunotverbose", F, '"https://api-eu.mixpanel.com/track?ip=0&verbose=1"', '"https://api-eu.mixpanel.com/track?ip=0"', nth=1),
+    Mutant("innotverbose", F, '"https://api-in.mixpanel.com/track?ip=0&verbose=1"', '"https://api-in.mixpanel.com/track?ip=0"'),
+    Mutant("statuszerodelivered", B, "return .rejected(reason: answer.error.flatMap { $0.isEmpty ? nil : $0 } ?? noValidEvent)", "return .delivered", mode="stmt"),
+    # errorignored holds emptyerrorkept's text, so it comes first.
+    Mutant("errorignored", B, "answer.error.flatMap { $0.isEmpty ? nil : $0 } ?? noValidEvent", "noValidEvent"),
+    Mutant("emptyerrorkept", B, "$0.isEmpty ? nil : $0", "$0"),
+    Mutant("verbosetwoaszero", B, "answer.status", "(answer.status == 2 ? 0 : answer.status)"),
+    Mutant("verboseunknownrejected", B, "break", "return .rejected(reason: noValidEvent)", mode="stmt", nth=0),
+    # verboseunknownrejected writes the same statement above it, so this picks the second.
+    Mutant("barezerodelivered", B, "return .rejected(reason: noValidEvent)", "return .delivered", mode="stmt", nth=1),
+    Mutant("bareunread", B, "try? decoder.decode(Int.self, from: response.body)", "Int?.none"),
+    Mutant("bareunknownrejected", B, "break", "return .rejected(reason: noValidEvent)", mode="stmt", nth=1),
+    Mutant("unreadablerejected", B, """logger.notice("Mixpanel answered \\(response.head.status) with a body its track API doesn't document; the request counts as delivered")
+        return .delivered""", "return .rejected(reason: noValidEvent)", mode="stmt"),
 ]

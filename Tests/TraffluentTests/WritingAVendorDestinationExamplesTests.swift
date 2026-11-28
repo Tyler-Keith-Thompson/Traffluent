@@ -79,6 +79,22 @@ extension AcmeBatchEncoder {
     static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(425)).map { [$0] } ?? []
 }
 
+extension AcmeBatchEncoder {
+    private struct Answer: Decodable {
+        let accepted: Bool
+        let error: String?
+    }
+
+    // Acme's ingestion reference answers 200 with {"accepted": false, "error": "..."} for an
+    // unknown API key, and {"accepted": true} for a request it stored.
+    static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: response.body), !answer.accepted else {
+            return .delivered
+        }
+        return .rejected(reason: answer.error ?? "Acme accepted none of the request")
+    }
+}
+
 /// Why the Acme factory couldn't make a destination.
 enum AcmeSetupError: Error, Hashable {
     case emptyAPIKey
@@ -132,6 +148,28 @@ struct WritingAVendorDestinationExamplesTests {
 
         let actual = transientStatuses(of: AcmeBatchEncoder.self)
 
+        #expect(actual == expected)
+    }
+
+    @Test("Acme's 200 saying it accepted nothing is dropped and reported with its error; one saying it accepted the request is delivered")
+    func acmeOutcome() async throws {
+        let host = try #require(URL(string: "https://acme.example.com"))
+        let plan = try TrackingPlan(schemas: [SignedUp.schema])
+        let transport = ScriptedTransport([
+            .response(.ok, body: Data(#"{"accepted":true}"#.utf8)),
+            .response(.ok, body: Data(#"{"accepted":false,"error":"unknown API key"}"#.utf8)),
+        ])
+        let sut = try HTTPDestination.acme(apiKey: "test-key", host: host, plan: plan, transport: transport)
+        let delivered = [EventRecord(event: SignedUp(plan: "pro", email: Sensitive("ada@example.com")), timestamp: Date(timeIntervalSince1970: 1_795_442_607), sourceLocation: nil)]
+        let refused = [EventRecord(event: SignedUp(plan: "team", email: Sensitive("grace@example.com")), timestamp: Date(timeIntervalSince1970: 1_795_442_608), sourceLocation: nil)]
+        let expected = HTTPDropReport<AcmeBatchEncoder.Failure>.rejectedInBody(status: .ok, reason: "unknown API key", recordIDs: refused.map(\.id))
+
+        await sut.receive(delivered)
+        await sut.receive(refused)
+
+        // A report of the delivered batch would come first.
+        var reports = sut.dropReports.makeAsyncIterator()
+        let actual = await reports.next()
         #expect(actual == expected)
     }
 

@@ -141,11 +141,15 @@ On a device whose clock runs about a day behind, a record tracked just now carri
 day old: the encoder sends it, and Aptabase drops it while answering 200, so the record is lost
 without a report.
 
-### What Aptabase doesn't report
+### What Aptabase's answers say
 
 Aptabase answers 200 to a request with a key of no app, of a deleted app, or of an account it has
-locked, such as one past its plan's monthly events, and stores nothing: check that the first
-events reach the app's Live View after setting the destination up. It doesn't remove duplicates,
+locked, such as one past its plan's monthly events, and stores nothing. Its body says so,
+`{"error": ...}`, so the destination drops the request and reports it as
+`HTTPDropReport.rejectedInBody(status:reason:recordIDs:)`, with Aptabase's error as the reason.
+Every request is refused that way until the key is fixed or the account unlocked, so watch the
+drop reports, and check that the first events reach the app's Live View after setting the
+destination up. It doesn't remove duplicates,
 so a record sent again, after a retry whose answer was lost or a store's redelivery, is counted
 twice.
 

@@ -116,7 +116,7 @@ MUTANTS = [
     Mutant("below300delivered", D, "status.kind == .successful", "status.code < 300"),
     Mutant("only200delivered", D, "status.kind == .successful", "status.code == 200"),
     Mutant("unansweredrejected", D, """throw retried(.unanswered(reason: reason), "A batch got no response, so it will be sent again: \\(reason)")""", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
-    Mutant("unavailablerejected", D, """throw retried(.unavailable(response), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.rejected(response)", mode="stmt"),
+    Mutant("unavailablerejected", D, """throw retried(.unavailable(response.head), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.rejected(response.head)", mode="stmt"),
     Mutant("transportcancelledendsretries", D, "Task.isCancelled", "true"),
     Mutant("cancelledunanswered", D, "throw CancellationError()", "throw AttemptFailure.unanswered(reason: \"cancelled\")", mode="stmt"),
     Mutant("invalidrequestretried", D, "throw AttemptFailure.invalidRequest(reason: reason)", "throw AttemptFailure.unanswered(reason: reason)", mode="stmt"),
@@ -249,7 +249,7 @@ MUTANTS = [
     Mutant("faileddeadlinenanpasses", D, "!(now() <= deadline)", "now() > deadline"),
     Mutant("unansweredpastdeadlineretried", D, """throw retried(.unanswered(reason: reason), "A batch got no response, so it will be sent again: \\(reason)")""", "throw AttemptFailure.unanswered(reason: reason)", mode="stmt"),
     Mutant("transportcancelledpastdeadlineretried", D, """throw retried(.unanswered(reason: "cancelled by the transport"), "A batch's send was cancelled by its transport, not the delivery, so it will be sent again")""", "throw AttemptFailure.unanswered(reason: \"cancelled by the transport\")", mode="stmt"),
-    Mutant("unavailablepastdeadlineretried", D, """throw retried(.unavailable(response), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.unavailable(response)", mode="stmt"),
+    Mutant("unavailablepastdeadlineretried", D, """throw retried(.unavailable(response.head), "The endpoint answered a batch with \\(status), so it will be sent again")""", "throw AttemptFailure.unavailable(response.head)", mode="stmt"),
     Mutant("deadlineretried", D, "throw AttemptFailure.deadlineExceeded(deadline)", "throw AttemptFailure.unanswered(reason: \"past its deadline\")", mode="stmt"),
     Mutant("deadlinerejected", D, "throw AttemptFailure.deadlineExceeded(deadline)", "throw AttemptFailure.rejected(HTTPResponse(status: .badRequest))", mode="stmt"),
     Mutant("deadlinecancellationunchecked", D, "try Task.checkCancellation()", "", mode="stmt"),
@@ -271,4 +271,22 @@ MUTANTS = [
     Mutant("reasondescribed", U, "throw .failed(reason: error.failureReason)", "throw .failed(reason: String(describing: error))", mode="stmt"),
     Mutant("reasonwithoutcode", U, '"\\(error.domain) \\(error.code)"', '"\\(error.domain)"'),
     Mutant("cancellationignored", U, "Task.isCancelled || error is CancellationError", "error is CancellationError"),
+    # What a 2xx answer's body says (TRAF-123).
+    Mutant("outcomeignored", D, "return try delivered(response)", "return response.head", mode="stmt"),
+    Mutant("rejectedinbodydelivered", D, "throw .rejectedInBody(response.head, reason: reason)", "return response.head", mode="stmt"),
+    Mutant("rejectedinbodyasrejected", D, "throw .rejectedInBody(response.head, reason: reason)", "throw .rejected(response.head)", mode="stmt"),
+    Mutant("transientinbodydelivered", D, """throw retried(.unavailable(response.head), "The endpoint answered a batch with \\(response.head.status), but its body says it stored nothing for now, so it will be sent again: \\(reason)")""", "return response.head", mode="stmt"),
+    Mutant("transientinbodyrejected", D, """throw retried(.unavailable(response.head), "The endpoint answered a batch with \\(response.head.status), but its body says it stored nothing for now, so it will be sent again: \\(reason)")""", "throw .rejectedInBody(response.head, reason: reason)", mode="stmt"),
+    Mutant("transientinbodypastdeadlineretried", D, """throw retried(.unavailable(response.head), "The endpoint answered a batch with \\(response.head.status), but its body says it stored nothing for now, so it will be sent again: \\(reason)")""", "throw AttemptFailure.unavailable(response.head)", mode="stmt"),
+    Mutant("rejectedinbodycaughtasrejected", D, "return .rejectedInBody(response, reason: reason)", "return .rejected(response)", mode="stmt"),
+    Mutant("rejectedinbodynotreported", D, "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))", "", mode="stmt"),
+    Mutant("rejectedinbodyreasonlost", D, "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))", "reporter.report(.rejectedInBody(status: response.status, reason: \"\", recordIDs: request.recordIDs))", mode="stmt"),
+    Mutant("rejectedinbodystatusok", D, "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))", "reporter.report(.rejectedInBody(status: .ok, reason: reason, recordIDs: request.recordIDs))", mode="stmt"),
+    Mutant("rejectedinbodyreportreturns", D, "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))", "return", mode="stmt"),
+    Mutant("rejectedinbodyidsofbatch", D, "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))", "reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: batch.map(\\.id)))", mode="stmt"),
+    Mutant("rejectedinbodyretried", R, "return false", """if case .rejectedInBody = error as? AttemptFailure {
+                return try await backoff.handle(error: error, beforeRetry: beforeRetry)
+            }
+            return false""", mode="stmt"),
+    Mutant("responsebodydropped", U, "return HTTPTransportResponse(head: head, body: responseBody)", "return HTTPTransportResponse(head: head, body: Data())", mode="stmt"),
 ]

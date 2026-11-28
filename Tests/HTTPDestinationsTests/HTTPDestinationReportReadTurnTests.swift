@@ -24,6 +24,10 @@ struct HTTPDestinationReportReadTurnTests {
     struct IdentifiersEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -35,8 +39,8 @@ struct HTTPDestinationReportReadTurnTests {
 
     /// Answers every request with 400 Bad Request, which drops the batch for good.
     struct RejectingTransport: HTTPTransport {
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
-            HTTPResponse(status: .badRequest)
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
+            HTTPTransportResponse(head: HTTPResponse(status: .badRequest), body: Data())
         }
     }
 

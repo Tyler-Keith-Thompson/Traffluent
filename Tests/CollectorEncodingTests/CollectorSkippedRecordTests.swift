@@ -33,9 +33,9 @@ struct CollectorSkippedRecordTests {
     final class TransportDouble: HTTPTransport {
         let sentCount = Mutex(0)
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             sentCount.withLock { $0 += 1 }
-            return HTTPResponse(status: .accepted)
+            return HTTPTransportResponse(head: HTTPResponse(status: .accepted), body: Data())
         }
     }
 

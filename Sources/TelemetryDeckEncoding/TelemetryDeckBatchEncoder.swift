@@ -87,6 +87,20 @@ public struct TelemetryDeckBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: TelemetryDeck answers 200 once it has accepted every signal of a request, and 422 to
+    /// one it refuses.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // TelemetryDeck's Ingest API v3 (cited below, "Responses"): 200 with "The number of accepted
+        // events", meaning "All events were accepted"; 422 when any event is invalid, with nothing
+        // stored. A wrong namespace or app ID is answered 200 too, with the same body.
+        .delivered
+    }
+
     // From TelemetryDeck's docs, read on 2026-11-27 (their source, github.com/TelemetryDeck/docs at
     // 1389edf3):
     // - Ingest API v3, https://telemetrydeck.com/docs/ingest/v3/ (POST /v3/{namespace}/, an array

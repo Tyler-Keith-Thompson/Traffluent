@@ -16,6 +16,17 @@ is one answered with a status the encoder lists in ``BatchEncoder/transientStatu
 encoder declares: empty for most servers, or each other failure its vendor answers to a request
 worth sending again, such as Aptabase's 418 for a slow upload.
 
+A 2xx counts as delivered unless the encoder's ``BatchEncoder/outcome(of:for:)`` reads its body and
+says otherwise. Some vendors answer 200 to a request they didn't store, and say so only in the
+body: Mixpanel's `{"status": 0}`, or Aptabase's `{"error": ...}` for an unknown key. A 2xx the
+encoder reads as ``ResponseOutcome/rejected(reason:)`` is dropped and reported as
+``HTTPDropReport/rejectedInBody(status:reason:recordIDs:)``. One it reads as
+``ResponseOutcome/transient(reason:)`` is sent again under the same backoff and deadline as a 5xx.
+An encoder should count an empty body, or one it can't read, as delivered, so an answer it
+doesn't recognize never sends a request again and again; the DestinationTesting conformance kit
+checks that it does. A transient answer is retried until the request's deadline, so an encoder
+whose requests have none should return rejected instead.
+
 Each wait has full jitter by default: a random wait shorter than the nominal one, so apps refused
 at the same moment retry at different moments. Pass ``ExponentialBackoff/Jitter/none`` for the
 nominal waits. In tests, pass a seeded generator as `randomNumberGenerator:` for jittered waits
@@ -58,6 +69,10 @@ import HTTPDestinations
 struct PlansEncoder: BatchEncoder {
     static let transientStatuses: Set<TransientStatus> = []
 
+    static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        .delivered
+    }
+
     func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
         let plans = batch.compactMap { ($0.event as? SignedUp)?.plan }
         let body = EncodedBatch(body: Data(plans.joined(separator: "\n").utf8), contentType: "text/plain")
@@ -93,6 +108,11 @@ covers this destination beside the others, and what a delivery does while a batc
 
 - ``BatchEncoder``
 - ``EncodedBatch``
+
+### Reading a 2xx answer
+
+- ``ResponseOutcome``
+- ``HTTPTransportResponse``
 
 ### Splitting a batch into requests
 

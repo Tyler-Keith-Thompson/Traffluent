@@ -15,7 +15,7 @@ public import TrackingPlans
 
 /// The checks every vendor destination passes, run from the vendor module's tests: its requests
 /// match recorded fixtures byte for byte, and it keeps the library's rules for `Sensitive` values,
-/// consent, oversized records, retries and trace context.
+/// consent, oversized records, retries, 2xx answers and trace context.
 ///
 /// Make one with the vendor's factory, called with the kit's ``ScriptedTransport`` and short
 /// backoff, then run each ``ConformanceCheck`` and each fixture from a test:
@@ -136,6 +136,7 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
         case .oversizedRecordSkipped: try await expectOversizedRecordSkipped(sourceLocation: sourceLocation)
         case .transientFailuresRetried: try await expectTransientFailuresRetried(sourceLocation: sourceLocation)
         case .rejectionsDropped: try await expectRejectionsDropped(sourceLocation: sourceLocation)
+        case .unreadableSuccessDelivered: try await expectUnreadableSuccessDelivered(sourceLocation: sourceLocation)
         case .traceContextWithheld: try await expectTraceContextWithheld(sourceLocation: sourceLocation)
         }
     }
@@ -273,6 +274,26 @@ public struct DestinationConformance<Encoding: BatchEncoder>: Sendable {
             }
             if !rejected || sent.reports.count != 1 {
                 Issue.record("After \(status), the destination didn't report the record as rejected: \(sent.reports)", sourceLocation: sourceLocation)
+            }
+        }
+    }
+
+    private func expectUnreadableSuccessDelivered(sourceLocation: Testing.SourceLocation) async throws {
+        let plan = try TrackingPlan(schemas: [ConformanceAnalyticsEvent.schema])
+        // An empty 200 and 204, and an HTML page, as a proxy in front of the vendor might answer.
+        let answers: [ScriptedTransport.Answer] = [.response(.ok, body: Data()), .response(.noContent, body: Data()), .response(.ok, body: Data("<html><body>OK</body></html>".utf8))]
+        for answer in answers {
+            let record = EventRecord(event: ConformanceAnalyticsEvent(label: "traffluent-conformance-unreadable"), timestamp: timestamp, sourceLocation: nil)
+
+            // A 400 after it, so a destination that sends the request again stops there, with a
+            // report, rather than retrying for ever.
+            let sent = try await send([record], plan: plan, script: [answer, .status(.badRequest)], through: makeDestination)
+
+            if sent.requests.count != 1 {
+                Issue.record("After \(answer), the destination sent \(sent.requests.count) requests, not one", sourceLocation: sourceLocation)
+            }
+            if !sent.reports.isEmpty {
+                Issue.record("After \(answer), the destination reported a drop: \(sent.reports)", sourceLocation: sourceLocation)
             }
         }
     }

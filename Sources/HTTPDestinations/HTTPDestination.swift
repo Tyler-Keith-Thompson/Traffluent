@@ -30,7 +30,16 @@ import Logging
 ///     field or the instrument wrote.
 /// - The body is exactly the encoder's ``EncodedBatch/body`` for the request's records, oldest
 ///   first. The format is the encoder's; events need no `Codable` conformance.
-/// - A response with a 2xx status means the batch arrived.
+/// - A response with a 2xx status means the request arrived, and the encoder reads its body to
+///   say whether the vendor stored it (``BatchEncoder/outcome(of:for:)``): most vendors answer 2xx
+///   only to what they store, and their encoders count every 2xx as delivered. A vendor that
+///   answers 2xx to a request it stores nothing of, and says so in the body (Mixpanel's
+///   `{"status": 0, "error": ...}`), has the request dropped and reported
+///   (``HTTPDropReport/rejectedInBody(status:reason:recordIDs:)``), or, for a refusal its vendor
+///   says may pass, sent again as after a 5xx, until the request's deadline. An encoder should
+///   count a body it can't read, an empty one included, as delivered, so an answer that changes
+///   shape never makes the destination send the same request again and again; the
+///   DestinationTesting conformance kit checks that it does.
 /// - A request the transport can never send (``HTTPTransportError/invalidRequest(reason:)``: a
 ///   malformed or unsupported URL, or an `http` URL App Transport Security refuses) isn't sent
 ///   again.
@@ -59,7 +68,8 @@ import Logging
 /// ``receive(_:)`` returns once the batch is delivered, dropped, or the delivery is cancelled, so
 /// a tracker's store keeps the records of a batch until it arrives, and a batch still being
 /// retried when the app ends is delivered again on the next launch. A request the endpoint
-/// rejects, that can't be sent or that passed its deadline, a batch the encoder can't encode, and
+/// rejects, by its status or in a 2xx answer's body, that can't be sent or that passed its
+/// deadline, a batch the encoder can't encode, and
 /// a record the encoder leaves out of its requests are dropped: logged at error level and
 /// reported on ``dropReports``. Each failed attempt that will be retried is logged at notice
 /// level.
@@ -207,6 +217,9 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             case .rejected(let response):
                 logger.error("Dropped a request the endpoint answered with \(response.status)")
                 reporter.report(.rejected(status: response.status, recordIDs: request.recordIDs))
+            case .rejectedInBody(let response, let reason):
+                logger.error("Dropped a request the endpoint answered with \(response.status), whose body says it stored nothing: \(reason)")
+                reporter.report(.rejectedInBody(status: response.status, reason: reason, recordIDs: request.recordIDs))
             case .invalidRequest(let reason):
                 logger.error("Dropped a request that can never be sent: \(reason)")
                 reporter.report(.invalidRequest(reason: reason, recordIDs: request.recordIDs))
@@ -227,7 +240,7 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             instrument.inject(context, into: &request.headerFields, using: HTTPFieldsInjector())
         }
         request.headerFields[.contentType] = encoded.body.contentType
-        let attempt = Attempt(transport: transport, request: request, body: encoded.body.body, deadline: encoded.deadline, transientStatuses: transientStatuses, now: now)
+        let attempt = Attempt<Transport, Encoding>(transport: transport, request: request, encoded: encoded, transientStatuses: transientStatuses, now: now)
         do {
             // Built for this request alone: Afluent's strategy keeps its count of retries, and a
             // cancelled unit of work stays cancelled.
@@ -237,6 +250,8 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
             return .delivered(response)
         } catch AttemptFailure.rejected(let response) {
             return .rejected(response)
+        } catch AttemptFailure.rejectedInBody(let response, let reason) {
+            return .rejectedInBody(response, reason: reason)
         } catch AttemptFailure.invalidRequest(let reason) {
             return .invalidRequest(reason)
         } catch AttemptFailure.deadlineExceeded(let deadline) {
@@ -255,10 +270,13 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
 
     /// What became of one request.
     package enum Outcome {
-        /// The server answered with a 2xx status.
+        /// The server answered with a 2xx status, whose body the encoder reads as delivered.
         case delivered(HTTPResponse)
         /// The server answered with a status that retrying won't change.
         case rejected(HTTPResponse)
+        /// The server answered with a 2xx status, whose body the encoder reads as storing nothing,
+        /// for `reason`, which retrying won't change.
+        case rejectedInBody(HTTPResponse, reason: String)
         /// The transport can never send the request.
         case invalidRequest(String)
         /// The request's deadline, `deadline`, passed before it was delivered.
@@ -271,14 +289,18 @@ public struct HTTPDestination<Transport: HTTPTransport, Encoding: BatchEncoder>:
 }
 
 /// One send of a batch's request, which throws what kept it from being delivered.
-private struct Attempt<Transport: HTTPTransport>: Sendable {
+///
+/// Generic over the encoder, whose ``BatchEncoder/outcome(of:for:)`` reads a 2xx answer's body.
+private struct Attempt<Transport: HTTPTransport, Encoding: BatchEncoder>: Sendable {
     let transport: Transport
     let request: HTTPRequest
-    let body: Data
-    let deadline: Date?
+    let encoded: EncodedRequest
     /// The statuses retried beside ``HTTPResponse/Status/isTransient``'s, from the encoder.
     let transientStatuses: Set<HTTPResponse.Status>
     let now: @Sendable () -> Date
+
+    private var body: Data { encoded.body.body }
+    private var deadline: Date? { encoded.deadline }
 
     /// Sends the request; throws `CancellationError` when cancelled, so the retry stops, and an
     /// ``AttemptFailure`` when the batch wasn't delivered.
@@ -297,7 +319,7 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
                 throw AttemptFailure.deadlineExceeded(deadline)
             }
         }
-        let response: HTTPResponse
+        let response: HTTPTransportResponse
         do {
             response = try await transport.send(request, body: body)
         } catch .cancelled where Task.isCancelled {
@@ -311,13 +333,27 @@ private struct Attempt<Transport: HTTPTransport>: Sendable {
         } catch .invalidRequest(let reason) {
             throw AttemptFailure.invalidRequest(reason: reason)
         }
-        switch response.status {
+        switch response.head.status {
         case let status where status.kind == .successful:
-            return response
+            return try delivered(response)
         case let status where status.isTransient || transientStatuses.contains(status):
-            throw retried(.unavailable(response), "The endpoint answered a batch with \(status), so it will be sent again")
+            throw retried(.unavailable(response.head), "The endpoint answered a batch with \(status), so it will be sent again")
         default:
-            throw AttemptFailure.rejected(response)
+            throw AttemptFailure.rejected(response.head)
+        }
+    }
+
+    /// `response`, a 2xx answer, when its encoder reads the body as delivered; throws the
+    /// ``AttemptFailure`` of one it reads as storing nothing.
+    private func delivered(_ response: HTTPTransportResponse) throws(AttemptFailure) -> HTTPResponse {
+        switch Encoding.outcome(of: response, for: encoded) {
+        case .delivered:
+            return response.head
+        case .rejected(let reason):
+            throw .rejectedInBody(response.head, reason: reason)
+        case .transient(let reason):
+            // The same path as a 5xx: the backoff, and the deadline checked first.
+            throw retried(.unavailable(response.head), "The endpoint answered a batch with \(response.head.status), but its body says it stored nothing for now, so it will be sent again: \(reason)")
         }
     }
 

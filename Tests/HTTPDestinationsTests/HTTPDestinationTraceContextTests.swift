@@ -21,6 +21,10 @@ struct HTTPDestinationTraceContextTests {
     struct PlansEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
             BatchRequests(requests: [EncodedRequest(body: body(of: batch), recordIDs: batch.map(\.id))], skippedRecords: [])
         }
@@ -40,9 +44,9 @@ struct HTTPDestinationTraceContextTests {
     final class TransportDouble: HTTPTransport {
         let sent = Mutex<[SentRequest]>([])
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             sent.withLock { $0.append(SentRequest(request: request, body: body)) }
-            return HTTPResponse(status: .ok)
+            return HTTPTransportResponse(head: HTTPResponse(status: .ok), body: Data())
         }
     }
 

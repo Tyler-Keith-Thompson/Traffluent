@@ -44,7 +44,7 @@ struct MixpanelEncodingModuleExamplesTests {
         let transport = ScriptedTransport([.status(.ok)])
         let recorded = try HTTPDestination.mixpanel(projectToken: projectToken, region: .us, plan: plan, transport: transport)
         await recorded.receive(memory.records)
-        let expectedURL = "https://api.mixpanel.com/track?ip=0"
+        let expectedURL = "https://api.mixpanel.com/track?ip=0&verbose=1"
         let request = try #require(transport.requests.first)
         let events = try #require(try JSONSerialization.jsonObject(with: request.body) as? [[String: Any]])
         let signedUp = try #require(events.first { $0["event"] as? String == "signed_up" })

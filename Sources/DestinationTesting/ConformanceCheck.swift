@@ -39,6 +39,11 @@ public enum ConformanceCheck: String, Sendable, Hashable, CaseIterable, CustomSt
     /// with the first client error (4xx) it doesn't list; one that lists every client error
     /// records an issue, as no rejection is left to check.
     case rejectionsDropped
+    /// A request answered 2xx with a body no vendor writes, an empty one or one that isn't JSON,
+    /// is sent once and nothing is reported: the encoder's `BatchEncoder.outcome(of:for:)` counts an
+    /// answer it can't read as delivered, so a vendor's answer that changes shape never makes the
+    /// destination send the same request again and again, or drop what the vendor stored.
+    case unreadableSuccessDelivered
     /// No request carries a trace context in its header fields (`traceparent`, `tracestate`, or
     /// whatever the instrument injects), even while a tracer is active and the record was tracked
     /// in a span: a vendor's destination passes `NoOpInstrument()`, so the app's traces stay in

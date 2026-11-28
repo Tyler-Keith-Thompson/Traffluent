@@ -73,16 +73,72 @@ public import TrackingPlans
 /// default, and makes none for a batch with no record it can write, so `HTTPDestination` sends
 /// nothing for it. Mixpanel answers a request it reads with 200, so `HTTPDestination` retries one
 /// that gets no response, a 5xx, 408 or 429, and drops one it rejects, such as with 400, 401 or
-/// 413. Mixpanel answers 200 as well when it ingests none of a request's events: a wrong region,
-/// or a token of no project, may be answered 200 with nothing stored, so check the project's Live
-/// View after setting it up. Its track API ingests only events from the last 5 days: a record
-/// older than that when it is sent, such as one a store kept through a long time offline, is
-/// counted as delivered and not stored. A record sent again keeps its `$insert_id`. The bytes are
+/// 413. It answers 200 as well to a request in which it finds no valid event, and says so in the
+/// body: with `verbose=1`, which the destination's endpoint sets, `{"status": 0, "error": ...}`.
+/// ``outcome(of:for:)`` reads that as rejected, so `HTTPDestination` drops the request and reports it
+/// with Mixpanel's error. A `status` of 1 means only that one event or more was well formed, not
+/// that the token names a project, so a wrong region, or a token of no project, may still be
+/// answered 200 with nothing stored: check the project's Live View after setting it up. Its track
+/// API ingests only events from the last 5 days: a record older than that when it is sent, such
+/// as one a store kept through a long time offline, is not stored, and is reported only when no
+/// event of its request was valid. A record sent again keeps its `$insert_id`. The bytes are
 /// the same for the same records on every run and platform: no whitespace, object members in the
 /// order of their names' UTF-8 bytes.
 public struct MixpanelBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
+
+    // From Mixpanel's track reference, https://developer.mixpanel.com/reference/track-event, read
+    // on 2026-11-27: `verbose=1` answers "a JSON Object describing the success or failure of the
+    // tracking call" with "two keys: `status`, with the value 1 on success and 0 on failure, and
+    // `error`, with a string-valued error message if the request wasn't successful"; without it,
+    // the 200 body is `1`, "One or more objects provided are valid. This does not signify a valid
+    // project token or secret", or `0`, "No data objects in the body are valid". Its SDKs drop a
+    // request answered 0 rather than send it again (mixpanel-swift's FlushRequest, mixpanel-js's
+    // request batcher), and its docs give no 200 that a retry would mend.
+    /// What Mixpanel's 2xx answer means: rejected when it found no valid event in the request,
+    /// and delivered otherwise.
+    ///
+    /// A body of `{"status": 0, "error": ...}`, as Mixpanel answers with `verbose=1`, or a bare
+    /// `0`, is ``/HTTPDestinations/ResponseOutcome/rejected(reason:)``, with Mixpanel's `error` as
+    /// the reason, so `HTTPDestination` drops the request and reports it. A `status` of 1, or a
+    /// bare `1`, is delivered. So is a body Mixpanel doesn't document, an empty one included,
+    /// logged as a notice: the request arrived, and sending it again would repeat it for as long as
+    /// Mixpanel answered that way.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: Whether Mixpanel stored the request's events, as far as its answer says.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        let decoder = JSONDecoder()
+        if let answer = try? decoder.decode(VerboseAnswer.self, from: response.body) {
+            switch answer.status {
+            case 1:
+                return .delivered
+            case 0:
+                // An empty error says nothing, so the reason falls back to what status 0 means.
+                return .rejected(reason: answer.error.flatMap { $0.isEmpty ? nil : $0 } ?? noValidEvent)
+            default:
+                break
+            }
+        } else if let status = try? decoder.decode(Int.self, from: response.body) {
+            switch status {
+            case 1:
+                return .delivered
+            case 0:
+                return .rejected(reason: noValidEvent)
+            default:
+                break
+            }
+        }
+        logger.notice("Mixpanel answered \(response.head.status) with a body its track API doesn't document; the request counts as delivered")
+        return .delivered
+    }
+
+    /// The reason of a rejection whose answer gives no error: what Mixpanel's docs say a status of
+    /// 0 means.
+    private static let noValidEvent = "No data objects in the body are valid"
 
     // From Mixpanel's ingestion API reference, read on 2026-11-27:
     // https://developer.mixpanel.com/reference/track-event (/track's 2,000 events a request, the
@@ -248,6 +304,14 @@ public struct MixpanelBatchEncoder: BatchEncoder {
             "properties": .object(properties),
         ])
     }
+}
+
+/// Mixpanel's answer to a track request sent with `verbose=1`.
+private struct VerboseAnswer: Decodable {
+    /// 1 when one event or more of the request was valid, 0 when none was.
+    let status: Int
+    /// Why none was, when `status` is 0.
+    let error: String?
 }
 
 extension MixpanelEncodingError {

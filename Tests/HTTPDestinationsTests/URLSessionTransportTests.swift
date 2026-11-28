@@ -8,6 +8,121 @@ import Testing
 
 @Suite("URLSessionTransport", .timeLimit(.minutes(1)))
 struct URLSessionTransportTests {
+    /// Answers every request with 200 and `{"status":0}`, without reaching the network.
+    final class AnsweringProtocol: URLProtocol {
+        static let body = Data(#"{"status":0}"#.utf8)
+
+        override class func canInit(with request: URLRequest) -> Bool {
+            true
+        }
+
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            request
+        }
+
+        override func startLoading() {
+            guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"]) else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+                return
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Self.body)
+            client?.urlProtocolDidFinishLoading(self)
+        }
+
+        override func stopLoading() {}
+    }
+
+    @Test("A response comes back with its status and its body")
+    func responseBody() async throws {
+        let url = try #require(URL(string: "https://collector.example.com/batches"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnsweringProtocol.self]
+        let sut = URLSessionTransport(session: URLSession(configuration: configuration))
+        let expectedStatus = HTTPResponse.Status.ok
+        let expectedBody = AnsweringProtocol.body
+
+        let actual = try await sut.send(HTTPRequest(method: .post, url: url), body: Data("a".utf8))
+
+        #expect(actual.head.status == expectedStatus)
+        #expect(actual.body == expectedBody)
+    }
+
+    /// Answers every request with 204 No Content and loads no data, without reaching the network.
+    final class NoContentProtocol: URLProtocol {
+        override class func canInit(with request: URLRequest) -> Bool {
+            true
+        }
+
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            request
+        }
+
+        override func startLoading() {
+            guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 204, httpVersion: "HTTP/1.1", headerFields: [:]) else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+                return
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocolDidFinishLoading(self)
+        }
+
+        override func stopLoading() {}
+    }
+
+    /// Answers every request with 200 and a body of no bytes, without reaching the network.
+    final class EmptyOKProtocol: URLProtocol {
+        override class func canInit(with request: URLRequest) -> Bool {
+            true
+        }
+
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            request
+        }
+
+        override func startLoading() {
+            guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "0"]) else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+                return
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data())
+            client?.urlProtocolDidFinishLoading(self)
+        }
+
+        override func stopLoading() {}
+    }
+
+    @Test("A 204 that loads no data comes back with its status and an empty body")
+    func noContentBody() async throws {
+        let url = try #require(URL(string: "https://collector.example.com/batches"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [NoContentProtocol.self]
+        let sut = URLSessionTransport(session: URLSession(configuration: configuration))
+        let expectedStatus = HTTPResponse.Status.noContent
+        let expectedBody = Data()
+
+        let actual = try await sut.send(HTTPRequest(method: .post, url: url), body: Data("a".utf8))
+
+        #expect(actual.head.status == expectedStatus)
+        #expect(actual.body == expectedBody)
+    }
+
+    @Test("A 200 with a body of no bytes comes back with its status and an empty body")
+    func emptyOKBody() async throws {
+        let url = try #require(URL(string: "https://collector.example.com/batches"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [EmptyOKProtocol.self]
+        let sut = URLSessionTransport(session: URLSession(configuration: configuration))
+        let expectedStatus = HTTPResponse.Status.ok
+        let expectedBody = Data()
+
+        let actual = try await sut.send(HTTPRequest(method: .post, url: url), body: Data("a".utf8))
+
+        #expect(actual.head.status == expectedStatus)
+        #expect(actual.body == expectedBody)
+    }
+
     @Test("A request no server answers throws failed")
     func noServer() async throws {
         // Port 1 on the loopback interface has no listener, so the connection is refused at
@@ -112,7 +227,7 @@ struct URLSessionTransportTests {
         let url = try #require(URL(string: "http://127.0.0.1:1/batches"))
         let sut = URLSessionTransport()
         let expected = HTTPTransportError.cancelled
-        let sending = Task { () async -> Result<HTTPResponse, HTTPTransportError> in
+        let sending = Task { () async -> Result<HTTPTransportResponse, HTTPTransportError> in
             withUnsafeCurrentTask { $0?.cancel() }
             do throws(HTTPTransportError) {
                 return .success(try await sut.send(HTTPRequest(method: .post, url: url), body: Data("a".utf8)))

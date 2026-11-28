@@ -102,10 +102,10 @@ struct MixpanelConformanceTests {
         #expect(actual.hasSuffix(expected))
     }
 
-    @Test("The destination posts JSON to the /track endpoint of the project's region, with ip=0", arguments: [
-        (MixpanelRegion.us, "https://api.mixpanel.com/track?ip=0"),
-        (.eu, "https://api-eu.mixpanel.com/track?ip=0"),
-        (.india, "https://api-in.mixpanel.com/track?ip=0"),
+    @Test("The destination posts JSON to the /track endpoint of the project's region, with ip=0 and verbose=1", arguments: [
+        (MixpanelRegion.us, "https://api.mixpanel.com/track?ip=0&verbose=1"),
+        (.eu, "https://api-eu.mixpanel.com/track?ip=0&verbose=1"),
+        (.india, "https://api-in.mixpanel.com/track?ip=0&verbose=1"),
     ])
     func endpoint(region: MixpanelRegion, expected: String) async throws {
         let plan = try TrackingPlan(schemas: [CheckoutStarted.schema])

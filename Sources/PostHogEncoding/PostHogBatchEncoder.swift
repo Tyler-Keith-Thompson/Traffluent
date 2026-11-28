@@ -79,6 +79,22 @@ public struct PostHogBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: PostHog's 200 body is the same whether or not it stores the events, so there is
+    /// nothing in it to read.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // PostHog's capture docs, https://posthog.com/docs/api/capture ("Invalid events", read on
+        // 2026-11-27): an event without a name or a distinct_id is answered 200 and not ingested;
+        // this encoder always sends both. Its capture service (rust/capture's v0_endpoint.rs) answers
+        // a project past its billing limit with 200 and the body it gives a success, so that loss
+        // can't be told from the answer.
+        .delivered
+    }
+
     /// PostHog's limits on one request: 10,000,000 bytes of body and 1,000,000 bytes of one event,
     /// with no limit on the count of events.
     ///

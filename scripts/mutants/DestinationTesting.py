@@ -73,4 +73,9 @@ MUTANTS = [
     Mutant("consentrecordsnow", C, "Tracker(consent: consent, now: { [timestamp] in timestamp })", "Tracker(consent: consent)"),
     Mutant("checkstimestampdefault", C, "self.timestamp = timestamp", "self.timestamp = .conformanceTimestamp", mode="stmt"),
     Mutant("setuptimestampother", S, "self.timestamp = timestamp", "self.timestamp = .distantPast", mode="stmt"),
+    # Response bodies and unreadableSuccessDelivered (TRAF-123).
+    Mutant("scriptedbodydropped", T, "return HTTPTransportResponse(head: HTTPResponse(status: status), body: responseBody)", "return HTTPTransportResponse(head: HTTPResponse(status: status), body: Data())", mode="stmt"),
+    Mutant("unreadablecountunchecked", C, "sent.requests.count != 1", "sent.requests.count < 1", nth=1),
+    # The third check of reports in the file is unreadableSuccessDelivered's.
+    Mutant("unreadablereportsunchecked", C, "!sent.reports.isEmpty", "false", nth=2),
 ]

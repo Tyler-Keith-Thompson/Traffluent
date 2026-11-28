@@ -19,9 +19,9 @@ struct StoreAnalyticsTests {
         let status: HTTPResponse.Status
         let bodies: AsyncStream<Data>.Continuation
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             bodies.yield(body)
-            return HTTPResponse(status: status)
+            return HTTPTransportResponse(head: HTTPResponse(status: status), body: Data())
         }
     }
 

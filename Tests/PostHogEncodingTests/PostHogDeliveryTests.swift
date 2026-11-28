@@ -69,13 +69,13 @@ struct PostHogDeliveryTests {
             self.script = script
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let attempt = sent.withLock { sent in
                 sent.append(SentRequest(request: request, body: body))
                 return sent.count
             }
             attempted.yield(attempt)
-            return HTTPResponse(status: script[min(attempt, script.count) - 1])
+            return HTTPTransportResponse(head: HTTPResponse(status: script[min(attempt, script.count) - 1]), body: Data())
         }
     }
 

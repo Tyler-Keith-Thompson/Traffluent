@@ -16,8 +16,11 @@ import Synchronization
 public struct ScriptedTransport: HTTPTransport {
     /// What the transport answers one request with.
     public enum Answer: Sendable, Hashable {
-        /// A response of this status.
+        /// A response of this status, with an empty body.
         case status(HTTPResponse.Status)
+        /// A response of this status and this body, such as a vendor's 200 whose body says it
+        /// stored nothing.
+        case response(HTTPResponse.Status, body: Data)
         /// No response, as when the network is down: `HTTPTransportError/failed(reason:)`.
         case noResponse
     }
@@ -54,16 +57,18 @@ public struct ScriptedTransport: HTTPTransport {
     /// - Parameters:
     ///   - request: The method, URL and header fields to send.
     ///   - body: The request's body.
-    /// - Returns: A response of the scripted status.
+    /// - Returns: A response of the scripted status and body.
     /// - Throws: `HTTPTransportError.failed(reason:)` for a scripted ``Answer/noResponse``.
-    public func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+    public func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
         let attempt = sent.requests.withLock { sent in
             sent.append(SentRequest(request: request, body: body))
             return sent.count
         }
         switch script.isEmpty ? .status(.ok) : script[min(attempt, script.count) - 1] {
         case .status(let status):
-            return HTTPResponse(status: status)
+            return HTTPTransportResponse(head: HTTPResponse(status: status), body: Data())
+        case .response(let status, let responseBody):
+            return HTTPTransportResponse(head: HTTPResponse(status: status), body: responseBody)
         case .noResponse:
             throw .failed(reason: "scripted: no response")
         }

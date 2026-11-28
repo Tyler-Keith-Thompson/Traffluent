@@ -92,6 +92,22 @@ public struct SegmentSpecBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: Segment and RudderStack answer 200 with no body that says whether they store the
+    /// calls, and Customer.io's strict mode answers a refusal with a failure status.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // Segment's HTTP API source docs ("Errors", cited below): 200 for every request but one too
+        // large or not JSON, a batch of too many calls it rejects included, with no documented body
+        // that says so; Segment points to the source's debugger instead. RudderStack's HTTP API
+        // docs list 200 as "Successful API request" and failures as 4xx. Customer.io answers a bad
+        // key with 200 unless X-Strict-Mode is set, which its factory sets.
+        .delivered
+    }
+
     // From the docs, read on 2026-11-27:
     // - Segment's HTTP Tracking API,
     //   https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/ ("Batch":

@@ -7,7 +7,7 @@ Send records to a Mixpanel project through its track API.
 ``HTTPDestinations/HTTPDestination/mixpanel(projectToken:region:plan:backoff:clock:)`` makes an
 `HTTPDestination` (module ``/HTTPDestinations``) for your Mixpanel project in one call. It checks
 the project token, posts to the `/track` endpoint of the project's data residency
-(``MixpanelRegion``) with a ``MixpanelBatchEncoder``, and splits each batch to Mixpanel's limits
+(``MixpanelRegion``), with `verbose=1`, through a ``MixpanelBatchEncoder``, and splits each batch to Mixpanel's limits
 (``MixpanelBatchEncoder/batchLimit``): 2,000 events and 2 MB a request. A batch with no record the
 encoder can write, an empty one included, makes no request. It retries no response, a 5xx, 408
 and 429, waiting ``HTTPDestinations/ExponentialBackoff/mixpanel``: Mixpanel's recommended
@@ -50,10 +50,14 @@ nests objects more than 3 deep, one whose event isn't
 epoch-milliseconds form, and one too large for Mixpanel. The destination reports each as
 `HTTPDropReport.skipped(_:)`, a `SkippedRecord` whose reason is a ``MixpanelEncodingError``.
 
-Mixpanel answers 200 even when it ingests none of a request's events, and its track API ingests
-only events from the last 5 days, so a record older than that when it is sent is counted as
-delivered and not stored. A wrong region, or a token of no project, may be answered 200 with
-nothing stored too, so check the project's Live View after setting the destination up.
+Mixpanel answers 200 even when it finds no valid event in a request. The endpoint asks for
+`verbose=1`, so the answer's body says so, `{"status": 0, "error": ...}`, and the destination
+drops the request and reports it as `HTTPDropReport.rejectedInBody(status:reason:recordIDs:)`,
+with Mixpanel's error as the reason. A `status` of 1 means only that one event or more was well
+formed: it doesn't confirm that the token names a project, so a wrong region, or a token of no
+project, may be answered 200 with nothing stored. Check the project's Live View after setting the
+destination up. Its track API ingests only events from the last 5 days, so a record older than
+that when it is sent isn't stored, and is reported only when no event of its request was valid.
 
 To send to PostHog or Amplitude, use `PostHogEncoding` or `AmplitudeEncoding` instead.
 

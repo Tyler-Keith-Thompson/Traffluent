@@ -24,6 +24,10 @@ struct GoogleAnalyticsAvailabilityTests {
     struct ProbeEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         typealias Failure = GoogleAnalyticsAvailabilityTests.Failure
 
         func requests(for batch: [EventRecord]) throws(Failure) -> BatchRequests<Failure> {

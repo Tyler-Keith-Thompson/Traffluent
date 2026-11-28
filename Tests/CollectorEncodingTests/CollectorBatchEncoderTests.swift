@@ -62,9 +62,9 @@ struct CollectorBatchEncoderTests {
     final class TransportDouble: HTTPTransport {
         let sent = Mutex<[SentRequest]>([])
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             sent.withLock { $0.append(SentRequest(request: request, body: body)) }
-            return HTTPResponse(status: .accepted)
+            return HTTPTransportResponse(head: HTTPResponse(status: .accepted), body: Data())
         }
     }
 

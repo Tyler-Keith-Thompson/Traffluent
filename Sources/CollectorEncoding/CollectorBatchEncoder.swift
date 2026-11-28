@@ -82,6 +82,17 @@ public struct CollectorBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
 
+    /// Every 2xx answer counts as delivered: a TraffluentCollector answers 2xx only to a batch it stores, and refuses one with a 4xx.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, which the answer is read without.
+    /// - Returns: ``/HTTPDestinations/ResponseOutcome/delivered``.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        // The collector refuses a batch with a failure status, so its 2xx body says nothing more.
+        .delivered
+    }
+
     // A dictionary of each event version's property types, parsed once here rather than per
     // record: every record of a batch is looked up in it.
     private let propertyTypes: [EventVersion: [String: WrittenType?]]

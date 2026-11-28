@@ -13,6 +13,8 @@ Check from Swift Testing that a vendor destination keeps the library's rules and
 - a record over the vendor's limit is left out and reported, and the rest of its batch is sent;
 - no response, a 5xx, 408, 429 and each status of the encoder's `transientStatuses` are retried,
   and other failures are dropped and reported;
+- a 2xx answer whose body the encoder can't read, an empty one included, counts as delivered: sent
+  once, nothing reported;
 - no request carries a trace context in its header fields, even while a tracer is active.
 
 Make it with the vendor's limit and a closure that calls the vendor's factory with the

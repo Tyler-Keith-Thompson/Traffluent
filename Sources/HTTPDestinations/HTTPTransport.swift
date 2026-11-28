@@ -5,11 +5,11 @@ public import HTTPTypes
 /// ``HTTPDestination`` and the network.
 ///
 /// A transport knows nothing of events. It sends the request and its body as given, and returns
-/// whatever response arrives, whatever its status; deciding what a status means is its caller's
-/// job. ``URLSessionTransport`` is the default; conform another type to send through a client of
-/// your own (AsyncHTTPClient, a test double).
+/// whatever response arrives, whatever its status, with its body; deciding what a status or a
+/// body means is its caller's job. ``URLSessionTransport`` is the default; conform another type to
+/// send through a client of your own (AsyncHTTPClient, a test double).
 public protocol HTTPTransport: Sendable {
-    /// Sends `request` with `body` and returns the response.
+    /// Sends `request` with `body` and returns the response, its body included.
     ///
     /// A transport honours cancellation: when the calling task is cancelled, it stops waiting for
     /// the response and throws ``HTTPTransportError/cancelled``.
@@ -17,9 +17,11 @@ public protocol HTTPTransport: Sendable {
     /// - Parameters:
     ///   - request: The method, URL and header fields to send.
     ///   - body: The request's body.
-    /// - Returns: The response the server sent, of any status.
+    /// - Returns: The response the server sent, of any status, with its body, which an encoder
+    ///   reads to learn whether a vendor that answered 2xx stored the request
+    ///   (``BatchEncoder/outcome(of:for:)``).
     /// - Throws: ``HTTPTransportError/cancelled`` when the calling task was cancelled,
     ///   ``HTTPTransportError/invalidRequest(reason:)`` when the request can never be sent as it
     ///   is, or ``HTTPTransportError/failed(reason:)`` when no response arrived otherwise.
-    func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse
+    func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse
 }

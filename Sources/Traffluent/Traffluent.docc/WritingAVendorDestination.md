@@ -122,7 +122,7 @@ struct AcmeBatchEncoder: BatchEncoder {
 }
 ```
 
-A `BatchEncoder` implements `requests(for:)` and declares `transientStatuses` (below), and
+A `BatchEncoder` implements `requests(for:)` and declares `transientStatuses` and `outcome(of:for:)` (below), and
 `Failure` names the reason a record is left out, as `requests(for:)` doesn't throw. `HTTPDestination` sends the requests in order, and
 reports each record left out as `HTTPDropReport.skipped(_:)`. Pass `includingSensitiveValues: true` only if the
 vendor's terms allow the values, and then only through a factory the adopter opts in with.
@@ -140,7 +140,7 @@ destination, so one clock decides what is encoded and what is sent.
 other status. Every encoder declares `transientStatuses`, as there is no default: `[]` when the
 vendor answers only those to a request worth sending again. If it answers some other failure for
 one, list that status, and `HTTPDestination` retries it too. A `TransientStatus` is a client or server error (4xx or 5xx); any other status throws
-`InvalidTransientStatus`, as a 2xx is always delivered:
+`InvalidTransientStatus`, as a 2xx is read by `outcome(of:for:)` instead (below):
 
 ```swift
 extension AcmeBatchEncoder {
@@ -154,6 +154,37 @@ statuses, whether it comes from the factory or not. The conformance checks read 
 that wraps another, to filter or rename records, forwards the inner encoder's set
 (`static var transientStatuses: Set<TransientStatus> { Inner.transientStatuses }`), or the
 vendor's retries are lost.
+
+Every encoder implements `outcome(of:for:)` too, which is called for every 2xx answer, with its status
+and body. Return `.delivered` when the vendor documents no 2xx that means "not stored". If the
+vendor answers 200 and says in the body that it stored nothing, read that answer: return `.rejected(reason:)` for
+one that will never be stored, which `HTTPDestination` drops and reports as
+`HTTPDropReport.rejectedInBody(status:reason:recordIDs:)`, and `.transient(reason:)` for one worth
+sending again, which it retries like a 5xx. Return `.delivered` for a body you can't read, an
+empty one included, as a proxy or a changed API might answer; otherwise the request would be
+resent or dropped for an answer the vendor never documented. Cite the documentation the answer
+comes from in a comment:
+
+```swift
+extension AcmeBatchEncoder {
+    private struct Answer: Decodable {
+        let accepted: Bool
+        let error: String?
+    }
+
+    // Acme's ingestion reference answers 200 with {"accepted": false, "error": "..."} for an
+    // unknown API key, and {"accepted": true} for a request it stored.
+    static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: response.body), !answer.accepted else {
+            return .delivered
+        }
+        return .rejected(reason: answer.error ?? "Acme accepted none of the request")
+    }
+}
+```
+
+An encoder that wraps another forwards its `outcome(of:for:)` the same way
+(`static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome { Inner.outcome(of: response, for: request) }`).
 
 ### The factory
 
@@ -208,6 +239,8 @@ limit and a closure that calls the factory with the setup's plan, transport and 
 - ``/DestinationTesting/ConformanceCheck/transientFailuresRetried`` and
   ``/DestinationTesting/ConformanceCheck/rejectionsDropped``: failures are retried or dropped as
   `HTTPDestination` classifies them, the encoder's `transientStatuses` among the retried ones.
+- ``/DestinationTesting/ConformanceCheck/unreadableSuccessDelivered``: a 2xx whose body the
+  encoder can't read, an empty one included, counts as delivered: sent once, nothing reported.
 - ``/DestinationTesting/ConformanceCheck/traceContextWithheld``: no request carries a trace context,
   even while a tracer is active.
 

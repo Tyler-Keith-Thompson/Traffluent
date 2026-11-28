@@ -74,12 +74,63 @@ public import TrackingPlans
 /// nothing for it. Matomo answers 200 to a bulk request it reads, counting the tracking requests
 /// it refuses as `invalid` in its answer without storing them; 400 to a body it can't read, which
 /// `HTTPDestination` drops and reports with every record of the request; and 500 when its database
-/// fails, which `HTTPDestination` retries. It doesn't remove duplicates, so a record sent again is
+/// fails, which `HTTPDestination` retries. A 200 that says Matomo tracked none of the request's
+/// tracking requests is rejected (``outcome(of:for:)``), so `HTTPDestination` drops and reports it
+/// too; one that refused only some isn't, as its answer doesn't say which. It doesn't remove duplicates, so a record sent again is
 /// counted again. The bytes are the same for the same records, time and configuration on every run
 /// and platform.
 public struct MatomoBatchEncoder: BatchEncoder {
     /// No status beyond the 408, 429 and 5xx that `HTTPDestination` retries for every encoder.
     public static let transientStatuses: Set<TransientStatus> = []
+
+    // From Matomo 6.0.0's source, read on 2026-11-27: plugins/BulkTracking/Tracker/Response.php
+    // answers {"status":"success","tracked":n,"invalid":m}, where tracked counts the tracking
+    // requests core/Tracker.php trackRequest logged and invalid those that threw
+    // UnexpectedWebsiteFoundException (a site ID of no site) or InvalidRequestParameterException
+    // (a cdt outside the window, say). Handler.php skips, uncounted, a tracking request that hit
+    // a database lock wait timeout, and Tracker.php logs none when record_statistics is 0, so a
+    // count short of the request's can't tell a passing lock from tracking turned off: it is sent
+    // again, which the request's 23-hour deadline bounds. Not verified: the QueuedTracking plugin
+    // queues tracking requests rather than logging them, and its queued ones may not count as
+    // tracked, which would send every request again until its deadline on such an installation.
+    /// What Matomo's 2xx answer to `request` means: transient when Matomo counted fewer of its
+    /// tracking requests than were sent, rejected when it refused every one it counted, and
+    /// delivered otherwise.
+    ///
+    /// Matomo answers a bulk request it reads with 200 and `{"status": "success", "tracked": n,
+    /// "invalid": m}`. When `tracked` and `invalid` add up to fewer than the request's tracking
+    /// requests, or are both 0, Matomo skipped some without saying so, as it does after a database
+    /// lock wait timeout, and the answer is ``/HTTPDestinations/ResponseOutcome/transient(reason:)``:
+    /// `HTTPDestination` sends the request again until its deadline, 23 hours after its oldest
+    /// record, and Matomo, which removes no duplicates, counts the ones it tracked again. When it
+    /// tracked none and refused some, as for a site ID of no site, the answer is
+    /// ``/HTTPDestinations/ResponseOutcome/rejected(reason:)``, so `HTTPDestination` drops the
+    /// request and reports it. When it tracked some and refused others, the answer says how many
+    /// but not which, so the request is delivered, with a notice logged. A body that isn't such an
+    /// answer, an empty one or one with a negative count included, is delivered.
+    ///
+    /// - Parameters:
+    ///   - response: The 2xx answer.
+    ///   - request: The request it answers, a tracking request for each of its records.
+    /// - Returns: Whether Matomo stored the request's tracking requests, as far as its answer says.
+    public static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+        guard let answer = try? JSONDecoder().decode(BulkAnswer.self, from: response.body), answer.tracked >= 0, answer.invalid >= 0 else {
+            return .delivered
+        }
+        let sent = request.recordIDs.count
+        // Written as comparisons of counts that are never negative, so no sum overflows.
+        let skippedSome = answer.tracked < sent && answer.invalid < sent - answer.tracked
+        if skippedSome || (answer.tracked == 0 && answer.invalid == 0) {
+            return .transient(reason: "Matomo counted \(answer.tracked) tracked and \(answer.invalid) invalid of the request's \(sent) tracking requests, and skipped the rest")
+        }
+        guard answer.tracked > 0 else {
+            return .rejected(reason: "Matomo refused all \(answer.invalid) of the request's tracking requests as invalid, as it does for a site ID of no site")
+        }
+        if answer.invalid > 0 {
+            logger.notice("Matomo tracked \(answer.tracked) of a bulk request's tracking requests and refused \(answer.invalid), without saying which")
+        }
+        return .delivered
+    }
 
     // From Matomo's Tracking HTTP API reference, https://developer.matomo.org/api-reference/tracking-api
     // (the Matomo 6.x docs), read on 2026-11-27: idsite and rec=1 required; _id "must be a 16
@@ -324,4 +375,12 @@ extension JSON {
         case .integer, .number, .boolean, .array, .object: minified
         }
     }
+}
+
+/// Matomo's answer to a bulk tracking request it read.
+private struct BulkAnswer: Decodable {
+    /// How many of the request's tracking requests Matomo stored.
+    let tracked: Int
+    /// How many it refused.
+    let invalid: Int
 }

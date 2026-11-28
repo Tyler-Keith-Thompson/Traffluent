@@ -24,6 +24,10 @@ writes for it, so events need no `Codable` conformance and the wire format is yo
 A send that gets no response, or a 5xx, 408 or 429 status, is sent again after a wait, until it is
 answered with 2xx. So is one answered with a status your encoder lists in its
 `transientStatuses`, for a server that answers another failure to a request worth sending again.
+Your encoder's `outcome(of:for:)` reads each 2xx answer's body: return `.delivered` for a server
+that stores whatever it answers 2xx to, `.rejected(reason:)` for an answer that says nothing was
+stored, which the destination drops and reports as `HTTPDropReport.rejectedInBody`, or
+`.transient(reason:)` for one worth sending again, which it retries like a 5xx.
 The nominal waits start at 1 second and double up to 60 seconds, and each wait is a random one
 shorter than that (full jitter), so apps refused at the same moment don't all retry at the same
 moment. Pass an `ExponentialBackoff` as `backoff:` for other waits, `jitter: .none` for the nominal
@@ -237,13 +241,17 @@ the destination takes. Mixpanel's import API takes the project's secret or a ser
 credentials instead; those belong on a server and must never ship in an app, so no Traffluent API
 accepts them. The factory throws `MixpanelSetupError` for an empty token, and for one with a
 character other than a letter or digit, which no project token has. That check matters because
-Mixpanel answers 200 to a token it doesn't know and stores nothing.
+Mixpanel may answer 200 to a token it doesn't know and store nothing.
 
 The destination retries 429 and 5xx responses and drops a request Mixpanel rejects, such as one
 answered with 400, 401 or 413. Its retries wait `ExponentialBackoff.mixpanel`: Mixpanel's
 recommended schedule, 2 s doubling to 60 s, with full jitter, which is Traffluent's choice rather
-than Mixpanel's. A wrong region, or a token of no project, may be answered with 200 and nothing
-stored, so check the project's Live View after setting the destination up. A record
+than Mixpanel's. The destination asks for Mixpanel's verbose answer (`verbose=1`), and a 200
+whose `status` is 0, which Mixpanel answers when it finds no valid event in the request, is dropped and
+reported as `HTTPDropReport.rejectedInBody(status:reason:recordIDs:)` with Mixpanel's error. A
+status of 1 doesn't confirm the token or the region: a wrong region, or a token of no project, may
+still be answered with 1 and nothing stored, so check the project's Live View after setting the
+destination up. A record
 sent again in the same run keeps its `$insert_id` and `distinct_id`, and Mixpanel counts a repeat
 of an event's name, `time`, `distinct_id` and `$insert_id` once. A record a store recovers after a
 relaunch keeps its session, so it goes out with the same `distinct_id` and `$insert_id`, and
@@ -289,10 +297,9 @@ more than 3 deep. Last, the encoder leaves out a record whose timestamp is befor
 or has no epoch-milliseconds form, and one too large for Mixpanel. The destination reports each on
 `dropReports` as `HTTPDropReport.skipped(_:)`.
 
-Mixpanel doesn't report every loss. It answers 200 even when it ingests none of a request's
-events, and its track API ingests only events from the last 5 days, so a record older than that
-when it is sent, such as one a store kept through a long time offline, counts as delivered and
-isn't stored.
+Mixpanel doesn't report every loss. Its track API ingests only events from the last 5 days, and
+it answers status 1 to a request it ingests some of, so a record older than that when it is sent,
+such as one a store kept through a long time offline, counts as delivered and isn't stored.
 
 ### Segment, RudderStack and Customer.io
 
@@ -667,8 +674,14 @@ stores it, with `&` and the other characters HTML escapes as their entities; and
 a request (`oversized`). The destination reports each on `dropReports` as
 `HTTPDropReport.skipped(_:)`.
 
-Matomo answers 200 to any bulk request it can read, so a wrong site ID loses every event without
-an error: check that the first ones reach the site's Visits Log. It doesn't remove duplicates, so
+Matomo answers 200 to any bulk request it can read, with how many tracking requests it tracked
+and how many it refused as invalid. When it refused every one, as for a site ID of no site, the
+destination drops the request and reports it as `HTTPDropReport.rejectedInBody`. When it tracked
+some and refused others, its answer doesn't say which without a token, so the request counts as
+delivered and the destination logs a notice. When the counts fall short of the request, Matomo
+skipped some, as after a database lock wait timeout, and the destination sends the request again
+until its 23-hour deadline. Check that the first events reach the site's Visits
+Log. It doesn't remove duplicates, so
 a record sent again, after a retry whose answer was lost or a store's redelivery, is counted twice.
 
 ### Heap
@@ -792,8 +805,9 @@ large for a request (`oversized`). The destination reports each on `dropReports`
 `HTTPDropReport.deadlineExceeded(deadline:recordIDs:)`.
 
 Aptabase answers 200 to a key of no app, and to one of an account it has locked, such as one past
-its plan's monthly events, and stores nothing, so check that the first events reach the app's
-Live View. It doesn't remove duplicates, so a record sent again, after a retry whose answer was
+its plan's monthly events, and stores nothing. Its body then holds an error, so the destination
+drops the request and reports it as `HTTPDropReport.rejectedInBody` with Aptabase's error. Check
+that the first events reach the app's Live View all the same. It doesn't remove duplicates, so a record sent again, after a retry whose answer was
 lost or a store's redelivery, is counted twice. It takes 20 requests a second from one IP
 address and answers 429 past it, which the destination retries on its backoff. It answers 418
 when a request's body arrives slower than 60 bytes a second after a 10-second grace period, as

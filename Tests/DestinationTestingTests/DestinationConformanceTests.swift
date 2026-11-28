@@ -48,6 +48,10 @@ struct DestinationConformanceTests {
     struct ToyEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         typealias Failure = DestinationConformanceTests.Failure
 
         let reader: PropertyReader
@@ -149,6 +153,10 @@ struct DestinationConformanceTests {
     struct UnprocessableRetryingEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = (try? TransientStatus(.unprocessableContent)).map { [$0] } ?? []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         typealias Failure = DestinationConformanceTests.Failure
 
         let wrapped: ToyEncoder
@@ -175,6 +183,10 @@ struct DestinationConformanceTests {
 
         static let transientStatuses = Set([400, 401, 403, 404, 413, 422].compactMap { try? TransientStatus(HTTPResponse.Status(code: $0)) })
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            ToyEncoder.outcome(of: response, for: request)
+        }
+
         let wrapped: ToyEncoder
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
@@ -188,11 +200,97 @@ struct DestinationConformanceTests {
 
         static let transientStatuses = Set((400 ... 499).compactMap { try? TransientStatus(HTTPResponse.Status(code: $0)) })
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            ToyEncoder.outcome(of: response, for: request)
+        }
+
         let wrapped: ToyEncoder
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
             wrapped.requests(for: batch)
         }
+    }
+
+    /// ``ToyEncoder`` reading a 2xx body that isn't JSON as `outcome`, as an encoder that trusts
+    /// nothing it can't parse would.
+    struct UnreadableDistrustingEncoder<Outcome: UnreadableOutcome>: BatchEncoder {
+        typealias Failure = DestinationConformanceTests.Failure
+
+        static var transientStatuses: Set<TransientStatus> { [] }
+
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            (try? JSONSerialization.jsonObject(with: response.body)) == nil ? Outcome.outcome : .delivered
+        }
+
+        let wrapped: ToyEncoder
+
+        func requests(for batch: [EventRecord]) -> BatchRequests<Failure> {
+            wrapped.requests(for: batch)
+        }
+    }
+
+    /// What ``UnreadableDistrustingEncoder`` makes of a body it can't parse.
+    protocol UnreadableOutcome: Sendable {
+        static var outcome: ResponseOutcome { get }
+    }
+
+    enum Rejecting: UnreadableOutcome {
+        static var outcome: ResponseOutcome { .rejected(reason: "unreadable") }
+    }
+
+    enum Retrying: UnreadableOutcome {
+        static var outcome: ResponseOutcome { .transient(reason: "unreadable") }
+    }
+
+    @Test("A destination whose encoder rejects a 2xx it can't read fails unreadableSuccessDelivered, as it reports a drop")
+    func rejectsUnreadableSuccess() async throws {
+        let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
+        let sut = DestinationConformance(limit: Self.limit) { setup in
+            HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: UnreadableDistrustingEncoder<Rejecting>(wrapped: ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: Self.limit, flaw: .none, revealing: false)), backoff: setup.backoff)
+        }
+        let expected = "reported a drop"
+
+        await withKnownIssue(isIntermittent: false) {
+            do {
+                try await sut.expect(.unreadableSuccessDelivered)
+            } catch {
+                Issue.record(error)
+            }
+        } matching: { issue in
+            issue.comments.contains { $0.rawValue.contains(expected) }
+        }
+    }
+
+    @Test("A destination whose encoder sends again a 2xx it can't read fails unreadableSuccessDelivered, as it sends more than one request")
+    func retriesUnreadableSuccess() async throws {
+        let endpoint = try #require(URL(string: "https://vendor.example.com/ingest"))
+        let sut = DestinationConformance(limit: Self.limit) { setup in
+            HTTPDestination(endpoint: endpoint, instrument: NoOpInstrument(), transport: setup.transport, encoder: UnreadableDistrustingEncoder<Retrying>(wrapped: ToyEncoder(reader: PropertyReader(plan: setup.plan), limit: Self.limit, flaw: .none, revealing: false)), backoff: setup.backoff)
+        }
+        let expected = "requests, not one"
+        // The resend is answered with 400, so it is reported too; the count must be recorded
+        // as well, so it is counted apart.
+        let reported = "reported a drop"
+        final class Counter: Sendable {
+            let count = Mutex(0)
+        }
+        let countsRecorded = Counter()
+
+        await withKnownIssue(isIntermittent: false) {
+            do {
+                try await sut.expect(.unreadableSuccessDelivered)
+            } catch {
+                Issue.record(error)
+            }
+        } matching: { issue in
+            let counted = issue.comments.contains { $0.rawValue.contains(expected) }
+            if counted {
+                countsRecorded.count.withLock { $0 += 1 }
+            }
+            return counted || issue.comments.contains { $0.rawValue.contains(reported) }
+        }
+
+        #expect(countsRecorded.count.withLock { $0 } > 0)
     }
 
     /// Counts the destinations a factory makes, one per send.

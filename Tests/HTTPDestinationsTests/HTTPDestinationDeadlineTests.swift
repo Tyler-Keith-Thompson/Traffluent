@@ -18,6 +18,10 @@ struct HTTPDestinationDeadlineTests {
     struct DeadlineEncoder: BatchEncoder {
         static let transientStatuses: Set<TransientStatus> = []
 
+        static func outcome(of response: HTTPTransportResponse, for request: EncodedRequest) -> ResponseOutcome {
+            .delivered
+        }
+
         var deadlines: [String: Date] = [:]
 
         func requests(for batch: [EventRecord]) -> BatchRequests<Never> {
@@ -52,14 +56,14 @@ struct HTTPDestinationDeadlineTests {
             sentAt.withLock { $0.count }
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             let attempt = sentAt.withLock { sentAt in
                 sentAt.append(start.duration(to: clock.now))
                 return sentAt.count
             }
             bodies.withLock { $0.append(body) }
             attempted.yield(attempt)
-            return try script[min(attempt, script.count) - 1].get()
+            return try HTTPTransportResponse(head: script[min(attempt, script.count) - 1].get(), body: Data())
         }
     }
 
@@ -259,10 +263,10 @@ struct HTTPDestinationDeadlineTests {
             self.after = after
         }
 
-        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPResponse {
+        func send(_ request: HTTPRequest, body: Data) async throws(HTTPTransportError) -> HTTPTransportResponse {
             sendCount.withLock { $0 += 1 }
             wallClock.reading.withLock { $0 = after }
-            return try failure.get()
+            return try HTTPTransportResponse(head: failure.get(), body: Data())
         }
     }
 
